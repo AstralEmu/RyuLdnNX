@@ -53,6 +53,7 @@
 #include "../debug/log.hpp"
 #include "../ldn/ldn_shared_state.hpp"
 #include "../config/game_whitelist.hpp"
+#include "global_reset.hpp"
 
 #include <array>
 #include <atomic>
@@ -287,13 +288,31 @@ static std::array<AbandonedServiceEntry, MAX_ABANDONED_SERVICES> g_abandoned_for
 static os::Mutex g_abandoned_services_mutex{false};
 
 /**
- * @brief Atomic flag ensuring only one thread executes ResetForNextGame().
+ * @brief Atomic flag ensuring only one thread executes ResetGlobalState().
  *
  * Prevents a TOCTOU race between DecrementSessionCount() returning 0 and
  * the actual reset call: if a new session is created between the decrement
  * and the reset, the flag's test_and_set() will fail and the reset is skipped.
  */
-static std::atomic_flag g_reset_in_progress = ATOMIC_FLAG_INIT;
+std::atomic_flag g_reset_in_progress = ATOMIC_FLAG_INIT;
+
+/**
+ * @brief RAII guard for g_reset_in_progress.
+ *
+ * Sets the flag on construction and clears it on destruction (unless
+ * disarmed). Ensures the flag is always released even on early-return
+ * or exception paths, replacing manual test_and_set()/clear() pairs.
+ */
+class ScopedAtomicFlag {
+    std::atomic_flag& m_flag;
+    bool m_armed;
+public:
+    explicit ScopedAtomicFlag(std::atomic_flag& flag) : m_flag(flag), m_armed(true) {}
+    ~ScopedAtomicFlag() { if (m_armed) m_flag.clear(); }
+    void disarm() { m_armed = false; }
+    ScopedAtomicFlag(const ScopedAtomicFlag&) = delete;
+    ScopedAtomicFlag& operator=(const ScopedAtomicFlag&) = delete;
+};
 
 // =============================================================================
 // Constructor / Destructor
@@ -436,10 +455,10 @@ BsdMitmService::~BsdMitmService() {
     LOG_INFO("[BSD#%u] Destructor: active sessions remaining = %u", m_session_id, remaining);
 
     // FIX: Reset global state only when ALL sessions (ldn:u + bsd:u) are gone.
-    // ResetForNextGame() internally gates on the atomic session counter and
+    // ResetGlobalState() internally gates on the atomic session counter and
     // an atomic_flag to prevent TOCTOU races and double resets.
     if (remaining == 0) {
-        ResetForNextGame();
+        ResetGlobalState();
     }
     // NOTE: We intentionally do NOT call svc::ExitProcess() here.
     // This sysmodule is a boot2 process (TitleID 4200000000000010) that
@@ -634,32 +653,8 @@ void BsdMitmService::CleanupAbandonedServices() {
     LOG_INFO("BSD CleanupAbandonedServices: cleanup complete");
 }
 
-void BsdMitmService::ResetForNextGame() {
-    // Gate: only one thread may execute the reset at a time. If another thread
-    // is already resetting, bail out immediately — the in-flight reset will
-    // cover this case.
-    if (g_reset_in_progress.test_and_set()) {
-        return;
-    }
-
-    // TOCTOU re-check: a new session may have appeared between the caller's
-    // DecrementSessionCount() returning 0 and us acquiring the flag. If so,
-    // skip the reset and release the flag.
-    auto& shared_state = ams::mitm::ldn::SharedState::GetInstance();
-    if (shared_state.GetActiveSessionCount() != 0) {
-        LOG_INFO("BSD ResetForNextGame: session count is now %u — reset skipped (new session detected)",
-                 shared_state.GetActiveSessionCount());
-        g_reset_in_progress.clear();
-        return;
-    }
-
-    LOG_INFO("BSD ResetForNextGame: resetting all global state for next game session");
-
-    // 1. Reset ProxySocketManager singleton (callbacks, sockets, ports, pending ring)
-    auto& proxy_mgr = ProxySocketManager::GetInstance();
-    proxy_mgr.Reset();
-
-    // 2. Clear the global socket info table
+void BsdMitmService::ResetInternalTables() {
+    // Clear the global socket info table
     {
         std::scoped_lock lock(g_socket_info_mutex);
         for (auto& entry : g_socket_info) {
@@ -667,10 +662,10 @@ void BsdMitmService::ResetForNextGame() {
             entry.info = SocketInfo{};
             entry.valid = false;
         }
-        LOG_VERBOSE("BSD ResetForNextGame: cleared g_socket_info table");
+        LOG_VERBOSE("BsdMitmService::ResetInternalTables: cleared g_socket_info table");
     }
 
-    // 3. Clear the global MITM PID count table
+    // Clear the global MITM PID count table
     {
         std::scoped_lock lock(g_mitm_pids_mutex);
         for (auto& entry : g_mitm_pid_count) {
@@ -678,31 +673,8 @@ void BsdMitmService::ResetForNextGame() {
             entry.count = 0;
             entry.valid = false;
         }
-        LOG_VERBOSE("BSD ResetForNextGame: cleared g_mitm_pid_count table");
+        LOG_VERBOSE("BsdMitmService::ResetInternalTables: cleared g_mitm_pid_count table");
     }
-
-    // 4. Clean up abandoned forward services
-    {
-        std::scoped_lock lock(g_abandoned_services_mutex);
-        size_t count = 0;
-        for (auto& slot : g_abandoned_forward_services) {
-            if (slot.valid) {
-                slot.service.reset();
-                slot.valid = false;
-                count++;
-            }
-        }
-        if (count > 0) {
-            LOG_INFO("BSD ResetForNextGame: cleaned up %zu abandoned services", count);
-        }
-    }
-
-    // 5. Reset LDN SharedState
-    ams::mitm::ldn::SharedState::GetInstance().Reset();
-
-    LOG_INFO("BSD ResetForNextGame: complete");
-    g_reset_in_progress.clear();
-    LOG_INFO("BSD ResetForNextGame: reset finished, flag cleared");
 }
 
 // =============================================================================
@@ -3478,3 +3450,48 @@ Result BsdMitmService::ShutdownAllSockets(
 }
 
 } // namespace ams::mitm::bsd
+
+// =============================================================================
+// Global state reset (neutral namespace — see global_reset.hpp)
+// =============================================================================
+
+namespace ams::mitm {
+
+void ResetGlobalState() {
+    // Gate: only one thread may execute the reset at a time. If another thread
+    // is already resetting, bail out immediately — the in-flight reset will
+    // cover this case.
+    if (g_reset_in_progress.test_and_set()) {
+        return;
+    }
+    ScopedAtomicFlag guard(g_reset_in_progress);
+
+    // TOCTOU re-check: a new session may have appeared between the caller's
+    // DecrementSessionCount() returning 0 and us acquiring the flag. If so,
+    // skip the reset and release the flag.
+    auto& shared_state = ams::mitm::ldn::SharedState::GetInstance();
+    if (shared_state.GetActiveSessionCount() != 0) {
+        LOG_INFO("ResetGlobalState: session count is now %u — reset skipped (new session detected)",
+                 shared_state.GetActiveSessionCount());
+        return;
+    }
+
+    LOG_INFO("ResetGlobalState: resetting all global state for next game session");
+
+    // 1. Reset ProxySocketManager singleton (callbacks, sockets, ports, pending ring)
+    auto& proxy_mgr = ams::mitm::bsd::ProxySocketManager::GetInstance();
+    proxy_mgr.Reset();
+
+    // 2-3. Clear the global socket info and MITM PID count tables
+    ams::mitm::bsd::BsdMitmService::ResetInternalTables();
+
+    // 4. Clean up abandoned forward services
+    ams::mitm::bsd::BsdMitmService::CleanupAbandonedServices();
+
+    // 5. Reset LDN SharedState
+    ams::mitm::ldn::SharedState::GetInstance().Reset();
+
+    LOG_INFO("ResetGlobalState: complete");
+}
+
+} // namespace ams::mitm

@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <stratosphere.hpp>
 #include "interfaces/ibsd_mitm_service.hpp"
 #include "bsd_types.hpp"
@@ -73,19 +74,13 @@ public:
     static void CleanupAbandonedServices();
 
     /**
-     * @brief Reset all global state for a new game session
+     * @brief Clear internal global socket and PID tracking tables.
      *
-     * Resets ProxySocketManager, global socket/PID tables, abandoned
-     * services, and LDN SharedState. Called when the last BSD session
-     * for a process is destroyed.
-     *
-     * This is critical because the sysmodule is a boot2 process that
-     * survives across multiple game sessions. Without this reset,
-     * stale callbacks, socket entries, and port reservations from
-     * the previous game cause crashes, corruption, and resource
-     * exhaustion in the next game.
+     * Exposed so that ams::mitm::ResetGlobalState() (in global_reset.hpp)
+     * can reset the BSD-internal tables without needing access to the
+     * private types SocketInfoEntry / MitmPidEntry.
      */
-    static void ResetForNextGame();
+    static void ResetInternalTables();
 
 public:
     // =========================================================================
@@ -757,5 +752,14 @@ private:
 
 // Verify interface compliance
 static_assert(ams::mitm::bsd::IsIBsdMitmService<BsdMitmService>);
+
+/**
+ * @brief Atomic flag gating ResetGlobalState() against concurrent execution.
+ *
+ * Declared extern (defined in bsd_mitm_service.cpp) so that
+ * ams::mitm::ResetGlobalState() can test-and-set it from the neutral
+ * ams::mitm namespace without pulling in the BSD private types.
+ */
+extern std::atomic_flag g_reset_in_progress;
 
 } // namespace ams::mitm::bsd

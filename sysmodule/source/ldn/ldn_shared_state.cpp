@@ -186,10 +186,12 @@ void SharedState::IncrementSessionCount() {
 }
 
 u32 SharedState::DecrementSessionCount() {
-    u32 old_count = m_active_sessions.fetch_sub(1, std::memory_order_acq_rel);
-    u32 new_count = old_count - 1;
-    LOG_INFO("SharedState::DecrementSessionCount: %u -> %u", old_count, new_count);
-    return new_count;
+    u32 old = m_active_sessions.load(std::memory_order_acquire);
+    if (old == 0) {
+        LOG_ERROR("SharedState::DecrementSessionCount: underflow detected (counter already 0)");
+        return 0;
+    }
+    return m_active_sessions.fetch_sub(1, std::memory_order_acq_rel) - 1;
 }
 
 u32 SharedState::GetActiveSessionCount() const {

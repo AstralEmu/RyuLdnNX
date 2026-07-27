@@ -11,7 +11,7 @@
 #include "../config/config_ipc_service.hpp"
 #include "../debug/log.hpp"
 #include "../bsd/proxy_socket_manager.hpp"
-#include "../bsd/bsd_mitm_service.hpp"
+#include "../global_reset.hpp"
 #include "../p2p/p2p_proxy_client.hpp"
 #include "../p2p/p2p_proxy_server.hpp"
 #include <arpa/inet.h>
@@ -398,16 +398,11 @@ ICommunicationService::~ICommunicationService() {
     shared_state.SetLdnPid(0);
     LOG_INFO("Destructor: cleared LDN PID and game active flag");
 
-    // Ensure ProxySocketManager is fully reset (DisconnectFromServer already
-    // calls Reset() when m_server_connected was true, but if the connection
-    // was already closed, the proxy sockets and callbacks may still be set).
-    // This is idempotent — Reset() clears everything to zero.
-    mitm::bsd::ProxySocketManager::GetInstance().Reset();
-
-    // Clean up abandoned BSD forward services (same reasoning —
-    // DisconnectFromServer only does this when m_server_connected was true,
-    // but abandoned services accumulate regardless of connection state).
-    mitm::bsd::BsdMitmService::CleanupAbandonedServices();
+    // NOTE: ProxySocketManager::Reset() and CleanupAbandonedServices() are
+    // NOT called here — they are handled by ResetGlobalState() below when
+    // the last session is destroyed. Calling them here would be redundant
+    // (ResetGlobalState repeats both) and could race with the BSD destructor
+    // path that also triggers the same reset.
 
     // Clear client info and network state
     m_client_process_id = 0;
@@ -427,11 +422,11 @@ ICommunicationService::~ICommunicationService() {
     LOG_INFO("Destructor: active sessions remaining = %u", remaining);
 
     // FIX: Reset global state when ALL sessions are gone.
-    // ResetForNextGame() internally gates on the atomic session counter
+    // ResetGlobalState() internally gates on the atomic session counter
     // and an atomic_flag to prevent TOCTOU races and double resets.
     if (remaining == 0) {
         LOG_INFO("All sessions destroyed — resetting global state for next game");
-        mitm::bsd::BsdMitmService::ResetForNextGame();
+        mitm::ResetGlobalState();
     }
     // NOTE: We intentionally do NOT call svc::ExitProcess() here.
     // This sysmodule is a boot2 process (TitleID 4200000000000010) that
