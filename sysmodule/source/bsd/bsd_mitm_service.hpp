@@ -72,6 +72,21 @@ public:
      */
     static void CleanupAbandonedServices();
 
+    /**
+     * @brief Reset all global state for a new game session
+     *
+     * Resets ProxySocketManager, global socket/PID tables, abandoned
+     * services, and LDN SharedState. Called when the last BSD session
+     * for a process is destroyed.
+     *
+     * This is critical because the sysmodule is a boot2 process that
+     * survives across multiple game sessions. Without this reset,
+     * stale callbacks, socket entries, and port reservations from
+     * the previous game cause crashes, corruption, and resource
+     * exhaustion in the next game.
+     */
+    static void ResetForNextGame();
+
 public:
     // =========================================================================
     // Command Implementations

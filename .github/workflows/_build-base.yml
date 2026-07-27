@@ -159,6 +159,44 @@ jobs:
             exit 1
           fi
 
+      - name: Apply Atmosphere PR #2821 patch if needed
+        run: |
+          PATCH_FILE="${GITHUB_WORKSPACE}/patches/atmosphere-pr2821-forwardrequest.patch"
+          ATMOSPHERE_DIR="${GITHUB_WORKSPACE}/sysmodule/Atmosphere-libs"
+          TARGET_CPP="$ATMOSPHERE_DIR/libstratosphere/source/sf/hipc/sf_hipc_server_session_manager.cpp"
+
+          if [ -f "$PATCH_FILE" ] && [ -f "$TARGET_CPP" ]; then
+            # Detection: grep for the exact fix line. If upstream reformulates the fix
+            # (different variable name, different formatting), this will produce a false
+            # negative and git apply --check will fail gracefully with a WARNING.
+            # This is an acceptable trade-off: the build continues with the pre-built
+            # library, and the warning in logs signals that the patch needs updating.
+            if grep -q "saved_request.meta.num_copy_handles" "$TARGET_CPP"; then
+              echo "✅ Atmosphere PR #2821 fix already present in submodule — skipping patch."
+            else
+              echo "🔧 Applying Atmosphere PR #2821 patch..."
+              if git -C "$ATMOSPHERE_DIR" apply --check "$PATCH_FILE" 2>/dev/null; then
+                git -C "$ATMOSPHERE_DIR" apply "$PATCH_FILE"
+                echo "✅ Patch applied. Rebuilding libstratosphere.a..."
+                make -C "$ATMOSPHERE_DIR/libstratosphere" -j$(nproc) nx_release
+                # Replace the symlink with the freshly built .a
+                LIB_DIR="${GITHUB_WORKSPACE}/sysmodule/Atmosphere-libs/libstratosphere/lib/nintendo_nx_arm64_armv8a/release"
+                rm -f "$LIB_DIR/libstratosphere.a"
+                # The .a is already at the right place after make nx_release
+                if [ ! -f "$LIB_DIR/libstratosphere.a" ]; then
+                  echo "::error::libstratosphere.a not found after rebuild — build will fail at link time"
+                  exit 1
+                fi
+                echo "✅ libstratosphere.a rebuilt with PR #2821 fix."
+              else
+                echo "⚠️  WARNING: Patch could not be applied (possible upstream integration)."
+                echo "⚠️  Build will continue with pre-built libstratosphere.a."
+              fi
+            fi
+          else
+            echo "ℹ️  Patch file or target not found — skipping."
+          fi
+
       - name: Detach devkitPro packaging tools from LD_PRELOAD
         run: |
           for tool in npdmtool elf2nso build_pfs0 nacptool; do

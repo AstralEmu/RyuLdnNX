@@ -425,6 +425,14 @@ ICommunicationService::~ICommunicationService() {
     // Note: shared_state was declared above for SetGameActive/SetLdnPid.
     u32 remaining = shared_state.DecrementSessionCount();
     LOG_INFO("Destructor: active sessions remaining = %u", remaining);
+
+    // FIX: Reset global state when ALL sessions are gone.
+    // ResetForNextGame() internally gates on the atomic session counter
+    // and an atomic_flag to prevent TOCTOU races and double resets.
+    if (remaining == 0) {
+        LOG_INFO("All sessions destroyed — resetting global state for next game");
+        mitm::bsd::BsdMitmService::ResetForNextGame();
+    }
     // NOTE: We intentionally do NOT call svc::ExitProcess() here.
     // This sysmodule is a boot2 process (TitleID 4200000000000010) that
     // must survive across multiple game sessions. When the game exits,

@@ -45,6 +45,43 @@ LOCAL_A="$ATMOSPHERE_DIR/libstratosphere/lib/nintendo_nx_arm64_armv8a/release/li
 IMAGE_A="/opt/ryu_ldn_nx/libstratosphere/lib/nintendo_nx_arm64_armv8a/release/libstratosphere.a"
 SRC_DIR="$ATMOSPHERE_DIR/libstratosphere"
 
+# ── Step 0: apply Atmosphere PR #2821 patch if needed ─────────────────────────
+PATCH_FILE="/workspace/patches/atmosphere-pr2821-forwardrequest.patch"
+TARGET_CPP="$ATMOSPHERE_DIR/libstratosphere/source/sf/hipc/sf_hipc_server_session_manager.cpp"
+
+if [ -f "$PATCH_FILE" ] && [ -f "$TARGET_CPP" ]; then
+    # Detection: grep for the exact fix line. If upstream reformulates the fix
+    # (different variable name, different formatting), this will produce a false
+    # negative and git apply --check will fail gracefully with a WARNING.
+    # This is an acceptable trade-off: the build continues with the pre-built
+    # library, and the warning in logs signals that the patch needs updating.
+    if grep -q "saved_request.meta.num_copy_handles" "$TARGET_CPP"; then
+        echo "[build] ✅ Atmosphere PR #2821 fix already present — patch skipped."
+    else
+        echo "[build] 🔧 Atmosphere PR #2821 fix not detected — applying patch..."
+        if git -C "$ATMOSPHERE_DIR" apply --check "$PATCH_FILE" 2>/dev/null; then
+            git -C "$ATMOSPHERE_DIR" apply "$PATCH_FILE"
+            echo "[build] ✅ Patch applied successfully."
+            # Force rebuild: remove stale .a so Step 1 will rebuild from patched source.
+            # Without this, a pre-existing libstratosphere.a (from a previous build
+            # or symlinked from the Docker image) would be linked without the fix.
+            if [ -f "$LOCAL_A" ]; then
+                rm -f "$LOCAL_A"
+                echo "[build] 🔧 Removed stale libstratosphere.a to force rebuild with patch"
+            fi
+        else
+            echo "[build] ⚠️  WARNING: Patch could not be applied (upstream may have integrated the fix differently)."
+            echo "[build] ⚠️  Build will continue — verify libstratosphere includes the fix manually."
+        fi
+    fi
+fi
+
+# NOTE: The patch above modifies the source tree but does NOT force a rebuild
+# of libstratosphere.a. If a pre-existing .a is found (LOCAL_A or IMAGE_A),
+# it will be used as-is — potentially without the PR #2821 fix. To guarantee
+# a patched build, use `docker compose run --rm build-local` (which mounts
+# the local submodule and rebuilds from source) or `clean-local && build-local`.
+
 # ── Step 1: resolve libstratosphere.a ────────────────────────────────────────
 if [ -f "$LOCAL_A" ]; then
     echo "[build] ✅ libstratosphere.a found at workspace path — using as-is"
