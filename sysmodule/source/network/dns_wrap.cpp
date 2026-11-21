@@ -167,10 +167,7 @@ namespace {
  * "www.example.com" becomes "\x03www\x07example\x03com\x00".
  */
 size_t EncodeDnsName(const char* hostname, uint8_t* buf, size_t buf_size) {
-    if ((hostname == nullptr) || (buf == nullptr) || buf_size == 0) {
-        return 0;
-    }
-
+    // Sole caller passes a non-empty, non-null hostname and a fixed array.
     size_t pos = 0;
     const char* src = hostname;
 
@@ -200,10 +197,9 @@ size_t EncodeDnsName(const char* hostname, uint8_t* buf, size_t buf_size) {
         }
     }
 
-    // Zero-length label (root terminator)
-    if (pos + 1 > buf_size) {
-        return 0;
-    }
+    // Zero-length label (root terminator). Room is guaranteed: every label
+    // above was admitted only if `pos + 1 + label_len + 1 <= buf_size`, i.e.
+    // one byte stays free after it.
     buf[pos++] = 0x00;
 
     return pos;
@@ -213,16 +209,15 @@ size_t EncodeDnsName(const char* hostname, uint8_t* buf, size_t buf_size) {
  * @brief Build a DNS query packet for an A record.
  * @param hostname     The hostname to resolve.
  * @param query_id     The query ID to embed in the DNS header.
- * @param packet       Output buffer for the DNS query packet.
- * @param packet_size  Size of the output buffer.
+ * @param packet       Output buffer for the DNS query packet (fixed-size array).
  * @return Size of the built packet in bytes, or -1 on error.
  *
  * The query requests an A record (QTYPE=1) in the IN class (QCLASS=1)
  * with the recursion-desired flag set.
  */
 ssize_t BuildDnsQuery(const char* hostname, uint16_t query_id,
-                      uint8_t* packet, size_t packet_size) {
-    if ((hostname == nullptr) || hostname[0] == '\0' || (packet == nullptr)) {
+                      uint8_t (&packet)[DNS_MESSAGE_BUFFER_SIZE]) {
+    if ((hostname == nullptr) || hostname[0] == '\0') {
         return -1;
     }
 
@@ -234,10 +229,9 @@ ssize_t BuildDnsQuery(const char* hostname, uint16_t query_id,
     }
 
     // Total packet size: header + name_len + QTYPE/QCLASS trailer
-    size_t total_size = DNS_HEADER_SIZE + name_len + DNS_QTYPE_QCLASS_SIZE;
-    if (total_size > packet_size) {
-        return -1;
-    }
+    // The largest query (full name buffer) always fits the packet buffer.
+    static_assert(DNS_HEADER_SIZE + DNS_NAME_BUFFER_SIZE + DNS_QTYPE_QCLASS_SIZE <= DNS_MESSAGE_BUFFER_SIZE,
+                  "a DNS query must fit the message buffer");
 
     size_t pos = 0;
 
@@ -320,10 +314,7 @@ bool GetDnsServerIp(uint32_t& dns_ip) {
  * the name without following pointers, since we only need to skip over it.
  */
 const uint8_t* SkipDnsName(const uint8_t* p, const uint8_t* end) {
-    if ((p == nullptr) || (end == nullptr)) {
-        return nullptr;
-    }
-
+    // Callers pass pointers into the response buffer (never null).
     while (p < end) {
         uint8_t label_len = *p;
 
@@ -470,9 +461,7 @@ int ParseDnsResponse(const uint8_t* response, size_t resp_len,
  * fallback is not implemented.
  */
 int ResolveHostnameDns(const char* hostname, uint32_t* out_ips, int max_ips) {
-    if ((hostname == nullptr) || (out_ips == nullptr) || max_ips <= 0) {
-        return -EAI_FAIL;
-    }
+    // Sole caller passes a non-null hostname, an array and a positive count.
 
     // Step 1: Get DNS server IP
     uint32_t dns_ip;
@@ -483,7 +472,7 @@ int ResolveHostnameDns(const char* hostname, uint32_t* out_ips, int max_ips) {
     uint16_t query_id = __atomic_fetch_add(&s_next_query_id, 1, __ATOMIC_RELAXED);
 
     uint8_t query_buf[DNS_MESSAGE_BUFFER_SIZE];
-    ssize_t query_len = BuildDnsQuery(hostname, query_id, query_buf, sizeof(query_buf));
+    ssize_t query_len = BuildDnsQuery(hostname, query_id, query_buf);
     if (query_len < 0) {
         return -EAI_FAIL;
     }

@@ -58,7 +58,12 @@ TEST_SOURCES := \
 	ldn_client_process_monitor_tests.cpp \
 	game_whitelist_tests.cpp \
 	ldn_config_service_tests.cpp \
-	config_ipc_service_real_tests.cpp
+	config_ipc_service_real_tests.cpp \
+	upnp_port_mapper_tests.cpp \
+	dns_wrap_tests.cpp \
+	proxy_socket_tests.cpp \
+	p2p_proxy_client_real_tests.cpp \
+	p2p_proxy_server_real_tests.cpp
 
 # Implementation sources needed for tests
 IMPL_SOURCES := \
@@ -112,6 +117,13 @@ TARGET_LDN_CLIENT_PROCESS_MONITOR := run_ldn_client_process_monitor_tests
 TARGET_GAME_WHITELIST := run_game_whitelist_tests
 TARGET_LDN_CONFIG_SERVICE := run_ldn_config_service_tests
 TARGET_CONFIG_IPC_SERVICE_REAL := run_config_ipc_service_real_tests
+TARGET_UPNP_PORT_MAPPER := run_upnp_port_mapper_tests
+TARGET_DNS_WRAP := run_dns_wrap_tests
+TARGET_PROXY_SOCKET := run_proxy_socket_tests
+TARGET_P2P_CLIENT_REAL := run_p2p_proxy_client_real_tests
+TARGET_P2P_SERVER_REAL := run_p2p_proxy_server_real_tests
+UPNP_SCENARIOS := alloc_urls_fail alloc_data_fail ok
+RUN_UPNP_PORT_MAPPER = for s in $(UPNP_SCENARIOS); do UPNP_SCENARIO=$$s ./$(TARGET_UPNP_PORT_MAPPER) || exit 1; done
 # The whitelist is a load-once latch: each scenario runs in its own process.
 GAME_WHITELIST_SCENARIOS := open_fail size_fail empty alloc_fail read_fail parse capacity
 RUN_GAME_WHITELIST = for s in $(GAME_WHITELIST_SCENARIOS); do WHITELIST_SCENARIO=$$s ./$(TARGET_GAME_WHITELIST) || exit 1; done
@@ -120,9 +132,9 @@ TARGET_ALL := run_all_tests
 #---------------------------------------------------------------------------------
 # Build rules
 #---------------------------------------------------------------------------------
-.PHONY: all clean test test-protocol test-config test-config-manager test-log test-socket test-tcp-client test-connection-state test-reconnect test-client test-ldn-types test-ldn-state-machine test-ldn-proxy test-ldn-error test-ldn-integration test-overlay test-ipc-config test-config-ipc-service test-shared-state test-packet-dispatcher test-session-handler test-proxy-handler test-handler-integration test-upnp test-p2p-proxy test-p2p-client test-p2p-integration test-p2p-create-network test-ephemeral-port-pool test-ldn-node-mapper test-ldn-network-timeout test-ldn-proxy-buffer test-ldn-state-machine-real test-ldn-shared-state-real test-ldn-client-process-monitor test-game-whitelist test-ldn-config-service test-config-ipc-service-real coverage coverage-enforce coverage-full-enforce
+.PHONY: all clean test test-protocol test-config test-config-manager test-log test-socket test-tcp-client test-connection-state test-reconnect test-client test-ldn-types test-ldn-state-machine test-ldn-proxy test-ldn-error test-ldn-integration test-overlay test-ipc-config test-config-ipc-service test-shared-state test-packet-dispatcher test-session-handler test-proxy-handler test-handler-integration test-upnp test-p2p-proxy test-p2p-client test-p2p-integration test-p2p-create-network test-ephemeral-port-pool test-ldn-node-mapper test-ldn-network-timeout test-ldn-proxy-buffer test-ldn-state-machine-real test-ldn-shared-state-real test-ldn-client-process-monitor test-game-whitelist test-ldn-config-service test-config-ipc-service-real test-upnp-port-mapper test-dns-wrap test-proxy-socket test-p2p-client-real test-p2p-server-real coverage coverage-enforce coverage-full-enforce
 
-all: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL)
+all: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL) $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET) $(TARGET_P2P_CLIENT_REAL) $(TARGET_P2P_SERVER_REAL)
 
 # Protocol tests (header-only, no impl needed)
 $(TARGET_PROTOCOL): protocol_tests.o
@@ -273,6 +285,33 @@ $(TARGET_LDN_CONFIG_SERVICE): ldn_config_service_tests.o ldn_config_service.o ld
 $(TARGET_CONFIG_IPC_SERVICE_REAL): config_ipc_service_real_tests.o config_ipc_service.o ldn_shared_state.o log.o config.o
 	$(CXX) $(LDFLAGS) -o $@ $^
 
+# UpnpPortMapper tests (real sources)
+$(TARGET_UPNP_PORT_MAPPER): upnp_port_mapper_tests.o upnp_port_mapper.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# DnsWrap tests (real sources)
+# --wrap=malloc lets the test fail the resolver's allocations (see dns_wrap_tests.cpp)
+$(TARGET_DNS_WRAP): dns_wrap_tests.o dns_wrap.o log.o config.o
+	$(CXX) $(LDFLAGS) -Wl,--wrap=malloc -o $@ $^
+
+# ProxySocket tests (real bsd/proxy_socket.cpp + manager, host Stratosphere stand-in)
+$(TARGET_PROXY_SOCKET): proxy_socket_tests.o proxy_socket.o proxy_socket_manager.o ephemeral_port_pool.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# P2pProxyClient tests (real p2p/p2p_proxy_client.cpp, loopback host)
+# --wrap lets the test inject the failures the kernel cannot produce on demand
+# (see p2p_proxy_client_real_tests.cpp); every wrapper passes through by default.
+P2P_CLIENT_REAL_WRAPS := -Wl,--wrap=socket,--wrap=setsockopt,--wrap=fcntl,--wrap=connect,--wrap=select,--wrap=getsockopt,--wrap=send,--wrap=recv
+$(TARGET_P2P_CLIENT_REAL): p2p_proxy_client_real_tests.o p2p_proxy_client.o log.o config.o
+	$(CXX) $(LDFLAGS) $(P2P_CLIENT_REAL_WRAPS) -pthread -o $@ $^
+
+# P2pProxyServer tests (real p2p/p2p_proxy_server.cpp, loopback peers)
+# --wrap injects the socket failures the kernel cannot produce on demand
+# (see p2p_proxy_server_real_tests.cpp); every wrapper passes through by default.
+P2P_SERVER_REAL_WRAPS := -Wl,--wrap=socket,--wrap=bind,--wrap=listen,--wrap=accept,--wrap=poll,--wrap=setsockopt,--wrap=send,--wrap=recv
+$(TARGET_P2P_SERVER_REAL): p2p_proxy_server_real_tests.o p2p_proxy_server.o upnp_port_mapper.o log.o config.o
+	$(CXX) $(LDFLAGS) $(P2P_SERVER_REAL_WRAPS) -pthread -o $@ $^
+
 # Compile test sources
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
@@ -332,6 +371,24 @@ ldn_config_service.o: ../sysmodule/source/ldn/ldn_config_service.cpp
 config_ipc_service.o: ../sysmodule/source/config/config_ipc_service.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
+upnp_port_mapper.o: ../sysmodule/source/p2p/upnp_port_mapper.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+dns_wrap.o: ../sysmodule/source/network/dns_wrap.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+proxy_socket.o: ../sysmodule/source/bsd/proxy_socket.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+proxy_socket_manager.o: ../sysmodule/source/bsd/proxy_socket_manager.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+p2p_proxy_client.o: ../sysmodule/source/p2p/p2p_proxy_client.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+p2p_proxy_server.o: ../sysmodule/source/p2p/p2p_proxy_server.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 ldn_packet_dispatcher.o: ../sysmodule/source/ldn/ldn_packet_dispatcher.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
@@ -342,7 +399,7 @@ ldn_proxy_handler.o: ../sysmodule/source/ldn/ldn_proxy_handler.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Run all tests
-test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL)
+test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL) $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET) $(TARGET_P2P_CLIENT_REAL) $(TARGET_P2P_SERVER_REAL)
 	@echo "=== Running Protocol Tests ==="
 	./$(TARGET_PROTOCOL)
 	@echo ""
@@ -453,6 +510,21 @@ test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG)
 	@echo ""
 	@echo "=== Running ryu:cfg ConfigService Tests ==="
 	./$(TARGET_CONFIG_IPC_SERVICE_REAL)
+	@echo ""
+	@echo "=== Running UpnpPortMapper Tests ==="
+	$(RUN_UPNP_PORT_MAPPER)
+	@echo ""
+	@echo "=== Running DnsWrap Tests ==="
+	./$(TARGET_DNS_WRAP)
+	@echo ""
+	@echo "=== Running ProxySocket tests (real bsd/proxy_socket.cpp + manager, host Stratosphere stand-in) Tests ==="
+	./$(TARGET_PROXY_SOCKET)
+	@echo ""
+	@echo "=== Running P2pProxyClient tests (real p2p/p2p_proxy_client.cpp, loopback host) ==="
+	./$(TARGET_P2P_CLIENT_REAL)
+	@echo ""
+	@echo "=== Running P2pProxyServer tests (real p2p/p2p_proxy_server.cpp, loopback peers) ==="
+	./$(TARGET_P2P_SERVER_REAL)
 
 test-protocol: $(TARGET_PROTOCOL)
 	./$(TARGET_PROTOCOL)
@@ -603,7 +675,7 @@ coverage-full-enforce: clean
 	cd .. && python3 scripts/check-coverage.py --min $(MIN_COVERAGE) --root .
 
 clean:
-	rm -f *.o $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL)
+	rm -f *.o $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL) $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET) $(TARGET_P2P_CLIENT_REAL) $(TARGET_P2P_SERVER_REAL)
 	rm -f *.gcno *.gcda *.gcov
 
 #---------------------------------------------------------------------------------
@@ -727,3 +799,18 @@ test-ldn-config-service: $(TARGET_LDN_CONFIG_SERVICE)
 
 test-config-ipc-service-real: $(TARGET_CONFIG_IPC_SERVICE_REAL)
 	./$(TARGET_CONFIG_IPC_SERVICE_REAL)
+
+test-upnp-port-mapper: $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET)
+	$(RUN_UPNP_PORT_MAPPER)
+
+test-dns-wrap: $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET)
+	./$(TARGET_DNS_WRAP)
+
+test-proxy-socket: $(TARGET_PROXY_SOCKET)
+	./$(TARGET_PROXY_SOCKET)
+
+test-p2p-client-real: $(TARGET_P2P_CLIENT_REAL)
+	./$(TARGET_P2P_CLIENT_REAL)
+
+test-p2p-server-real: $(TARGET_P2P_SERVER_REAL)
+	./$(TARGET_P2P_SERVER_REAL)

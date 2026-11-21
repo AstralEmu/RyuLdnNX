@@ -545,19 +545,6 @@ private:
     ~ProxySocketManager() = default;
 
     /**
-     * @brief Find a socket matching the given destination (first match)
-     *
-     * @param dest_ip Destination IP (host byte order)
-     * @param dest_port Destination port (host byte order)
-     * @param protocol Protocol type
-     * @return Pointer to matching socket, or nullptr if not found
-     *
-     * @note Caller must hold m_mutex
-     */
-    ProxySocket* FindSocketByDestination(uint32_t dest_ip, uint16_t dest_port,
-                                          ryu_ldn::bsd::ProtocolType protocol);
-
-    /**
      * @brief Find all sockets matching the given destination
      *
      * For broadcast/multicast packets, multiple sockets may match.
@@ -606,8 +593,11 @@ private:
 
     /**
      * @brief Mutex for thread safety
+     *
+     * Recursive: RouteConnectRequest holds it while the listening socket's
+     * IncomingConnection calls back SendProxyConnectReply, which locks it again.
      */
-    mutable os::Mutex m_mutex{false};
+    mutable os::Mutex m_mutex{true};
 
     /**
      * @brief Ephemeral port pool

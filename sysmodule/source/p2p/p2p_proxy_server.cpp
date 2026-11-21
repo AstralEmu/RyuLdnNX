@@ -166,6 +166,7 @@
 #include <poll.h>         // poll(), pollfd, POLLIN — see AcceptLoop
 #include <cerrno>         // errno
 #include <cstring>        // memcmp(), memset()
+#include <new>             // std::nothrow
 #include <utility>
 
 namespace ams::mitm::p2p {
@@ -535,6 +536,8 @@ bool P2pProxyServer::Start(uint16_t port) {
  * Thread-safe: Can be called from any thread.
  */
 void P2pProxyServer::Stop() {
+    P2pProxySession* claimed[MAX_LIVE_SESSIONS] = {};
+    int claimed_count = 0;
     {
         std::scoped_lock lock(m_mutex);
 
@@ -562,12 +565,30 @@ void P2pProxyServer::Stop() {
         // We disconnect with from_master=true to prevent sessions from
         // calling OnSessionDisconnected (since we're shutting down anyway).
 
-        for (auto & m_session : m_sessions) {
-            if (m_session != nullptr) {
-                m_session->Disconnect(true);  // from_master = true
-                m_session.reset();
+        // A session's receive thread may be inside Disconnect(false) →
+        // OnSessionDisconnected, waiting for m_mutex (which we hold): destroying
+        // the session here would wait for that thread and deadlock. So each
+        // session is only disconnected and handed to the zombie queue; its
+        // thread is waited for, and the object freed, after the lock is dropped.
+        // Every started session is in m_live_sessions[], authenticated or not;
+        // those that registered are also owned by a m_sessions[] slot.
+        for (int i = 0; i < m_live_session_count; ++i) {
+            P2pProxySession* live = m_live_sessions[i];
+            live->Disconnect(true);  // from_master = true
+            for (auto & m_session : m_sessions) {
+                if (m_session.get() == live) {
+                    (void)m_session.release();  // the zombie queue takes over
+                }
+            }
+            if (m_zombie_session_count < MAX_ZOMBIE_SESSIONS) {
+                m_zombie_sessions[m_zombie_session_count++].reset(live);
+                claimed[claimed_count++] = live;
+            } else {
+                LOG_ERROR("Zombie session pool full (%d), dropping pointer — heap will leak",
+                          MAX_ZOMBIE_SESSIONS);
             }
         }
+        m_live_session_count = 0;
         m_session_count = 0;
 
         // =====================================================================
@@ -587,12 +608,22 @@ void P2pProxyServer::Stop() {
     os::WaitThread(&m_accept_thread);
     os::DestroyThread(&m_accept_thread);
 
-    // The Stop() loop above already Disconnect+delete'd the *active*
-    // sessions in m_sessions[]. There may still be entries sitting in
-    // m_zombie_sessions that disconnected earlier (their recv threads
-    // returned but AcceptLoop didn't get another iteration). Reap them
-    // now so the recv buffers (64 KB each) and stack slots come back
-    // before the server object goes away.
+    // The Stop() loop above disconnected the *active* sessions in m_sessions[]
+    // and queued them as zombies; wait for their receive threads (their
+    // sockets are shut down, so they end on their own). The wait is bounded so
+    // a stuck thread costs a leak, never a hang.
+    for (int i = 0; i < claimed_count; ++i) {
+        for (int waited_ms = 0;
+             !claimed[i]->m_thread_done.load(std::memory_order_acquire) &&
+             waited_ms < STOP_SESSION_WAIT_MS;
+             ++waited_ms) {
+            svc::SleepThread(TimeSpan::FromMilliSeconds(1).GetNanoSeconds());
+        }
+    }
+    // Reap them, and the entries that disconnected earlier (their recv threads
+    // returned but AcceptLoop didn't get another iteration), so the recv
+    // buffers (64 KB each) and stack slots come back before the server object
+    // goes away.
     ReapZombieSessions();
 
     LOG_INFO("P2P server stopped");
@@ -1349,7 +1380,9 @@ void P2pProxyServer::AcceptLoop() {
         // OnSessionDisconnected (see cppcoreguidelines-owning-memory note
         // there). A unique_ptr here would not survive the handoff pattern
         // (session outlives this loop iteration by design).
-        auto* session = new P2pProxySession(this, client_fd, remote_ip);  // NOLINT(cppcoreguidelines-owning-memory)
+        // nothrow: the sysmodule heap answers nullptr under pressure; a plain
+        // `new` would run the constructor on that null (no -fcheck-new here).
+        auto* session = new (std::nothrow) P2pProxySession(this, client_fd, remote_ip);  // NOLINT(cppcoreguidelines-owning-memory)
         if (session == nullptr) {
             LOG_ERROR("P2P AcceptLoop: failed to allocate P2pProxySession "
                        "(heap exhausted?) — closing client_fd=%d", client_fd);
@@ -1357,8 +1390,27 @@ void P2pProxyServer::AcceptLoop() {
             continue;
         }
 
-        if (session != nullptr) {
-            session->Start();  // Start receive thread
+        // Register and start under the lock: Stop() either sees a started
+        // session (and disconnects and waits for it) or this check sees
+        // m_running == false, so no thread can outlive the server unnoticed.
+        bool keep = false;
+        {
+            std::scoped_lock lock(m_mutex);
+            if (m_running) {
+                m_live_sessions[m_live_session_count++] = session;
+                session->Start();  // Start receive thread
+                if (session->IsConnected()) {
+                    keep = true;
+                } else {
+                    // No stack slot, so no thread: nothing else owns this
+                    // session or its fd.
+                    --m_live_session_count;
+                }
+            }
+        }
+        if (!keep) {
+            // The destructor closes the fd (Disconnect(true)).
+            delete session;  // NOLINT(cppcoreguidelines-owning-memory)
         }
     }
 }
@@ -1374,6 +1426,7 @@ void P2pProxyServer::AcceptLoop() {
  * @param sender The session that sent the message
  * @param info ProxyInfo containing source and destination IPs
  * @param send_func Function to call for each target session
+ * @return false if the message was rejected as spoofed (nothing routed)
  *
  * ## Routing Logic
  *
@@ -1390,7 +1443,7 @@ void P2pProxyServer::AcceptLoop() {
  * This prevents a malicious client from impersonating another player.
  */
 template<typename SendFunc>
-void P2pProxyServer::RouteMessage(P2pProxySession* sender,
+bool P2pProxyServer::RouteMessage(P2pProxySession* sender,
                                    ryu_ldn::protocol::ProxyInfo& info,
                                    SendFunc send_func) {
     std::scoped_lock lock(m_mutex);
@@ -1407,7 +1460,7 @@ void P2pProxyServer::RouteMessage(P2pProxySession* sender,
         // Security: Reject spoofing attempts
         LOG_WARN("P2P spoofing attempt: session 0x%08X tried to send as 0x%08X",
                  sender->GetVirtualIpAddress(), info.source_ipv4);
-        return;
+        return false;
     }
 
     // =========================================================================
@@ -1464,6 +1517,7 @@ void P2pProxyServer::RouteMessage(P2pProxySession* sender,
             }
         }
     }
+    return true;
 }
 
 
@@ -1473,15 +1527,14 @@ void P2pProxyServer::RouteMessage(P2pProxySession* sender,
  * ProxyData is the main data transfer message used for UDP game traffic.
  * Routes the data to the destination session(s) based on ProxyInfo.
  */
-// Whether a given dest IP, after broadcast translation, lands on the host's
-// local game. Caller must hold m_mutex (or be otherwise safe against
-// concurrent updates to m_host_virtual_ip / m_broadcast_address).
+// Whether a given dest IP lands on the host's local game. The caller passes
+// the destination RouteMessage already translated (the legacy broadcast is
+// rewritten there; a rejected spoof never gets this far). Caller must hold
+// m_mutex (or be otherwise safe against concurrent updates to
+// m_host_virtual_ip / m_broadcast_address).
 static inline bool HostShouldReceive(uint32_t dest_ip,
                                      uint32_t host_vip,
                                      uint32_t broadcast_address) {
-    if (dest_ip == 0xc0a800ff) {
-        dest_ip = broadcast_address;
-    }
     if (dest_ip == broadcast_address) { return true;
 }
     if (host_vip != 0 && dest_ip == host_vip) { return true;
@@ -1499,7 +1552,7 @@ void P2pProxyServer::HandleProxyData(P2pProxySession* sender,
              static_cast<unsigned>(header.info.protocol), data_len);
     ryu_ldn::debug::g_logger.flush();
 
-    RouteMessage(sender, header.info, [&](P2pProxySession* target) {
+    const bool routed = RouteMessage(sender, header.info, [&](P2pProxySession* target) {
         LOG_INFO("HandleProxyData ROUTE: sender_vIP=0x%08X -> target_vIP=0x%08X (target=%p)",
                  sender->GetVirtualIpAddress(),
                  target ? target->GetVirtualIpAddress() : 0,
@@ -1513,12 +1566,14 @@ void P2pProxyServer::HandleProxyData(P2pProxySession* sender,
                                             header, data, data_len, len);
         target->Send(packet, len);
     });
+    if (!routed) {
+        return;  // spoofed source: dropped for the host too
+    }
 
     // After RouteMessage canonicalises source_ipv4 / dest_ipv4 the header
     // reflects what other joiners will see on the wire. If this packet is
     // also for us (broadcast or directly addressed to the host's vIP), feed
-    // it into the host's BSD MITM via the registered callback. RouteMessage
-    // has already rejected spoof attempts before reaching this point.
+    // it into the host's BSD MITM via the registered callback.
     HostProxyDataCallback host_cb;
     void* host_user_data;
     bool to_host;
@@ -1620,7 +1675,10 @@ void P2pProxyServer::ReapZombieSessions() {
         std::scoped_lock lock(m_mutex);
         int kept = 0;
         for (int i = 0; i < m_zombie_session_count; ++i) {
-            P2pProxySession* z = m_zombie_sessions[i].get();
+            // release(): the slot stops owning z, so neither the compaction
+            // below nor the tail reset can delete a session that is about to
+            // be joined.
+            P2pProxySession* z = m_zombie_sessions[i].release();
             if (z != nullptr && z->m_thread_done.load(std::memory_order_acquire)) {
                 zombies[taken++] = z;
             } else {
@@ -1710,11 +1768,29 @@ void P2pProxyServer::HandleExternalProxyStateChange(uint32_t virtual_ip, bool co
 void P2pProxyServer::OnSessionDisconnected(P2pProxySession* session) {
     std::scoped_lock lock(m_mutex);
 
+    // Already queued (Stop() claimed it while this thread was waiting for the
+    // lock): queueing it again would give the object two owners.
+    for (int i = 0; i < m_zombie_session_count; ++i) {
+        if (m_zombie_sessions[i].get() == session) {
+            return;
+        }
+    }
+
+    // The session no longer has a running connection to disconnect.
+    for (int i = 0; i < m_live_session_count; ++i) {
+        if (m_live_sessions[i] == session) {
+            m_live_sessions[i] = m_live_sessions[--m_live_session_count];
+            break;
+        }
+    }
+
     // Find and remove from session array
     bool found = false;
     for (auto & m_session : m_sessions) {
         if (m_session.get() == session) {
-            m_session.reset();
+            // release(), not reset(): the session is still running on the
+            // calling thread; the zombie queue below becomes its only owner.
+            (void)m_session.release();
             m_session_count--;
             found = true;
             LOG_INFO("P2P session disconnected: virtual IP 0x%08X",

@@ -507,16 +507,6 @@ public:
     os::Event& GetReceiveEvent() { return m_receive_event; }
 
 private:
-    /**
-     * @brief Pop the front packet from the receive queue
-     *
-     * @param peek If true, don't remove from queue (MSG_PEEK)
-     * @return The front packet, or empty if queue is empty
-     *
-     * @note Caller must hold m_queue_mutex
-     */
-    ReceivedPacket PopFrontPacket(bool peek);
-
     // =========================================================================
     // Accept queue ring buffer helpers (caller must hold m_queue_mutex)
     // =========================================================================
@@ -526,23 +516,16 @@ private:
     bool IsAcceptQueueFull() const { return m_accept_queue_count >= MAX_ACCEPT_QUEUE; }
 
     /// Push a new accepted socket at the tail. Caller must hold m_queue_mutex
-    /// and must have checked IsAcceptQueueFull() first.
+    /// and must have checked !IsAcceptQueueFull() first (the only caller does).
     void AcceptQueuePushBack(std::unique_ptr<ProxySocket> socket) {
-        // Defensive: drop if full (caller should already have checked)
-        if (m_accept_queue_count >= MAX_ACCEPT_QUEUE) {
-            return;
-        }
         m_accept_queue[m_accept_queue_tail] = std::move(socket);
         m_accept_queue_tail = (m_accept_queue_tail + 1) % MAX_ACCEPT_QUEUE;
         m_accept_queue_count++;
     }
 
     /// Pop the front accepted socket. Caller must hold m_queue_mutex and
-    /// must have checked IsAcceptQueueEmpty() first. Returns nullptr if empty.
+    /// must have checked !IsAcceptQueueEmpty() first (both callers do).
     std::unique_ptr<ProxySocket> AcceptQueuePopFront() {
-        if (m_accept_queue_count == 0) {
-            return nullptr;
-        }
         std::unique_ptr<ProxySocket> result = std::move(m_accept_queue[m_accept_queue_head]);
         m_accept_queue[m_accept_queue_head].reset();
         m_accept_queue_head = (m_accept_queue_head + 1) % MAX_ACCEPT_QUEUE;

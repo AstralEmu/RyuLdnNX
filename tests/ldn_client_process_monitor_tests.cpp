@@ -20,7 +20,7 @@ TEST(the_monitor_can_be_created_and_destroyed) {
 
 TEST(registering_a_client_always_succeeds) {
     ams::sf::ClientProcessId pid;
-    pid.value = 4242;
+    pid.process_id.value = 4242;
     ASSERT_TRUE(IClientProcessMonitor::RegisterClient(pid).IsSuccess());
 }
 

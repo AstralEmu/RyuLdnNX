@@ -361,10 +361,12 @@ private:
      * @param sender The session that sent the message
      * @param info Proxy info with source/dest IPs
      * @param send_func Function to call for each target session
+     * @return false if the message was rejected (spoofed source) and nothing
+     *         was routed; the caller must then drop it entirely
      */
     template<typename SendFunc>
     /// @gdb{tag="P2P:ROUTE", msg="Message routed"}
-    void RouteMessage(P2pProxySession* sender,
+    bool RouteMessage(P2pProxySession* sender,
                       ryu_ldn::protocol::ProxyInfo& info,
                       SendFunc send_func);
 
@@ -417,6 +419,15 @@ private:
     std::unique_ptr<P2pProxySession> m_sessions[MAX_PLAYERS];
     int m_session_count;
 
+    /// Started sessions that are still connected, authenticated or not
+    /// (non-owning). Stop() uses it to disconnect and wait for the receive
+    /// threads of peers that never authenticated, which m_sessions[] does not
+    /// hold. MAX_PLAYERS stack slots bound the started sessions; +1 is the
+    /// one AcceptLoop registers just before starting it.
+    static constexpr int MAX_LIVE_SESSIONS = MAX_PLAYERS + 1;
+    P2pProxySession* m_live_sessions[MAX_LIVE_SESSIONS]{};
+    int m_live_session_count = 0;
+
     // Disconnected sessions waiting to be deleted by ReapZombieSessions().
     // Sized at 2 * MAX_PLAYERS so a burst of joiners cycling in/out can't
     // overflow before the next reap. We can't `delete this` inside the
@@ -425,6 +436,10 @@ private:
     // AcceptLoop / Stop() free it once m_thread_done is true and the
     // thread has joined.
     static constexpr int MAX_ZOMBIE_SESSIONS = MAX_PLAYERS * 2;
+
+    /// Upper bound (ms) Stop() waits for the receive threads of the sessions it
+    /// disconnected; their sockets are shut down so they end almost at once.
+    static constexpr int STOP_SESSION_WAIT_MS = 2000;
     std::unique_ptr<P2pProxySession> m_zombie_sessions[MAX_ZOMBIE_SESSIONS];
     int m_zombie_session_count;
 

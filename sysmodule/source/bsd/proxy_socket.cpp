@@ -188,10 +188,8 @@ s32 ProxySocket::SendTo(const void* data, size_t len, s32 flags, const ryu_ldn::
         return -static_cast<s32>(Errno::Inval);
     }
 
-    // Check socket state
-    if (m_state == ProxySocketState::Closed) {
-        return -static_cast<s32>(Errno::BadF);
-    }
+    // A Closed socket is never seen here: Close() sets both shutdown flags, so a
+    // closed socket is refused above (Errno::Inval for send, EOF for receive).
 
     // Must be at least bound to send
     if (m_state == ProxySocketState::Created) {
@@ -246,10 +244,7 @@ s32 ProxySocket::RecvFrom(void* buffer, size_t len, s32 flags, ryu_ldn::bsd::Soc
         return 0; // EOF
     }
 
-    // Check socket state
-    if (m_state == ProxySocketState::Closed) {
-        return -static_cast<s32>(Errno::BadF);
-    }
+    // A Closed socket is never seen here: Close() sets m_shutdown_read (see SendTo).
 
     // Validate buffer
     if (buffer == nullptr && len > 0) {
@@ -358,20 +353,6 @@ void ProxySocket::IncomingData(const void* data, size_t len, const ryu_ldn::bsd:
     m_rx_count++;
 
     m_receive_event.Signal();
-}
-
-ReceivedPacket ProxySocket::PopFrontPacket(bool peek) {
-    // Caller must hold m_queue_mutex
-    if (m_rx_count == 0) {
-        return {};
-    }
-
-    ReceivedPacket packet = m_rx_ring[m_rx_head];
-    if (!peek) {
-        m_rx_head = (m_rx_head + 1) % PROXY_SOCKET_MAX_QUEUE_SIZE;
-        m_rx_count--;
-    }
-    return packet;
 }
 
 // =============================================================================
@@ -683,8 +664,9 @@ bool ProxySocket::WaitForData(u64 timeout_ms) {
     if (timeout_ms == 0) {
         m_receive_event.Wait();
         return true;
-    }         return m_receive_event.TimedWait(TimeSpan::FromMilliSeconds(timeout_ms));
-   
+    }
+
+    return m_receive_event.TimedWait(TimeSpan::FromMilliSeconds(timeout_ms));
 }
 
 } // namespace ams::mitm::bsd
