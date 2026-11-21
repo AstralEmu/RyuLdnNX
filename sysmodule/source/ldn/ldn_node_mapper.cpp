@@ -183,8 +183,10 @@ void LdnNodeMapper::UpdateFromNetworkInfo(const NetworkInfo& info) {
     for (u8 i = 0; i < info.ldn.nodeCount && i < MaxNodes; i++) {
         const auto& node = info.ldn.nodes[i];
 
-        // Only add nodes that are marked as connected
-        if (node.isConnected != 0) {
+        // Only add nodes that are marked as connected. nodeId comes from the
+        // server and is signed: reject anything outside the table so a bad
+        // packet cannot write out of bounds.
+        if (node.isConnected != 0 && node.nodeId >= 0 && node.nodeId < static_cast<s8>(MaxNodes)) {
             m_nodes[node.nodeId].ipv4_address = node.ipv4Address;
             m_nodes[node.nodeId].is_connected = true;
         }

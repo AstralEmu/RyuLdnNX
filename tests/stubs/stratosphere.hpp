@@ -18,6 +18,16 @@
 #include <cstring>
 #include <mutex>
 
+// libnx scalar aliases (global in the real toolchain)
+using u8 = std::uint8_t;
+using u16 = std::uint16_t;
+using u32 = std::uint32_t;
+using u64 = std::uint64_t;
+using s8 = std::int8_t;
+using s16 = std::int16_t;
+using s32 = std::int32_t;
+using s64 = std::int64_t;
+
 namespace ams {
 
 namespace os {
@@ -57,6 +67,29 @@ private:
     std::recursive_mutex m_recursive_mutex;
 };
 
+/// Non-recursive mutex of the SDK (Lockable)
+class SdkMutex {
+public:
+    SdkMutex() = default;
+    SdkMutex(const SdkMutex&) = delete;
+    SdkMutex& operator=(const SdkMutex&) = delete;
+
+    void lock() { m_mutex.lock(); }
+    bool try_lock() { return m_mutex.try_lock(); }
+    void unlock() { m_mutex.unlock(); }
+
+private:
+    std::mutex m_mutex;
+};
+
 } // namespace os
+
+namespace sf {
+
+/// Marker bases used by IPC structs; they carry no data on the host.
+struct LargeData {};
+struct PrefersPointerTransferMode {};
+
+} // namespace sf
 
 } // namespace ams
