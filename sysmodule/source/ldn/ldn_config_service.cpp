@@ -224,49 +224,27 @@ Result LdnConfigService::SetLogToFile(u32 enabled) {
     R_SUCCEED();
 }
 
-Result LdnConfigService::SaveConfig(sf::Out<ConfigResult> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    auto result = cfg.Save();
-
-    // Convert ryu_ldn::config::ConfigResult to IPC ConfigResult
+ConfigResult LdnConfigService::ToIpcResult(ryu_ldn::config::ConfigResult result) {
     switch (result) {
         case ryu_ldn::config::ConfigResult::Success:
-            *out = ConfigResult::Success;
-            break;
+            return ConfigResult::Success;
         case ryu_ldn::config::ConfigResult::FileNotFound:
-            *out = ConfigResult::FileNotFound;
-            break;
+            return ConfigResult::FileNotFound;
         case ryu_ldn::config::ConfigResult::ParseError:
-            *out = ConfigResult::ParseError;
-            break;
+            return ConfigResult::ParseError;
         case ryu_ldn::config::ConfigResult::IoError:
         default:
-            *out = ConfigResult::IoError;
-            break;
+            return ConfigResult::IoError;
     }
+}
+
+Result LdnConfigService::SaveConfig(sf::Out<ConfigResult> out) {
+    *out = ToIpcResult(ryu_ldn::config::ConfigManager::Instance().Save());
     R_SUCCEED();
 }
 
 Result LdnConfigService::ReloadConfig(sf::Out<ConfigResult> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    auto result = cfg.Reload();
-
-    // Convert ryu_ldn::config::ConfigResult to IPC ConfigResult
-    switch (result) {
-        case ryu_ldn::config::ConfigResult::Success:
-            *out = ConfigResult::Success;
-            break;
-        case ryu_ldn::config::ConfigResult::FileNotFound:
-            *out = ConfigResult::FileNotFound;
-            break;
-        case ryu_ldn::config::ConfigResult::ParseError:
-            *out = ConfigResult::ParseError;
-            break;
-        case ryu_ldn::config::ConfigResult::IoError:
-        default:
-            *out = ConfigResult::IoError;
-            break;
-    }
+    *out = ToIpcResult(ryu_ldn::config::ConfigManager::Instance().Reload());
     R_SUCCEED();
 }
 

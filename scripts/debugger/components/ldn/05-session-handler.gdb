@@ -31,4 +31,4 @@ dprintf ryu_ldn::ldn::LdnSessionHandler::get_node_count, "[LDN:SESSION_HANDLER] 
 dprintf ryu_ldn::ldn::LdnSessionHandler::leave_session, "[LDN:SESSION_HANDLER] leave_session\n"
 dprintf ryu_ldn::ldn::LdnSessionHandler::reset, "[LDN:SESSION_HANDLER] reset\n"
 
-echo [LDN] session_handler: 26 dprintf points\n
+echo [LDN] session-handler: 26 dprintf points\n

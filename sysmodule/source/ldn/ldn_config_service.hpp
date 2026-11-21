@@ -40,6 +40,7 @@
 
 #include <stratosphere.hpp>
 #include "ldn_types.hpp"
+#include "../config/config.hpp"
 
 namespace ams::mitm::ldn {
 
@@ -337,6 +338,14 @@ public:
      */
     /// @gdb{tag="LDN:CONFIG", msg="ReloadConfig"}
     static Result ReloadConfig(sf::Out<ConfigResult> out);
+
+    /**
+     * @brief Map a config-file result to the IPC ConfigResult
+     *
+     * Shared by SaveConfig and ReloadConfig. Any value that has no IPC
+     * counterpart is reported as IoError.
+     */
+    static ConfigResult ToIpcResult(ryu_ldn::config::ConfigResult result);
 
 private:
     /**

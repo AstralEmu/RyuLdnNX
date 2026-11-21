@@ -87,9 +87,7 @@ bool g_whitelist_loaded = false;
  * @brief Parse a hex string like "0x0100152000022000" to u64
  */
 u64 ParseHexId(const char* str, size_t len) {
-    if ((str == nullptr) || len == 0) { return 0;
-}
-
+    // Only called with line_buf and line_len > 0: no null/empty guard needed.
     size_t i = 0;
 
     // Skip "0x" or "0X" prefix if present

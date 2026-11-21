@@ -24,6 +24,9 @@ dprintf ams::mitm::ldn::SharedState::SetLastRtt, "[LDN:STATE] SetLastRtt: rtt=%u
 dprintf ams::mitm::ldn::SharedState::GetLastRtt, "[LDN:STATE] GetLastRtt\n"
 dprintf ams::mitm::ldn::SharedState::RequestReconnect, "[LDN:STATE] RequestReconnect\n"
 dprintf ams::mitm::ldn::SharedState::ConsumeReconnectRequest, "[LDN:STATE] ConsumeReconnectRequest\n"
+dprintf ams::mitm::ldn::SharedState::IncrementSessionCount, "[LDN:STATE] IncrementSessionCount\n"
+dprintf ams::mitm::ldn::SharedState::DecrementSessionCount, "[LDN:STATE] DecrementSessionCount\n"
+dprintf ams::mitm::ldn::SharedState::GetActiveSessionCount, "[LDN:STATE] GetActiveSessionCount\n"
 dprintf ams::mitm::ldn::SharedState::SharedState, "[LDN:STATE] SharedState: constructor\n"
 dprintf ams::mitm::ldn::LdnStateMachine::LdnStateMachine, "[LDN:STATE] LdnStateMachine: constructor\n"
 dprintf ams::mitm::ldn::LdnStateMachine::~LdnStateMachine, "[LDN:STATE] LdnStateMachine: destructor\n"
@@ -47,6 +50,5 @@ dprintf ams::mitm::ldn::LdnStateMachine::SetStateCallback, "[LDN:STATE] SetState
 dprintf ams::mitm::ldn::LdnStateMachine::StateToString, "[LDN:STATE] StateToString\n"
 dprintf ams::mitm::ldn::LdnStateMachine::ResultToString, "[LDN:STATE] ResultToString\n"
 dprintf ams::mitm::ldn::LdnStateMachine::SignalStateChange, "[LDN:STATE] SignalStateChange: signaling event\n"
-dprintf ams::mitm::ldn::LdnStateMachine::TransitionTo, "[LDN:STATE] TransitionTo: new_state=%d\n", $x1
 
-echo [LDN] state: 44 dprintf points\n
+echo [LDN] state: 46 dprintf points\n

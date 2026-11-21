@@ -178,7 +178,7 @@ The sysmodule runs on Switch hardware with aggressive constraints:
 
 ## Test Patterns
 
-- Tests in `tests/` are host-compiled (`g++ -std=c++17 -Wall -Wextra -g -O0 -I../sysmodule/source -DTEST_BUILD`).
+- Tests in `tests/` are host-compiled (`g++ -std=c++20 -Wall -Wextra -g -O0 -I../sysmodule/source -DTEST_BUILD`).
 - Each suite has its own Makefile target: `make test-<name>` runs just that suite.
 - Lightweight custom test framework: `TEST(name)` macro, `ASSERT_TRUE`/`ASSERT_EQ`/`ASSERT_NE` macros, auto-registration via `register_test()`.
 - Some suites link implementation objects (e.g., `config.o`, `tcp_client.o`); others are standalone (e.g., `ldn_state_machine_tests.cpp` inlines everything).

@@ -30,7 +30,7 @@ python3 scripts/gdb_codegen.py generate
 python3 scripts/gdb_codegen.py verify
 ```
 
-Unit tests live in [tests/](tests/) and build as native host binaries with `g++ -std=c++17 -DTEST_BUILD`. Each test suite has a per-suite target:
+Unit tests live in [tests/](tests/) and build as native host binaries with `g++ -std=c++20 -DTEST_BUILD`. Each test suite has a per-suite target:
 
 ```bash
 cd tests && make test-ldn-state-machine       # any of: protocol, config, log, socket,

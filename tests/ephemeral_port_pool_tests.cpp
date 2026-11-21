@@ -8,43 +8,8 @@
 #include <cstdio>
 #include <cstdint>
 
+#include "test_harness.hpp"
 #include "bsd/ephemeral_port_pool.hpp"
-
-static int g_tests_passed = 0;
-static int g_tests_failed = 0;
-
-#define TEST(name) \
-    static void test_##name(); \
-    static struct test_##name##_register { \
-        test_##name##_register() { \
-            printf("  [TEST] %s... ", #name); \
-            fflush(stdout); \
-            test_##name(); \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } \
-    } test_##name##_instance; \
-    static void test_##name()
-
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL\n    Assertion failed: %s\n    at %s:%d\n", #cond, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
-
-#define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
-
-#define ASSERT_EQ(a, b) \
-    do { \
-        if (!((a) == (b))) { \
-            printf("FAIL\n    Expected: %s == %s\n    at %s:%d\n", #a, #b, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
 
 using ams::mitm::bsd::EphemeralPortPool;
 using ams::mitm::bsd::EPHEMERAL_PORT_COUNT;
@@ -138,13 +103,5 @@ TEST(release_all_frees_both_pools_and_resets_the_hints) {
 }
 
 int main() {
-    printf("\n========================================\n");
-    printf("  EphemeralPortPool Tests\n");
-    printf("========================================\n\n");
-
-    printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_passed + g_tests_failed);
-    printf("========================================\n\n");
-
-    return g_tests_failed > 0 ? 1 : 0;
+    return test_report("EphemeralPortPool Tests");
 }

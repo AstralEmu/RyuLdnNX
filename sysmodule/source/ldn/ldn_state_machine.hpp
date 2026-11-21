@@ -244,23 +244,6 @@ public:
     void SignalStateChange();
 
 private:
-    /**
-     * @brief Perform state transition if valid
-     * @param new_state Target state
-     * @return Transition result
-     */
-    /// @gdb{tag="LDN:STATE", msg="TransitionTo: new_state=%d", args="$x1"}
-    StateTransitionResult TransitionTo(CommState new_state);
-
-    /**
-     * @brief Check if transition is valid
-     * @param from Source state
-     * @param to Target state
-     * @return true if transition is allowed
-     */
-    static bool IsValidTransition(CommState from, CommState to);
-
-private:
     mutable os::SdkMutex m_mutex;           ///< Mutex for thread safety
     CommState m_state;                       ///< Current state
     os::SystemEvent m_state_event;           ///< State change event

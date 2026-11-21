@@ -24,4 +24,4 @@ dprintf ryu_ldn::network::RyuLdnClient::is_handshake_timeout, "[NETWORK:STATE_CA
 dprintf ryu_ldn::network::RyuLdnClient::start_backoff, "[NETWORK:STATE_CALLBACKS] start_backoff: delay=%u retry=%u\n", $x0, $x1
 dprintf ryu_ldn::network::RyuLdnClient::is_backoff_expired, "[NETWORK:STATE_CALLBACKS] is_backoff_expired\n"
 
-echo [NETWORK] state_callbacks: 19 dprintf points\n
+echo [NETWORK] state-callbacks: 19 dprintf points\n

@@ -22,4 +22,4 @@ dprintf ryu_ldn::network::Socket::is_connected, "[NETWORK:STATE_MACHINE] Socket 
 dprintf ryu_ldn::network::socket_init, "[NETWORK:STATE_MACHINE] socket_init\n"
 dprintf ryu_ldn::network::socket_exit, "[NETWORK:STATE_MACHINE] socket_exit\n"
 
-echo [NETWORK] state_machine: 17 dprintf points\n
+echo [NETWORK] state-machine: 17 dprintf points\n

@@ -315,64 +315,6 @@ const char* LdnStateMachine::ResultToString(StateTransitionResult result) {
     }
 }
 
-// ============================================================================
-// Private Methods
-// ============================================================================
-
-StateTransitionResult LdnStateMachine::TransitionTo(CommState new_state) {
-    if (m_state == new_state) {
-        return StateTransitionResult::AlreadyInState;
-    }
-
-    if (!IsValidTransition(m_state, new_state)) {
-        return StateTransitionResult::InvalidTransition;
-    }
-
-    CommState old_state = m_state;
-    m_state = new_state;
-    SignalStateChange();
-
-    if (m_callback != nullptr) {
-        m_callback(old_state, m_state, m_callback_user_data);
-    }
-
-    return StateTransitionResult::Success;
-}
-
-bool LdnStateMachine::IsValidTransition(CommState from, CommState to) {
-    // Special cases: can always go to Error or None (via Finalize)
-    if (to == CommState::Error || to == CommState::None) {
-        return true;
-    }
-
-    switch (from) {
-        case CommState::None:
-            return to == CommState::Initialized;
-
-        case CommState::Initialized:
-            return to == CommState::AccessPoint || to == CommState::Station;
-
-        case CommState::AccessPoint:
-            return to == CommState::AccessPointCreated || to == CommState::Initialized;
-
-        case CommState::AccessPointCreated:
-            return to == CommState::AccessPoint || to == CommState::Initialized;
-
-        case CommState::Station:
-            return to == CommState::StationConnected || to == CommState::Initialized;
-
-        case CommState::StationConnected:
-            return to == CommState::Station || to == CommState::Initialized;
-
-        case CommState::Error:
-            // Can recover to Initialized via re-initialization
-            return to == CommState::Initialized;
-
-        default:
-            return false;
-    }
-}
-
 void LdnStateMachine::SignalStateChange() {
     m_state_event.Signal();
 }
