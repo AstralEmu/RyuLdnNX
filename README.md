@@ -1,8 +1,13 @@
-# ryu_ldn_nx
+# RyuLdnNX
+<p align="center">
+  <img src="https://github.com/AstralEmu/.github/raw/refs/heads/main/profile/banner-astralemu.svg" alt="AstralEmu" width="100%"/>
+</p>
 
-[![Build Status](https://github.com/Ethiquema/ryu_ldn_nx/actions/workflows/build.yml/badge.svg)](https://github.com/Ethiquema/ryu_ldn_nx/actions)
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/REMOVED/REMOVED/raw/coverage.json)](https://github.com/Ethiquema/ryu_ldn_nx/actions)
-[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
+<p align="center">
+  <img src="https://img.shields.io/badge/focus-console%20modding%20%26%20emulation-f2d974?style=flat-square" alt="Focus"/>
+  <img src="https://img.shields.io/badge/platform-Nintendo%20Switch%20|%20Atmosphere%20|%20Ryujinx-1a1a4e?style=flat-square" alt="Platform"/>
+  <img src="https://img.shields.io/badge/license-GPL-blue?style=flat-square" alt="License"/>
+</p>
 
 Nintendo Switch sysmodule enabling online multiplayer via Ryujinx LDN servers — no complex network setup required.
 
@@ -13,9 +18,9 @@ This project is still under development and is not ready for release yet.
 
 If you want to test the project and contribute, please use a private RyuLDN server, please DO NOT USE the official Ryujinx LDN servers with this project (ldn.ryujinx.app).
 
-A hosted testing instance is also available via IP address at 90.93.156.13.
+A hosted testing instance is also available at ldn.astralemu.com.
 
-## What is ryu_ldn_nx?
+## What is RyuLdnNX?
 
 ryu_ldn_nx is an Atmosphere sysmodule that intercepts local wireless (LDN) game traffic and routes it through Ryujinx's LDN servers over TCP. This allows Switch users with CFW to play online multiplayer games without:
 
