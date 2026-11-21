@@ -962,6 +962,14 @@ private:
         ASSERT_TRUE((peer).accept_client()); \
     } while (0)
 
+/// Same as CONNECT_PAIR for helpers returning bool instead of asserting.
+#define CONNECT_PAIR_BOOL(client, peer) \
+    do { \
+        socket_init(); \
+        if ((client).connect("127.0.0.1", (peer).port(), 2000) != ClientResult::Success) return false; \
+        if (!(peer).accept_client()) return false; \
+    } while (0)
+
 /// Build one wire packet (header + payload) the way the server would.
 static std::vector<uint8_t> make_packet(PacketId type, const void* payload, size_t size) {
     std::vector<uint8_t> buf(sizeof(LdnHeader) + size);
@@ -1092,6 +1100,56 @@ TEST(connected_fixed_size_messages_carry_their_packet_id_and_size) {
     ASSERT_EQ(client.send_reject(rej), ClientResult::Success);
     p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::Reject, sizeof(RejectRequest));
+}
+
+/// A payload whose every byte is distinct and non-zero, so any reordering,
+/// truncation or padding change on the wire shows up as a byte difference.
+template <typename T>
+static T patterned(uint8_t seed) {
+    T value{};
+    auto* bytes = reinterpret_cast<uint8_t*>(&value);
+    for (size_t i = 0; i < sizeof(T); ++i) {
+        bytes[i] = static_cast<uint8_t>(seed + 31 * i + 1);
+    }
+    return value;
+}
+
+/// Send `msg` through the real TcpClient and require the bytes on the wire to
+/// equal what protocol::encode() (the C#-server-verified layout) produces.
+template <typename T, typename SendFn>
+static bool wire_matches_reference(PacketId id, const T& msg, SendFn send) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR_BOOL(client, peer);
+    if (send(client, msg) != ClientResult::Success) return false;
+
+    std::vector<uint8_t> expected(get_packet_size<T>());
+    size_t written = 0;
+    if (encode(expected.data(), expected.size(), id, msg, written) != EncodeResult::Success) return false;
+
+    auto got = peer.read_packet();
+    return written == expected.size() && got == expected;
+}
+
+TEST(connected_fixed_size_messages_are_byte_identical_to_the_reference_encoder) {
+    ASSERT_TRUE(wire_matches_reference(PacketId::Initialize, patterned<InitializeMessage>(1),
+        [](TcpClient& c, const InitializeMessage& m) { return c.send_initialize(m); }));
+    ASSERT_TRUE(wire_matches_reference(PacketId::Passphrase, patterned<PassphraseMessage>(2),
+        [](TcpClient& c, const PassphraseMessage& m) { return c.send_passphrase(m); }));
+    ASSERT_TRUE(wire_matches_reference(PacketId::Ping, patterned<PingMessage>(3),
+        [](TcpClient& c, const PingMessage& m) { return c.send_ping(m); }));
+    ASSERT_TRUE(wire_matches_reference(PacketId::Disconnect, patterned<DisconnectMessage>(4),
+        [](TcpClient& c, const DisconnectMessage& m) { return c.send_disconnect(m); }));
+    ASSERT_TRUE(wire_matches_reference(PacketId::Connect, patterned<ConnectRequest>(5),
+        [](TcpClient& c, const ConnectRequest& m) { return c.send_connect(m); }));
+    ASSERT_TRUE(wire_matches_reference(PacketId::ConnectPrivate, patterned<ConnectPrivateRequest>(6),
+        [](TcpClient& c, const ConnectPrivateRequest& m) { return c.send_connect_private(m); }));
+    ASSERT_TRUE(wire_matches_reference(PacketId::Scan, patterned<ScanFilterFull>(7),
+        [](TcpClient& c, const ScanFilterFull& m) { return c.send_scan(m); }));
+    ASSERT_TRUE(wire_matches_reference(PacketId::SetAcceptPolicy, patterned<SetAcceptPolicyRequest>(8),
+        [](TcpClient& c, const SetAcceptPolicyRequest& m) { return c.send_set_accept_policy(m); }));
+    ASSERT_TRUE(wire_matches_reference(PacketId::Reject, patterned<RejectRequest>(9),
+        [](TcpClient& c, const RejectRequest& m) { return c.send_reject(m); }));
 }
 
 TEST(connected_send_passphrase_string_copies_and_truncates) {
