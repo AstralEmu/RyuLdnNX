@@ -51,7 +51,8 @@ TEST_SOURCES := \
 	p2p_create_network_tests.cpp \
 	ephemeral_port_pool_tests.cpp \
 	ldn_node_mapper_tests.cpp \
-	ldn_network_timeout_tests.cpp
+	ldn_network_timeout_tests.cpp \
+	ldn_proxy_buffer_tests.cpp
 
 # Implementation sources needed for tests
 IMPL_SOURCES := \
@@ -98,14 +99,15 @@ TARGET_P2P_CREATE_NETWORK := run_p2p_create_network_tests
 TARGET_EPHEMERAL_PORT_POOL := run_ephemeral_port_pool_tests
 TARGET_LDN_NODE_MAPPER := run_ldn_node_mapper_tests
 TARGET_LDN_NETWORK_TIMEOUT := run_ldn_network_timeout_tests
+TARGET_LDN_PROXY_BUFFER := run_ldn_proxy_buffer_tests
 TARGET_ALL := run_all_tests
 
 #---------------------------------------------------------------------------------
 # Build rules
 #---------------------------------------------------------------------------------
-.PHONY: all clean test test-protocol test-config test-config-manager test-log test-socket test-tcp-client test-connection-state test-reconnect test-client test-ldn-types test-ldn-state-machine test-ldn-proxy test-ldn-error test-ldn-integration test-overlay test-ipc-config test-config-ipc-service test-shared-state test-packet-dispatcher test-session-handler test-proxy-handler test-handler-integration test-upnp test-p2p-proxy test-p2p-client test-p2p-integration test-p2p-create-network test-ephemeral-port-pool test-ldn-node-mapper test-ldn-network-timeout coverage coverage-enforce coverage-full-enforce
+.PHONY: all clean test test-protocol test-config test-config-manager test-log test-socket test-tcp-client test-connection-state test-reconnect test-client test-ldn-types test-ldn-state-machine test-ldn-proxy test-ldn-error test-ldn-integration test-overlay test-ipc-config test-config-ipc-service test-shared-state test-packet-dispatcher test-session-handler test-proxy-handler test-handler-integration test-upnp test-p2p-proxy test-p2p-client test-p2p-integration test-p2p-create-network test-ephemeral-port-pool test-ldn-node-mapper test-ldn-network-timeout test-ldn-proxy-buffer coverage coverage-enforce coverage-full-enforce
 
-all: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT)
+all: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER)
 
 # Protocol tests (header-only, no impl needed)
 $(TARGET_PROTOCOL): protocol_tests.o
@@ -228,6 +230,10 @@ $(TARGET_LDN_NODE_MAPPER): ldn_node_mapper_tests.o ldn_node_mapper.o
 $(TARGET_LDN_NETWORK_TIMEOUT): ldn_network_timeout_tests.o ldn_network_timeout.o log.o config.o
 	$(CXX) $(LDFLAGS) -o $@ $^
 
+# LdnProxyBuffer tests (real ldn/ldn_proxy_buffer.cpp)
+$(TARGET_LDN_PROXY_BUFFER): ldn_proxy_buffer_tests.o ldn_proxy_buffer.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
 # Compile test sources
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
@@ -266,6 +272,9 @@ ldn_node_mapper.o: ../sysmodule/source/ldn/ldn_node_mapper.cpp
 ldn_network_timeout.o: ../sysmodule/source/ldn/ldn_network_timeout.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
+ldn_proxy_buffer.o: ../sysmodule/source/ldn/ldn_proxy_buffer.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 ldn_packet_dispatcher.o: ../sysmodule/source/ldn/ldn_packet_dispatcher.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
@@ -276,7 +285,7 @@ ldn_proxy_handler.o: ../sysmodule/source/ldn/ldn_proxy_handler.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Run all tests
-test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT)
+test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER)
 	@echo "=== Running Protocol Tests ==="
 	./$(TARGET_PROTOCOL)
 	@echo ""
@@ -366,6 +375,9 @@ test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG)
 	@echo ""
 	@echo "=== Running NetworkTimeout Tests ==="
 	./$(TARGET_LDN_NETWORK_TIMEOUT)
+	@echo ""
+	@echo "=== Running LdnProxyBuffer Tests ==="
+	./$(TARGET_LDN_PROXY_BUFFER)
 
 test-protocol: $(TARGET_PROTOCOL)
 	./$(TARGET_PROTOCOL)
@@ -516,7 +528,7 @@ coverage-full-enforce: clean
 	cd .. && python3 scripts/check-coverage.py --min $(MIN_COVERAGE) --root .
 
 clean:
-	rm -f *.o $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT)
+	rm -f *.o $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER)
 	rm -f *.gcno *.gcda *.gcov
 
 #---------------------------------------------------------------------------------
@@ -614,8 +626,11 @@ config_ipc_service_tests.o: config_ipc_service_tests.cpp
 test-ephemeral-port-pool: $(TARGET_EPHEMERAL_PORT_POOL)
 	./$(TARGET_EPHEMERAL_PORT_POOL)
 
-test-ldn-node-mapper: $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT)
+test-ldn-node-mapper: $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER)
 	./$(TARGET_LDN_NODE_MAPPER)
 
-test-ldn-network-timeout: $(TARGET_LDN_NETWORK_TIMEOUT)
+test-ldn-network-timeout: $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER)
 	./$(TARGET_LDN_NETWORK_TIMEOUT)
+
+test-ldn-proxy-buffer: $(TARGET_LDN_PROXY_BUFFER)
+	./$(TARGET_LDN_PROXY_BUFFER)

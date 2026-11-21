@@ -49,7 +49,8 @@ LdnProxyBuffer::LdnProxyBuffer()
  *
  * ## Algorithm
  * 1. Check if packet queue is full
- * 2. Check if data buffer has enough space
+ * 2. Check if data buffer has enough free space (never overwriting unread
+ *    packets, also after the write position wrapped)
  * 3. Copy data to ring buffer (handle wrap-around)
  * 4. Store packet metadata
  * 5. Update write indices
@@ -73,17 +74,28 @@ bool LdnProxyBuffer::Write(const ryu_ldn::protocol::ProxyDataHeader& header,
         return false;
     }
 
-    // Calculate available data space
-    // If not enough contiguous space at end, wrap to start if space is available
-    size_t available = BufferSize - m_data_write_pos;
-    if (available < size) {
-        // Not enough contiguous space, wrap to start if possible
-        if (m_data_read_pos > size) {
-            m_data_write_pos = 0;
-        } else {
-            // Buffer full
-            return false;
+    // Where does the unread data start? Writes must never reach it.
+    // With nothing queued the data area is free (Read() rewinds it).
+    const size_t head = (m_packet_count > 0)
+        ? m_packets[m_packet_read_idx].data_offset
+        : m_data_write_pos;
+
+    if (m_data_write_pos >= head) {
+        // Unread data sits at or before the write position: the free space is
+        // the tail of the buffer, then (after wrapping) the area before head.
+        if (BufferSize - m_data_write_pos < size) {
+            if (head > size) {
+                m_data_write_pos = 0;
+            } else {
+                // Buffer full
+                return false;
+            }
         }
+    } else if (head - m_data_write_pos <= size) {
+        // The writer already wrapped: only the gap up to the oldest unread
+        // packet is free. Keep write_pos strictly below head so "full" is
+        // never confused with "empty".
+        return false;
     }
 
     // Store packet metadata
