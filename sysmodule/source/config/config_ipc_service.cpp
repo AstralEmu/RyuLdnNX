@@ -110,14 +110,11 @@ void safe_strcpy(char* dest, const char* src, size_t max_len) {
  *   - Length (excluding null terminator) must be <= max_len
  *   - Every character must be printable ASCII (0x20 .. 0x7E)
  *
- * @param str Null-terminated passphrase buffer
+ * @param str Passphrase buffer, never null (the only caller passes an array)
  * @param max_len Maximum allowed length excluding the null terminator
  * @return true if valid, false otherwise
  */
 bool ValidatePassphrase(const char* str, size_t max_len) {
-    if (str == nullptr) {
-        return false;
-    }
     size_t i = 0;
     while (str[i] != '\0') {
         if (i >= max_len) {
@@ -141,14 +138,11 @@ bool ValidatePassphrase(const char* str, size_t max_len) {
  *     backtick character. These would be dangerous if the host string
  *     were ever passed to a shell (e.g., for DNS lookup helpers).
  *
- * @param str Null-terminated host buffer
+ * @param str Host buffer, never null (the only caller passes an array)
  * @param max_len Maximum allowed length excluding the null terminator
  * @return true if valid, false otherwise
  */
 bool ValidateHost(const char* str, size_t max_len) {
-    if (str == nullptr) {
-        return false;
-    }
     size_t i = 0;
     while (str[i] != '\0') {
         if (i >= max_len) {
@@ -267,7 +261,10 @@ ams::Result ConfigService::GetPassphrase(RyuCfgOutPassphraseString out) {
  * @return Success or `result::ResultInvalidIpcInput` on validation failure
  */
 ams::Result ConfigService::SetPassphrase(RyuCfgPassphraseString passphrase) {
-    if (!ValidatePassphrase(passphrase.buf.data(), config::MAX_PASSPHRASE_LENGTH)) {
+    // Bound the scan by the 64-byte IPC buffer (63 characters + terminator), not
+    // by the larger config limit: an unterminated buffer must be rejected, never
+    // read past its end.
+    if (!ValidatePassphrase(passphrase.buf.data(), passphrase.buf.size() - 1)) {
         LOG_WARN("Config IPC: SetPassphrase rejected (invalid length or non-printable chars)");
         R_THROW(result::ResultInvalidIpcInput());
     }
@@ -352,7 +349,10 @@ ams::Result ConfigService::GetServerAddress(RyuCfgOutServerAddress out) {
  * @return Success or `result::ResultInvalidIpcInput` on validation failure
  */
 ams::Result ConfigService::SetServerAddress(RyuCfgInServerAddress address) {
-    if (!ValidateHost(address.host, config::MAX_HOST_LENGTH)) {
+    // The IPC field is 64 bytes: bound the scan by the field, not by the larger
+    // config limit, so an unterminated field is rejected instead of being read
+    // past its end into the port and padding bytes.
+    if (!ValidateHost(address.host, sizeof(address.host) - 1)) {
         LOG_WARN("Config IPC: SetServerAddress rejected (invalid host length or shell metacharacters)");
         R_THROW(result::ResultInvalidIpcInput());
     }

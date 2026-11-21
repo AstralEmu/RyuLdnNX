@@ -218,6 +218,7 @@ class Out {
 public:
     explicit Out(T& target) : m_target(&target) {}
     T& operator*() const { return *m_target; }
+    T* operator->() const { return m_target; }
 
 private:
     T* m_target;
@@ -229,11 +230,20 @@ private:
 
 #define R_SUCCEED() return ::ams::ResultSuccess()
 #define R_FAILED(expr) ((expr).IsFailure())
+#define R_THROW(res) return (res)
+
+/// Result module/description: the host Result keeps the same bit packing as
+/// the real one (module in bits 0-8, description from bit 9), so a code
+/// defined here is non-zero and distinguishable from success.
+#define R_DEFINE_NAMESPACE_RESULT_MODULE(NS, MOD) \
+    namespace NS { inline constexpr std::uint32_t ResultModuleId = (MOD); }
+#define R_DEFINE_ERROR_RESULT(NAME, DESC) \
+    constexpr ::ams::Result Result##NAME() { return ::ams::Result(ResultModuleId | ((DESC) << 9)); }
 
 /// Stand-in for the sf interface description macros. Real Stratosphere
 /// generates a concept checking every method signature; the host version
 /// checks that each listed method exists on the class (not its signature),
 /// which is what the static_assert in the sources guards at build time.
-#define AMS_SF_METHOD_INFO(C, H, ID, RET, NAME, ARGS, CALLARGS) (void)&C::NAME;
+#define AMS_SF_METHOD_INFO(C, H, ID, RET, NAME, ARGS, CALLARGS, ...) (void)&C::NAME;
 #define AMS_SF_DEFINE_INTERFACE(NS, NAME, METHODS, ID) \
     namespace NS { template<class T> concept Is##NAME = requires { METHODS(T, 0) }; }
