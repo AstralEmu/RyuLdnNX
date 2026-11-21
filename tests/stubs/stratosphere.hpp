@@ -82,6 +82,25 @@ private:
     std::mutex m_mutex;
 };
 
+/// Host clock: tests set the "system tick" directly, in milliseconds.
+inline std::uint64_t g_host_tick_ms = 0;
+
+class TimeSpan {
+public:
+    explicit TimeSpan(std::uint64_t ms) : m_ms(ms) {}
+    std::uint64_t GetMilliSeconds() const { return m_ms; }
+
+private:
+    std::uint64_t m_ms;
+};
+
+struct Tick {
+    std::uint64_t ms;
+};
+
+inline Tick GetSystemTick() { return Tick{g_host_tick_ms}; }
+inline TimeSpan ConvertToTimeSpan(Tick tick) { return TimeSpan(tick.ms); }
+
 } // namespace os
 
 namespace sf {
