@@ -777,6 +777,80 @@ TEST(session_handler_accept_policy_persists_after_reset) {
     ASSERT_EQ(handler.get_accept_policy(), AcceptPolicy::AcceptAll);
 }
 
+TEST(get_max_nodes_is_zero_outside_a_session) {
+    ldn::LdnSessionHandler handler;
+    ASSERT_EQ(handler.get_max_nodes(), 0);
+
+    InitializeMessage init{};
+    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::Initialized);
+    ASSERT_EQ(handler.get_max_nodes(), 0);
+}
+
+TEST(set_local_node_id_zero_marks_host_only_inside_a_session) {
+    ldn::LdnSessionHandler handler;
+    InitializeMessage init{};
+    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+
+    // Not in a session yet: node id is stored but the host flag is untouched.
+    handler.set_local_node_id(0);
+    ASSERT_EQ(handler.get_local_node_id(), 0);
+    ASSERT_FALSE(handler.is_host());
+
+    // Join a session as a station, then become node 0.
+    NetworkInfo info = make_test_network_info(2, 8);
+    handler.handle_connected(make_test_header(PacketId::Connected, sizeof(info)), info);
+    ASSERT_TRUE(handler.is_in_session());
+    handler.set_local_node_id(1);
+    ASSERT_FALSE(handler.is_host());
+    handler.set_local_node_id(0);
+    ASSERT_TRUE(handler.is_host());
+    ASSERT_EQ(handler.get_max_nodes(), 8);
+}
+
+TEST(leave_session_is_a_no_op_before_initialization) {
+    ldn::LdnSessionHandler handler;
+    handler.leave_session();
+    ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::None);
+}
+
+TEST(repeated_initialize_does_not_notify_state_change_twice) {
+    g_callback_state.reset();
+    ldn::LdnSessionHandler handler;
+    InitializeMessage init{};
+    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+
+    int notifications = 0;
+    static int* counter;
+    counter = &notifications;
+    handler.set_state_callback([](ldn::LdnSessionState, ldn::LdnSessionState) { ++*counter; });
+    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    ASSERT_EQ(notifications, 0);
+}
+
+TEST(sync_network_after_reinitialize_restores_host_access_point_state) {
+    // A server that re-sends Initialize while we are hosting drops the state
+    // back to Initialized while the host flag is still set; the next
+    // SyncNetwork must put us back in AccessPoint.
+    ldn::LdnSessionHandler handler;
+    InitializeMessage init{};
+    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+
+    handler.set_local_node_id(0);
+    NetworkInfo info = make_test_network_info(1, 8);
+    handler.handle_sync_network(make_test_header(PacketId::SyncNetwork, sizeof(info)), info);
+    ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::AccessPoint);
+    ASSERT_TRUE(handler.is_host());
+
+    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::Initialized);
+    ASSERT_TRUE(handler.is_host());
+
+    handler.set_local_node_id(1);
+    handler.handle_sync_network(make_test_header(PacketId::SyncNetwork, sizeof(info)), info);
+    ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::AccessPoint);
+}
+
 // ============================================================================
 // Main
 // ============================================================================

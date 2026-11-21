@@ -49,18 +49,25 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: recursive
           fetch-depth: 0
 
       - name: Install dependencies
+        env:
+          YQ_VERSION: v4.54.2
+          YQ_SHA256: 44c7759059b4910827a0059a2757b22001e59360cdecdb2ef8dedc4b6c7e9f32
+          GCOVR_VERSION: 8.7
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y build-essential g++ netcat-openbsd
-          pip install gcovr
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+          pip install "gcovr==${GCOVR_VERSION}"
+          # Pinned release, checksum-verified before it is made executable.
+          curl -fsSL -o /tmp/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          echo "${YQ_SHA256}  /tmp/yq" | sha256sum --check --strict -
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
 
       - name: Pull service images
         run: docker compose pull
@@ -94,7 +101,7 @@ jobs:
       - name: Compute average coverage
         id: coverage
         run: |
-          python3 scripts/check-coverage.py --min 0 --root . --json /tmp/cov.json || true
+          python3 scripts/check-coverage.py --min 0 --root . --json /tmp/cov.json
           python3 <<'PYEOF' > /tmp/avg.txt
           import json
           with open('/tmp/cov.json') as f:
@@ -110,11 +117,11 @@ jobs:
           avg = (total_covered / total_lines * 100) if total_lines > 0 else 0
           print(f'{avg:.1f}')
           PYEOF
-          echo "percent=$(cat /tmp/avg.txt)" >> $GITHUB_OUTPUT
+          echo "percent=$(cat /tmp/avg.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Update coverage badge
         if: ${{ inputs.badge-always == true || github.event_name == 'push' }}
-        uses: schneegans/dynamic-badges-action@v1.8.0
+        uses: schneegans/dynamic-badges-action@0e50b8bad39e7e1afd3e4e9c2b7dd145fad07501 # v1.8.0
         with:
           auth: ${{ secrets.GIST_BADGE_SECRET }}
           gistID: REMOVED
@@ -133,13 +140,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: recursive
           fetch-depth: 0
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -153,19 +160,20 @@ jobs:
           DEFAULT_BRANCH: ${{ inputs.default-branch }}
         run: |
           git config --global --add safe.directory '*'
-          git symbolic-ref HEAD refs/heads/"${GITHUB_REF_NAME:-$DEFAULT_BRANCH}" 2>/dev/null || true
+          git symbolic-ref HEAD refs/heads/"${GITHUB_REF_NAME:-$DEFAULT_BRANCH}" \
+            || echo "::warning::could not point HEAD at a symbolic ref; git describe may warn"
 
       - name: Build sysmodule + overlay + dist ZIP
         run: docker compose run --rm build
 
       - name: Upload release ZIP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ inputs.artifact-name-zip }}
           path: ryu_ldn_nx-release.zip
 
       - name: Upload debug symbols
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ inputs.artifact-name-debug }}
           path: |

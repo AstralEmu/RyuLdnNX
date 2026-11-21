@@ -2289,6 +2289,264 @@ bool test_get_last_error_code_after_network_error() {
     return true;
 }
 
+// ============================================================================
+// Coverage closure: Ready-state packet handling, Initialize failures,
+// handshake responses with a state callback registered
+// ============================================================================
+
+/** @brief Push a packet of the given type and payload bytes onto the mock queue */
+static void push_packet(MockTcpClient* mock, PacketId id, const void* payload, size_t size) {
+    MockPacket pkt;
+    pkt.id = id;
+    pkt.data.resize(size);
+    if (size > 0) {
+        std::memcpy(pkt.data.data(), payload, size);
+    }
+    mock->recv_queue.push(std::move(pkt));
+    mock->next_recv_result = ClientResult::Success;
+}
+
+/** @brief Connect and send the handshake so the client waits in Handshaking */
+static void drive_to_handshaking(RyuLdnClient* client, MockTcpClient* mock, uint64_t t) {
+    mock->next_connect_result = ClientResult::Success;
+    client->connect("127.0.0.1", 30456);
+    mock->next_send_result = ClientResult::Success;
+    client->update(t);
+}
+
+/**
+ * @brief A Disconnect packet from the server in Ready moves the client to
+ * Disconnecting; the next update() completes it to Disconnected.
+ */
+bool test_server_disconnect_in_ready_walks_through_disconnecting() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_ready(client.get(), mock, 1000);
+    ASSERT_EQ(client->get_state(), ConnectionState::Ready);
+
+    clear_state_changes();
+    client->set_state_callback(state_callback);
+    DisconnectMessage msg{};
+    push_packet(mock, PacketId::Disconnect, &msg, sizeof(msg));
+    client->update(2000);
+    ASSERT_EQ(client->get_state(), ConnectionState::Disconnecting);
+
+    client->update(2100);
+    ASSERT_EQ(client->get_state(), ConnectionState::Disconnected);
+    ASSERT_TRUE(!g_state_changes.empty());
+    ASSERT_EQ(g_state_changes.back().old_state, ConnectionState::Disconnecting);
+    ASSERT_EQ(g_state_changes.back().new_state, ConnectionState::Disconnected);
+    return true;
+}
+
+/**
+ * @brief A Ping reply (requester != 0) is not echoed back and the client stays Ready.
+ */
+bool test_ping_reply_from_server_is_not_echoed() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_ready(client.get(), mock, 1000);
+    mock->reset_counters();
+
+    PingMessage ping{};
+    ping.requester = 1;
+    ping.id = 7;
+    push_packet(mock, PacketId::Ping, &ping, sizeof(ping));
+    client->update(2000);
+
+    ASSERT_EQ(mock->send_ping_call_count, 0);
+    ASSERT_EQ(client->get_state(), ConnectionState::Ready);
+    return true;
+}
+
+/**
+ * @brief In Ready, update() does not poll the socket once the TCP link is down.
+ */
+bool test_ready_update_skips_packet_polling_when_tcp_is_down() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_ready(client.get(), mock, 1000);
+    ASSERT_EQ(client->get_state(), ConnectionState::Ready);
+
+    mock->connected = false;
+    mock->reset_counters();
+    client->update(2000);
+    ASSERT_EQ(mock->recv_call_count, 0);
+    return true;
+}
+
+/**
+ * @brief Initialize lost mid-send (passphrase succeeded): the client leaves
+ * the Connected state through the connection-lost path and never reaches Handshaking.
+ */
+bool test_send_initialize_connection_lost_aborts_handshake() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    mock->next_connect_result = ClientResult::Success;
+    client->connect("127.0.0.1", 30456);
+
+    mock->next_send_result = ClientResult::Success;
+    mock->use_initialize_result = true;
+    mock->next_initialize_result = ClientResult::ConnectionLost;
+    client->update(1000);
+
+    ASSERT_EQ(mock->send_initialize_call_count, 1);
+    ASSERT_TRUE(client->get_state() != ConnectionState::Handshaking);
+    ASSERT_TRUE(!client->is_ready());
+    return true;
+}
+
+/**
+ * @brief Initialize rejected for a non-connection reason: the handshake is
+ * reported as failed and the client does not reach Handshaking.
+ */
+bool test_send_initialize_failure_aborts_handshake() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    mock->next_connect_result = ClientResult::Success;
+    client->connect("127.0.0.1", 30456);
+
+    mock->next_send_result = ClientResult::Success;
+    mock->use_initialize_result = true;
+    mock->next_initialize_result = ClientResult::EncodingError;
+    client->update(1000);
+
+    ASSERT_EQ(mock->send_initialize_call_count, 1);
+    ASSERT_TRUE(client->get_state() != ConnectionState::Handshaking);
+    ASSERT_TRUE(!client->is_ready());
+    return true;
+}
+
+/**
+ * @brief The handshake timeout is disabled while the start timestamp is the
+ * 0 sentinel (a handshake started at t=0 can never time out).
+ *
+ * This documents current behaviour: on hardware the update clock is a tick
+ * counter that is never 0 at handshake time.
+ */
+bool test_handshake_started_at_time_zero_never_times_out() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_handshaking(client.get(), mock, 0);
+    ASSERT_EQ(client->get_state(), ConnectionState::Handshaking);
+
+    client->update(100000000);
+    ASSERT_EQ(client->get_state(), ConnectionState::Handshaking);
+    return true;
+}
+
+/**
+ * @brief NetworkError shorter than a NetworkErrorMessage is recorded as InternalError.
+ */
+bool test_handshake_network_error_truncated_payload_is_internal_error() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_handshaking(client.get(), mock, 1000);
+
+    push_packet(mock, PacketId::NetworkError, nullptr, 0);
+    client->update(1500);
+    ASSERT_EQ(static_cast<int>(client->get_last_error_code()),
+              static_cast<int>(NetworkErrorCode::InternalError));
+    return true;
+}
+
+/**
+ * @brief VersionMismatch during handshake notifies the state callback with the final state.
+ */
+bool test_handshake_version_mismatch_notifies_state_callback() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_handshaking(client.get(), mock, 1000);
+    clear_state_changes();
+    client->set_state_callback(state_callback);
+
+    NetworkErrorMessage msg{};
+    msg.error_code = static_cast<uint32_t>(NetworkErrorCode::VersionMismatch);
+    push_packet(mock, PacketId::NetworkError, &msg, sizeof(msg));
+    client->update(1500);
+
+    ASSERT_EQ(client->get_state(), ConnectionState::Error);
+    ASSERT_TRUE(!g_state_changes.empty());
+    ASSERT_EQ(g_state_changes.back().old_state, ConnectionState::Handshaking);
+    ASSERT_EQ(g_state_changes.back().new_state, ConnectionState::Error);
+    return true;
+}
+
+/**
+ * @brief SyncNetwork as handshake answer notifies the state callback with Ready.
+ */
+bool test_handshake_sync_network_notifies_state_callback() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_handshaking(client.get(), mock, 1000);
+    clear_state_changes();
+    client->set_state_callback(state_callback);
+
+    push_packet(mock, PacketId::SyncNetwork, nullptr, 0);
+    client->update(1500);
+
+    ASSERT_EQ(client->get_state(), ConnectionState::Ready);
+    ASSERT_TRUE(!g_state_changes.empty());
+    ASSERT_EQ(g_state_changes.back().old_state, ConnectionState::Handshaking);
+    ASSERT_EQ(g_state_changes.back().new_state, ConnectionState::Ready);
+    return true;
+}
+
+/**
+ * @brief A server Disconnect during handshake notifies the state callback and
+ * records ConnectionRejected.
+ */
+bool test_handshake_server_disconnect_notifies_state_callback() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_handshaking(client.get(), mock, 1000);
+    clear_state_changes();
+    client->set_state_callback(state_callback);
+
+    DisconnectMessage msg{};
+    push_packet(mock, PacketId::Disconnect, &msg, sizeof(msg));
+    client->update(1500);
+
+    ASSERT_EQ(static_cast<int>(client->get_last_error_code()),
+              static_cast<int>(NetworkErrorCode::ConnectionRejected));
+    ASSERT_TRUE(!g_state_changes.empty());
+    ASSERT_EQ(g_state_changes.back().old_state, ConnectionState::Handshaking);
+    ASSERT_TRUE(g_state_changes.back().new_state != ConnectionState::Handshaking);
+    return true;
+}
+
+static int g_unexpected_packets = 0;
+static PacketId g_unexpected_id = PacketId::Initialize;
+static void count_unexpected_packet(PacketId id, const uint8_t*, size_t, void*) {
+    ++g_unexpected_packets;
+    g_unexpected_id = id;
+}
+
+/**
+ * @brief A packet that is not a handshake answer is forwarded to the packet
+ * callback (when set) and the client keeps waiting in Handshaking.
+ */
+bool test_handshake_unexpected_packet_is_forwarded_and_keeps_waiting() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_handshaking(client.get(), mock, 1000);
+
+    // No packet callback registered: ignored, still waiting.
+    PingMessage ping{};
+    push_packet(mock, PacketId::Ping, &ping, sizeof(ping));
+    client->update(1100);
+    ASSERT_EQ(client->get_state(), ConnectionState::Handshaking);
+
+    // With a packet callback: forwarded exactly once, still waiting.
+    g_unexpected_packets = 0;
+    client->set_packet_callback(count_unexpected_packet);
+    push_packet(mock, PacketId::Ping, &ping, sizeof(ping));
+    client->update(1200);
+    ASSERT_EQ(client->get_state(), ConnectionState::Handshaking);
+    ASSERT_EQ(g_unexpected_packets, 1);
+    ASSERT_EQ(g_unexpected_id, PacketId::Ping);
+    return true;
+}
 
 /**
  * @brief Run all RyuLdnClient unit tests
@@ -2453,6 +2711,19 @@ int main() {
     RUN_TEST(test_error_code_types);
     RUN_TEST(test_get_last_rtt_initial);
     RUN_TEST(test_get_last_error_code_initial);
+
+    printf("\nCoverage closure:\n");
+    RUN_TEST(test_server_disconnect_in_ready_walks_through_disconnecting);
+    RUN_TEST(test_ping_reply_from_server_is_not_echoed);
+    RUN_TEST(test_ready_update_skips_packet_polling_when_tcp_is_down);
+    RUN_TEST(test_send_initialize_connection_lost_aborts_handshake);
+    RUN_TEST(test_send_initialize_failure_aborts_handshake);
+    RUN_TEST(test_handshake_started_at_time_zero_never_times_out);
+    RUN_TEST(test_handshake_network_error_truncated_payload_is_internal_error);
+    RUN_TEST(test_handshake_version_mismatch_notifies_state_callback);
+    RUN_TEST(test_handshake_sync_network_notifies_state_callback);
+    RUN_TEST(test_handshake_server_disconnect_notifies_state_callback);
+    RUN_TEST(test_handshake_unexpected_packet_is_forwarded_and_keeps_waiting);
 
     printf("\n========================================\n");
     printf("  Results: %d/%d passed\n",

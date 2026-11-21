@@ -33,6 +33,10 @@ public:
     ClientResult next_send_result = ClientResult::Success;
     ClientResult next_recv_result = ClientResult::Timeout;
 
+    /// When true, send_initialize() returns next_initialize_result instead of next_send_result.
+    bool use_initialize_result = false;
+    ClientResult next_initialize_result = ClientResult::Success;
+
     std::queue<MockPacket> recv_queue;
 
     uint32_t connect_call_count = 0;
@@ -97,6 +101,9 @@ public:
 
     ClientResult send_initialize(const protocol::InitializeMessage& msg) override {
         send_initialize_call_count++;
+        // Lets a test fail the Initialize message alone while the preceding
+        // Passphrase message (which uses next_send_result) still succeeds.
+        if (use_initialize_result) return next_initialize_result;
         return next_send_result;
     }
 

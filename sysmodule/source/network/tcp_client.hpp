@@ -460,6 +460,17 @@ public:
      */
     ClientResult set_nodelay(bool enable) override;
 
+    /**
+     * @brief Convert SocketResult to ClientResult
+     *
+     * Maps low-level socket errors to higher-level client results. Pure
+     * function, public so the whole mapping table can be verified directly.
+     *
+     * @param socket_result Socket operation result
+     * @return Corresponding ClientResult
+     */
+    static ClientResult socket_to_client_result(SocketResult socket_result);
+
 private:
     Socket m_socket;                                 ///< Underlying TCP socket
     protocol::PacketBuffer<0x2000> m_recv_buffer;    ///< Buffer for TCP stream reassembly (8KB - saves 56KB!)
@@ -474,14 +485,15 @@ private:
     mutable ::ams::os::Mutex m_recv_mutex{false};
 
     /**
-     * @brief Convert SocketResult to ClientResult
+     * @brief Encode a fixed-size message into the send buffer
      *
-     * Maps low-level socket errors to higher-level client results.
+     * The caller holds m_send_mutex. Fitting the buffer is proven at compile
+     * time (static_assert), so there is no runtime failure to report.
      *
-     * @param socket_result Socket operation result
-     * @return Corresponding ClientResult
+     * @return Number of bytes written (header + payload)
      */
-    static ClientResult socket_to_client_result(SocketResult socket_result);
+    template <typename T>
+    size_t encode_fixed(protocol::PacketId type, const T& payload);
 
     /**
      * @brief Try to receive more data into packet buffer

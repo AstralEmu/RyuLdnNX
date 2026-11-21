@@ -184,13 +184,7 @@ ClientResult TcpClient::send_packet(protocol::PacketId type, const void* payload
     }
 
     // Send the encoded packet
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-
-    if (send_result != SocketResult::Success) {
-        return socket_to_client_result(send_result);
-    }
-
-    return ClientResult::Success;
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -208,13 +202,7 @@ ClientResult TcpClient::send_raw(const void* data, size_t size) {
     }
 
     // Send the already-encoded data directly
-    SocketResult send_result = m_socket.send_all(static_cast<const uint8_t*>(data), size);
-
-    if (send_result != SocketResult::Success) {
-        return socket_to_client_result(send_result);
-    }
-
-    return ClientResult::Success;
+    return socket_to_client_result(m_socket.send_all(static_cast<const uint8_t*>(data), size));
 }
 
 /**
@@ -227,17 +215,8 @@ ClientResult TcpClient::send_initialize(const protocol::InitializeMessage& msg) 
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::Initialize, msg, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
-
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    const size_t encoded_size = encode_fixed(protocol::PacketId::Initialize, msg);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -250,17 +229,8 @@ ClientResult TcpClient::send_passphrase(const protocol::PassphraseMessage& msg) 
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::Passphrase, msg, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
-
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    const size_t encoded_size = encode_fixed(protocol::PacketId::Passphrase, msg);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -287,17 +257,8 @@ ClientResult TcpClient::send_ping(const protocol::PingMessage& msg) {
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::Ping, msg, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
-
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    const size_t encoded_size = encode_fixed(protocol::PacketId::Ping, msg);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -310,17 +271,8 @@ ClientResult TcpClient::send_disconnect(const protocol::DisconnectMessage& msg) 
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::Disconnect, msg, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
-
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    const size_t encoded_size = encode_fixed(protocol::PacketId::Disconnect, msg);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -398,8 +350,7 @@ ClientResult TcpClient::send_create_access_point(const protocol::CreateAccessPoi
         ryu_ldn::debug::g_logger.flush();
     }
 
-    SocketResult send_result = m_socket.send_all(m_send_buffer, offset);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, offset));
 }
 
 /**
@@ -412,14 +363,7 @@ ClientResult TcpClient::send_connect(const protocol::ConnectRequest& request) {
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::Connect, request, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
+    const size_t encoded_size = encode_fixed(protocol::PacketId::Connect, request);
 
     LOG_INFO("send_connect: header=%zu, payload=%zu, total=%zu bytes",
              sizeof(protocol::LdnHeader), sizeof(request), encoded_size);
@@ -435,8 +379,7 @@ ClientResult TcpClient::send_connect(const protocol::ConnectRequest& request) {
              m_send_buffer[24], m_send_buffer[25], m_send_buffer[26], m_send_buffer[27],
              m_send_buffer[28], m_send_buffer[29], m_send_buffer[30], m_send_buffer[31]);
 
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -479,8 +422,7 @@ ClientResult TcpClient::send_create_access_point_private(
         offset += advertise_size;
     }
 
-    SocketResult send_result = m_socket.send_all(m_send_buffer, offset);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, offset));
 }
 
 /**
@@ -493,17 +435,8 @@ ClientResult TcpClient::send_connect_private(const protocol::ConnectPrivateReque
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::ConnectPrivate, request, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
-
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    const size_t encoded_size = encode_fixed(protocol::PacketId::ConnectPrivate, request);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -516,17 +449,8 @@ ClientResult TcpClient::send_scan(const protocol::ScanFilterFull& filter) {
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::Scan, filter, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
-
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    const size_t encoded_size = encode_fixed(protocol::PacketId::Scan, filter);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -552,8 +476,7 @@ ClientResult TcpClient::send_proxy_data(const protocol::ProxyDataHeader& header,
         return ClientResult::EncodingError;
     }
 
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -566,17 +489,8 @@ ClientResult TcpClient::send_set_accept_policy(const protocol::SetAcceptPolicyRe
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::SetAcceptPolicy, request, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
-
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    const size_t encoded_size = encode_fixed(protocol::PacketId::SetAcceptPolicy, request);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -607,8 +521,7 @@ ClientResult TcpClient::send_set_advertise_data(const uint8_t* data, size_t size
     }
 
     size_t total_size = sizeof(header) + size;
-    SocketResult send_result = m_socket.send_all(m_send_buffer, total_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, total_size));
 }
 
 /**
@@ -621,17 +534,8 @@ ClientResult TcpClient::send_reject(const protocol::RejectRequest& request) {
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    size_t encoded_size = 0;
-    protocol::EncodeResult encode_result = protocol::encode(
-        m_send_buffer, sizeof(m_send_buffer),
-        protocol::PacketId::Reject, request, encoded_size);
-
-    if (encode_result != protocol::EncodeResult::Success) {
-        return ClientResult::EncodingError;
-    }
-
-    SocketResult send_result = m_socket.send_all(m_send_buffer, encoded_size);
-    return send_result == SocketResult::Success ? ClientResult::Success : socket_to_client_result(send_result);
+    const size_t encoded_size = encode_fixed(protocol::PacketId::Reject, request);
+    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 // =============================================================================
@@ -671,22 +575,11 @@ ClientResult TcpClient::receive_packet(protocol::PacketId& type,
         }
     }
 
-    // We have a complete packet - get packet info
-    size_t packet_size = 0;
-    protocol::BufferResult peek_result = m_recv_buffer.peek_packet_info(packet_size);
-
-    if (peek_result != protocol::BufferResult::Success) {
-        return ClientResult::InvalidPacket;
-    }
-
-    // Decode header to get type and payload size
+    // The loop above only exits on a complete packet (header validated by
+    // check_complete_packet), so the header can be read without re-validation.
     protocol::LdnHeader header{};
-    protocol::DecodeResult decode_result = protocol::decode_header(
-        m_recv_buffer.data(), m_recv_buffer.size(), header);
-
-    if (decode_result != protocol::DecodeResult::Success) {
-        return ClientResult::InvalidPacket;
-    }
+    std::memcpy(&header, m_recv_buffer.data(), sizeof(header));
+    const size_t packet_size = sizeof(header) + static_cast<size_t>(header.data_size);
 
     // Check if payload fits in user buffer
     auto packet_payload_size = static_cast<size_t>(header.data_size);
@@ -737,6 +630,17 @@ ClientResult TcpClient::set_nodelay(bool enable) {
 // =============================================================================
 // Private Helper Functions
 // =============================================================================
+
+template <typename T>
+size_t TcpClient::encode_fixed(protocol::PacketId type, const T& payload) {
+    // Compile-time proof replaces a runtime "buffer too small" branch that
+    // could never be taken: every fixed-size message fits the send buffer.
+    static_assert(sizeof(protocol::LdnHeader) + sizeof(T) <= sizeof(m_send_buffer),
+                  "fixed-size message does not fit the TcpClient send buffer");
+    size_t offset = protocol::encode_header(m_send_buffer, type, sizeof(T));
+    std::memcpy(m_send_buffer + offset, &payload, sizeof(T));
+    return offset + sizeof(T);
+}
 
 /**
  * @brief Convert SocketResult to ClientResult
@@ -814,12 +718,6 @@ ClientResult TcpClient::receive_into_buffer(int32_t timeout_ms) {
     if (recv_result != SocketResult::Success) {
         LOG_INFO("recv: non-success socket result %d", static_cast<int>(recv_result));
         return socket_to_client_result(recv_result);
-    }
-
-    if (received == 0) {
-        // Zero bytes with Success means connection closed gracefully
-        LOG_INFO("recv: 0 bytes with Success (graceful close by peer)");
-        return ClientResult::ConnectionLost;
     }
 
     // Append received data to packet buffer

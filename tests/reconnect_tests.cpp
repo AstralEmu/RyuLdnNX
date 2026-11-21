@@ -846,6 +846,29 @@ bool test_fast_to_exponential_transition() {
     return true;
 }
 
+/**
+ * @brief Backoff with a max delay above 2^32 / 100 ms must not overflow
+ *
+ * max_delay_ms * 100 does not fit in 32 bits for max_delay_ms > ~42.9 M, which
+ * used to wrap the overflow guard and clamp the delay to the maximum too early.
+ */
+bool test_large_max_delay_does_not_overflow() {
+    ReconnectConfig cfg;
+    cfg.fast_retries = 0;
+    cfg.initial_delay_ms = 30000000;     // 30 000 s
+    cfg.max_delay_ms = 100000000;        // 100 000 s
+    cfg.multiplier_percent = 200;
+    ReconnectManager mgr(cfg);
+
+    ASSERT_EQ(mgr.get_next_delay_ms(), 30000000);
+    mgr.record_failure();
+    ASSERT_EQ(mgr.get_next_delay_ms(), 60000000);   // 30 M * 2, below the cap
+    mgr.record_failure();
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100000000);  // 120 M would exceed the cap
+
+    return true;
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -918,6 +941,7 @@ int main() {
     RUN_TEST(test_small_initial_delay);
     RUN_TEST(test_initial_equals_max);
     RUN_TEST(test_no_growth_multiplier);
+    RUN_TEST(test_large_max_delay_does_not_overflow);
 
     // String Conversion
     printf("\nString Conversion:\n");

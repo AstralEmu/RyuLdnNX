@@ -480,6 +480,30 @@ TEST(logger_check_idle_timeout_with_file) {
     std::remove(path);
 }
 
+TEST(log_level_to_string_unknown) {
+    ASSERT_TRUE(std::strcmp(log_level_to_string(static_cast<LogLevel>(99)), "UNKNOWN") == 0);
+}
+
+TEST(logger_init_with_explicit_null_path_uses_the_default_path) {
+    DebugConfig config{};
+    config.enabled = false;   // disabled: init must not touch the SD-card path
+    config.level = 2;
+
+    Logger logger;
+    logger.init(config, nullptr);
+
+    ASSERT_FALSE(logger.is_enabled());
+    ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2u);
+}
+
+TEST(format_log_message_truncates_when_the_prefix_does_not_fit) {
+    char tiny[4];
+    std::memset(tiny, 'x', sizeof(tiny));
+    format_log_message(tiny, sizeof(tiny), LogLevel::Info, "message %d", 42);
+    ASSERT_EQ(tiny[sizeof(tiny) - 1], '\0');
+    ASSERT_TRUE(std::strlen(tiny) < sizeof(tiny));
+}
+
 // ============================================================================
 // Main
 // ============================================================================

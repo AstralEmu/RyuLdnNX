@@ -716,6 +716,117 @@ TEST(dispatcher_clear_handler) {
 }
 
 // ============================================================================
+// Guard paths: no handler registered / undersized payload / bad ProxyData
+// ============================================================================
+
+namespace {
+
+int g_typed_hits = 0;
+
+template<typename T>
+void count_typed(const LdnHeader&, const T&) { ++g_typed_hits; }
+
+LdnHeader make_header(PacketId id, size_t size) {
+    LdnHeader header{};
+    header.magic = PROTOCOL_MAGIC;
+    header.version = PROTOCOL_VERSION;
+    header.type = static_cast<uint8_t>(id);
+    header.data_size = static_cast<int32_t>(size);
+    return header;
+}
+
+// Returns true when, for packet `id` carrying payload type T:
+//  - dispatching with no handler registered is a no-op,
+//  - an undersized payload never reaches the handler,
+//  - an exactly-sized payload reaches the handler exactly once.
+template<typename T>
+bool check_typed_guards(PacketId id, void (ldn::PacketDispatcher::*setter)(ldn::PacketHandler<T>)) {
+    std::vector<uint8_t> payload(sizeof(T), 0);
+    ldn::PacketDispatcher dispatcher;
+
+    g_typed_hits = 0;
+    dispatcher.dispatch(make_header(id, payload.size()), payload.data(), payload.size());
+    if (g_typed_hits != 0) return false;
+
+    (dispatcher.*setter)(&count_typed<T>);
+
+    dispatcher.dispatch(make_header(id, payload.size() - 1), payload.data(), payload.size() - 1);
+    if (g_typed_hits != 0) return false;
+
+    dispatcher.dispatch(make_header(id, 0), payload.data(), 0);
+    if (g_typed_hits != 0) return false;
+
+    dispatcher.dispatch(make_header(id, payload.size()), payload.data(), payload.size());
+    return g_typed_hits == 1;
+}
+
+}  // namespace
+
+TEST(typed_packets_ignore_missing_handler_and_undersized_payload) {
+    ASSERT_TRUE(check_typed_guards<InitializeMessage>(PacketId::Initialize, &ldn::PacketDispatcher::set_initialize_handler));
+    ASSERT_TRUE(check_typed_guards<NetworkInfo>(PacketId::Connected, &ldn::PacketDispatcher::set_connected_handler));
+    ASSERT_TRUE(check_typed_guards<NetworkInfo>(PacketId::SyncNetwork, &ldn::PacketDispatcher::set_sync_network_handler));
+    ASSERT_TRUE(check_typed_guards<NetworkInfo>(PacketId::ScanReply, &ldn::PacketDispatcher::set_scan_reply_handler));
+    ASSERT_TRUE(check_typed_guards<DisconnectMessage>(PacketId::Disconnect, &ldn::PacketDispatcher::set_disconnect_handler));
+    ASSERT_TRUE(check_typed_guards<PingMessage>(PacketId::Ping, &ldn::PacketDispatcher::set_ping_handler));
+    ASSERT_TRUE(check_typed_guards<NetworkErrorMessage>(PacketId::NetworkError, &ldn::PacketDispatcher::set_network_error_handler));
+    ASSERT_TRUE(check_typed_guards<ProxyConfig>(PacketId::ProxyConfig, &ldn::PacketDispatcher::set_proxy_config_handler));
+    ASSERT_TRUE(check_typed_guards<ProxyConnectRequest>(PacketId::ProxyConnect, &ldn::PacketDispatcher::set_proxy_connect_handler));
+    ASSERT_TRUE(check_typed_guards<ProxyConnectResponse>(PacketId::ProxyConnectReply, &ldn::PacketDispatcher::set_proxy_connect_reply_handler));
+    ASSERT_TRUE(check_typed_guards<ProxyDisconnectMessage>(PacketId::ProxyDisconnect, &ldn::PacketDispatcher::set_proxy_disconnect_handler));
+    ASSERT_TRUE(check_typed_guards<RejectRequest>(PacketId::Reject, &ldn::PacketDispatcher::set_reject_handler));
+    ASSERT_TRUE(check_typed_guards<SetAcceptPolicyRequest>(PacketId::SetAcceptPolicy, &ldn::PacketDispatcher::set_accept_policy_handler));
+}
+
+TEST(empty_packets_ignore_missing_handler_and_reach_registered_one) {
+    static int hits;
+    hits = 0;
+    ldn::PacketDispatcher dispatcher;
+
+    dispatcher.dispatch(make_header(PacketId::ScanReplyEnd, 0), nullptr, 0);
+    dispatcher.dispatch(make_header(PacketId::RejectReply, 0), nullptr, 0);
+    ASSERT_EQ(hits, 0);
+
+    dispatcher.set_scan_reply_end_handler([](const LdnHeader&) { ++hits; });
+    dispatcher.set_reject_reply_handler([](const LdnHeader&) { hits += 10; });
+    dispatcher.dispatch(make_header(PacketId::ScanReplyEnd, 0), nullptr, 0);
+    ASSERT_EQ(hits, 1);
+    dispatcher.dispatch(make_header(PacketId::RejectReply, 0), nullptr, 0);
+    ASSERT_EQ(hits, 11);
+}
+
+TEST(proxy_data_rejects_truncated_header_and_overlong_declared_length) {
+    g_callback_state.reset();
+    ldn::PacketDispatcher dispatcher;
+
+    // No handler: nothing happens.
+    std::vector<uint8_t> packet(sizeof(ProxyDataHeader) + 4, 0);
+    dispatcher.dispatch(make_header(PacketId::ProxyData, packet.size()), packet.data(), packet.size());
+    ASSERT_FALSE(g_callback_state.proxy_data_called);
+
+    dispatcher.set_proxy_data_handler(on_proxy_data);
+
+    // Payload shorter than the ProxyDataHeader itself.
+    dispatcher.dispatch(make_header(PacketId::ProxyData, sizeof(ProxyDataHeader) - 1),
+                        packet.data(), sizeof(ProxyDataHeader) - 1);
+    ASSERT_FALSE(g_callback_state.proxy_data_called);
+
+    // Declared data_length larger than the bytes actually present.
+    ProxyDataHeader hdr{};
+    hdr.data_length = 5;
+    memcpy(packet.data(), &hdr, sizeof(hdr));
+    dispatcher.dispatch(make_header(PacketId::ProxyData, packet.size()), packet.data(), packet.size());
+    ASSERT_FALSE(g_callback_state.proxy_data_called);
+
+    // Declared data_length exactly equal to the bytes present is accepted.
+    hdr.data_length = 4;
+    memcpy(packet.data(), &hdr, sizeof(hdr));
+    dispatcher.dispatch(make_header(PacketId::ProxyData, packet.size()), packet.data(), packet.size());
+    ASSERT_TRUE(g_callback_state.proxy_data_called);
+    ASSERT_EQ(g_callback_state.last_proxy_data.size(), 4u);
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 

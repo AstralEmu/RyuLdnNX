@@ -26,11 +26,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+            set -euo pipefail
             for label in "game-report:e1f5fe:Auto-maintained hub for game reports" "game-issue:fef2e2:Game problem report - awaiting review" "pending-review:fef2e2:Awaiting maintainer review" "confirmed:d4f5d4:Verified by maintainer" "needs-retest:fff3cd:Retest requested after new release" "stale:f0f0f0:No response after 7 days" "wontfix:e2e2e2:Will not be fixed"; do
             NAME=$(echo "$label" | cut -d: -f1)
             COLOR=$(echo "$label" | cut -d: -f2)
             DESC=$(echo "$label" | cut -d: -f3)
-            gh label create "$NAME" --color "$COLOR" --description "$DESC" 2>/dev/null || true
+            gh label create "$NAME" --color "$COLOR" --description "$DESC" --force
             done
 
       - name: Add pending-review label
@@ -51,14 +52,17 @@ jobs:
     steps:
       - name: Extract Title ID from issue body
         id: game
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const body = context.payload.issue.body || '';
             const titleIdMatch = body.match(/### Title ID\s*\n\s*\n(.+)/);
             const gameTitleMatch = body.match(/### Game Title\s*\n\s*\n(.+)/);
             let titleId = (titleIdMatch ? titleIdMatch[1].trim() : '').toLowerCase().replace(/^0x/, '');
-            const gameTitle = gameTitleMatch ? gameTitleMatch[1].trim() : '';
+            // Untrusted issue text: a Title ID is hex only, a title is bounded plain text.
+            if (!/^[0-9a-f]{1,16}$/.test(titleId)) titleId = '';
+            const gameTitle = (gameTitleMatch ? gameTitleMatch[1].trim() : '')
+              .replace(/[^\p{L}\p{N} .:'&-]/gu, '').slice(0, 120);
             core.setOutput('title_id', titleId);
             core.setOutput('game_title', gameTitle);
 
@@ -69,25 +73,28 @@ jobs:
           TITLE_ID: ${{ steps.game.outputs.title_id }}
           GAME_TITLE: ${{ steps.game.outputs.game_title }}
         run: |
-          TITLE_ID_CLEAN=$(echo "$TITLE_ID" | sed 's/^0x//; s/^0X//')
-
+          set -euo pipefail
+          # TITLE_ID and GAME_TITLE were validated/sanitised in the previous step
+          # (hex only / plain text only); they are still never interpolated into a
+          # jq program: the title is matched as a literal via `jq --arg`.
           HUB_NUMBER=""
-          if [ -n "$TITLE_ID_CLEAN" ]; then
+          if [ -n "$TITLE_ID" ]; then
             HUB_NUMBER=$(gh issue list \
               --label "game-report" \
               --state all \
-              --search "title_id:${TITLE_ID_CLEAN}" \
+              --search "title_id:${TITLE_ID}" \
               --json number \
-              --jq '.[0].number // empty' 2>/dev/null || echo "")
+              --jq '.[0].number // empty')
           fi
 
           if [ -z "$HUB_NUMBER" ] && [ -n "$GAME_TITLE" ]; then
             HUB_NUMBER=$(gh issue list \
               --label "game-report" \
               --state all \
-              --search "${GAME_TITLE}" \
+              --search "${GAME_TITLE} in:title" \
               --json number,title \
-              --jq ".[] | select(.title | test(\"${GAME_TITLE}\"; \"i\")) | .number" 2>/dev/null | head -1 || echo "")
+              | jq -r --arg t "$GAME_TITLE" \
+                  '[.[] | select(.title | ascii_downcase | contains($t | ascii_downcase)) | .number][0] // empty')
           fi
 
           if [ -n "$HUB_NUMBER" ]; then
@@ -105,7 +112,8 @@ jobs:
           GAME_TITLE: ${{ steps.game.outputs.game_title }}
           TITLE_ID: ${{ steps.game.outputs.title_id }}
         run: |
-          gh label create "game-report" --description "Auto-maintained hub for a game's problem and vulnerability reports" 2>/dev/null || true
+          set -euo pipefail
+          gh label create "game-report" --force --description "Auto-maintained hub for a game's problem and vulnerability reports"
 
           HUB_BODY="## Game Hub: ${GAME_TITLE}
 
@@ -141,11 +149,14 @@ jobs:
           echo "hub_number=$HUB_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Create bidirectional relation to hub
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          HUB_NUMBER: ${{ steps.search.outputs.hub_number || steps.create.outputs.hub_number }}
         with:
           script: |
             const issueNumber = context.payload.issue.number;
-            const hubNumber = parseInt('${{ steps.search.outputs.hub_number || steps.create.outputs.hub_number }}');
+            const hubNumber = Number.parseInt(process.env.HUB_NUMBER, 10);
+            if (!Number.isInteger(hubNumber)) throw new Error(`invalid hub number: ${process.env.HUB_NUMBER}`);
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const MARKER = '<!-- HUB-RELATIONS -->';
@@ -265,14 +276,15 @@ jobs:
     steps:
       - name: Find hub for this sub-issue
         id: find-hub
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const body = context.payload.issue.body || '';
             const titleIdMatch = body.match(/### Title ID\s*\n\s*\n(.+)/);
-            const titleId = titleIdMatch ? titleIdMatch[1].trim().toLowerCase().replace(/^0x/, '') : '';
+            const rawTitleId = titleIdMatch ? titleIdMatch[1].trim().toLowerCase().replace(/^0x/, '') : '';
+            const titleId = /^[0-9a-f]{1,16}$/.test(rawTitleId) ? rawTitleId : '';
             const gameTitleMatch = body.match(/### Game Title\s*\n\s*\n(.+)/);
-            const gameTitle = gameTitleMatch ? gameTitleMatch[1].trim() : '';
+            const gameTitle = gameTitleMatch ? gameTitleMatch[1].trim().slice(0, 120) : '';
 
             if (!titleId && !gameTitle) {
               core.setOutput('hub_found', 'false');
@@ -304,10 +316,13 @@ jobs:
 
       - name: Recalculate and update hub body
         if: steps.find-hub.outputs.hub_found == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          HUB_NUMBER: ${{ steps.find-hub.outputs.hub_number }}
         with:
           script: |
-            const hubNumber = parseInt('${{ steps.find-hub.outputs.hub_number }}');
+            const hubNumber = Number.parseInt(process.env.HUB_NUMBER, 10);
+            if (!Number.isInteger(hubNumber)) throw new Error(`invalid hub number: ${process.env.HUB_NUMBER}`);
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
@@ -512,7 +527,7 @@ jobs:
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
       - name: Comment on confirmed issues requesting retest
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const tagName = context.payload.release.tag_name;
@@ -558,7 +573,7 @@ jobs:
     if: github.event_name == 'schedule'
     steps:
       - name: Mark needs-retest issues stale after 7 days
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const { data: issues } = await github.rest.issues.listForRepo({
@@ -597,7 +612,7 @@ jobs:
                   repo: context.repo.repo,
                   issue_number: issue.number,
                   name: 'needs-retest'
-                }).catch(() => {});
+                }).catch(e => { if (e.status !== 404) throw e; });
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -608,7 +623,7 @@ jobs:
             }
 
       - name: Close stale issues after 14 more days
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const { data: issues } = await github.rest.issues.listForRepo({
@@ -655,6 +670,6 @@ jobs:
                   repo: context.repo.repo,
                   issue_number: issue.number,
                   name: 'stale'
-                }).catch(() => {});
+                }).catch(e => { if (e.status !== 404) throw e; });
               }
             }

@@ -70,7 +70,18 @@ services:
   test:
     <<: *service-base
     working_dir: /workspace/tests
+    environment:
+      - COVERAGE
     command: make clean test
+
+  # Doxygen XML for the wiki code reference (rendered on the host by
+  # scripts/gen_docs.py, which writes into the ./docs wiki symlink that is not
+  # mounted here). Runs as the host user so .cache/ is not root-owned.
+  # Usage: make docs
+  docs:
+    <<: *service-base
+    user: "${DOCS_UID:-1000}:${DOCS_GID:-1000}"
+    entrypoint: ["python3", "/workspace/scripts/gen_docs.py", "--xml-only"]
 
   # GDB debugger for Switch (interactive)
   # Usage: docker compose run --rm debugger <SWITCH_IP> [PROCESS_ID]

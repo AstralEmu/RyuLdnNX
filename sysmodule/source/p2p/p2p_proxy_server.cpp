@@ -1011,7 +1011,7 @@ bool P2pProxyServer::TryRegisterUser(P2pProxySession* session,
             // (the joiner endpoint as the *server* sees it) and `remote_ip`
             // (as the *host* sees it) legitimately differ. Accept on token
             // match alone in that case and log a warning — see
-            // docs/notes/p2p_local_loopback_auth_fallback.md.
+            // wiki page Design-P2P-Loopback-Auth-Fallback.
 
             if (token_match && !ip_match) {
                 // Recompute token_ip for the warning text only.

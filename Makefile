@@ -13,6 +13,9 @@
 #   make lint        # run clang-tidy on project sources
 #   make shell       # interactive shell inside the build container
 #   make debug IP=... [PID=...]  # interactive GDB session
+#   make hooks       # wire tracked git hooks (hooks/) and the wiki hook
+#   make hooks-check # fail when git hooks are not wired to this repo
+#   make workflow-lint # actionlint (+ shellcheck) on .github/workflows
 #
 # See docker-compose.yml for the authoritative service definitions.
 #
@@ -28,7 +31,11 @@ DOCKER_COMPOSE ?= docker compose
 IP  ?=
 PID ?=
 
-.PHONY: build test clean dist lint shell debug help
+# actionlint image used by `make workflow-lint` (bundles shellcheck). Override
+# to pin a digest: ACTIONLINT_IMAGE=rhysd/actionlint@sha256:...
+ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.7
+
+.PHONY: build test clean dist lint shell debug help hooks hooks-check workflow-lint docs
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} \
@@ -37,7 +44,7 @@ help: ## Show this help
 build: ## Build sysmodule + overlay + dist ZIP (docker compose run --rm build)
 	$(DOCKER_COMPOSE) run --rm build
 
-test: ## Run host unit tests (docker compose run --rm test)
+test: hooks-check ## Run host unit tests (docker compose run --rm test)
 	$(DOCKER_COMPOSE) run --rm test
 
 clean: ## Clean all build artifacts and output/ (docker compose run --rm clean)
@@ -46,7 +53,7 @@ clean: ## Clean all build artifacts and output/ (docker compose run --rm clean)
 dist: ## Package SD card layout + release ZIP (runs the dist target in sysmodule)
 	$(DOCKER_COMPOSE) run --rm build sh -c 'cd /workspace/sysmodule && make dist'
 
-lint: ## Run clang-tidy on project sources (docker compose run --rm lint)
+lint: hooks-check ## Run clang-tidy on project sources (docker compose run --rm lint)
 	$(DOCKER_COMPOSE) run --rm lint
 
 shell: ## Interactive shell inside the build container (docker compose run --rm shell)
@@ -58,3 +65,22 @@ debug: ## Interactive GDB session: make debug IP=<SWITCH_IP> [PID=<pid>]
 		exit 2; \
 	fi
 	$(DOCKER_COMPOSE) run --rm debugger $(IP) $(PID)
+
+hooks: ## Wire the tracked git hooks (hooks/) and the wiki's own pre-commit
+	git config core.hooksPath hooks
+	@if [ -e docs/.git ]; then \
+		gd=$$(git -C docs rev-parse --absolute-git-dir) && \
+		install -m 755 hooks/docs-pre-commit "$$gd/hooks/pre-commit" && \
+		echo "wiki pre-commit installed"; \
+	else \
+		echo "no ./docs wiki symlink: wiki hook not installed"; \
+	fi
+
+hooks-check: ## Fail when git hooks are not wired to this repo's hooks/
+	@python3 scripts/hooks_path.py
+
+docs: ## Regenerate the wiki code reference + navigation (Doxygen XML -> docs/)
+	python3 scripts/gen_docs.py
+
+workflow-lint: ## actionlint + shellcheck on .github/workflows (container)
+	docker run --rm -v "$(CURDIR):/repo:ro" -w /repo $(ACTIONLINT_IMAGE) -color

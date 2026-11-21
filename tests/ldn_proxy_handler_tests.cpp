@@ -469,6 +469,33 @@ TEST(proxy_handler_tcp_and_udp_separate) {
     ASSERT_EQ(handler.get_connection_count(), 2);
 }
 
+static int g_saturation_callbacks = 0;
+static void on_saturation_connect(const ProxyInfo&) { ++g_saturation_callbacks; }
+
+TEST(proxy_connect_table_full_drops_new_connection_but_still_notifies) {
+    g_saturation_callbacks = 0;
+    ldn::LdnProxyHandler handler;
+    handler.set_connect_callback(on_saturation_connect);
+
+    const size_t capacity = ldn::LdnProxyHandler::MAX_PROXY_CONNECTIONS;
+    for (size_t i = 0; i < capacity; ++i) {
+        ProxyConnectRequest req{};
+        req.info = make_test_proxy_info(0x0A720001, static_cast<uint16_t>(1000 + i), 0x0A720002, 5678);
+        handler.handle_proxy_connect(make_test_header(PacketId::ProxyConnect, sizeof(req)), req);
+    }
+    ASSERT_EQ(handler.get_connection_count(), capacity);
+
+    // One more: the table is full, the entry is dropped, the count is unchanged.
+    ProxyConnectRequest overflow{};
+    overflow.info = make_test_proxy_info(0x0A720001, 60000, 0x0A720002, 5678);
+    handler.handle_proxy_connect(make_test_header(PacketId::ProxyConnect, sizeof(overflow)), overflow);
+
+    ASSERT_EQ(handler.get_connection_count(), capacity);
+    ASSERT_FALSE(handler.has_connection(0x0A720001, 60000, 0x0A720002, 5678));
+    // The application is still notified of the connect attempt.
+    ASSERT_EQ(g_saturation_callbacks, static_cast<int>(capacity) + 1);
+}
+
 // ============================================================================
 // Main
 // ============================================================================

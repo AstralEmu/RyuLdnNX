@@ -1094,6 +1094,20 @@ TEST(event_to_string_unknown) {
     ASSERT_STREQ(result, "Unknown");
 }
 
+TEST(transition_result_to_string_unknown) {
+    ASSERT_STREQ(transition_result_to_string(static_cast<TransitionResult>(99)), "Unknown");
+}
+
+TEST(process_event_rejects_out_of_range_state_and_event) {
+    ConnectionStateMachine sm;
+    sm.force_state(static_cast<ConnectionState>(99));
+    ASSERT_TRUE(sm.process_event(ConnectionEvent::Connect) == TransitionResult::InvalidTransition);
+
+    sm.force_state(ConnectionState::Disconnected);
+    ASSERT_TRUE(sm.process_event(static_cast<ConnectionEvent>(99)) == TransitionResult::InvalidTransition);
+    ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
+}
+
 // ============================================================================
 // Main Entry Point
 // ============================================================================
@@ -1210,6 +1224,8 @@ int main() {
     RUN_TEST(is_connected_in_handshaking_detailed);
     RUN_TEST(state_to_string_unknown);
     RUN_TEST(event_to_string_unknown);
+    RUN_TEST(transition_result_to_string_unknown);
+    RUN_TEST(process_event_rejects_out_of_range_state_and_event);
 
     printf("\n========================================\n");
     printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_run);

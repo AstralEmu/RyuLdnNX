@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   tag-release:
@@ -14,16 +14,21 @@ jobs:
     runs-on: ubuntu-latest
     # Only run when PR is merged and has a release label
     if: github.event.pull_request.merged == true
+    permissions:
+      contents: write
+      actions: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Checkout the merge commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
 
       - name: Extract version label
         id: version
+        env:
+          LABELS: ${{ toJson(github.event.pull_request.labels) }}
         run: |
-          LABELS='${{ toJson(github.event.pull_request.labels) }}'
           VERSION=$(echo "$LABELS" | python3 -c "
           import json, sys
           labels = json.loads(sys.stdin.read())
@@ -37,17 +42,20 @@ jobs:
           ")
           if [ -z "$VERSION" ]; then
             echo "No release label found. Skipping tag creation."
-            echo "has_version=false" >> $GITHUB_OUTPUT
+            echo "has_version=false" >> "$GITHUB_OUTPUT"
           else
             echo "Found version: $VERSION"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "has_version=true" >> $GITHUB_OUTPUT
+            {
+              echo "version=$VERSION"
+              echo "has_version=true"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Validate version format
         if: steps.version.outputs.has_version == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
             echo "::error::Version '$VERSION' does not match semver pattern (e.g., v1.0.0 or v1.0.0-rc.1)"
             exit 1
@@ -55,8 +63,9 @@ jobs:
 
       - name: Check tag does not already exist
         if: steps.version.outputs.has_version == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if git tag --list | grep -qx "$VERSION"; then
             echo "::error::Tag '$VERSION' already exists. Choose a different version."
             exit 1
@@ -65,16 +74,30 @@ jobs:
 
       - name: Create and push tag
         if: steps.version.outputs.has_version == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           git tag "$VERSION"
           git push origin "$VERSION"
           echo "Created tag $VERSION on main"
 
+      # A tag pushed with GITHUB_TOKEN does not trigger release.yml (GitHub
+      # suppresses token-triggered events, except workflow_dispatch): dispatch it.
+      - name: Dispatch the release workflow
+        if: steps.version.outputs.has_version == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh workflow run release.yml --ref main -f "version=${VERSION}"
+
       - name: Summary
         if: steps.version.outputs.has_version == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          echo "### Release Tag Created 🏷️" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Tag \`${{ steps.version.outputs.version }}\` has been created on the merge commit." >> $GITHUB_STEP_SUMMARY
-          echo "The Release workflow will build and publish the release shortly." >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### Release Tag Created 🏷️"
+            echo ""
+            echo "Tag \`${VERSION}\` has been created on the merge commit."
+            echo "The Release workflow was dispatched and will build and publish the release shortly."
+          } >> "$GITHUB_STEP_SUMMARY"

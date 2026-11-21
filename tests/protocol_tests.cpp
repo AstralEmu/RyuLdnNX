@@ -2181,6 +2181,454 @@ TEST(result_to_string_all_values) {
     ASSERT_TRUE(strcmp(packet_id_to_string(PacketId::NetworkError), "NetworkError") == 0);
 }
 
+// ============================================================================
+// Failure paths of the generic encode/decode templates
+// ============================================================================
+
+namespace {
+
+// Scratch buffer large enough for the biggest payload plus header and extras.
+constexpr size_t SCRATCH = 8192;
+
+template<typename T>
+void check_encode_too_small() {
+    T payload;
+    std::memset(&payload, 0, sizeof(payload));
+    uint8_t buf[SCRATCH];
+    size_t out = 123;
+    ASSERT_TRUE(get_packet_size<T>() <= SCRATCH);
+    ASSERT_TRUE(encode(buf, get_packet_size<T>() - 1, PacketId::Ping, payload, out) ==
+                EncodeResult::BufferTooSmall);
+    ASSERT_EQ(out, 0);
+    ASSERT_TRUE(encode(buf, get_packet_size<T>(), PacketId::Ping, payload, out) ==
+                EncodeResult::Success);
+    ASSERT_EQ(out, get_packet_size<T>());
+}
+
+template<typename T>
+void check_decode_failures() {
+    uint8_t buf[SCRATCH];
+    LdnHeader header;
+    T payload;
+    ASSERT_TRUE(get_packet_size<T>() <= SCRATCH);
+
+    // Header invalid: all-zero bytes carry no protocol magic.
+    std::memset(buf, 0, sizeof(buf));
+    ASSERT_TRUE(decode(buf, sizeof(buf), header, payload) == DecodeResult::InvalidMagic);
+
+    // Header valid, but the buffer stops right after it (payload missing).
+    encode_header(buf, PacketId::Ping, static_cast<int32_t>(sizeof(T)));
+    ASSERT_TRUE(decode(buf, sizeof(LdnHeader), header, payload) == DecodeResult::BufferTooSmall);
+
+    // Complete packet decodes.
+    ASSERT_TRUE(decode(buf, get_packet_size<T>(), header, payload) == DecodeResult::Success);
+}
+
+template<typename T>
+void check_decode_with_data_paths() {
+    uint8_t buf[SCRATCH];
+    LdnHeader header;
+    T payload;
+    const uint8_t* extra = buf;
+    size_t extra_size = 77;
+
+    // Invalid header.
+    std::memset(buf, 0, sizeof(buf));
+    ASSERT_TRUE(decode_with_data(buf, sizeof(buf), header, payload, extra, extra_size) ==
+                DecodeResult::InvalidMagic);
+    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra_size, 0);
+
+    // Header only, payload structure missing.
+    extra = buf; extra_size = 77;
+    encode_header(buf, PacketId::Ping, static_cast<int32_t>(sizeof(T)));
+    ASSERT_TRUE(decode_with_data(buf, sizeof(LdnHeader), header, payload, extra, extra_size) ==
+                DecodeResult::BufferTooSmall);
+    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra_size, 0);
+
+    // Structure only, no trailing data.
+    extra = buf; extra_size = 77;
+    ASSERT_TRUE(decode_with_data(buf, get_packet_size<T>(), header, payload, extra, extra_size) ==
+                DecodeResult::Success);
+    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra_size, 0);
+
+    // Trailing data announced but only partly received.
+    encode_header(buf, PacketId::Ping, static_cast<int32_t>(sizeof(T) + 10));
+    extra = buf; extra_size = 77;
+    ASSERT_TRUE(decode_with_data(buf, get_packet_size<T>() + 9, header, payload, extra, extra_size) ==
+                DecodeResult::IncompletePacket);
+    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra_size, 0);
+
+    // Trailing data complete.
+    extra = nullptr; extra_size = 0;
+    ASSERT_TRUE(decode_with_data(buf, get_packet_size<T>() + 10, header, payload, extra, extra_size) ==
+                DecodeResult::Success);
+    ASSERT_EQ(extra_size, 10);
+    ASSERT_TRUE(extra == buf + get_packet_size<T>());
+}
+
+template<typename T>
+void check_encode_with_data_too_small() {
+    T payload;
+    std::memset(&payload, 0, sizeof(payload));
+    const uint8_t extra[5] = {1, 2, 3, 4, 5};
+    uint8_t buf[SCRATCH];
+    size_t out = 123;
+    ASSERT_TRUE(encode_with_data(buf, get_packet_size<T>() + 4, PacketId::Ping, payload,
+                                 extra, sizeof(extra), out) == EncodeResult::BufferTooSmall);
+    ASSERT_EQ(out, 0);
+    ASSERT_TRUE(encode_with_data(buf, get_packet_size<T>() + 5, PacketId::Ping, payload,
+                                 extra, sizeof(extra), out) == EncodeResult::Success);
+    ASSERT_EQ(out, get_packet_size<T>() + 5);
+    ASSERT_EQ(std::memcmp(buf + get_packet_size<T>(), extra, sizeof(extra)), 0);
+}
+
+} // namespace
+
+TEST(encode_payload_rejects_a_buffer_one_byte_too_small) {
+    check_encode_too_small<ConnectRequest>();
+    check_encode_too_small<DisconnectMessage>();
+    check_encode_too_small<InitializeMessage>();
+    check_encode_too_small<PassphraseMessage>();
+    check_encode_too_small<PingMessage>();
+    check_encode_too_small<ProxyConnectRequest>();
+    check_encode_too_small<ProxyConnectResponse>();
+    check_encode_too_small<ProxyDisconnectMessage>();
+    check_encode_too_small<RejectRequest>();
+    check_encode_too_small<ScanFilterFull>();
+    check_encode_too_small<SetAcceptPolicyRequest>();
+}
+
+TEST(decode_payload_rejects_bad_header_and_truncated_payload) {
+    check_decode_failures<ConnectRequest>();
+    check_decode_failures<DisconnectMessage>();
+    check_decode_failures<InitializeMessage>();
+    check_decode_failures<NetworkInfo>();
+    check_decode_failures<PassphraseMessage>();
+    check_decode_failures<PingMessage>();
+    check_decode_failures<ProxyConnectRequest>();
+    check_decode_failures<ProxyConnectResponse>();
+    check_decode_failures<ProxyDisconnectMessage>();
+    check_decode_failures<RejectRequest>();
+    check_decode_failures<ScanFilterFull>();
+    check_decode_failures<SetAcceptPolicyRequest>();
+}
+
+TEST(decode_with_data_covers_every_outcome) {
+    check_decode_with_data_paths<ConnectRequest>();
+    check_decode_with_data_paths<CreateAccessPointRequest>();
+    check_decode_with_data_paths<PingMessage>();
+    check_decode_with_data_paths<ProxyDataHeader>();
+    check_decode_with_data_paths<ProxyInfo>();
+}
+
+TEST(encode_with_data_rejects_a_buffer_too_small_for_the_extra_bytes) {
+    check_encode_with_data_too_small<CreateAccessPointRequest>();
+    check_encode_with_data_too_small<ProxyInfo>();
+}
+
+TEST(to_string_helpers_report_unknown_for_out_of_range_values) {
+    ASSERT_TRUE(strcmp(buffer_result_to_string(static_cast<BufferResult>(99)), "Unknown") == 0);
+    ASSERT_TRUE(strcmp(decode_result_to_string(static_cast<DecodeResult>(99)), "Unknown") == 0);
+    ASSERT_TRUE(strcmp(encode_result_to_string(static_cast<EncodeResult>(99)), "Unknown") == 0);
+    ASSERT_TRUE(strcmp(packet_id_to_string(static_cast<PacketId>(200)), "Unknown") == 0);
+}
+
+// ============================================================================
+// PacketBuffer edge cases
+// ============================================================================
+
+namespace {
+
+// Builds a header-only packet in `out`, returns its size.
+size_t make_packet(uint8_t* out, PacketId type, int32_t data_size, uint8_t fill = 0xAB) {
+    size_t n = encode_header(out, type, data_size);
+    if (data_size > 0) {
+        std::memset(out + n, fill, static_cast<size_t>(data_size));
+        n += static_cast<size_t>(data_size);
+    }
+    return n;
+}
+
+} // namespace
+
+TEST(packet_buffer_append_empty_is_a_noop_and_overflow_is_refused) {
+    PacketBuffer<64> pb;
+    const uint8_t b[1] = {0};
+    ASSERT_TRUE(pb.append(b, 0) == BufferResult::Success);
+    ASSERT_EQ(pb.size(), 0);
+
+    uint8_t big[65] = {0};
+    ASSERT_TRUE(pb.append(big, sizeof(big)) == BufferResult::BufferFull);
+    ASSERT_EQ(pb.size(), 0);
+    ASSERT_TRUE(pb.append(big, 64) == BufferResult::Success);
+    ASSERT_EQ(pb.size(), 64);
+    ASSERT_TRUE(pb.append(b, 1) == BufferResult::BufferFull);
+}
+
+TEST(packet_buffer_append_overflow_on_small_and_large_capacities) {
+    uint8_t blob[300] = {0};
+    PacketBuffer<16> p16;
+    ASSERT_TRUE(p16.append(blob, 17) == BufferResult::BufferFull);
+    ASSERT_TRUE(p16.append(blob, 0) == BufferResult::Success);
+    PacketBuffer<256> p256;
+    ASSERT_TRUE(p256.append(blob, 257) == BufferResult::BufferFull);
+    ASSERT_TRUE(p256.append(blob, 0) == BufferResult::Success);
+    PacketBuffer<8192> p8k;
+    ASSERT_TRUE(p8k.append(blob, 0) == BufferResult::Success);
+    PacketBuffer<1024> p1k;
+    ASSERT_TRUE(p1k.append(blob, 0) == BufferResult::Success);
+    ASSERT_TRUE(p1k.append(blob, 1025) == BufferResult::BufferFull);
+    PacketBuffer<64> p64;
+    ASSERT_TRUE(p64.append(blob, 0) == BufferResult::Success);
+    ASSERT_TRUE(p64.append(blob, 65) == BufferResult::BufferFull);
+}
+
+TEST(packet_buffer_peek_info_maps_every_header_state) {
+    uint8_t pkt[256];
+    size_t size = 99;
+
+    // Fewer bytes than a header.
+    PacketBuffer<1024> pb;
+    const uint8_t few[3] = {1, 2, 3};
+    pb.append(few, sizeof(few));
+    ASSERT_TRUE(pb.peek_packet_info(size) == BufferResult::NoCompletePacket);
+    ASSERT_EQ(size, 0);
+    ASSERT_TRUE(pb.peek_packet(size) == nullptr);
+    ASSERT_EQ(size, 0);
+    ASSERT_TRUE(pb.peek_packet_type() == PacketId::Initialize);
+
+    // Header announces more data than received.
+    PacketBuffer<1024> partial;
+    size_t n = make_packet(pkt, PacketId::Ping, 16);
+    partial.append(pkt, n - 1);
+    ASSERT_TRUE(partial.peek_packet_info(size) == BufferResult::NoCompletePacket);
+    ASSERT_TRUE(partial.peek_packet(size) == nullptr);
+    ASSERT_FALSE(partial.has_complete_packet());
+
+    // Announced size beyond the protocol maximum.
+    PacketBuffer<1024> huge;
+    encode_header(pkt, PacketId::Ping, static_cast<int32_t>(MAX_PACKET_SIZE) + 1);
+    huge.append(pkt, sizeof(LdnHeader));
+    ASSERT_TRUE(huge.peek_packet_info(size) == BufferResult::PacketTooLarge);
+
+    // Wrong magic and wrong version.
+    PacketBuffer<1024> bad_magic;
+    n = make_packet(pkt, PacketId::Ping, 0);
+    pkt[0] ^= 0xFF;
+    bad_magic.append(pkt, n);
+    ASSERT_TRUE(bad_magic.peek_packet_info(size) == BufferResult::InvalidPacket);
+    ASSERT_TRUE(bad_magic.peek_packet_type() == PacketId::Initialize);
+
+    PacketBuffer<256> bad_version;
+    n = make_packet(pkt, PacketId::Ping, 0);
+    LdnHeader h;
+    std::memcpy(&h, pkt, sizeof(h));
+    h.version = static_cast<decltype(h.version)>(h.version + 1);
+    std::memcpy(pkt, &h, sizeof(h));
+    bad_version.append(pkt, n);
+    ASSERT_TRUE(bad_version.peek_packet_info(size) == BufferResult::InvalidPacket);
+
+    // Same mapping on the 256-byte instantiation, plus a valid type read.
+    PacketBuffer<256> ok;
+    n = make_packet(pkt, PacketId::Ping, 4);
+    ok.append(pkt, n);
+    ASSERT_TRUE(ok.peek_packet_info(size) == BufferResult::Success);
+    ASSERT_EQ(size, n);
+    ASSERT_TRUE(ok.peek_packet_type() == PacketId::Ping);
+    ASSERT_TRUE(ok.peek_packet(size) == ok.data());
+
+    PacketBuffer<256> bad256;
+    pkt[0] ^= 0xFF;
+    bad256.append(pkt, n);
+    ASSERT_TRUE(bad256.peek_packet_info(size) == BufferResult::InvalidPacket);
+    ASSERT_TRUE(bad256.peek_packet_type() == PacketId::Initialize);
+
+    PacketBuffer<256> huge256;
+    encode_header(pkt, PacketId::Ping, -1);
+    huge256.append(pkt, sizeof(LdnHeader));
+    ASSERT_TRUE(huge256.peek_packet_info(size) == BufferResult::PacketTooLarge);
+}
+
+TEST(packet_buffer_consume_partial_and_empty) {
+    PacketBuffer<8192> pb;
+    const uint8_t data[6] = {1, 2, 3, 4, 5, 6};
+    pb.append(data, sizeof(data));
+    pb.consume(0);
+    ASSERT_EQ(pb.size(), 6);
+    pb.consume(2);
+    ASSERT_EQ(pb.size(), 4);
+    ASSERT_EQ(std::memcmp(pb.data(), data + 2, 4), 0);
+    pb.consume(100);
+    ASSERT_TRUE(pb.empty());
+
+    PacketBuffer<1024> p1k;
+    p1k.append(data, sizeof(data));
+    p1k.consume(0);
+    ASSERT_EQ(p1k.size(), 6);
+}
+
+TEST(packet_buffer_extract_reports_failures) {
+    uint8_t pkt[64];
+    uint8_t out[64];
+    size_t size = 0;
+
+    PacketBuffer<1024> empty;
+    ASSERT_TRUE(empty.extract_packet(out, sizeof(out), size) == BufferResult::NoCompletePacket);
+
+    PacketBuffer<1024> pb;
+    size_t n = make_packet(pkt, PacketId::Ping, 8);
+    pb.append(pkt, n);
+    ASSERT_TRUE(pb.extract_packet(out, n - 1, size) == BufferResult::BufferFull);
+    ASSERT_EQ(pb.size(), n);
+    ASSERT_TRUE(pb.extract_packet(out, sizeof(out), size) == BufferResult::Success);
+    ASSERT_EQ(size, n);
+    ASSERT_EQ(std::memcmp(out, pkt, n), 0);
+    ASSERT_TRUE(pb.empty());
+
+    PacketBuffer<256> small;
+    ASSERT_TRUE(small.extract_packet(out, sizeof(out), size) == BufferResult::NoCompletePacket);
+    small.append(pkt, n);
+    ASSERT_TRUE(small.extract_packet(out, n - 1, size) == BufferResult::BufferFull);
+}
+
+TEST(packet_buffer_write_ptr_and_advance_write_respect_capacity) {
+    PacketBuffer<16> pb;
+    ASSERT_EQ(pb.capacity(), 16);
+    std::memset(pb.write_ptr(), 0x11, 10);
+    pb.advance_write(10);
+    ASSERT_EQ(pb.size(), 10);
+    pb.advance_write(7);          // would exceed the capacity: ignored
+    ASSERT_EQ(pb.size(), 10);
+    pb.advance_write(6);          // exactly fills it
+    ASSERT_EQ(pb.size(), 16);
+    ASSERT_EQ(pb.available(), 0);
+}
+
+TEST(packet_buffer_discard_until_valid_skips_garbage) {
+    uint8_t pkt[64];
+    PacketBuffer<64> pb;
+    const uint8_t junk[3] = {0xDE, 0xAD, 0xBE};
+    pb.append(junk, sizeof(junk));
+    size_t n = make_packet(pkt, PacketId::Ping, 0);
+    pb.append(pkt, n);
+    ASSERT_EQ(pb.discard_until_valid(), 3);
+    ASSERT_TRUE(pb.has_complete_packet());
+    ASSERT_EQ(pb.discard_until_valid(), 0);
+
+    PacketBuffer<16> tiny;
+    tiny.append(junk, sizeof(junk));
+    ASSERT_EQ(tiny.discard_until_valid(), 0);
+    ASSERT_EQ(tiny.size(), 3);
+}
+
+namespace {
+
+// Every public branch of PacketBuffer<N>; each size is a separate template
+// instantiation and is measured as such by the line-coverage gate.
+template<size_t N>
+void check_packet_buffer_api() {
+    uint8_t pkt[64];
+    uint8_t out[64];
+    size_t size = 99;
+    const uint8_t junk[3] = {0xDE, 0xAD, 0xBE};
+    LdnHeader h;
+
+    // --- empty / too short -------------------------------------------------
+    PacketBuffer<N> pb;
+    ASSERT_TRUE(pb.empty());
+    ASSERT_FALSE(pb.has_complete_packet());
+    ASSERT_TRUE(pb.peek_packet_type() == PacketId::Initialize);
+    ASSERT_TRUE(pb.peek_packet_info(size) == BufferResult::NoCompletePacket);
+    ASSERT_TRUE(pb.extract_packet(out, sizeof(out), size) == BufferResult::NoCompletePacket);
+    ASSERT_EQ(pb.discard_until_valid(), 0);
+    ASSERT_TRUE(pb.append(junk, 0) == BufferResult::Success);
+    pb.consume(0);
+    ASSERT_TRUE(pb.append(junk, sizeof(junk)) == BufferResult::Success);
+    ASSERT_FALSE(pb.has_complete_packet());
+    ASSERT_TRUE(pb.peek_packet_type() == PacketId::Initialize);
+    ASSERT_TRUE(pb.peek_packet(size) == nullptr);
+
+    // --- garbage then a valid packet --------------------------------------
+    size_t n = make_packet(pkt, PacketId::Ping, 1);
+    ASSERT_TRUE(pb.append(pkt, n) == BufferResult::Success);
+    ASSERT_EQ(pb.discard_until_valid(), 3);
+    ASSERT_TRUE(pb.has_complete_packet());
+    ASSERT_TRUE(pb.peek_packet_type() == PacketId::Ping);
+    ASSERT_TRUE(pb.peek_packet(size) == pb.data());
+    ASSERT_EQ(size, n);
+
+    // --- partial consume keeps the tail ------------------------------------
+    ASSERT_TRUE(pb.append(junk, sizeof(junk)) == BufferResult::Success);
+    pb.consume(n);
+    ASSERT_EQ(pb.size(), 3);
+    ASSERT_EQ(std::memcmp(pb.data(), junk, 3), 0);
+    pb.consume(sizeof(pkt));
+    ASSERT_TRUE(pb.empty());
+
+    // --- extract: buffer too small, then ok -------------------------------
+    pb.append(pkt, n);
+    ASSERT_TRUE(pb.extract_packet(out, n - 1, size) == BufferResult::BufferFull);
+    ASSERT_EQ(pb.size(), n);
+    ASSERT_TRUE(pb.extract_packet(out, sizeof(out), size) == BufferResult::Success);
+    ASSERT_EQ(std::memcmp(out, pkt, n), 0);
+    ASSERT_TRUE(pb.empty());
+
+    // --- header states -----------------------------------------------------
+    pb.append(pkt, n - 1);                       // announced 1 byte, none present
+    ASSERT_FALSE(pb.has_complete_packet());
+    ASSERT_TRUE(pb.peek_packet_info(size) == BufferResult::NoCompletePacket);
+    pb.consume(sizeof(pkt));
+
+    encode_header(pkt, PacketId::Ping, static_cast<int32_t>(MAX_PACKET_SIZE) + 1);
+    pb.append(pkt, sizeof(LdnHeader));
+    ASSERT_TRUE(pb.peek_packet_info(size) == BufferResult::PacketTooLarge);
+    pb.consume(sizeof(pkt));
+
+    n = make_packet(pkt, PacketId::Ping, 0);
+    pkt[0] ^= 0xFF;                               // corrupt the magic
+    pb.append(pkt, n);
+    ASSERT_TRUE(pb.peek_packet_info(size) == BufferResult::InvalidPacket);
+    ASSERT_TRUE(pb.peek_packet_type() == PacketId::Initialize);
+    pb.consume(sizeof(pkt));
+
+    n = make_packet(pkt, PacketId::Ping, 0);
+    std::memcpy(&h, pkt, sizeof(h));
+    h.version = static_cast<decltype(h.version)>(h.version + 1);
+    std::memcpy(pkt, &h, sizeof(h));
+    pb.append(pkt, n);
+    ASSERT_TRUE(pb.peek_packet_info(size) == BufferResult::InvalidPacket);
+    pb.consume(sizeof(pkt));
+
+    // --- capacity ----------------------------------------------------------
+    ASSERT_EQ(PacketBuffer<N>::capacity(), N);
+    uint8_t big[N + 1];
+    std::memset(big, 0, sizeof(big));
+    ASSERT_TRUE(pb.append(big, N + 1) == BufferResult::BufferFull);
+    ASSERT_TRUE(pb.append(big, N) == BufferResult::Success);
+    ASSERT_EQ(pb.available(), 0);
+    ASSERT_TRUE(pb.append(big, 1) == BufferResult::BufferFull);
+    pb.consume(N);
+    pb.advance_write(N + 1);                      // beyond capacity: ignored
+    ASSERT_EQ(pb.size(), 0);
+    std::memset(pb.write_ptr(), 0, N);
+    pb.advance_write(N);
+    ASSERT_EQ(pb.size(), N);
+}
+
+} // namespace
+
+TEST(packet_buffer_api_is_exhaustive_for_every_instantiated_size) {
+    check_packet_buffer_api<16>();
+    check_packet_buffer_api<64>();
+    check_packet_buffer_api<256>();
+    check_packet_buffer_api<1024>();
+    check_packet_buffer_api<8192>();
+}
+
 TEST(has_header_threshold) {
     ASSERT_TRUE(has_header(12));
     ASSERT_TRUE(has_header(100));

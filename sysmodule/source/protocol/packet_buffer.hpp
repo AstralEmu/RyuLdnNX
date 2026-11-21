@@ -168,7 +168,6 @@ public:
                 return BufferResult::PacketTooLarge;
             case DecodeResult::InvalidMagic:
             case DecodeResult::InvalidVersion:
-                return BufferResult::InvalidPacket;
             default:
                 return BufferResult::InvalidPacket;
         }

@@ -603,12 +603,8 @@ ConfigResult load_config(const char* path, Config& config) {
             continue;
         }
 
-        // Skip if in unknown section
-        if (current_section == Section::None || current_section == Section::Unknown) {
-            continue;
-        }
-
-        // Parse key=value
+        // Parse key=value (lines outside a known section are dropped by the
+        // `default` arm of the switch below)
         char* eq_pos = std::strchr(line, '=');
         if (!eq_pos) {
             continue;  // No '=' found, skip line

@@ -1060,6 +1060,475 @@ TEST(send_recv_connected) {
 }
 
 // =============================================================================
+// Fault injection (libc interposition)
+//
+// The syscall wrappers below replace the libc symbols inside this test
+// executable only. By default every call is forwarded to the real libc
+// function; a test arms ONE fault on ONE function to make a specific call fail
+// the way the kernel would. Production code is untouched: this is the only way
+// to reach the "syscall failed" branches of socket.cpp deterministically.
+// =============================================================================
+
+#include <dlfcn.h>
+#include <poll.h>
+#include <cstdarg>
+
+namespace {
+
+enum Fn { FN_SOCKET, FN_FCNTL, FN_SETSOCKOPT, FN_GETSOCKOPT, FN_POLL, FN_SEND, FN_RECV, FN_COUNT };
+
+struct Fault {
+    bool armed;     // fault pending
+    int  skip;      // number of calls to let through before failing
+    int  err;       // errno to set (when ret < 0)
+    long ret;       // value returned instead of calling libc
+    bool set_out;   // getsockopt only: succeed and write out_int to *optval
+    int  out_int;
+};
+
+Fault g_fault[FN_COUNT];
+
+void arm(Fn fn, int err, int skip = 0, long ret = -1) {
+    g_fault[fn] = Fault{true, skip, err, ret, false, 0};
+}
+
+void arm_so_error(int value) {
+    g_fault[FN_GETSOCKOPT] = Fault{true, 0, 0, 0, true, value};
+}
+
+bool take(Fn fn) {
+    Fault& f = g_fault[fn];
+    if (!f.armed) return false;
+    if (f.skip > 0) { --f.skip; return false; }
+    f.armed = false;
+    if (f.ret < 0) errno = f.err;
+    return true;
+}
+
+struct FaultGuard {
+    ~FaultGuard() { std::memset(g_fault, 0, sizeof(g_fault)); }
+};
+
+template <typename F>
+F real(const char* name) {
+    return reinterpret_cast<F>(dlsym(RTLD_NEXT, name));
+}
+
+} // namespace
+
+extern "C" {
+
+int socket(int d, int t, int p) noexcept {
+    if (take(FN_SOCKET)) return static_cast<int>(g_fault[FN_SOCKET].ret);
+    static auto fn = real<int (*)(int, int, int)>("socket");
+    return fn(d, t, p);
+}
+
+int fcntl(int fd, int cmd, ...) {
+    va_list ap;
+    va_start(ap, cmd);
+    void* arg = va_arg(ap, void*);
+    va_end(ap);
+    if (take(FN_FCNTL)) return static_cast<int>(g_fault[FN_FCNTL].ret);
+    static auto fn = real<int (*)(int, int, void*)>("fcntl");
+    return fn(fd, cmd, arg);
+}
+
+int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
+    if (take(FN_SETSOCKOPT)) return static_cast<int>(g_fault[FN_SETSOCKOPT].ret);
+    static auto fn = real<int (*)(int, int, int, const void*, socklen_t)>("setsockopt");
+    return fn(fd, l, n, v, len);
+}
+
+int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
+    bool inject = take(FN_GETSOCKOPT);
+    if (inject && !g_fault[FN_GETSOCKOPT].set_out) {
+        return static_cast<int>(g_fault[FN_GETSOCKOPT].ret);
+    }
+    static auto fn = real<int (*)(int, int, int, void*, socklen_t*)>("getsockopt");
+    int r = fn(fd, l, n, v, len);
+    if (inject) {
+        *static_cast<int*>(v) = g_fault[FN_GETSOCKOPT].out_int;
+    }
+    return r;
+}
+
+int poll(struct pollfd* fds, nfds_t n, int t) {
+    if (take(FN_POLL)) return static_cast<int>(g_fault[FN_POLL].ret);
+    static auto fn = real<int (*)(struct pollfd*, nfds_t, int)>("poll");
+    return fn(fds, n, t);
+}
+
+ssize_t send(int fd, const void* b, size_t n, int f) {
+    if (take(FN_SEND)) return static_cast<ssize_t>(g_fault[FN_SEND].ret);
+    static auto fn = real<ssize_t (*)(int, const void*, size_t, int)>("send");
+    return fn(fd, b, n, f);
+}
+
+ssize_t recv(int fd, void* b, size_t n, int f) {
+    if (take(FN_RECV)) return static_cast<ssize_t>(g_fault[FN_RECV].ret);
+    static auto fn = real<ssize_t (*)(int, void*, size_t, int)>("recv");
+    return fn(fd, b, n, f);
+}
+
+} // extern "C"
+
+// =============================================================================
+// Loopback peer used by the tests below
+// =============================================================================
+
+namespace {
+
+struct LoopPeer {
+    int listen_fd = -1;
+    int accepted = -1;
+    uint16_t port = 0;
+
+    LoopPeer() {
+        listen_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        sockaddr_in a{};
+        a.sin_family = AF_INET;
+        a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (bind(listen_fd, reinterpret_cast<sockaddr*>(&a), sizeof(a)) < 0) throw "bind failed";
+        if (listen(listen_fd, 4) < 0) throw "listen failed";
+        socklen_t l = sizeof(a);
+        getsockname(listen_fd, reinterpret_cast<sockaddr*>(&a), &l);
+        port = ntohs(a.sin_port);
+    }
+
+    ~LoopPeer() {
+        if (accepted >= 0) ::close(accepted);
+        if (listen_fd >= 0) ::close(listen_fd);
+    }
+
+    void accept_one() {
+        pollfd p{listen_fd, POLLIN, 0};
+        if (::poll(&p, 1, 2000) != 1) throw "no pending connection";
+        accepted = ::accept(listen_fd, nullptr, nullptr);
+        if (accepted < 0) throw "accept failed";
+    }
+};
+
+// Connect `sock` to the peer and accept it.
+#define CONNECT_LOCAL(sock, peer, timeout) \
+    do { \
+        ASSERT_EQ((sock).connect("127.0.0.1", (peer).port, (timeout)), SocketResult::Success); \
+        (peer).accept_one(); \
+    } while (0)
+
+// Zero-timeout reads race the loopback delivery: retry until the kernel has it.
+SocketResult recv_nowait(Socket& sock, uint8_t* buf, size_t size, size_t& got) {
+    SocketResult r = SocketResult::WouldBlock;
+    for (int i = 0; i < 400 && r == SocketResult::WouldBlock; ++i) {
+        r = sock.recv(buf, size, got, 0);
+        if (r == SocketResult::WouldBlock) usleep(5000);
+    }
+    return r;
+}
+
+} // namespace
+
+// =============================================================================
+// Tests: connect() failure paths
+// =============================================================================
+
+TEST(connect_twice_reports_already_connected) {
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 2000), SocketResult::AlreadyConnected);
+    ASSERT_TRUE(sock.is_connected());
+}
+
+TEST(connect_fails_when_socket_creation_fails) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    arm(FN_SOCKET, EMFILE);
+    Socket sock;
+    ASSERT_EQ(sock.connect("127.0.0.1", 1, 1000), SocketResult::SocketError);
+    ASSERT_FALSE(sock.is_valid());
+}
+
+TEST(connect_reuses_a_descriptor_left_by_a_failed_send) {
+    // A send error clears m_connected but keeps the descriptor open; a new
+    // connect() reuses it (create() is idempotent).
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    uint8_t byte = 1;
+    size_t sent = 0;
+    arm(FN_SEND, EPIPE);
+    ASSERT_EQ(sock.send(&byte, 1, sent), SocketResult::SocketError);
+    ASSERT_FALSE(sock.is_connected());
+    ASSERT_TRUE(sock.is_valid());
+    // Linux: the first connect() after a completed non-blocking connect()
+    // reports 0 (it acknowledges the completion), so the reused descriptor
+    // is adopted again; a further connect() is then refused up front.
+    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 0), SocketResult::Success);
+    ASSERT_TRUE(sock.is_connected());
+    ASSERT_TRUE(sock.is_valid());
+    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 0), SocketResult::AlreadyConnected);
+}
+
+TEST(connect_fails_when_nonblocking_mode_cannot_be_set) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    arm(FN_FCNTL, EBADF);
+    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 1000), SocketResult::SocketError);
+    ASSERT_FALSE(sock.is_valid());
+}
+
+TEST(connect_fails_when_so_error_cannot_be_read) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    arm(FN_GETSOCKOPT, EBADF);
+    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 1000), SocketResult::SocketError);
+    ASSERT_FALSE(sock.is_valid());
+}
+
+TEST(connect_reports_the_pending_socket_error) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    arm_so_error(ECONNREFUSED);
+    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 1000), SocketResult::ConnectionRefused);
+    ASSERT_FALSE(sock.is_valid());
+}
+
+TEST(connect_to_a_closed_port_fails_immediately_in_blocking_mode) {
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    uint16_t dead_port = 0;
+    {
+        LoopPeer peer;      // closed at scope exit: nothing listens on that port
+        dead_port = peer.port;
+    }
+    Socket sock;
+    ASSERT_EQ(sock.connect("127.0.0.1", dead_port, 0), SocketResult::ConnectionRefused);
+    ASSERT_FALSE(sock.is_valid());
+}
+
+TEST(connect_succeeds_without_keepalive_when_it_cannot_be_enabled) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    arm(FN_SETSOCKOPT, ENOPROTOOPT);
+    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 1000), SocketResult::Success);
+    ASSERT_TRUE(sock.is_connected());
+    peer.accept_one();
+}
+
+// =============================================================================
+// Tests: send() / send_all()
+// =============================================================================
+
+TEST(send_reports_would_block_on_a_full_non_blocking_socket) {
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    ASSERT_EQ(sock.set_non_blocking(true), SocketResult::Success);
+    std::vector<uint8_t> chunk(65536, 0x5A);
+    SocketResult r = SocketResult::Success;
+    // The peer never reads, so the kernel buffers fill up and send() must
+    // eventually report WouldBlock instead of Success.
+    for (int i = 0; i < 4096 && r == SocketResult::Success; ++i) {
+        size_t sent = 0;
+        r = sock.send(chunk.data(), chunk.size(), sent);
+    }
+    ASSERT_EQ(r, SocketResult::WouldBlock);
+    ASSERT_TRUE(sock.is_connected());
+}
+
+TEST(send_treats_a_zero_byte_result_as_a_closed_connection) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    uint8_t byte = 1;
+    size_t sent = 99;
+    arm(FN_SEND, 0, 0, 0);
+    ASSERT_EQ(sock.send(&byte, 1, sent), SocketResult::Closed);
+    ASSERT_EQ(sent, static_cast<size_t>(0));
+    ASSERT_FALSE(sock.is_connected());
+}
+
+TEST(send_all_waits_for_writability_after_would_block) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    uint8_t payload[] = {1, 2, 3, 4};
+    arm(FN_SEND, EAGAIN);                      // first send blocks, the retry goes through
+    ASSERT_EQ(sock.send_all(payload, sizeof(payload)), SocketResult::Success);
+    uint8_t got[4] = {};
+    ASSERT_EQ(::recv(peer.accepted, got, sizeof(got), MSG_WAITALL), static_cast<ssize_t>(4));
+    ASSERT_EQ(std::memcmp(got, payload, 4), 0);
+}
+
+TEST(send_all_returns_the_wait_error_when_writability_cannot_be_awaited) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    uint8_t payload[] = {1};
+    arm(FN_SEND, EAGAIN);
+    arm(FN_POLL, EINTR);
+    ASSERT_EQ(sock.send_all(payload, sizeof(payload)), SocketResult::SocketError);
+}
+
+// =============================================================================
+// Tests: recv() in non-blocking and blocking modes
+// =============================================================================
+
+TEST(recv_non_blocking_without_data_would_block) {
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    uint8_t buf[16];
+    size_t got = 7;
+    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, 0), SocketResult::WouldBlock);
+    ASSERT_EQ(got, static_cast<size_t>(0));
+    ASSERT_TRUE(sock.is_connected());
+}
+
+TEST(recv_non_blocking_reads_data_that_is_already_buffered) {
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    const uint8_t msg[] = {9, 8, 7};
+    ASSERT_EQ(::send(peer.accepted, msg, sizeof(msg), MSG_NOSIGNAL), static_cast<ssize_t>(3));
+    uint8_t buf[16];
+    size_t got = 0;
+    ASSERT_EQ(recv_nowait(sock, buf, sizeof(buf), got), SocketResult::Success);
+    ASSERT_EQ(got, static_cast<size_t>(3));
+    ASSERT_EQ(std::memcmp(buf, msg, 3), 0);
+}
+
+TEST(recv_non_blocking_reports_a_graceful_close) {
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    ::close(peer.accepted);
+    peer.accepted = -1;
+    uint8_t buf[16];
+    size_t got = 0;
+    ASSERT_EQ(recv_nowait(sock, buf, sizeof(buf), got), SocketResult::Closed);
+    ASSERT_FALSE(sock.is_connected());
+}
+
+TEST(recv_non_blocking_reports_a_connection_error) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    uint8_t buf[16];
+    size_t got = 0;
+    arm(FN_RECV, ECONNRESET);
+    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, 0), SocketResult::ConnectionReset);
+    ASSERT_FALSE(sock.is_connected());
+}
+
+TEST(recv_blocking_returns_data) {
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    const uint8_t msg[] = {4, 5};
+    ASSERT_EQ(::send(peer.accepted, msg, sizeof(msg), MSG_NOSIGNAL), static_cast<ssize_t>(2));
+    uint8_t buf[16];
+    size_t got = 0;
+    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, -1), SocketResult::Success);
+    ASSERT_EQ(got, static_cast<size_t>(2));
+}
+
+TEST(recv_blocking_reports_a_graceful_close) {
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    ::close(peer.accepted);
+    peer.accepted = -1;
+    uint8_t buf[16];
+    size_t got = 0;
+    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, -1), SocketResult::Closed);
+    ASSERT_FALSE(sock.is_connected());
+}
+
+TEST(recv_blocking_reports_would_block_and_connection_errors) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    uint8_t buf[16];
+    size_t got = 0;
+    arm(FN_RECV, EAGAIN);
+    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, -1), SocketResult::WouldBlock);
+    ASSERT_TRUE(sock.is_connected());
+    arm(FN_RECV, ECONNRESET);
+    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, -1), SocketResult::ConnectionReset);
+    ASSERT_FALSE(sock.is_connected());
+}
+
+// =============================================================================
+// Tests: option setters and wait_ready()
+// =============================================================================
+
+TEST(set_non_blocking_reports_fcntl_failures) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    arm(FN_FCNTL, EBADF);                     // F_GETFL fails
+    ASSERT_EQ(sock.set_non_blocking(true), SocketResult::SocketError);
+    arm(FN_FCNTL, EBADF, 1);                  // F_GETFL passes, F_SETFL fails
+    ASSERT_EQ(sock.set_non_blocking(true), SocketResult::SocketError);
+}
+
+TEST(option_setters_report_setsockopt_failures) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    arm(FN_SETSOCKOPT, ENOPROTOOPT);
+    ASSERT_EQ(sock.set_nodelay(true), SocketResult::SocketError);
+    arm(FN_SETSOCKOPT, ENOPROTOOPT);
+    ASSERT_EQ(sock.set_recv_buffer_size(4096), SocketResult::SocketError);
+    arm(FN_SETSOCKOPT, ENOPROTOOPT);
+    ASSERT_EQ(sock.set_send_buffer_size(4096), SocketResult::SocketError);
+}
+
+TEST(wait_ready_failure_is_propagated_by_recv) {
+    FaultGuard g;
+    ASSERT_EQ(socket_init(), SocketResult::Success);
+    LoopPeer peer;
+    Socket sock;
+    CONNECT_LOCAL(sock, peer, 2000);
+    uint8_t buf[16];
+    size_t got = 0;
+    arm(FN_POLL, EINTR);
+    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, 100), SocketResult::SocketError);
+}
+
+// =============================================================================
 // Main
 // =============================================================================
 

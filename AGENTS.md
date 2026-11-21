@@ -290,4 +290,4 @@ Documentation: `scripts/gdb_codegen/README.md`
 
 ## Docs Site
 
-`docs/` is an Astro + Starlight site. Build with `npm run generate-api` (runs Doxygen, transforms XML → MDX) then `astro build`. Deploys to GitHub Pages.
+The documentation is the GitHub wiki, reached through the untracked `docs` symlink (`../RyuLdnNX.wiki`). `make docs` regenerates the generated regions (Doxygen XML via `scripts/gen_docs.py`); `make hooks` activates the git hooks that require the wiki to move with the code. See wiki page `Handoff-Dev-Flow`.

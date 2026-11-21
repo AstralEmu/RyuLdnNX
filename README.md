@@ -167,7 +167,7 @@ ryu_ldn_nx/
 ├── tests/               # Host unit tests
 ├── scripts/             # Build scripts, GDB debugger scripts
 ├── config/              # Example configuration
-└── docs/                 # Astro + Starlight documentation site
+└── docs                  # Symlink to the GitHub wiki clone (untracked)
 ```
 
 ### Debugging on Hardware

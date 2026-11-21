@@ -435,6 +435,104 @@ TEST(ensure_config_exists_keeps_existing) {
 }
 
 // ============================================================================
+// Value parsing: booleans, integers, ports, unknown sections, save failure
+// ============================================================================
+
+// Loads `[ldn]\nenabled = <value>` over a config whose `enabled` is the
+// opposite of `expected`, so the assertion proves the parser actually decided.
+static void expect_bool(const char* value, bool expected) {
+    char content[128];
+    snprintf(content, sizeof(content), "[ldn]\nenabled = %s\n", value);
+    TempConfigFile file(content);
+    Config config = get_default_config();
+    config.ldn.enabled = !expected;
+    ASSERT_EQ(load_config(file.path(), config), ConfigResult::Success);
+    ASSERT_EQ(config.ldn.enabled, expected);
+}
+
+TEST(parse_bool_accepts_only_the_four_documented_spellings) {
+    expect_bool("1", true);
+    expect_bool("true", true);
+    expect_bool("TrUe", true);
+    expect_bool("0", false);
+    expect_bool("false", false);
+    expect_bool("FALSE", false);
+}
+
+TEST(parse_bool_rejects_anything_else_as_false) {
+    expect_bool("yes", false);
+    expect_bool("on", false);
+    expect_bool("2", false);
+    expect_bool("tru", false);      // prefix of a valid token
+    expect_bool("truee", false);    // valid token plus a trailing character
+    expect_bool("", false);         // empty value
+}
+
+// Loads `[debug]\nlevel = <value>` over a config whose level is 77.
+static long long load_debug_level(const char* value) {
+    char content[128];
+    snprintf(content, sizeof(content), "[debug]\nlevel = %s\n", value);
+    TempConfigFile file(content);
+    Config config = get_default_config();
+    config.debug.level = 77;
+    ASSERT_EQ(load_config(file.path(), config), ConfigResult::Success);
+    return static_cast<long long>(config.debug.level);
+}
+
+TEST(parse_uint32_accepts_clean_integers) {
+    ASSERT_EQ(load_debug_level("0"), 0);
+    ASSERT_EQ(load_debug_level("3"), 3);
+    ASSERT_EQ(load_debug_level("4294967295"), 4294967295LL);
+}
+
+TEST(parse_uint32_turns_malformed_values_into_zero) {
+    ASSERT_EQ(load_debug_level(""), 0);              // empty
+    ASSERT_EQ(load_debug_level("-1"), 0);            // negative
+    ASSERT_EQ(load_debug_level("4294967296"), 0);    // 2^32: exceeds uint32_t
+    ASSERT_EQ(load_debug_level("99999999999999999999999"), 0);  // ERANGE
+    ASSERT_EQ(load_debug_level("12abc"), 0);         // trailing garbage
+    ASSERT_EQ(load_debug_level("abc"), 0);           // nothing parsed
+}
+
+TEST(server_port_with_empty_or_negative_value_is_zero) {
+    const char* values[] = {"", "-1"};
+    for (const char* v : values) {
+        char content[64];
+        snprintf(content, sizeof(content), "[server]\nport = %s\n", v);
+        TempConfigFile file(content);
+        Config config = get_default_config();
+        ASSERT_EQ(load_config(file.path(), config), ConfigResult::Success);
+        ASSERT_EQ(config.server.port, 0);
+    }
+}
+
+TEST(keys_outside_a_known_section_are_ignored) {
+    const char* content =
+        "orphan = 1\n"             // before any section
+        "[nonsense]\n"
+        "host = evil.example\n"    // unknown section
+        "port = 1\n"
+        "[server]\n"
+        "no_equals_sign_here\n"    // known section, malformed line
+        "port = 4242\n";
+    TempConfigFile file(content);
+    Config config = get_default_config();
+    Config defaults = get_default_config();
+    ASSERT_EQ(load_config(file.path(), config), ConfigResult::Success);
+    ASSERT_STREQ(config.server.host, defaults.server.host);
+    ASSERT_EQ(config.server.port, 4242);
+}
+
+TEST(save_config_reports_io_error_when_the_file_cannot_be_created) {
+    // The parent "directory" is a regular file, so neither mkdir nor fopen can succeed.
+    TempConfigFile blocker("x");
+    char path[300];
+    snprintf(path, sizeof(path), "%s/config.ini", blocker.path());
+    Config config = get_default_config();
+    ASSERT_EQ(save_config(path, config), ConfigResult::IoError);
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 

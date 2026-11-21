@@ -131,6 +131,77 @@ TEST(singleton_instance) {
     ASSERT_TRUE(&m1 == &m2);
 }
 
+// Must stay the first test that touches the singleton after
+// singleton_instance: it relies on Initialize() not having run yet.
+TEST(save_and_reload_before_initialize_report_io_error) {
+    ASSERT_FALSE(ConfigManager::Instance().IsInitialized());
+    ASSERT_EQ(ConfigManager::Instance().Save(), ConfigResult::IoError);
+    ASSERT_EQ(ConfigManager::Instance().Reload(), ConfigResult::IoError);
+}
+
+TEST(initialize_without_a_path_falls_back_to_the_default_location) {
+    // The default path is an SD-card path that does not exist on the host:
+    // a missing file is acceptable and leaves the defaults in place.
+    ASSERT_TRUE(ConfigManager::Instance().Initialize(nullptr));
+    ASSERT_TRUE(ConfigManager::Instance().IsInitialized());
+    ASSERT_FALSE(ConfigManager::Instance().HasUnsavedChanges());
+}
+
+TEST(save_writes_the_file_and_clears_the_dirty_flag) {
+    char path[256];
+    snprintf(path, sizeof(path), "/tmp/config_manager_save_%d.ini", rand());
+    ASSERT_TRUE(ConfigManager::Instance().Initialize(path));
+    ConfigManager::Instance().SetServerPort(4321);
+    ASSERT_TRUE(ConfigManager::Instance().HasUnsavedChanges());
+    ASSERT_EQ(ConfigManager::Instance().Save(), ConfigResult::Success);
+    ASSERT_FALSE(ConfigManager::Instance().HasUnsavedChanges());
+
+    // The saved file reloads to the saved value.
+    ConfigManager::Instance().SetServerPort(1);
+    ASSERT_EQ(ConfigManager::Instance().Reload(), ConfigResult::Success);
+    ASSERT_EQ(ConfigManager::Instance().GetServerPort(), 4321);
+    std::remove(path);
+}
+
+TEST(save_failure_keeps_the_dirty_flag) {
+    // Parent directory does not exist and mkdir only creates the last level.
+    char path[256];
+    snprintf(path, sizeof(path), "/tmp/config_manager_missing_%d/sub/config.ini", rand());
+    ASSERT_TRUE(ConfigManager::Instance().Initialize(path));
+    ConfigManager::Instance().SetServerPort(4321);
+    ASSERT_EQ(ConfigManager::Instance().Save(), ConfigResult::IoError);
+    ASSERT_TRUE(ConfigManager::Instance().HasUnsavedChanges());
+}
+
+TEST(use_passphrase_setter_updates_value_and_notifies) {
+    ConfigManager::Instance().Initialize("/tmp/nonexistent_config_12345.ini");
+    g_change_callback_count = 0;
+    g_last_changed_section = nullptr;
+    ConfigManager::Instance().SetChangeCallback(test_change_callback);
+    ConfigManager::Instance().SetUsePassphrase(true);
+    ASSERT_TRUE(ConfigManager::Instance().GetUsePassphrase());
+    ASSERT_TRUE(ConfigManager::Instance().HasUnsavedChanges());
+    ASSERT_EQ(g_change_callback_count, 1);
+    ASSERT_STREQ(g_last_changed_section, "ldn");
+    ConfigManager::Instance().SetUsePassphrase(false);
+    ASSERT_FALSE(ConfigManager::Instance().GetUsePassphrase());
+    ConfigManager::Instance().SetChangeCallback(nullptr);
+}
+
+TEST(generate_random_passphrase_rejects_null_and_undersized_buffers) {
+    char buf[17];
+    std::memset(buf, 'x', sizeof(buf));
+    GenerateRandomPassphrase(nullptr, 32);               // must not crash
+    GenerateRandomPassphrase(buf, 16);                   // too small: emptied
+    ASSERT_EQ(buf[0], '\0');
+    std::memset(buf, 'x', sizeof(buf));
+    GenerateRandomPassphrase(buf, 0);                    // zero size: untouched
+    ASSERT_EQ(buf[0], 'x');
+    GenerateRandomPassphrase(buf, sizeof(buf));
+    ASSERT_TRUE(IsValidPassphrase(buf));
+    ASSERT_EQ(std::strlen(buf), 16u);
+}
+
 TEST(initialize_with_missing_file) {
     // Initialize with non-existent file should use defaults
     bool result = ConfigManager::Instance().Initialize("/tmp/nonexistent_config_12345.ini");

@@ -127,8 +127,9 @@ void ReconnectManager::calculate_delay() {
     for (uint32_t i = 0; i < exponential_count; ++i) {
         // Check for potential overflow before multiplying
         // max_delay / (multiplier/100) gives us the safe threshold
-        uint32_t safe_threshold = (m_config.max_delay_ms * 100) /
-                                   m_config.multiplier_percent;
+        // 64-bit arithmetic: max_delay_ms * 100 overflows uint32_t above ~42 M ms.
+        const uint64_t safe_threshold = (static_cast<uint64_t>(m_config.max_delay_ms) * 100) /
+                                         m_config.multiplier_percent;
 
         if (m_current_delay_ms >= safe_threshold) {
             // Would overflow or exceed max, clamp to max
@@ -136,14 +137,11 @@ void ReconnectManager::calculate_delay() {
             return;
         }
 
-        // Apply multiplier: delay = delay * (multiplier_percent / 100)
-        m_current_delay_ms = (m_current_delay_ms * m_config.multiplier_percent) / 100;
-
-        // Clamp to max delay
-        if (m_current_delay_ms > m_config.max_delay_ms) {
-            m_current_delay_ms = m_config.max_delay_ms;
-            return;
-        }
+        // Apply multiplier: delay = delay * (multiplier_percent / 100).
+        // No further clamp is needed: delay < safe_threshold guarantees
+        // delay * multiplier_percent / 100 < max_delay_ms.
+        m_current_delay_ms = static_cast<uint32_t>(
+            (static_cast<uint64_t>(m_current_delay_ms) * m_config.multiplier_percent) / 100);
     }
 }
 

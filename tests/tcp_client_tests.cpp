@@ -25,6 +25,14 @@
 #include <cstring>
 #include <cstdlib>
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <string>
+#include <vector>
+
 #include "network/tcp_client.hpp"
 
 using namespace ryu_ldn::network;
@@ -843,6 +851,571 @@ TEST(tcp_client_send_connect_private_not_connected) {
     ConnectPrivateRequest req{};
     ClientResult r = client.send_connect_private(req);
     ASSERT_EQ(r, ClientResult::NotConnected);
+}
+
+// =============================================================================
+// Tests: Connected behaviour against a real loopback peer
+// =============================================================================
+
+/**
+ * Loopback TCP peer standing in for the Ryujinx LDN server: it listens on an
+ * OS-assigned port and, once the client connected, accepts the connection so
+ * the test can read what the client wrote and write what it must receive.
+ */
+class Peer {
+public:
+    Peer() {
+        m_listen = ::socket(AF_INET, SOCK_STREAM, 0);
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = 0;
+        ::bind(m_listen, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        ::listen(m_listen, 1);
+        socklen_t len = sizeof(addr);
+        ::getsockname(m_listen, reinterpret_cast<sockaddr*>(&addr), &len);
+        m_port = ntohs(addr.sin_port);
+    }
+
+    ~Peer() {
+        close_connection();
+        if (m_listen >= 0) {
+            ::close(m_listen);
+        }
+    }
+
+    Peer(const Peer&) = delete;
+    Peer& operator=(const Peer&) = delete;
+
+    uint16_t port() const { return m_port; }
+
+    /// Accept the pending client connection (the client already connected).
+    bool accept_client() {
+        m_conn = ::accept(m_listen, nullptr, nullptr);
+        if (m_conn < 0) {
+            return false;
+        }
+        timeval tv{2, 0};
+        ::setsockopt(m_conn, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        return true;
+    }
+
+    /// Read exactly `size` bytes; returns what was read (shorter on EOF/timeout).
+    std::vector<uint8_t> read_bytes(size_t size) {
+        std::vector<uint8_t> out(size);
+        size_t got = 0;
+        while (got < size) {
+            ssize_t n = ::recv(m_conn, out.data() + got, size - got, 0);
+            if (n <= 0) {
+                break;
+            }
+            got += static_cast<size_t>(n);
+        }
+        out.resize(got);
+        return out;
+    }
+
+    /// Read one whole LDN packet (header, then data_size payload bytes).
+    std::vector<uint8_t> read_packet() {
+        std::vector<uint8_t> pkt = read_bytes(sizeof(LdnHeader));
+        if (pkt.size() != sizeof(LdnHeader)) {
+            return pkt;
+        }
+        LdnHeader h{};
+        std::memcpy(&h, pkt.data(), sizeof(h));
+        std::vector<uint8_t> body = read_bytes(static_cast<size_t>(h.data_size));
+        pkt.insert(pkt.end(), body.begin(), body.end());
+        return pkt;
+    }
+
+    bool write_bytes(const void* data, size_t size) {
+        return ::send(m_conn, data, size, MSG_NOSIGNAL) == static_cast<ssize_t>(size);
+    }
+
+    void close_connection() {
+        if (m_conn >= 0) {
+            ::close(m_conn);
+            m_conn = -1;
+        }
+    }
+
+    /// Abort the connection with a RST instead of a FIN (SO_LINGER, 0 s).
+    void reset_connection() {
+        if (m_conn >= 0) {
+            linger lg{1, 0};
+            ::setsockopt(m_conn, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
+        }
+        close_connection();
+    }
+
+private:
+    int m_listen = -1;
+    int m_conn = -1;
+    uint16_t m_port = 0;
+};
+
+/// Connect `client` to `peer` and accept on the peer side; asserts both.
+#define CONNECT_PAIR(client, peer) \
+    do { \
+        socket_init(); \
+        ASSERT_EQ((client).connect("127.0.0.1", (peer).port(), 2000), ClientResult::Success); \
+        ASSERT_TRUE((peer).accept_client()); \
+    } while (0)
+
+/// Build one wire packet (header + payload) the way the server would.
+static std::vector<uint8_t> make_packet(PacketId type, const void* payload, size_t size) {
+    std::vector<uint8_t> buf(sizeof(LdnHeader) + size);
+    size_t written = 0;
+    EncodeResult r = encode_raw(buf.data(), buf.size(), type,
+                                static_cast<const uint8_t*>(payload), size, written);
+    if (r != EncodeResult::Success || written != buf.size()) {
+        throw "make_packet: encode_raw failed";
+    }
+    return buf;
+}
+
+/// Assert a received wire packet has the expected type and payload size.
+#define ASSERT_WIRE(pkt, expect_type, expect_payload) \
+    do { \
+        ASSERT_EQ((pkt).size(), sizeof(LdnHeader) + (expect_payload)); \
+        LdnHeader hdr_{}; \
+        std::memcpy(&hdr_, (pkt).data(), sizeof(hdr_)); \
+        ASSERT_EQ(hdr_.magic, PROTOCOL_MAGIC); \
+        ASSERT_EQ(hdr_.type, static_cast<uint8_t>(expect_type)); \
+        ASSERT_EQ(hdr_.version, PROTOCOL_VERSION); \
+        ASSERT_EQ(static_cast<size_t>(hdr_.data_size), static_cast<size_t>(expect_payload)); \
+    } while (0)
+
+TEST(connected_connect_enables_nodelay_and_rejects_second_connect) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    ASSERT_TRUE(client.is_connected());
+    ASSERT_EQ(client.set_nodelay(true), ClientResult::Success);
+    ASSERT_EQ(client.set_nodelay(false), ClientResult::Success);
+    ASSERT_EQ(client.connect("127.0.0.1", peer.port(), 2000), ClientResult::AlreadyConnected);
+    ASSERT_TRUE(client.is_connected());
+    client.disconnect();
+    ASSERT_FALSE(client.is_connected());
+}
+
+TEST(connected_move_assignment_transfers_the_connection) {
+    Peer peer;
+    TcpClient source;
+    CONNECT_PAIR(source, peer);
+    TcpClient target;
+    target = std::move(source);
+    ASSERT_TRUE(target.is_connected());
+    ASSERT_FALSE(source.is_connected());
+    ASSERT_EQ(target.send_raw("ab", 2), ClientResult::Success);
+    ASSERT_EQ(peer.read_bytes(2).size(), static_cast<size_t>(2));
+}
+
+TEST(connected_send_packet_writes_header_and_payload) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    const uint8_t payload[5] = {1, 2, 3, 4, 5};
+    ASSERT_EQ(client.send_packet(PacketId::Ping, payload, sizeof(payload)), ClientResult::Success);
+    auto pkt = peer.read_packet();
+    ASSERT_WIRE(pkt, PacketId::Ping, sizeof(payload));
+    ASSERT_EQ(std::memcmp(pkt.data() + sizeof(LdnHeader), payload, sizeof(payload)), 0);
+}
+
+TEST(connected_send_packet_larger_than_buffer_is_an_encoding_error) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    std::vector<uint8_t> big(4096, 0x5A);
+    ASSERT_EQ(client.send_packet(PacketId::Ping, big.data(), big.size()), ClientResult::EncodingError);
+}
+
+TEST(connected_send_raw_forwards_bytes_unchanged_and_validates_input) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    ASSERT_EQ(client.send_raw(nullptr, 4), ClientResult::EncodingError);
+    ASSERT_EQ(client.send_raw("x", 0), ClientResult::EncodingError);
+    const uint8_t raw[3] = {9, 8, 7};
+    ASSERT_EQ(client.send_raw(raw, sizeof(raw)), ClientResult::Success);
+    auto got = peer.read_bytes(sizeof(raw));
+    ASSERT_EQ(got.size(), sizeof(raw));
+    ASSERT_EQ(std::memcmp(got.data(), raw, sizeof(raw)), 0);
+}
+
+TEST(connected_fixed_size_messages_carry_their_packet_id_and_size) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+
+    InitializeMessage init{};
+    ASSERT_EQ(client.send_initialize(init), ClientResult::Success);
+    auto p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Initialize, sizeof(InitializeMessage));
+
+    PassphraseMessage pass{};
+    ASSERT_EQ(client.send_passphrase(pass), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Passphrase, sizeof(PassphraseMessage));
+
+    PingMessage ping{};
+    ASSERT_EQ(client.send_ping(ping), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Ping, sizeof(PingMessage));
+
+    DisconnectMessage disc{};
+    ASSERT_EQ(client.send_disconnect(disc), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Disconnect, sizeof(DisconnectMessage));
+
+    ConnectRequest conn{};
+    ASSERT_EQ(client.send_connect(conn), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Connect, sizeof(ConnectRequest));
+
+    ConnectPrivateRequest connp{};
+    ASSERT_EQ(client.send_connect_private(connp), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::ConnectPrivate, sizeof(ConnectPrivateRequest));
+
+    ScanFilterFull scan{};
+    ASSERT_EQ(client.send_scan(scan), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Scan, sizeof(ScanFilterFull));
+
+    SetAcceptPolicyRequest pol{};
+    ASSERT_EQ(client.send_set_accept_policy(pol), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::SetAcceptPolicy, sizeof(SetAcceptPolicyRequest));
+
+    RejectRequest rej{};
+    ASSERT_EQ(client.send_reject(rej), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Reject, sizeof(RejectRequest));
+}
+
+TEST(connected_send_passphrase_string_copies_and_truncates) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+
+    ASSERT_EQ(client.send_passphrase("hello"), ClientResult::Success);
+    auto p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Passphrase, sizeof(PassphraseMessage));
+    ASSERT_EQ(std::memcmp(p.data() + sizeof(LdnHeader), "hello", 5), 0);
+    ASSERT_EQ(p[sizeof(LdnHeader) + 5], static_cast<uint8_t>(0));
+
+    ASSERT_EQ(client.send_passphrase(static_cast<const char*>(nullptr)), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Passphrase, sizeof(PassphraseMessage));
+    ASSERT_EQ(p[sizeof(LdnHeader)], static_cast<uint8_t>(0));
+
+    std::string long_text(300, 'x');
+    ASSERT_EQ(client.send_passphrase(long_text.c_str()), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::Passphrase, sizeof(PassphraseMessage));
+    // Truncated to 127 characters, the 128th byte stays the terminator.
+    ASSERT_EQ(p[sizeof(LdnHeader) + 126], static_cast<uint8_t>('x'));
+    ASSERT_EQ(p[sizeof(LdnHeader) + 127], static_cast<uint8_t>(0));
+}
+
+TEST(connected_send_create_access_point_appends_advertise_data) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    CreateAccessPointRequest req{};
+    const uint8_t adv[40] = {0xAA, 0xBB};
+
+    ASSERT_EQ(client.send_create_access_point(req, adv, sizeof(adv)), ClientResult::Success);
+    auto p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::CreateAccessPoint, sizeof(req) + sizeof(adv));
+    ASSERT_EQ(p[sizeof(LdnHeader) + sizeof(req)], static_cast<uint8_t>(0xAA));
+
+    // No advertise data: request only.
+    ASSERT_EQ(client.send_create_access_point(req, nullptr, 0), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::CreateAccessPoint, sizeof(req));
+}
+
+TEST(connected_send_create_access_point_rejects_oversized_advertise_data) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    CreateAccessPointRequest req{};
+    std::vector<uint8_t> adv(4096, 1);
+    ASSERT_EQ(client.send_create_access_point(req, adv.data(), adv.size()), ClientResult::BufferTooSmall);
+}
+
+TEST(connected_send_create_access_point_private_appends_advertise_data) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    CreateAccessPointPrivateRequest req{};
+    const uint8_t adv[16] = {0xCC};
+
+    ASSERT_EQ(client.send_create_access_point_private(req, adv, sizeof(adv)), ClientResult::Success);
+    auto p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::CreateAccessPointPrivate, sizeof(req) + sizeof(adv));
+    ASSERT_EQ(p[sizeof(LdnHeader) + sizeof(req)], static_cast<uint8_t>(0xCC));
+
+    ASSERT_EQ(client.send_create_access_point_private(req, nullptr, 0), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::CreateAccessPointPrivate, sizeof(req));
+
+    std::vector<uint8_t> big(4096, 1);
+    ASSERT_EQ(client.send_create_access_point_private(req, big.data(), big.size()),
+              ClientResult::BufferTooSmall);
+}
+
+TEST(connected_send_proxy_data_encodes_header_and_payload) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    ProxyDataHeader header{};
+    header.info.source_port = 1234;
+    const uint8_t data[6] = {1, 2, 3, 4, 5, 6};
+    header.data_length = sizeof(data);
+
+    ASSERT_EQ(client.send_proxy_data(header, data, sizeof(data)), ClientResult::Success);
+    auto p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::ProxyData, sizeof(ProxyDataHeader) + sizeof(data));
+
+    std::vector<uint8_t> big(4096, 1);
+    ASSERT_EQ(client.send_proxy_data(header, big.data(), big.size()), ClientResult::EncodingError);
+}
+
+TEST(connected_send_set_advertise_data_clamps_to_protocol_maximum) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+
+    const uint8_t small[4] = {1, 2, 3, 4};
+    ASSERT_EQ(client.send_set_advertise_data(small, sizeof(small)), ClientResult::Success);
+    auto p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::SetAdvertiseData, sizeof(small));
+
+    ASSERT_EQ(client.send_set_advertise_data(nullptr, 0), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::SetAdvertiseData, static_cast<size_t>(0));
+
+    std::vector<uint8_t> big(1000, 7);
+    ASSERT_EQ(client.send_set_advertise_data(big.data(), big.size()), ClientResult::Success);
+    p = peer.read_packet();
+    ASSERT_WIRE(p, PacketId::SetAdvertiseData, static_cast<size_t>(384));
+}
+
+TEST(connected_send_fails_once_the_peer_is_gone) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    peer.close_connection();
+
+    // The first writes after a FIN may still be accepted by the kernel; the RST
+    // that follows must surface as a non-success result within a few sends.
+    std::vector<uint8_t> chunk(1400, 0x11);
+    ClientResult last = ClientResult::Success;
+    for (int i = 0; i < 200 && last == ClientResult::Success; i++) {
+        last = client.send_raw(chunk.data(), chunk.size());
+    }
+    ASSERT_NE(last, ClientResult::Success);
+
+    // The failure is sticky: a later send on the same dead connection fails too.
+    uint8_t one = 1;
+    ASSERT_NE(client.send_packet(PacketId::Ping, &one, 1), ClientResult::Success);
+}
+
+TEST(connected_receive_packet_returns_payload_and_consumes_it) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    const uint8_t payload[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+    auto pkt = make_packet(PacketId::Ping, payload, sizeof(payload));
+    ASSERT_TRUE(peer.write_bytes(pkt.data(), pkt.size()));
+
+    PacketId type{};
+    uint8_t out[16] = {};
+    size_t out_size = 0;
+    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::Success);
+    ASSERT_EQ(type, PacketId::Ping);
+    ASSERT_EQ(out_size, sizeof(payload));
+    ASSERT_EQ(std::memcmp(out, payload, sizeof(payload)), 0);
+    ASSERT_FALSE(client.has_packet_available());
+}
+
+TEST(connected_receive_packet_without_payload) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    auto pkt = make_packet(PacketId::ScanReplyEnd, nullptr, 0);
+    ASSERT_TRUE(peer.write_bytes(pkt.data(), pkt.size()));
+
+    PacketId type{};
+    uint8_t out[4];
+    size_t out_size = 99;
+    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::Success);
+    ASSERT_EQ(type, PacketId::ScanReplyEnd);
+    ASSERT_EQ(out_size, static_cast<size_t>(0));
+}
+
+TEST(connected_receive_packet_reassembles_a_split_packet) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    const uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    auto pkt = make_packet(PacketId::Ping, payload, sizeof(payload));
+    // Header alone first: the client must wait for the rest.
+    ASSERT_TRUE(peer.write_bytes(pkt.data(), 5));
+    ASSERT_TRUE(peer.write_bytes(pkt.data() + 5, pkt.size() - 5));
+
+    PacketId type{};
+    uint8_t out[16] = {};
+    size_t out_size = 0;
+    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::Success);
+    ASSERT_EQ(out_size, sizeof(payload));
+    ASSERT_EQ(std::memcmp(out, payload, sizeof(payload)), 0);
+}
+
+TEST(connected_receive_packet_keeps_the_packet_when_the_buffer_is_too_small) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    const uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    auto pkt = make_packet(PacketId::Ping, payload, sizeof(payload));
+    ASSERT_TRUE(peer.write_bytes(pkt.data(), pkt.size()));
+
+    PacketId type{};
+    uint8_t small[2];
+    size_t out_size = 0;
+    ASSERT_EQ(client.receive_packet(type, small, sizeof(small), out_size, 2000), ClientResult::BufferTooSmall);
+    ASSERT_EQ(out_size, sizeof(payload));
+    ASSERT_TRUE(client.has_packet_available());
+
+    uint8_t big[16] = {};
+    ASSERT_EQ(client.receive_packet(type, big, sizeof(big), out_size, 2000), ClientResult::Success);
+    ASSERT_EQ(std::memcmp(big, payload, sizeof(payload)), 0);
+}
+
+TEST(connected_receive_packet_times_out_without_data) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    PacketId type{};
+    uint8_t out[4];
+    size_t out_size = 0;
+    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 50), ClientResult::Timeout);
+    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 0), ClientResult::Timeout);
+}
+
+TEST(connected_receive_packet_reports_connection_lost_on_peer_close) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    peer.close_connection();
+    PacketId type{};
+    uint8_t out[4];
+    size_t out_size = 0;
+    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::ConnectionLost);
+}
+
+TEST(connected_receive_packet_rejects_a_corrupt_header) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    uint8_t garbage[sizeof(LdnHeader)];
+    std::memset(garbage, 0xEE, sizeof(garbage));
+    ASSERT_TRUE(peer.write_bytes(garbage, sizeof(garbage)));
+    PacketId type{};
+    uint8_t out[4];
+    size_t out_size = 0;
+    // A header with an invalid magic is never "complete": the client keeps
+    // waiting, then reports a timeout rather than handing back garbage.
+    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 100), ClientResult::Timeout);
+}
+
+TEST(connected_receive_packet_overflowing_the_stream_buffer_is_invalid) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+
+    // A valid header announcing a payload larger than the 8 KB stream buffer,
+    // followed by more bytes than the buffer can ever hold.
+    LdnHeader header{};
+    header.magic = PROTOCOL_MAGIC;
+    header.version = PROTOCOL_VERSION;
+    header.type = static_cast<uint8_t>(PacketId::Ping);
+    header.data_size = 60000;
+    ASSERT_TRUE(peer.write_bytes(&header, sizeof(header)));
+    std::vector<uint8_t> filler(4096, 0x33);
+
+    PacketId type{};
+    uint8_t out[4];
+    size_t out_size = 0;
+    ClientResult result = ClientResult::Success;
+    for (int i = 0; i < 8 && result != ClientResult::InvalidPacket; i++) {
+        ASSERT_TRUE(peer.write_bytes(filler.data(), filler.size()));
+        result = client.receive_packet(type, out, sizeof(out), out_size, 200);
+    }
+    ASSERT_EQ(result, ClientResult::InvalidPacket);
+}
+
+TEST(connected_receive_packet_maps_a_connection_reset) {
+    Peer peer;
+    TcpClient client;
+    CONNECT_PAIR(client, peer);
+    peer.reset_connection();
+    PacketId type{};
+    uint8_t out[4];
+    size_t out_size = 0;
+    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::ConnectionLost);
+}
+
+TEST(connect_times_out_when_the_server_never_accepts) {
+    socket_init();
+    // Listener with a one-slot accept queue that nobody drains: once it is
+    // full the kernel drops further SYNs, so the next connect cannot finish.
+    int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_TRUE(fd >= 0);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    ASSERT_EQ(::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)), 0);
+    ASSERT_EQ(::listen(fd, 0), 0);
+    socklen_t len = sizeof(addr);
+    ASSERT_EQ(::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len), 0);
+    const uint16_t port = ntohs(addr.sin_port);
+
+    TcpClient fillers[3];
+    ClientResult last = ClientResult::Success;
+    for (auto& filler : fillers) {
+        last = filler.connect("127.0.0.1", port, 300);
+        if (last != ClientResult::Success) {
+            break;
+        }
+    }
+    ::close(fd);
+    ASSERT_EQ(last, ClientResult::Timeout);
+}
+
+TEST(socket_result_mapping_covers_every_socket_outcome) {
+    struct Row { SocketResult in; ClientResult out; };
+    const Row rows[] = {
+        {SocketResult::Success, ClientResult::Success},
+        {SocketResult::WouldBlock, ClientResult::Success},
+        {SocketResult::Timeout, ClientResult::Timeout},
+        {SocketResult::NotConnected, ClientResult::NotConnected},
+        {SocketResult::AlreadyConnected, ClientResult::AlreadyConnected},
+        {SocketResult::NotInitialized, ClientResult::NotInitialized},
+        {SocketResult::Closed, ClientResult::ConnectionLost},
+        {SocketResult::ConnectionReset, ClientResult::ConnectionLost},
+        {SocketResult::ConnectionRefused, ClientResult::ConnectionFailed},
+        {SocketResult::HostUnreachable, ClientResult::ConnectionFailed},
+        {SocketResult::NetworkDown, ClientResult::ConnectionFailed},
+        {SocketResult::InvalidAddress, ClientResult::ConnectionFailed},
+        {SocketResult::SocketError, ClientResult::InternalError},
+    };
+    for (const Row& row : rows) {
+        ASSERT_EQ(TcpClient::socket_to_client_result(row.in), row.out);
+    }
 }
 
 // =============================================================================
