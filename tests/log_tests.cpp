@@ -26,44 +26,46 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegister_##name { \
-        TestRegister_##name() { register_test(#name, test_##name); } \
-    } g_test_register_##name; \
+#define TEST(name)                             \
+    static void test_##name();                 \
+    static struct TestRegister_##name {        \
+        TestRegister_##name() {                \
+            register_test(#name, test_##name); \
+        }                                      \
+    } g_test_register_##name;                  \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT_TRUE(cond)                                      \
+    do {                                                       \
+        if (!(cond)) {                                         \
             printf("  FAIL: %s (line %d)\n", #cond, __LINE__); \
             throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+        }                                                      \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        auto _a = (a); \
-        auto _b = (b); \
-        if (_a != _b) { \
-            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
+#define ASSERT_EQ(a, b)                                                      \
+    do {                                                                     \
+        auto _a = (a);                                                       \
+        auto _b = (b);                                                       \
+        if (_a != _b) {                                                      \
+            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
             printf("    got: %lld vs %lld\n", (long long)_a, (long long)_b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            throw std::runtime_error("Test assertion failed");               \
+        }                                                                    \
+    } while (0)
 
-#define ASSERT_STREQ(a, b) \
-    do { \
-        const char* _a = (a); \
-        const char* _b = (b); \
-        if (std::strcmp(_a, _b) != 0) { \
+#define ASSERT_STREQ(a, b)                                            \
+    do {                                                              \
+        const char* _a = (a);                                         \
+        const char* _b = (b);                                         \
+        if (std::strcmp(_a, _b) != 0) {                               \
             printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
-            printf("    got: \"%s\" vs \"%s\"\n", _a, _b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            printf("    got: \"%s\" vs \"%s\"\n", _a, _b);            \
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
+    } while (0)
 
 struct TestEntry {
     const char* name;
@@ -105,7 +107,6 @@ TEST(logger_init_disabled) {
     DebugConfig config{};
     config.enabled = false;
     config.level = 3;
-    
 
     Logger logger;
     logger.init(config);
@@ -117,7 +118,6 @@ TEST(logger_init_enabled) {
     DebugConfig config{};
     config.enabled = true;
     config.level = 2;
-    
 
     Logger logger;
     logger.init(config);
@@ -130,7 +130,6 @@ TEST(logger_should_log_level_filtering) {
     DebugConfig config{};
     config.enabled = true;
     config.level = 1;  // Warning level
-    
 
     Logger logger;
     logger.init(config);
@@ -147,7 +146,6 @@ TEST(logger_should_log_all_levels) {
     DebugConfig config{};
     config.enabled = true;
     config.level = 3;  // Verbose (all levels)
-    
 
     Logger logger;
     logger.init(config);
@@ -162,7 +160,6 @@ TEST(logger_disabled_never_logs) {
     DebugConfig config{};
     config.enabled = false;
     config.level = 3;  // Even at verbose
-    
 
     Logger logger;
     logger.init(config);
@@ -188,7 +185,8 @@ TEST(format_log_message_basic) {
 
 TEST(format_log_message_with_args) {
     char buffer[256];
-    format_log_message(buffer, sizeof(buffer), LogLevel::Error, "Error code: %d", 42);
+    format_log_message(
+        buffer, sizeof(buffer), LogLevel::Error, "Error code: %d", 42);
 
     ASSERT_TRUE(strstr(buffer, "[ERROR]") != nullptr);
     ASSERT_TRUE(strstr(buffer, "Error code: 42") != nullptr);
@@ -196,12 +194,16 @@ TEST(format_log_message_with_args) {
 
 TEST(format_log_message_truncation) {
     char buffer[32];
-    format_log_message(buffer, sizeof(buffer), LogLevel::Info,
+    format_log_message(
+        buffer,
+        sizeof(buffer),
+        LogLevel::Info,
         "This is a very long message that should be truncated");
 
     // Buffer should be null-terminated and not overflow
     ASSERT_TRUE(strlen(buffer) < sizeof(buffer));
-    ASSERT_TRUE(buffer[sizeof(buffer) - 1] == '\0' || strlen(buffer) < sizeof(buffer));
+    ASSERT_TRUE(
+        buffer[sizeof(buffer) - 1] == '\0' || strlen(buffer) < sizeof(buffer));
 }
 
 // ============================================================================
@@ -218,7 +220,6 @@ TEST(logger_file_output_enabled) {
     DebugConfig config{};
     config.enabled = true;
     config.level = 3;
-    
 
     Logger logger;
     logger.init(config, log_path);
@@ -231,8 +232,8 @@ TEST(logger_file_output_enabled) {
     std::ifstream f(log_path);
     ASSERT_TRUE(f.is_open());
 
-    std::string content((std::istreambuf_iterator<char>(f)),
-                         std::istreambuf_iterator<char>());
+    std::string content(
+        (std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     f.close();
 
     ASSERT_TRUE(content.find("Test file logging") != std::string::npos);
@@ -242,7 +243,8 @@ TEST(logger_file_output_enabled) {
 
 TEST(logger_file_output_disabled) {
     char log_path[256];
-    snprintf(log_path, sizeof(log_path), "/tmp/test_log_disabled_%d.log", rand());
+    snprintf(
+        log_path, sizeof(log_path), "/tmp/test_log_disabled_%d.log", rand());
 
     // Remove if exists
     std::remove(log_path);
@@ -331,7 +333,6 @@ TEST(logger_from_full_config) {
     Config config = get_default_config();
     config.debug.enabled = true;
     config.debug.level = 2;
-    
 
     Logger logger;
     logger.init(config.debug);
@@ -424,7 +425,7 @@ TEST(logger_flush_without_file) {
     DebugConfig cfg;
     cfg.enabled = true;
     cfg.level = 3;
-    
+
     logger.init(cfg);
 
     // flush() without open file should not crash
@@ -436,10 +437,9 @@ TEST(logger_flush_with_file) {
     DebugConfig cfg;
     cfg.enabled = true;
     cfg.level = 3;
-    
+
     char path[256];
-    std::snprintf(path, sizeof(path),
-                  "/tmp/test_flush_%d.log", rand());
+    std::snprintf(path, sizeof(path), "/tmp/test_flush_%d.log", rand());
     logger.init(cfg, path);
 
     logger.log(LogLevel::Info, "Flush test");
@@ -454,7 +454,7 @@ TEST(logger_check_idle_timeout_no_file) {
     DebugConfig cfg;
     cfg.enabled = true;
     cfg.level = 3;
-    
+
     logger.init(cfg);
 
     // check_idle_timeout without open file should not crash
@@ -466,10 +466,9 @@ TEST(logger_check_idle_timeout_with_file) {
     DebugConfig cfg;
     cfg.enabled = true;
     cfg.level = 3;
-    
+
     char path[256];
-    std::snprintf(path, sizeof(path),
-                  "/tmp/test_idle_%d.log", rand());
+    std::snprintf(path, sizeof(path), "/tmp/test_idle_%d.log", rand());
     logger.init(cfg, path);
 
     logger.log(LogLevel::Info, "Test message");
@@ -481,12 +480,14 @@ TEST(logger_check_idle_timeout_with_file) {
 }
 
 TEST(log_level_to_string_unknown) {
-    ASSERT_TRUE(std::strcmp(log_level_to_string(static_cast<LogLevel>(99)), "UNKNOWN") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            log_level_to_string(static_cast<LogLevel>(99)), "UNKNOWN") == 0);
 }
 
 TEST(logger_init_with_explicit_null_path_uses_the_default_path) {
     DebugConfig config{};
-    config.enabled = false;   // disabled: init must not touch the SD-card path
+    config.enabled = false;  // disabled: init must not touch the SD-card path
     config.level = 2;
 
     Logger logger;
@@ -527,8 +528,11 @@ int main() {
     }
 
     printf("\n========================================\n");
-    printf("Results: %d passed, %d failed, %d total\n",
-           g_tests_passed, g_tests_failed, g_tests_run);
+    printf(
+        "Results: %d passed, %d failed, %d total\n",
+        g_tests_passed,
+        g_tests_failed,
+        g_tests_run);
 
     if (g_tests_failed == 0) {
         printf("ALL TESTS PASSED\n");

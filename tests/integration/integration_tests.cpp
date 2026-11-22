@@ -1,6 +1,7 @@
 /**
  * @file integration_tests.cpp
- * @brief Full-coverage integration tests for ryu_ldn_nx against a live LdnServer
+ * @brief Full-coverage integration tests for ryu_ldn_nx against a live
+ * LdnServer
  *
  * Exercises every RyuLdnClient public method, state transition, callback path,
  * and error branch that can be reached against a real server.
@@ -36,47 +37,56 @@ using namespace ryu_ldn::network;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT_TRUE(cond)                                               \
+    do {                                                                \
+        if (!(cond)) {                                                  \
             printf("    FAIL: %s:%d: %s\n", __FILE__, __LINE__, #cond); \
-            return false; \
-        } \
-    } while(0)
+            return false;                                               \
+        }                                                               \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("    FAIL: %s:%d: %s == %s (got %d, expected %d)\n", \
-                   __FILE__, __LINE__, #a, #b, \
-                   static_cast<int>(a), static_cast<int>(b)); \
-            return false; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                              \
+    do {                                                             \
+        if ((a) != (b)) {                                            \
+            printf(                                                  \
+                "    FAIL: %s:%d: %s == %s (got %d, expected %d)\n", \
+                __FILE__,                                            \
+                __LINE__,                                            \
+                #a,                                                  \
+                #b,                                                  \
+                static_cast<int>(a),                                 \
+                static_cast<int>(b));                                \
+            return false;                                            \
+        }                                                            \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
-            printf("    FAIL: %s:%d: %s != %s (both %d)\n", \
-                   __FILE__, __LINE__, #a, #b, \
-                   static_cast<int>(a)); \
-            return false; \
-        } \
-    } while(0)
+#define ASSERT_NE(a, b)                                  \
+    do {                                                 \
+        if ((a) == (b)) {                                \
+            printf(                                      \
+                "    FAIL: %s:%d: %s != %s (both %d)\n", \
+                __FILE__,                                \
+                __LINE__,                                \
+                #a,                                      \
+                #b,                                      \
+                static_cast<int>(a));                    \
+            return false;                                \
+        }                                                \
+    } while (0)
 
-#define RUN_TEST(test_func) \
-    do { \
+#define RUN_TEST(test_func)                    \
+    do {                                       \
         printf("  [TEST] %s... ", #test_func); \
-        fflush(stdout); \
-        if (test_func()) { \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } else { \
-            g_tests_failed++; \
-        } \
-    } while(0)
+        fflush(stdout);                        \
+        if (test_func()) {                     \
+            printf("PASS\n");                  \
+            g_tests_passed++;                  \
+        } else {                               \
+            g_tests_failed++;                  \
+        }                                      \
+    } while (0)
 
 static const char* g_host = "localhost";
 static uint16_t g_port = 30456;
@@ -89,33 +99,40 @@ static uint64_t now_ms() {
     auto tp = std::chrono::steady_clock::now();
     return static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(
-            tp.time_since_epoch()).count());
+            tp.time_since_epoch())
+            .count());
 }
 
 static bool wait_until_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     auto start = std::chrono::steady_clock::now();
     while (true) {
         client.update(now_ms());
-        if (client.is_ready()) return true;
+        if (client.is_ready())
+            return true;
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed >= timeout_ms) return false;
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+        if (elapsed >= timeout_ms)
+            return false;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
-static bool wait_for_state(RyuLdnClient& client, ConnectionState target,
-                           int timeout_ms = 5000) {
+static bool wait_for_state(
+    RyuLdnClient& client, ConnectionState target, int timeout_ms = 5000) {
     auto start = std::chrono::steady_clock::now();
     while (true) {
         client.update(now_ms());
-        if (client.get_state() == target) return true;
+        if (client.get_state() == target)
+            return true;
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed >= timeout_ms) return false;
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+        if (elapsed >= timeout_ms)
+            return false;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -126,8 +143,10 @@ static void poll_for(RyuLdnClient& client, int ms) {
     while (true) {
         client.update(now_ms());
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed >= ms) break;
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+        if (elapsed >= ms)
+            break;
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
@@ -141,17 +160,21 @@ static RyuLdnClientConfig make_config(bool auto_reconnect = false) {
     return cfg;
 }
 
-static protocol::CreateAccessPointRequest make_ap_request(const char* name = "TestHost") {
+static protocol::CreateAccessPointRequest make_ap_request(
+    const char* name = "TestHost") {
     protocol::CreateAccessPointRequest req{};
     req.security_config.security_mode = 1;
     req.security_config.passphrase_size = 0;
-    std::strncpy(req.user_config.user_name, name, sizeof(req.user_config.user_name) - 1);
+    std::strncpy(
+        req.user_config.user_name, name, sizeof(req.user_config.user_name) - 1);
     req.network_config.intent_id.local_communication_id = 0x01000BB9000E0000LL;
     req.network_config.channel = 0;
     req.network_config.node_count_max = 8;
     req.network_config.local_communication_version = 1;
-    std::strncpy(reinterpret_cast<char*>(req.ryu_network_config.game_version),
-                 "1.0", sizeof(req.ryu_network_config.game_version) - 1);
+    std::strncpy(
+        reinterpret_cast<char*>(req.ryu_network_config.game_version),
+        "1.0",
+        sizeof(req.ryu_network_config.game_version) - 1);
     return req;
 }
 
@@ -164,7 +187,8 @@ static protocol::ScanFilterFull make_scan_filter() {
 // Helper: connect a client and wait for Ready
 static bool connect_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     ClientOpResult result = client.connect(g_host, g_port);
-    if (result != ClientOpResult::Success) return false;
+    if (result != ClientOpResult::Success)
+        return false;
     return wait_until_ready(client, timeout_ms);
 }
 
@@ -237,7 +261,8 @@ bool test_passphrase_config() {
     std::strncpy(cfg.host, g_host, sizeof(cfg.host) - 1);
     cfg.port = g_port;
     cfg.connect_timeout_ms = 3000;
-    std::strncpy(cfg.passphrase, "Ryujinx-DEADBEEF", sizeof(cfg.passphrase) - 1);
+    std::strncpy(
+        cfg.passphrase, "Ryujinx-DEADBEEF", sizeof(cfg.passphrase) - 1);
     RyuLdnClient client(cfg);
 
     // Verify passphrase is stored
@@ -350,7 +375,8 @@ bool test_sequential_connect_disconnect_cycles() {
         ASSERT_TRUE(client.is_ready());
 
         client.disconnect();
-        ASSERT_TRUE(wait_for_state(client, ConnectionState::Disconnected, 3000));
+        ASSERT_TRUE(
+            wait_for_state(client, ConnectionState::Disconnected, 3000));
     }
 
     socket_exit();
@@ -484,7 +510,8 @@ bool test_send_create_access_point_with_advertise() {
 
     auto req = make_ap_request("APAdv");
     uint8_t advertise_data[] = {0x01, 0x02, 0x03, 0x04};
-    ClientOpResult result = client.send_create_access_point(req, advertise_data, sizeof(advertise_data));
+    ClientOpResult result = client.send_create_access_point(
+        req, advertise_data, sizeof(advertise_data));
     ASSERT_EQ(result, ClientOpResult::Success);
 
     poll_for(client, 2000);
@@ -507,8 +534,10 @@ bool test_send_connect() {
     protocol::ConnectRequest connect_req{};
     connect_req.security_config.security_mode = 1;
     connect_req.security_config.passphrase_size = 0;
-    std::strncpy(connect_req.user_config.user_name, "Station",
-                 sizeof(connect_req.user_config.user_name) - 1);
+    std::strncpy(
+        connect_req.user_config.user_name,
+        "Station",
+        sizeof(connect_req.user_config.user_name) - 1);
     connect_req.local_communication_version = 1;
     std::memset(&connect_req.network_info, 0, sizeof(connect_req.network_info));
     connect_req.network_info.network_id.intent_id.local_communication_id =
@@ -532,16 +561,22 @@ bool test_send_create_access_point_private() {
     protocol::CreateAccessPointPrivateRequest req{};
     req.security_config.security_mode = 1;
     req.security_config.passphrase_size = 8;
-    std::strncpy(reinterpret_cast<char*>(req.security_config.passphrase),
-                 "test1234", sizeof(req.security_config.passphrase) - 1);
-    std::strncpy(req.user_config.user_name, "PrivateHost",
-                 sizeof(req.user_config.user_name) - 1);
+    std::strncpy(
+        reinterpret_cast<char*>(req.security_config.passphrase),
+        "test1234",
+        sizeof(req.security_config.passphrase) - 1);
+    std::strncpy(
+        req.user_config.user_name,
+        "PrivateHost",
+        sizeof(req.user_config.user_name) - 1);
     req.network_config.intent_id.local_communication_id = 0x01000BB9000E0000LL;
     req.network_config.channel = 0;
     req.network_config.node_count_max = 8;
     req.network_config.local_communication_version = 1;
-    std::strncpy(reinterpret_cast<char*>(req.ryu_network_config.game_version),
-                 "1.0", sizeof(req.ryu_network_config.game_version) - 1);
+    std::strncpy(
+        reinterpret_cast<char*>(req.ryu_network_config.game_version),
+        "1.0",
+        sizeof(req.ryu_network_config.game_version) - 1);
 
     ClientOpResult result = client.send_create_access_point_private(req);
     ASSERT_EQ(result, ClientOpResult::Success);
@@ -560,10 +595,14 @@ bool test_send_connect_private() {
     protocol::ConnectPrivateRequest req{};
     req.security_config.security_mode = 1;
     req.security_config.passphrase_size = 8;
-    std::strncpy(reinterpret_cast<char*>(req.security_config.passphrase),
-                 "test1234", sizeof(req.security_config.passphrase) - 1);
-    std::strncpy(req.user_config.user_name, "PrivStation",
-                 sizeof(req.user_config.user_name) - 1);
+    std::strncpy(
+        reinterpret_cast<char*>(req.security_config.passphrase),
+        "test1234",
+        sizeof(req.security_config.passphrase) - 1);
+    std::strncpy(
+        req.user_config.user_name,
+        "PrivStation",
+        sizeof(req.user_config.user_name) - 1);
     req.network_config.intent_id.local_communication_id = 0x01000BB9000E0000LL;
     req.local_communication_version = 1;
 
@@ -650,10 +689,12 @@ bool test_send_set_accept_policy() {
     client.send_create_access_point(ap_req, nullptr, 0);
     poll_for(client, 1500);
 
-    ClientOpResult r1 = client.send_set_accept_policy(protocol::AcceptPolicy::RejectAll);
+    ClientOpResult r1 =
+        client.send_set_accept_policy(protocol::AcceptPolicy::RejectAll);
     ASSERT_EQ(r1, ClientOpResult::Success);
 
-    ClientOpResult r2 = client.send_set_accept_policy(protocol::AcceptPolicy::AcceptAll);
+    ClientOpResult r2 =
+        client.send_set_accept_policy(protocol::AcceptPolicy::AcceptAll);
     ASSERT_EQ(r2, ClientOpResult::Success);
 
     client.disconnect();
@@ -671,13 +712,15 @@ bool test_send_set_advertise_data() {
     poll_for(client, 1500);
 
     uint8_t adv_data[] = {0xAA, 0xBB, 0xCC};
-    ClientOpResult result = client.send_set_advertise_data(adv_data, sizeof(adv_data));
+    ClientOpResult result =
+        client.send_set_advertise_data(adv_data, sizeof(adv_data));
     ASSERT_EQ(result, ClientOpResult::Success);
 
     // Also test max-size advertise data (384 bytes)
     uint8_t large_adv_data[384];
     std::memset(large_adv_data, 0xAB, sizeof(large_adv_data));
-    ClientOpResult r2 = client.send_set_advertise_data(large_adv_data, sizeof(large_adv_data));
+    ClientOpResult r2 =
+        client.send_set_advertise_data(large_adv_data, sizeof(large_adv_data));
     ASSERT_EQ(r2, ClientOpResult::Success);
 
     // Test null advertise data with size 0
@@ -700,10 +743,13 @@ bool test_send_reject() {
 
     // Node doesn't exist, but send should still succeed at protocol level
     ClientOpResult r1 = client.send_reject(1, protocol::DisconnectReason::User);
-    ASSERT_TRUE(r1 == ClientOpResult::Success || r1 == ClientOpResult::SendFailed);
+    ASSERT_TRUE(
+        r1 == ClientOpResult::Success || r1 == ClientOpResult::SendFailed);
 
-    ClientOpResult r2 = client.send_reject(0, protocol::DisconnectReason::SystemRequest);
-    ASSERT_TRUE(r2 == ClientOpResult::Success || r2 == ClientOpResult::SendFailed);
+    ClientOpResult r2 =
+        client.send_reject(0, protocol::DisconnectReason::SystemRequest);
+    ASSERT_TRUE(
+        r2 == ClientOpResult::Success || r2 == ClientOpResult::SendFailed);
 
     client.disconnect();
     socket_exit();
@@ -717,15 +763,23 @@ bool test_send_raw_packet() {
 
     // Valid Ping packet in raw format
     uint8_t raw_packet[14] = {};
-    raw_packet[0] = 'L'; raw_packet[1] = 'D'; raw_packet[2] = 'N'; raw_packet[3] = 0x00;
+    raw_packet[0] = 'L';
+    raw_packet[1] = 'D';
+    raw_packet[2] = 'N';
+    raw_packet[3] = 0x00;
     raw_packet[4] = 0xFE;  // Ping type
     raw_packet[5] = 0x00;  // version
-    raw_packet[6] = 0x00; raw_packet[7] = 0x00;  // reserved
-    raw_packet[8] = 0x02; raw_packet[9] = 0x00; raw_packet[10] = 0x00; raw_packet[11] = 0x00;  // data_size=2
+    raw_packet[6] = 0x00;
+    raw_packet[7] = 0x00;  // reserved
+    raw_packet[8] = 0x02;
+    raw_packet[9] = 0x00;
+    raw_packet[10] = 0x00;
+    raw_packet[11] = 0x00;  // data_size=2
     raw_packet[12] = 0x01;  // requester=1 (client)
     raw_packet[13] = 0x00;  // id=0
 
-    ClientOpResult result = client.send_raw_packet(raw_packet, sizeof(raw_packet));
+    ClientOpResult result =
+        client.send_raw_packet(raw_packet, sizeof(raw_packet));
     ASSERT_EQ(result, ClientOpResult::Success);
 
     poll_for(client, 1000);
@@ -743,17 +797,33 @@ bool test_send_not_connected() {
     RyuLdnClient client(make_config());
     // Not connected — all send_* should return NotReady
     ASSERT_EQ(client.send_scan(make_scan_filter()), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_create_access_point(make_ap_request(), nullptr, 0), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_connect(protocol::ConnectRequest{}), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_create_access_point_private(protocol::CreateAccessPointPrivateRequest{}), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_connect_private(protocol::ConnectPrivateRequest{}), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_proxy_data(protocol::ProxyDataHeader{}, nullptr, 0), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_create_access_point(make_ap_request(), nullptr, 0),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_connect(protocol::ConnectRequest{}),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_create_access_point_private(
+            protocol::CreateAccessPointPrivateRequest{}),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_connect_private(protocol::ConnectPrivateRequest{}),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_proxy_data(protocol::ProxyDataHeader{}, nullptr, 0),
+        ClientOpResult::NotReady);
     ASSERT_EQ(client.send_ping(), ClientOpResult::NotReady);
     ASSERT_EQ(client.send_ping_response(0), ClientOpResult::NotReady);
     ASSERT_EQ(client.send_disconnect_network(), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_set_accept_policy(protocol::AcceptPolicy::AcceptAll), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_set_advertise_data(nullptr, 0), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_reject(0, protocol::DisconnectReason::User), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_set_accept_policy(protocol::AcceptPolicy::AcceptAll),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_set_advertise_data(nullptr, 0), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_reject(0, protocol::DisconnectReason::User),
+        ClientOpResult::NotReady);
     ASSERT_EQ(client.send_raw_packet(nullptr, 0), ClientOpResult::NotReady);
 
     socket_exit();
@@ -770,7 +840,9 @@ bool test_state_callback_lifecycle() {
 
     RyuLdnClient client(make_config());
     client.set_state_callback(
-        [](ConnectionState /*old_state*/, ConnectionState /*new_state*/, void* user_data) {
+        [](ConnectionState /*old_state*/,
+           ConnectionState /*new_state*/,
+           void* user_data) {
             auto* count = static_cast<std::atomic<int>*>(user_data);
             (*count)++;
         },
@@ -778,7 +850,9 @@ bool test_state_callback_lifecycle() {
 
     client.connect(g_host, g_port);
     ASSERT_TRUE(wait_until_ready(client, 8000));
-    ASSERT_TRUE(callback_count.load() >= 2);  // Connecting + Connected/Handshaking + Ready
+    ASSERT_TRUE(
+        callback_count.load() >=
+        2);  // Connecting + Connected/Handshaking + Ready
 
     int before_disconnect = callback_count.load();
     client.disconnect();
@@ -862,8 +936,10 @@ bool test_receive_scan_reply() {
     client.set_packet_callback(
         [](protocol::PacketId id, const uint8_t*, size_t, void* user_data) {
             auto* si = static_cast<ScanInfo*>(user_data);
-            if (id == protocol::PacketId::ScanReply) si->scan_reply_count++;
-            if (id == protocol::PacketId::ScanReplyEnd) si->scan_reply_end_count++;
+            if (id == protocol::PacketId::ScanReply)
+                si->scan_reply_count++;
+            if (id == protocol::PacketId::ScanReplyEnd)
+                si->scan_reply_end_count++;
         },
         &info);
 
@@ -890,8 +966,10 @@ bool test_receive_connected_sync_network() {
     client.set_packet_callback(
         [](protocol::PacketId id, const uint8_t*, size_t, void* user_data) {
             auto* si = static_cast<ServerInfo*>(user_data);
-            if (id == protocol::PacketId::Connected) si->got_connected.store(true);
-            if (id == protocol::PacketId::SyncNetwork) si->got_sync_network.store(true);
+            if (id == protocol::PacketId::Connected)
+                si->got_connected.store(true);
+            if (id == protocol::PacketId::SyncNetwork)
+                si->got_sync_network.store(true);
         },
         &info);
 
@@ -912,13 +990,14 @@ bool test_receive_connected_sync_network() {
 
 bool test_server_ping_echo() {
     // The server sends Pings (requester=0), our client echoes them back
-    // in handle_packet(). We verify this doesn't crash and the connection stays alive.
+    // in handle_packet(). We verify this doesn't crash and the connection stays
+    // alive.
     socket_init();
     RyuLdnClient client(make_config());
     ASSERT_TRUE(connect_ready(client));
 
-    // Wait long enough for server to send a ping (server pings every ~30s in practice,
-    // but we just verify the connection stays stable)
+    // Wait long enough for server to send a ping (server pings every ~30s in
+    // practice, but we just verify the connection stays stable)
     poll_for(client, 2000);
     ASSERT_TRUE(client.is_ready());
 
@@ -937,7 +1016,8 @@ bool test_host_station_full_flow() {
     RyuLdnClient host(make_config());
     ASSERT_TRUE(connect_ready(host));
 
-    ClientOpResult host_result = host.send_create_access_point(make_ap_request("FlowHost"), nullptr, 0);
+    ClientOpResult host_result =
+        host.send_create_access_point(make_ap_request("FlowHost"), nullptr, 0);
     ASSERT_EQ(host_result, ClientOpResult::Success);
     poll_for(host, 2000);
 
@@ -951,8 +1031,10 @@ bool test_host_station_full_flow() {
     protocol::ConnectRequest connect_req{};
     connect_req.security_config.security_mode = 1;
     connect_req.security_config.passphrase_size = 0;
-    std::strncpy(connect_req.user_config.user_name, "FlowStation",
-                 sizeof(connect_req.user_config.user_name) - 1);
+    std::strncpy(
+        connect_req.user_config.user_name,
+        "FlowStation",
+        sizeof(connect_req.user_config.user_name) - 1);
     connect_req.local_communication_version = 1;
     std::memset(&connect_req.network_info, 0, sizeof(connect_req.network_info));
     connect_req.network_info.network_id.intent_id.local_communication_id =
@@ -966,8 +1048,10 @@ bool test_host_station_full_flow() {
         station.update(now_ms());
         host.update(now_ms());
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - t0).count();
-        if (elapsed >= 3000) break;
+                           std::chrono::steady_clock::now() - t0)
+                           .count();
+        if (elapsed >= 3000)
+            break;
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
@@ -1015,9 +1099,10 @@ bool test_passphrase_connect() {
     client.connect(g_host, g_port);
     (void)wait_until_ready(client, 8000);
     // Server behavior depends on passphrase matching — just verify no crash
-    ASSERT_TRUE(client.get_state() == ConnectionState::Ready ||
-                client.get_state() == ConnectionState::Error ||
-                client.get_state() == ConnectionState::Disconnected);
+    ASSERT_TRUE(
+        client.get_state() == ConnectionState::Ready ||
+        client.get_state() == ConnectionState::Error ||
+        client.get_state() == ConnectionState::Disconnected);
 
     client.disconnect();
     socket_exit();
@@ -1039,9 +1124,10 @@ bool test_connect_to_invalid_port() {
 
     ClientOpResult result = client.connect(g_host, 19999);
     // Should fail or auto-transition, but not crash
-    ASSERT_TRUE(result == ClientOpResult::Success ||
-                result == ClientOpResult::ConnectionFailed ||
-                result == ClientOpResult::InvalidState);
+    ASSERT_TRUE(
+        result == ClientOpResult::Success ||
+        result == ClientOpResult::ConnectionFailed ||
+        result == ClientOpResult::InvalidState);
 
     socket_exit();
     return true;
@@ -1102,18 +1188,27 @@ bool test_move_assignment() {
 
 bool test_client_op_result_to_string_all() {
     ASSERT_TRUE(client_op_result_to_string(ClientOpResult::Success) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::NotConnected) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::NotReady) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::AlreadyConnected) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::ConnectionFailed) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::SendFailed) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::InvalidState) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::NotConnected) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::NotReady) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::AlreadyConnected) !=
+        nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::ConnectionFailed) !=
+        nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::SendFailed) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::InvalidState) != nullptr);
     ASSERT_TRUE(client_op_result_to_string(ClientOpResult::Timeout) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::ProtocolError) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::InternalError) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::ProtocolError) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::InternalError) != nullptr);
     return true;
 }
-
 
 // ============================================================================
 // SECTION 10: Server Drop Tests (kill/restart Docker container)
@@ -1122,31 +1217,38 @@ bool test_client_op_result_to_string_all() {
 // Resolve docker-compose file path: env var takes priority, else relative path
 static std::string get_compose_file() {
     const char* env = std::getenv("INTEGRATION_COMPOSE_FILE");
-    if (env && env[0] != '\0') return std::string(env);
+    if (env && env[0] != '\0')
+        return std::string(env);
     return "docker-compose.yml";
 }
 
 // Execute a shell command, return its exit code (or -1 on signal)
 static int run_shell(const char* cmd) {
     int ret = std::system(cmd);
-    if (WIFEXITED(ret)) return WEXITSTATUS(ret);
+    if (WIFEXITED(ret))
+        return WEXITSTATUS(ret);
     return -1;
 }
 
 // Check if a TCP port is reachable (python3)
 static bool tcp_check(const char* host, uint16_t port, int timeout_s = 5) {
-    std::string cmd = "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(" +
-                      std::to_string(timeout_s) + "); r=s.connect_ex(('" + host + "'," +
-                      std::to_string(port) + ")); s.close(); sys.exit(0 if r==0 else 1)\" 2>/dev/null";
+    std::string cmd =
+        "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(" +
+        std::to_string(timeout_s) + "); r=s.connect_ex(('" + host + "'," +
+        std::to_string(port) +
+        ")); s.close(); sys.exit(0 if r==0 else 1)\" 2>/dev/null";
     return run_shell(cmd.c_str()) == 0;
 }
 
-// Kill the ldn-server container via docker compose (SIGKILL for immediate termination)
+// Kill the ldn-server container via docker compose (SIGKILL for immediate
+// termination)
 static bool kill_server() {
     std::string compose = get_compose_file();
     // Use kill (SIGKILL) for immediate process termination — stop (SIGTERM)
-    // lets the .NET server drain slowly and the TCP FIN may not arrive for seconds
-    std::string cmd = "docker compose -f '" + compose + "' kill ldn-server 2>/dev/null";
+    // lets the .NET server drain slowly and the TCP FIN may not arrive for
+    // seconds
+    std::string cmd =
+        "docker compose -f '" + compose + "' kill ldn-server 2>/dev/null";
     printf("(killing server...) ");
     fflush(stdout);
     int rc = run_shell(cmd.c_str());
@@ -1160,7 +1262,8 @@ static bool kill_server() {
 // Restart the ldn-server container, then verify it is accepting TCP connections
 static bool restart_server(int max_wait_s = 30) {
     std::string compose = get_compose_file();
-    std::string cmd = "docker compose -f '" + compose + "' start ldn-server 2>/dev/null";
+    std::string cmd =
+        "docker compose -f '" + compose + "' start ldn-server 2>/dev/null";
     printf("(restarting server...) ");
     fflush(stdout);
     int rc = run_shell(cmd.c_str());
@@ -1169,11 +1272,13 @@ static bool restart_server(int max_wait_s = 30) {
         rc = run_shell(cmd.c_str());
     }
     if (rc != 0) {
-        cmd = "docker compose -f '" + compose + "' up -d ldn-server 2>/dev/null";
+        cmd =
+            "docker compose -f '" + compose + "' up -d ldn-server 2>/dev/null";
         rc = run_shell(cmd.c_str());
     }
     for (int i = 0; i < max_wait_s; i++) {
-        if (tcp_check(g_host, g_port, 2)) return true;
+        if (tcp_check(g_host, g_port, 2))
+            return true;
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     return false;
@@ -1219,8 +1324,7 @@ bool test_connection_lost_during_ready() {
     poll_for(client, 2000);
 
     ConnectionState state = client.get_state();
-    bool lost = (state != ConnectionState::Ready ||
-                 saw_connection_lost.load());
+    bool lost = (state != ConnectionState::Ready || saw_connection_lost.load());
     // If still ready, push harder
     if (!lost) {
         for (int attempt = 0; attempt < 10 && !lost; attempt++) {
@@ -1228,7 +1332,8 @@ bool test_connection_lost_during_ready() {
             client.update(now_ms());
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             state = client.get_state();
-            lost = (state != ConnectionState::Ready || saw_connection_lost.load());
+            lost =
+                (state != ConnectionState::Ready || saw_connection_lost.load());
         }
     }
     ASSERT_TRUE(lost);
@@ -1265,7 +1370,8 @@ bool test_connection_lost_no_auto_reconnect() {
     force_send_to_detect_loss(client);
     poll_for(client, 2000);
 
-    // Without auto_reconnect, client should NOT attempt retry (no Retrying state)
+    // Without auto_reconnect, client should NOT attempt retry (no Retrying
+    // state)
     ASSERT_FALSE(saw_retrying.load());
 
     // Client should no longer be ready
@@ -1300,12 +1406,14 @@ bool test_send_fails_after_server_drop() {
 
     // Send should fail or client should no longer be Ready
     ClientOpResult result = client.send_scan(make_scan_filter());
-    bool send_failed = (result != ClientOpResult::Success || !client.is_ready());
+    bool send_failed =
+        (result != ClientOpResult::Success || !client.is_ready());
     if (!send_failed) {
         for (int attempt = 0; attempt < 10 && !send_failed; attempt++) {
             result = client.send_scan(make_scan_filter());
             client.update(now_ms());
-            send_failed = (result != ClientOpResult::Success || !client.is_ready());
+            send_failed =
+                (result != ClientOpResult::Success || !client.is_ready());
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
     }
@@ -1346,7 +1454,8 @@ bool test_try_connect_failure_then_backoff() {
 
     // Should have entered Backoff at least once (try_connect failed)
     if (backoff_count.load() == 0) {
-        for (int attempt = 0; attempt < 10 && backoff_count.load() == 0; attempt++) {
+        for (int attempt = 0; attempt < 10 && backoff_count.load() == 0;
+             attempt++) {
             client.send_scan(make_scan_filter());
             client.update(now_ms());
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -1379,12 +1488,16 @@ bool test_backoff_expiry_and_retry() {
     } flags{backoff_count, retrying_count};
 
     client.set_state_callback(
-        [](ConnectionState old_state, ConnectionState new_state, void* user_data) {
+        [](ConnectionState old_state,
+           ConnectionState new_state,
+           void* user_data) {
             auto* f = static_cast<BoffFlags*>(user_data);
-            if (new_state == ConnectionState::Backoff) f->boff++;
+            if (new_state == ConnectionState::Backoff)
+                f->boff++;
             // Retrying is a transient state — detect it from old_state
             if (old_state == ConnectionState::Retrying ||
-                new_state == ConnectionState::Retrying) f->retry++;
+                new_state == ConnectionState::Retrying)
+                f->retry++;
         },
         &flags);
 
@@ -1398,7 +1511,8 @@ bool test_backoff_expiry_and_retry() {
 
     // Should have entered Backoff at least once
     if (backoff_count.load() == 0) {
-        for (int attempt = 0; attempt < 10 && backoff_count.load() == 0; attempt++) {
+        for (int attempt = 0; attempt < 10 && backoff_count.load() == 0;
+             attempt++) {
             client.send_scan(make_scan_filter());
             client.update(now_ms());
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -1443,7 +1557,8 @@ bool test_server_initiated_disconnect() {
     ASSERT_TRUE(connect_ready(client));
 
     std::string compose = get_compose_file();
-    std::string cmd = "docker compose -f '" + compose + "' kill ldn-server 2>/dev/null";
+    std::string cmd =
+        "docker compose -f '" + compose + "' kill ldn-server 2>/dev/null";
     printf("(killing server (SIGKILL)...) ");
     fflush(stdout);
     run_shell(cmd.c_str());
@@ -1592,7 +1707,8 @@ bool test_tcpclient_receive_packet_not_connected() {
     protocol::PacketId type;
     uint8_t buf[1024];
     size_t payload_size = 0;
-    ClientResult r = tc.receive_packet(type, buf, sizeof(buf), payload_size, 100);
+    ClientResult r =
+        tc.receive_packet(type, buf, sizeof(buf), payload_size, 100);
     ASSERT_EQ(r, ClientResult::NotConnected);
     return true;
 }
@@ -1647,11 +1763,13 @@ bool test_tcpclient_send_receive_roundtrip() {
         r = tc.receive_packet(type, buf, sizeof(buf), payload_size, 500);
         if (r == ClientResult::Success) {
             // Got a packet — verify it's a valid type
-            ASSERT_TRUE(type == protocol::PacketId::Connected ||
-                        type == protocol::PacketId::Initialize);
+            ASSERT_TRUE(
+                type == protocol::PacketId::Connected ||
+                type == protocol::PacketId::Initialize);
             break;
         }
-        if (r == ClientResult::ConnectionLost) break;
+        if (r == ClientResult::ConnectionLost)
+            break;
     }
     // Success if we got any packet, or Timeout is acceptable
     // (server may not respond without proper handshake sequence)
@@ -1934,8 +2052,9 @@ bool test_socket_recv_nonblocking() {
     // Non-blocking recv — server hasn't sent anything yet, so this should
     // return WouldBlock or Timeout immediately
     r = sock.recv(buf, sizeof(buf), received, 0);
-    ASSERT_TRUE(r == SocketResult::WouldBlock || r == SocketResult::Timeout
-                || r == SocketResult::Success);
+    ASSERT_TRUE(
+        r == SocketResult::WouldBlock || r == SocketResult::Timeout ||
+        r == SocketResult::Success);
 
     sock.close();
     socket_exit();
@@ -1969,9 +2088,9 @@ bool test_socket_recv_blocking() {
     uint8_t recv_buf[4096];
     size_t received = 0;
     r = sock.recv(recv_buf, sizeof(recv_buf), received, -1);
-    ASSERT_TRUE(r == SocketResult::Success || r == SocketResult::Timeout
-                || r == SocketResult::ConnectionReset
-                || r == SocketResult::Closed);
+    ASSERT_TRUE(
+        r == SocketResult::Success || r == SocketResult::Timeout ||
+        r == SocketResult::ConnectionReset || r == SocketResult::Closed);
     if (r == SocketResult::Success) {
         ASSERT_TRUE(received > 0);
     }
@@ -1990,8 +2109,8 @@ bool test_socket_send_zero_bytes() {
 
     // send_all with 0 bytes is a no-op
     r = sock.send_all(nullptr, 0);
-    // This returns Success because the while loop condition (total_sent < 0) is false
-    // Actually size_t(0) - so loop doesn't execute, returns Success
+    // This returns Success because the while loop condition (total_sent < 0) is
+    // false Actually size_t(0) - so loop doesn't execute, returns Success
     ASSERT_EQ(r, SocketResult::Success);
 
     sock.close();
@@ -2040,23 +2159,27 @@ bool test_socket_connect_port_zero() {
     SocketResult r = sock.connect("127.0.0.1", 1, 2000);
     // Accept any non-success result; the important thing is no crash
     // and the result is a reasonable error code
-    ASSERT_TRUE(r != SocketResult::Success || true);  // always passes, no crash = success
+    ASSERT_TRUE(
+        r != SocketResult::Success ||
+        true);  // always passes, no crash = success
     sock.close();
     socket_exit();
     return true;
 }
 
 bool test_socket_connect_connection_refused() {
-    // Connect to a port that nobody listens on — exercises errno_to_result(ECONNREFUSED)
-    // and the immediate-failure path in Socket::connect()
+    // Connect to a port that nobody listens on — exercises
+    // errno_to_result(ECONNREFUSED) and the immediate-failure path in
+    // Socket::connect()
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
-    SocketResult r = sock.connect("127.0.0.1", 1, 0);  // timeout_ms=0 = blocking mode
+    SocketResult r =
+        sock.connect("127.0.0.1", 1, 0);  // timeout_ms=0 = blocking mode
     // In blocking mode, ECONNREFUSED goes through the else branch at line ~470
     // which calls errno_to_result(ECONNREFUSED)
-    ASSERT_TRUE(r == SocketResult::ConnectionRefused ||
-                r == SocketResult::Timeout ||
-                r == SocketResult::HostUnreachable);
+    ASSERT_TRUE(
+        r == SocketResult::ConnectionRefused || r == SocketResult::Timeout ||
+        r == SocketResult::HostUnreachable);
     sock.close();
     socket_exit();
     return true;
@@ -2130,8 +2253,8 @@ bool test_socket_recv_zero_timeout_with_data() {
     }
     ASSERT_TRUE(received > 0);
 
-    // Now try non-blocking recv (timeout_ms == 0) — will return WouldBlock since we
-    // already consumed the data. This exercises the recv(0) code path.
+    // Now try non-blocking recv (timeout_ms == 0) — will return WouldBlock
+    // since we already consumed the data. This exercises the recv(0) code path.
     // Send another ping and immediately recv(0) — might catch the response.
     r = sock.send_all(sendbuf, sizeof(hdr) + sizeof(ping));
     if (r != SocketResult::Success) {
@@ -2293,8 +2416,10 @@ int main(int argc, char* argv[]) {
     RUN_TEST(test_socket_create_twice);
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n",
-           g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

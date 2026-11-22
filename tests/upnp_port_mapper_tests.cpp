@@ -28,8 +28,9 @@ using ams::mitm::p2p::UpnpPortMapper;
 // ---------------------------------------------------------------------------
 namespace {
 int g_nothrow_calls = 0;
-int g_nothrow_fail_at = 0;  ///< 1-based index of the nothrow allocation to fail; 0 = never
-}
+int g_nothrow_fail_at =
+    0;  ///< 1-based index of the nothrow allocation to fail; 0 = never
+}  // namespace
 
 void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
     if (++g_nothrow_calls == g_nothrow_fail_at) {
@@ -59,7 +60,9 @@ static void reset_fake() {
 // ---------------------------------------------------------------------------
 
 TEST(a_failed_first_allocation_leaves_the_mapper_unusable) {
-    if (!scenario("alloc_urls_fail")) { return; }
+    if (!scenario("alloc_urls_fail")) {
+        return;
+    }
     arm_allocation_failure(1);
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     disarm_allocation_failure();
@@ -71,8 +74,11 @@ TEST(a_failed_first_allocation_leaves_the_mapper_unusable) {
     m.Cleanup();
 }
 
-TEST(a_failed_second_allocation_releases_the_first_and_leaves_the_mapper_unusable) {
-    if (!scenario("alloc_data_fail")) { return; }
+TEST(
+    a_failed_second_allocation_releases_the_first_and_leaves_the_mapper_unusable) {
+    if (!scenario("alloc_data_fail")) {
+        return;
+    }
     arm_allocation_failure(2);
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     disarm_allocation_failure();
@@ -84,7 +90,9 @@ TEST(a_failed_second_allocation_releases_the_first_and_leaves_the_mapper_unusabl
 }
 
 TEST(nothing_works_before_a_successful_discovery) {
-    if (!scenario("ok")) { return; }
+    if (!scenario("ok")) {
+        return;
+    }
     reset_fake();
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     char buf[16];
@@ -97,14 +105,18 @@ TEST(nothing_works_before_a_successful_discovery) {
     ASSERT_EQ(m.GetLocalIPv4(), static_cast<uint32_t>(0));
 }
 
-TEST(discovery_fails_without_devices_or_without_a_usable_gateway_and_retries_cleanly) {
-    if (!scenario("ok")) { return; }
+TEST(
+    discovery_fails_without_devices_or_without_a_usable_gateway_and_retries_cleanly) {
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
 
     reset_fake();
     g_fake_upnp.devices_found = false;
     ASSERT_FALSE(m.Discover());
-    ASSERT_EQ(g_fake_upnp.last_delay, ams::mitm::p2p::UPNP_DISCOVERY_TIMEOUT_MS);
+    ASSERT_EQ(
+        g_fake_upnp.last_delay, ams::mitm::p2p::UPNP_DISCOVERY_TIMEOUT_MS);
     ASSERT_EQ(g_fake_upnp.devlist_frees, 0);
 
     // Devices found but no IGD: the control URL the library filled in is kept
@@ -121,8 +133,11 @@ TEST(discovery_fails_without_devices_or_without_a_usable_gateway_and_retries_cle
     ASSERT_FALSE(m.IsAvailable());
 }
 
-TEST(discovery_succeeds_on_a_connected_or_a_disconnected_gateway_and_is_cached) {
-    if (!scenario("ok")) { return; }
+TEST(
+    discovery_succeeds_on_a_connected_or_a_disconnected_gateway_and_is_cached) {
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
 
     reset_fake();
@@ -140,7 +155,9 @@ TEST(discovery_succeeds_on_a_connected_or_a_disconnected_gateway_and_is_cached) 
 }
 
 TEST(adding_a_mapping_sends_the_ports_the_lease_and_the_lan_address) {
-    if (!scenario("ok")) { return; }
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     ASSERT_TRUE(m.IsAvailable());
 
@@ -159,11 +176,15 @@ TEST(adding_a_mapping_sends_the_ports_the_lease_and_the_lan_address) {
 }
 
 TEST(refreshing_re_adds_the_mapping_with_the_standard_lease) {
-    if (!scenario("ok")) { return; }
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     g_fake_upnp.add_result = 0;
     ASSERT_TRUE(m.RefreshPortMapping(39991, 39992, "renew"));
-    ASSERT_TRUE(g_fake_upnp.add_lease == std::to_string(ams::mitm::p2p::PORT_LEASE_DURATION));
+    ASSERT_TRUE(
+        g_fake_upnp.add_lease ==
+        std::to_string(ams::mitm::p2p::PORT_LEASE_DURATION));
     ASSERT_TRUE(g_fake_upnp.add_int_port == "39991");
     ASSERT_TRUE(g_fake_upnp.add_ext_port == "39992");
     g_fake_upnp.add_result = 501;
@@ -171,7 +192,9 @@ TEST(refreshing_re_adds_the_mapping_with_the_standard_lease) {
 }
 
 TEST(deleting_a_mapping_treats_a_missing_entry_as_success) {
-    if (!scenario("ok")) { return; }
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     g_fake_upnp.delete_result = 0;
     ASSERT_TRUE(m.DeletePortMapping(39993));
@@ -184,8 +207,11 @@ TEST(deleting_a_mapping_treats_a_missing_entry_as_success) {
     ASSERT_FALSE(m.DeletePortMapping(39993));
 }
 
-TEST(the_external_address_is_copied_with_termination_and_bad_arguments_are_refused) {
-    if (!scenario("ok")) { return; }
+TEST(
+    the_external_address_is_copied_with_termination_and_bad_arguments_are_refused) {
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     char buf[16];
     ASSERT_TRUE(m.GetExternalIPAddress(buf, sizeof(buf)));
@@ -201,8 +227,11 @@ TEST(the_external_address_is_copied_with_termination_and_bad_arguments_are_refus
     ASSERT_FALSE(m.GetExternalIPAddress(buf, sizeof(buf)));
 }
 
-TEST(the_local_address_is_copied_with_termination_and_bad_arguments_are_refused) {
-    if (!scenario("ok")) { return; }
+TEST(
+    the_local_address_is_copied_with_termination_and_bad_arguments_are_refused) {
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     char buf[32];
     ASSERT_TRUE(m.GetLocalIPAddress(buf, sizeof(buf)));
@@ -217,11 +246,16 @@ TEST(the_local_address_is_copied_with_termination_and_bad_arguments_are_refused)
 }
 
 TEST(the_local_address_is_parsed_to_host_order_and_malformed_ones_give_zero) {
-    if (!scenario("ok")) { return; }
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     ASSERT_EQ(m.GetLocalIPv4(), static_cast<uint32_t>(0xC0A80164));
 
-    struct Case { const char* lan; uint32_t expected; };
+    struct Case {
+        const char* lan;
+        uint32_t expected;
+    };
     const Case cases[] = {
         {"10.114.0.1", 0x0A720001},
         {"255.255.255.255", 0xFFFFFFFF},
@@ -243,7 +277,9 @@ TEST(the_local_address_is_parsed_to_host_order_and_malformed_ones_give_zero) {
 }
 
 TEST(a_gateway_without_a_control_url_refuses_every_command) {
-    if (!scenario("ok")) { return; }
+    if (!scenario("ok")) {
+        return;
+    }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
     m.Cleanup();
     reset_fake();

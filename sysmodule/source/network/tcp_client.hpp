@@ -41,7 +41,8 @@
  * TcpClient client;
  *
  * // Connect to server
- * if (client.connect("ryuldnnx.ddns.net", 30456, 5000) == ClientResult::Success) {
+ * if (client.connect("ryuldnnx.ddns.net", 30456, 5000) ==
+ * ClientResult::Success) {
  *     // Send initialize message
  *     InitializeMessage init{};
  *     client.send_initialize(init);
@@ -50,7 +51,8 @@
  *     PacketId type;
  *     uint8_t payload[1024];
  *     size_t payload_size;
- *     if (client.receive_packet(type, payload, sizeof(payload), payload_size, 5000)
+ *     if (client.receive_packet(type, payload, sizeof(payload), payload_size,
+ * 5000)
  *         == ClientResult::Success) {
  *         // Handle response...
  *     }
@@ -144,14 +146,16 @@ public:
      * @return ClientResult::Success on successful connection
      * @return ClientResult::AlreadyConnected if already connected
      * @return ClientResult::NotInitialized if socket subsystem not ready
-     * @return ClientResult::ConnectionFailed if connection could not be established
+     * @return ClientResult::ConnectionFailed if connection could not be
+     * established
      * @return ClientResult::Timeout if connection timed out
      *
      * @note After connection, you should send InitializeMessage
      * @note Recommended timeout: 5000ms (5 seconds)
      */
     /// @gdb{tag="NETWORK:TCP", msg="TcpClient::connect"}
-    ClientResult connect(const char* host, uint16_t port, uint32_t timeout_ms = 5000) override;
+    ClientResult connect(
+        const char* host, uint16_t port, uint32_t timeout_ms = 5000) override;
 
     /**
      * @brief Disconnect from server
@@ -197,7 +201,10 @@ public:
      * @return ClientResult::ConnectionLost if send failed
      */
     /// @gdb{tag="NETWORK:TCP", msg="TcpClient::send_packet"}
-    ClientResult send_packet(protocol::PacketId type, const void* payload, size_t payload_size) override;
+    ClientResult send_packet(
+        protocol::PacketId type,
+        const void* payload,
+        size_t payload_size) override;
 
     /**
      * @brief Send raw pre-encoded data
@@ -227,7 +234,8 @@ public:
      * @note Send with zeros for id/mac to request new session from server
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_initialize"}
-    ClientResult send_initialize(const protocol::InitializeMessage& msg) override;
+    ClientResult send_initialize(
+        const protocol::InitializeMessage& msg) override;
 
     /**
      * @brief Send Passphrase message
@@ -238,7 +246,8 @@ public:
      * @return ClientResult indicating success or error
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_passphrase"}
-    ClientResult send_passphrase(const protocol::PassphraseMessage& msg) override;
+    ClientResult send_passphrase(
+        const protocol::PassphraseMessage& msg) override;
 
     /**
      * @brief Send Passphrase message
@@ -275,7 +284,8 @@ public:
      * @note Call this before disconnect() for graceful shutdown
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_disconnect"}
-    ClientResult send_disconnect(const protocol::DisconnectMessage& msg) override;
+    ClientResult send_disconnect(
+        const protocol::DisconnectMessage& msg) override;
 
     /**
      * @brief Send CreateAccessPoint request
@@ -286,9 +296,10 @@ public:
      * @return ClientResult indicating success or error
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_create_access_point"}
-    ClientResult send_create_access_point(const protocol::CreateAccessPointRequest& request,
-                                          const uint8_t* advertise_data = nullptr,
-                                          size_t advertise_size = 0) override;
+    ClientResult send_create_access_point(
+        const protocol::CreateAccessPointRequest& request,
+        const uint8_t* advertise_data = nullptr,
+        size_t advertise_size = 0) override;
 
     /**
      * @brief Send CreateAccessPointPrivate request
@@ -301,9 +312,10 @@ public:
      * @return ClientResult indicating success or error
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_create_access_point_private"}
-    ClientResult send_create_access_point_private(const protocol::CreateAccessPointPrivateRequest& request,
-                                                   const uint8_t* advertise_data = nullptr,
-                                                   size_t advertise_size = 0) override;
+    ClientResult send_create_access_point_private(
+        const protocol::CreateAccessPointPrivateRequest& request,
+        const uint8_t* advertise_data = nullptr,
+        size_t advertise_size = 0) override;
 
     /**
      * @brief Send Connect request
@@ -325,7 +337,8 @@ public:
      * @return ClientResult indicating success or error
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_connect_private"}
-    ClientResult send_connect_private(const protocol::ConnectPrivateRequest& request) override;
+    ClientResult send_connect_private(
+        const protocol::ConnectPrivateRequest& request) override;
 
     /**
      * @brief Send Scan request
@@ -349,8 +362,10 @@ public:
      * @return ClientResult indicating success or error
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_proxy_data"}
-    ClientResult send_proxy_data(const protocol::ProxyDataHeader& header,
-                                  const uint8_t* data, size_t data_size) override;
+    ClientResult send_proxy_data(
+        const protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_size) override;
 
     /**
      * @brief Send SetAcceptPolicy request
@@ -361,7 +376,8 @@ public:
      * @return ClientResult indicating success or error
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_set_accept_policy"}
-    ClientResult send_set_accept_policy(const protocol::SetAcceptPolicyRequest& request) override;
+    ClientResult send_set_accept_policy(
+        const protocol::SetAcceptPolicyRequest& request) override;
 
     /**
      * @brief Send SetAdvertiseData request
@@ -373,7 +389,8 @@ public:
      * @return ClientResult indicating success or error
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_set_advertise_data"}
-    ClientResult send_set_advertise_data(const uint8_t* data, size_t size) override;
+    ClientResult send_set_advertise_data(
+        const uint8_t* data, size_t size) override;
 
     /**
      * @brief Send Reject request
@@ -400,7 +417,8 @@ public:
      * @param[out] payload Buffer to receive payload data
      * @param payload_buffer_size Size of payload buffer
      * @param[out] payload_size Actual size of received payload
-     * @param timeout_ms Receive timeout in milliseconds (0 = non-blocking, -1 = blocking)
+     * @param timeout_ms Receive timeout in milliseconds (0 = non-blocking, -1 =
+     * blocking)
      *
      * @return ClientResult::Success if packet was received
      * @return ClientResult::NotConnected if not connected
@@ -409,13 +427,16 @@ public:
      * @return ClientResult::InvalidPacket if received invalid packet
      * @return ClientResult::ConnectionLost if connection was lost
      *
-     * @note payload_size is set even on BufferTooSmall (indicates required size)
+     * @note payload_size is set even on BufferTooSmall (indicates required
+     * size)
      */
     /// @gdb{tag="NETWORK:TCP", msg="receive_packet: timeout=%d", args="$x5"}
-    ClientResult receive_packet(protocol::PacketId& type,
-                                 void* payload, size_t payload_buffer_size,
-                                 size_t& payload_size,
-                                 int32_t timeout_ms = -1) override;
+    ClientResult receive_packet(
+        protocol::PacketId& type,
+        void* payload,
+        size_t payload_buffer_size,
+        size_t& payload_size,
+        int32_t timeout_ms = -1) override;
 
     /**
      * @brief Check if a complete packet is available
@@ -458,9 +479,12 @@ public:
     static ClientResult socket_to_client_result(SocketResult socket_result);
 
 private:
-    Socket m_socket;                                 ///< Underlying TCP socket
-    protocol::PacketBuffer<0x2000> m_recv_buffer;    ///< Buffer for TCP stream reassembly (8KB - saves 56KB!)
-    uint8_t m_send_buffer[2048]{};                   ///< Buffer for encoding outgoing packets (zero-initialized, LINT-22)
+    Socket m_socket;  ///< Underlying TCP socket
+    protocol::PacketBuffer<0x2000>
+        m_recv_buffer;  ///< Buffer for TCP stream reassembly (8KB - saves
+                        ///< 56KB!)
+    uint8_t m_send_buffer[2048]{};  ///< Buffer for encoding outgoing packets
+                                    ///< (zero-initialized, LINT-22)
 
     // Internal thread-safety: protects m_send_buffer + socket send calls,
     // and m_recv_buffer + socket recv calls. They are separate so a long
@@ -493,4 +517,4 @@ private:
     ClientResult receive_into_buffer(int32_t timeout_ms);
 };
 
-} // namespace ryu_ldn::network
+}  // namespace ryu_ldn::network

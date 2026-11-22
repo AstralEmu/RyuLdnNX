@@ -35,4 +35,4 @@ void LoadWhitelist();
  */
 bool IsGameInWhitelist(uint64_t program_id);
 
-} // namespace ryu_ldn::config
+}  // namespace ryu_ldn::config

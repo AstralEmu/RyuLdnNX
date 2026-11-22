@@ -2,9 +2,9 @@
  * @file proxy_socket_manager.hpp
  * @brief Proxy Socket Manager - Central Registry for LDN Proxy Sockets
  *
- * This file defines the ProxySocketManager class which manages all proxy sockets
- * for LDN communication. It acts as a bridge between the BSD MITM service and
- * the LDN protocol layer.
+ * This file defines the ProxySocketManager class which manages all proxy
+ * sockets for LDN communication. It acts as a bridge between the BSD MITM
+ * service and the LDN protocol layer.
  *
  * ## Responsibilities
  *
@@ -135,8 +135,12 @@ public:
      * @note Thread-safe
      * @note Returns nullptr if fd already has a proxy socket
      */
-    /// @gdb{tag="BSD:SOCKET", msg="CreateProxySocket: fd=%d type=%d protocol=%d", args="$x1, $x2, $x3"}
-    ProxySocket* CreateProxySocket(s32 fd, ryu_ldn::bsd::SocketType type, ryu_ldn::bsd::ProtocolType protocol);
+    /// @gdb{tag="BSD:SOCKET", msg="CreateProxySocket: fd=%d type=%d
+    /// protocol=%d", args="$x1, $x2, $x3"}
+    ProxySocket* CreateProxySocket(
+        s32 fd,
+        ryu_ldn::bsd::SocketType type,
+        ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Get the proxy socket for a file descriptor
@@ -220,7 +224,8 @@ public:
      *
      * @note Thread-safe
      */
-    /// @gdb{tag="BSD:SOCKET", msg="ReservePort: port=%u protocol=%d", args="$x1, $x2"}
+    /// @gdb{tag="BSD:SOCKET", msg="ReservePort: port=%u protocol=%d",
+    /// args="$x1, $x2"}
     bool ReservePort(uint16_t port, ryu_ldn::bsd::ProtocolType protocol);
 
     /**
@@ -231,7 +236,8 @@ public:
      *
      * @note Thread-safe
      */
-    /// @gdb{tag="BSD:SOCKET", msg="ReleasePort: port=%u protocol=%d", args="$x1, $x2"}
+    /// @gdb{tag="BSD:SOCKET", msg="ReleasePort: port=%u protocol=%d",
+    /// args="$x1, $x2"}
     void ReleasePort(uint16_t port, ryu_ldn::bsd::ProtocolType protocol);
 
     // =========================================================================
@@ -256,11 +262,16 @@ public:
      *
      * @note Thread-safe
      */
-    /// @gdb{tag="BSD:DATA", msg="RouteIncomingData: dest_ip=0x%x dest_port=%u", args="$x3, $x4"}
-    bool RouteIncomingData(uint32_t source_ip, uint16_t source_port,
-                           uint32_t dest_ip, uint16_t dest_port,
-                           ryu_ldn::bsd::ProtocolType protocol,
-                           const void* data, size_t data_len);
+    /// @gdb{tag="BSD:DATA", msg="RouteIncomingData: dest_ip=0x%x dest_port=%u",
+    /// args="$x3, $x4"}
+    bool RouteIncomingData(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol,
+        const void* data,
+        size_t data_len);
 
     // =========================================================================
     // Outgoing Data
@@ -281,10 +292,14 @@ public:
      * @param data_len Payload length
      * @return true if data was sent successfully, false otherwise
      */
-    using SendProxyDataCallback = bool (*)(uint32_t source_ip, uint16_t source_port,
-                                           uint32_t dest_ip, uint16_t dest_port,
-                                           ryu_ldn::bsd::ProtocolType protocol,
-                                           const void* data, size_t data_len);
+    using SendProxyDataCallback = bool (*)(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol,
+        const void* data,
+        size_t data_len);
 
     /**
      * @brief Set the callback for sending ProxyData to the LDN server
@@ -310,15 +325,21 @@ public:
      * @param protocol Protocol type
      * @param data Packet payload
      * @param data_len Payload length
-     * @return true if data was sent, false if no callback registered or send failed
+     * @return true if data was sent, false if no callback registered or send
+     * failed
      *
      * @note Thread-safe
      */
-    /// @gdb{tag="BSD:DATA", msg="SendProxyData: src=0x%x:%u -> dst=0x%x:%u", args="$x1, $x2, $x3, $x4"}
-    bool SendProxyData(uint32_t source_ip, uint16_t source_port,
-                       uint32_t dest_ip, uint16_t dest_port,
-                       ryu_ldn::bsd::ProtocolType protocol,
-                       const void* data, size_t data_len);
+    /// @gdb{tag="BSD:DATA", msg="SendProxyData: src=0x%x:%u -> dst=0x%x:%u",
+    /// args="$x1, $x2, $x3, $x4"}
+    bool SendProxyData(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol,
+        const void* data,
+        size_t data_len);
 
     /**
      * @brief Callback type for sending ProxyConnect to the LDN server
@@ -332,9 +353,12 @@ public:
      * @param protocol Protocol type (TCP)
      * @return true if request was sent successfully, false otherwise
      */
-    using SendProxyConnectCallback = bool (*)(uint32_t source_ip, uint16_t source_port,
-                                               uint32_t dest_ip, uint16_t dest_port,
-                                               ryu_ldn::bsd::ProtocolType protocol);
+    using SendProxyConnectCallback = bool (*)(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Set the callback for sending ProxyConnect to the LDN server
@@ -362,24 +386,33 @@ public:
      *
      * @note Thread-safe
      */
-    /// @gdb{tag="BSD:DATA", msg="SendProxyConnect: src=0x%x:%u -> dst=0x%x:%u", args="$x1, $x2, $x3, $x4"}
-    bool SendProxyConnect(uint32_t source_ip, uint16_t source_port,
-                          uint32_t dest_ip, uint16_t dest_port,
-                          ryu_ldn::bsd::ProtocolType protocol);
+    /// @gdb{tag="BSD:DATA", msg="SendProxyConnect: src=0x%x:%u -> dst=0x%x:%u",
+    /// args="$x1, $x2, $x3, $x4"}
+    bool SendProxyConnect(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Callback type for sending ProxyConnectReply to the LDN server
      *
-     * This callback is invoked when a listening TCP socket accepts a connection.
+     * This callback is invoked when a listening TCP socket accepts a
+     * connection.
      */
-    using SendProxyConnectReplyCallback = bool (*)(uint32_t source_ip, uint16_t source_port,
-                                                    uint32_t dest_ip, uint16_t dest_port,
-                                                    ryu_ldn::bsd::ProtocolType protocol);
+    using SendProxyConnectReplyCallback = bool (*)(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Set the callback for sending ProxyConnectReply to the LDN server
      *
-     * @param callback Function to call when TCP proxy sockets accept connections
+     * @param callback Function to call when TCP proxy sockets accept
+     * connections
      */
     void SetProxyConnectReplyCallback(SendProxyConnectReplyCallback callback);
 
@@ -395,18 +428,24 @@ public:
      * @param protocol Protocol type (TCP)
      * @return true if reply was sent, false if no callback or send failed
      */
-    bool SendProxyConnectReply(uint32_t source_ip, uint16_t source_port,
-                                uint32_t dest_ip, uint16_t dest_port,
-                                ryu_ldn::bsd::ProtocolType protocol);
+    bool SendProxyConnectReply(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Callback type for sending ProxyDisconnect to the LDN server
      *
      * This callback is invoked when a TCP proxy socket is closed.
      */
-    using SendProxyDisconnectCallback = bool (*)(uint32_t source_ip, uint16_t source_port,
-                                                  uint32_t dest_ip, uint16_t dest_port,
-                                                  ryu_ldn::bsd::ProtocolType protocol);
+    using SendProxyDisconnectCallback = bool (*)(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Set the callback for sending ProxyDisconnect to the LDN server
@@ -427,9 +466,12 @@ public:
      * @param protocol Protocol type (TCP)
      * @return true if disconnect was sent, false if no callback or send failed
      */
-    bool SendProxyDisconnect(uint32_t source_ip, uint16_t source_port,
-                              uint32_t dest_ip, uint16_t dest_port,
-                              ryu_ldn::bsd::ProtocolType protocol);
+    bool SendProxyDisconnect(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Route incoming ProxyConnectReply to the connecting socket
@@ -442,7 +484,8 @@ public:
      * @note Thread-safe
      */
     /// @gdb{tag="BSD:DATA", msg="RouteConnectResponse"}
-    bool RouteConnectResponse(const ryu_ldn::protocol::ProxyConnectResponse& response);
+    bool RouteConnectResponse(
+        const ryu_ldn::protocol::ProxyConnectResponse& response);
 
     /**
      * @brief Route incoming ProxyConnect to a listening socket (accept queue)
@@ -456,7 +499,8 @@ public:
      * @note Thread-safe
      */
     /// @gdb{tag="BSD:DATA", msg="RouteConnectRequest"}
-    bool RouteConnectRequest(const ryu_ldn::protocol::ProxyConnectRequest& request);
+    bool RouteConnectRequest(
+        const ryu_ldn::protocol::ProxyConnectRequest& request);
 
     // =========================================================================
     // LDN Network Configuration
@@ -467,7 +511,8 @@ public:
      *
      * Called when the game receives its IP from GetIpv4Address.
      *
-     * @param ip Local IP address in host byte order (e.g., 0x0A720001 for 10.114.0.1)
+     * @param ip Local IP address in host byte order (e.g., 0x0A720001
+     * for 10.114.0.1)
      *
      * @note Thread-safe
      */
@@ -531,7 +576,10 @@ public:
      * @param port The port the socket is bound to
      * @param protocol The protocol type
      */
-    void DeliverPendingPackets(ProxySocket* socket, uint16_t port, ryu_ldn::bsd::ProtocolType protocol);
+    void DeliverPendingPackets(
+        ProxySocket* socket,
+        uint16_t port,
+        ryu_ldn::bsd::ProtocolType protocol);
 
 private:
     /**
@@ -559,9 +607,12 @@ private:
      *
      * @note Caller must hold m_mutex
      */
-    size_t FindAllSocketsByDestination(uint32_t dest_ip, uint16_t dest_port,
-                                        ryu_ldn::bsd::ProtocolType protocol,
-                                        ProxySocket* out_sockets[], size_t max_sockets);
+    size_t FindAllSocketsByDestination(
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::bsd::ProtocolType protocol,
+        ProxySocket* out_sockets[],
+        size_t max_sockets);
 
     /**
      * @brief Map of file descriptor to ProxySocket — fixed-size flat array.
@@ -595,7 +646,8 @@ private:
      * @brief Mutex for thread safety
      *
      * Recursive: RouteConnectRequest holds it while the listening socket's
-     * IncomingConnection calls back SendProxyConnectReply, which locks it again.
+     * IncomingConnection calls back SendProxyConnectReply, which locks it
+     * again.
      */
     mutable os::Mutex m_mutex{true};
 
@@ -654,4 +706,4 @@ private:
     size_t m_pending_count = 0;
 };
 
-} // namespace ams::mitm::bsd
+}  // namespace ams::mitm::bsd

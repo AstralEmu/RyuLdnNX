@@ -9,7 +9,8 @@
  *
  * 1. **Command ID Tests**: Verify command enumeration values match header
  * 2. **Structure Tests**: Verify IPC structure sizes and layouts
- * 3. **ConfigService Logic Tests**: Test service method behavior via mock config
+ * 3. **ConfigService Logic Tests**: Test service method behavior via mock
+ * config
  * 4. **ConfigResult Tests**: Verify result code values
  *
  * ## ryu:cfg Command IDs (0-24)
@@ -76,7 +77,7 @@ typedef int64_t s64;
 typedef int32_t Result;
 
 #define R_SUCCEEDED(res) ((res) == 0)
-#define R_FAILED(res)    ((res) != 0)
+#define R_FAILED(res) ((res) != 0)
 #define R_SUCCEED() return 0
 
 //=============================================================================
@@ -90,35 +91,35 @@ typedef int32_t Result;
  */
 enum class ConfigCmd : u32 {
     // Sysmodule Status (0-8)
-    GetVersion          = 0,
+    GetVersion = 0,
     GetConnectionStatus = 1,
-    IsServiceActive     = 2,
-    IsGameActive        = 3,
-    GetLdnState         = 4,
-    GetSessionInfo      = 5,
-    GetLastRtt          = 6,
-    ForceReconnect      = 7,
-    GetActiveProcessId  = 8,
+    IsServiceActive = 2,
+    IsGameActive = 3,
+    GetLdnState = 4,
+    GetSessionInfo = 5,
+    GetLastRtt = 6,
+    ForceReconnect = 7,
+    GetActiveProcessId = 8,
 
     // Sysmodule General Settings (9-14)
-    GetDebugEnabled     = 9,
-    SetDebugEnabled     = 10,
-    GetDebugLevel       = 11,
-    SetDebugLevel       = 12,
-    SaveConfig          = 13,
-    ReloadConfig        = 14,
+    GetDebugEnabled = 9,
+    SetDebugEnabled = 10,
+    GetDebugLevel = 11,
+    SetDebugLevel = 12,
+    SaveConfig = 13,
+    ReloadConfig = 14,
 
     // Sysmodule Configuration Manager (15-24)
-    GetServerAddress    = 15,
-    SetServerAddress    = 16,
-    GetLdnEnabled       = 17,
-    SetLdnEnabled       = 18,
-    GetDisableP2p       = 19,
-    SetDisableP2p       = 20,
-    GetUsePassphrase    = 21,
-    SetUsePassphrase    = 22,
-    GetPassphrase       = 23,
-    SetPassphrase       = 24,
+    GetServerAddress = 15,
+    SetServerAddress = 16,
+    GetLdnEnabled = 17,
+    SetLdnEnabled = 18,
+    GetDisableP2p = 19,
+    SetDisableP2p = 20,
+    GetUsePassphrase = 21,
+    SetUsePassphrase = 22,
+    GetPassphrase = 23,
+    SetPassphrase = 24,
 };
 
 /**
@@ -148,7 +149,8 @@ struct ServerAddressIpc {
     u16 port;       ///< Server port number
     u16 padding;    ///< Padding for alignment
 };
-static_assert(sizeof(ServerAddressIpc) == 68, "ServerAddressIpc must be 68 bytes");
+static_assert(
+    sizeof(ServerAddressIpc) == 68, "ServerAddressIpc must be 68 bytes");
 
 //=============================================================================
 // Mock Configuration State (simulates global config)
@@ -201,10 +203,11 @@ void init_mock_config() {
     std::memset(&g_mock_config, 0, sizeof(g_mock_config));
 
     // Server defaults
-    std::strncpy(g_mock_config.server.host, "ryuldnnx.ddns.net",
-                 sizeof(g_mock_config.server.host) - 1);
+    std::strncpy(
+        g_mock_config.server.host,
+        "ryuldnnx.ddns.net",
+        sizeof(g_mock_config.server.host) - 1);
     g_mock_config.server.port = 30456;
-
 
     // LDN defaults
     g_mock_config.ldn.enabled = true;
@@ -221,7 +224,7 @@ void init_mock_config() {
     g_mock_config.ldn.disable_p2p = true;
 }
 
-} // namespace mock
+}  // namespace mock
 
 //=============================================================================
 // Mock ConfigService Implementation
@@ -259,7 +262,7 @@ public:
 
     // Connection status
     Result GetConnectionStatus(u32& out) {
-        out = 0; // Always ready
+        out = 0;  // Always ready
         R_SUCCEED();
     }
 
@@ -299,7 +302,6 @@ public:
         g_mock_config.ldn.enabled = (enabled != 0);
         R_SUCCEED();
     }
-
 
     // Debug enabled
     Result GetDebugEnabled(u32& out) {
@@ -352,7 +354,7 @@ public:
     }
 };
 
-} // namespace mock
+}  // namespace mock
 
 //=============================================================================
 // Test Framework
@@ -362,22 +364,27 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 
 #define TEST(name) void name()
-#define RUN_TEST(name) do { \
-    g_tests_run++; \
-    printf("  [TEST] %s...", #name); \
-    mock::init_mock_config(); \
-    name(); \
-    g_tests_passed++; \
-    printf(" PASS\n"); \
-} while(0)
+#define RUN_TEST(name)                   \
+    do {                                 \
+        g_tests_run++;                   \
+        printf("  [TEST] %s...", #name); \
+        mock::init_mock_config();        \
+        name();                          \
+        g_tests_passed++;                \
+        printf(" PASS\n");               \
+    } while (0)
 
-#define ASSERT(cond) do { \
-    if (!(cond)) { \
-        printf(" FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
-               #cond, __FILE__, __LINE__); \
-        exit(1); \
-    } \
-} while(0)
+#define ASSERT(cond)                                               \
+    do {                                                           \
+        if (!(cond)) {                                             \
+            printf(                                                \
+                " FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
+                #cond,                                             \
+                __FILE__,                                          \
+                __LINE__);                                         \
+            exit(1);                                               \
+        }                                                          \
+    } while (0)
 
 #define ASSERT_EQ(a, b) ASSERT((a) == (b))
 #define ASSERT_NE(a, b) ASSERT((a) != (b))
@@ -442,22 +449,29 @@ TEST(command_ids_match_layout) {
  */
 TEST(command_ids_get_set_pairing) {
     // General Settings pairs (9-14)
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDebugEnabled),
-              static_cast<u32>(ConfigCmd::GetDebugEnabled) + 1);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDebugLevel),
-              static_cast<u32>(ConfigCmd::GetDebugLevel) + 1);
+    ASSERT_EQ(
+        static_cast<u32>(ConfigCmd::SetDebugEnabled),
+        static_cast<u32>(ConfigCmd::GetDebugEnabled) + 1);
+    ASSERT_EQ(
+        static_cast<u32>(ConfigCmd::SetDebugLevel),
+        static_cast<u32>(ConfigCmd::GetDebugLevel) + 1);
 
     // Configuration Manager pairs (15-24)
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetServerAddress),
-              static_cast<u32>(ConfigCmd::GetServerAddress) + 1);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetLdnEnabled),
-              static_cast<u32>(ConfigCmd::GetLdnEnabled) + 1);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDisableP2p),
-              static_cast<u32>(ConfigCmd::GetDisableP2p) + 1);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetUsePassphrase),
-              static_cast<u32>(ConfigCmd::GetUsePassphrase) + 1);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetPassphrase),
-              static_cast<u32>(ConfigCmd::GetPassphrase) + 1);
+    ASSERT_EQ(
+        static_cast<u32>(ConfigCmd::SetServerAddress),
+        static_cast<u32>(ConfigCmd::GetServerAddress) + 1);
+    ASSERT_EQ(
+        static_cast<u32>(ConfigCmd::SetLdnEnabled),
+        static_cast<u32>(ConfigCmd::GetLdnEnabled) + 1);
+    ASSERT_EQ(
+        static_cast<u32>(ConfigCmd::SetDisableP2p),
+        static_cast<u32>(ConfigCmd::GetDisableP2p) + 1);
+    ASSERT_EQ(
+        static_cast<u32>(ConfigCmd::SetUsePassphrase),
+        static_cast<u32>(ConfigCmd::GetUsePassphrase) + 1);
+    ASSERT_EQ(
+        static_cast<u32>(ConfigCmd::SetPassphrase),
+        static_cast<u32>(ConfigCmd::GetPassphrase) + 1);
 }
 
 /**
@@ -491,16 +505,19 @@ TEST(server_address_ipc_layout) {
     ServerAddressIpc addr = {};
 
     // Verify host is at offset 0
-    ASSERT_EQ(reinterpret_cast<char*>(&addr.host) -
-              reinterpret_cast<char*>(&addr), 0);
+    ASSERT_EQ(
+        reinterpret_cast<char*>(&addr.host) - reinterpret_cast<char*>(&addr),
+        0);
 
     // Verify port is at offset 64
-    ASSERT_EQ(reinterpret_cast<char*>(&addr.port) -
-              reinterpret_cast<char*>(&addr), 64);
+    ASSERT_EQ(
+        reinterpret_cast<char*>(&addr.port) - reinterpret_cast<char*>(&addr),
+        64);
 
     // Verify padding is at offset 66
-    ASSERT_EQ(reinterpret_cast<char*>(&addr.padding) -
-              reinterpret_cast<char*>(&addr), 66);
+    ASSERT_EQ(
+        reinterpret_cast<char*>(&addr.padding) - reinterpret_cast<char*>(&addr),
+        66);
 }
 
 /**
@@ -595,7 +612,7 @@ TEST(is_service_active_returns_true) {
 TEST(get_passphrase_default_empty) {
     mock::MockConfigService svc;
     std::array<char, 64> passphrase = {};
-    passphrase[0] = 'X'; // Pre-fill to verify it gets cleared
+    passphrase[0] = 'X';  // Pre-fill to verify it gets cleared
 
     Result r = svc.GetPassphrase(passphrase);
 
@@ -739,7 +756,6 @@ TEST(ldn_enabled_set_get_roundtrip) {
     ASSERT_EQ(enabled, 1u);
 }
 
-
 /**
  * @test DebugEnabled default is false
  */
@@ -751,7 +767,6 @@ TEST(debug_enabled_default_false) {
 
     ASSERT_EQ(enabled, 0u);
 }
-
 
 /**
  * @test Non-zero values for Set are treated as true

@@ -31,61 +31,73 @@ using namespace ryu_ldn::protocol;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegistrar_##name { \
-        TestRegistrar_##name() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct TestRegistrar_##name {      \
+        TestRegistrar_##name() {              \
             printf("  [TEST] " #name "... "); \
-            fflush(stdout); \
-            test_##name(); \
-            g_tests_passed++; \
-            printf("PASS\n"); \
-        } \
-    } g_registrar_##name; \
+            fflush(stdout);                   \
+            test_##name();                    \
+            g_tests_passed++;                 \
+            printf("PASS\n");                 \
+        }                                     \
+    } g_registrar_##name;                     \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL\n    Expected: " #cond " to be true\n    at %s:%d\n", __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_TRUE(cond)                                                   \
+    do {                                                                    \
+        if (!(cond)) {                                                      \
+            printf(                                                         \
+                "FAIL\n    Expected: " #cond " to be true\n    at %s:%d\n", \
+                __FILE__,                                                   \
+                __LINE__);                                                  \
+            g_tests_failed++;                                               \
+            return;                                                         \
+        }                                                                   \
+    } while (0)
 
-#define ASSERT_FALSE(cond) \
-    do { \
-        if (cond) { \
-            printf("FAIL\n    Expected: " #cond " to be false\n    at %s:%d\n", __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_FALSE(cond)                                                   \
+    do {                                                                     \
+        if (cond) {                                                          \
+            printf(                                                          \
+                "FAIL\n    Expected: " #cond " to be false\n    at %s:%d\n", \
+                __FILE__,                                                    \
+                __LINE__);                                                   \
+            g_tests_failed++;                                                \
+            return;                                                          \
+        }                                                                    \
+    } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("FAIL\n    Expected: " #a " == " #b "\n    at %s:%d\n", __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                                 \
+    do {                                                                \
+        if ((a) != (b)) {                                               \
+            printf(                                                     \
+                "FAIL\n    Expected: " #a " == " #b "\n    at %s:%d\n", \
+                __FILE__,                                               \
+                __LINE__);                                              \
+            g_tests_failed++;                                           \
+            return;                                                     \
+        }                                                               \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
-            printf("FAIL\n    Expected: " #a " != " #b "\n    at %s:%d\n", __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_NE(a, b)                                                 \
+    do {                                                                \
+        if ((a) == (b)) {                                               \
+            printf(                                                     \
+                "FAIL\n    Expected: " #a " != " #b "\n    at %s:%d\n", \
+                __FILE__,                                               \
+                __LINE__);                                              \
+            g_tests_failed++;                                           \
+            return;                                                     \
+        }                                                               \
+    } while (0)
 
 // ============================================================================
 // Constants for Proxy
 // ============================================================================
 
-constexpr uint32_t BROADCAST_IP = 0xFFFFFFFF;  ///< Broadcast destination IP
-constexpr size_t MAX_PROXY_DATA_SIZE = 0x1000; // 4KB max per packet
+constexpr uint32_t BROADCAST_IP = 0xFFFFFFFF;   ///< Broadcast destination IP
+constexpr size_t MAX_PROXY_DATA_SIZE = 0x1000;  // 4KB max per packet
 constexpr uint8_t TEST_MAX_NODES = 8;
 
 // Test IP addresses (10.114.0.x network)
@@ -130,31 +142,36 @@ public:
     }
 
     bool is_node_connected(uint32_t node_id) const {
-        if (node_id >= TEST_MAX_NODES) return false;
+        if (node_id >= TEST_MAX_NODES)
+            return false;
         return m_nodes[node_id].is_connected;
     }
 
     bool is_ip_connected(uint32_t ip) const {
         auto it = m_ip_to_node.find(ip);
-        if (it == m_ip_to_node.end()) return false;
+        if (it == m_ip_to_node.end())
+            return false;
         return m_nodes[it->second].is_connected;
     }
 
     uint32_t get_node_ip(uint32_t node_id) const {
-        if (node_id >= TEST_MAX_NODES) return 0;
+        if (node_id >= TEST_MAX_NODES)
+            return 0;
         return m_nodes[node_id].ipv4_address;
     }
 
     uint32_t get_ip_node_id(uint32_t ip) const {
         auto it = m_ip_to_node.find(ip);
-        if (it == m_ip_to_node.end()) return 0xFFFFFFFF;
+        if (it == m_ip_to_node.end())
+            return 0xFFFFFFFF;
         return it->second;
     }
 
     std::vector<uint32_t> get_broadcast_target_ips(uint32_t source_ip) const {
         std::vector<uint32_t> targets;
         for (uint8_t i = 0; i < TEST_MAX_NODES; i++) {
-            if (m_nodes[i].is_connected && m_nodes[i].ipv4_address != source_ip) {
+            if (m_nodes[i].is_connected &&
+                m_nodes[i].ipv4_address != source_ip) {
                 targets.push_back(m_nodes[i].ipv4_address);
             }
         }
@@ -164,7 +181,8 @@ public:
     size_t get_connected_count() const {
         size_t count = 0;
         for (uint8_t i = 0; i < TEST_MAX_NODES; i++) {
-            if (m_nodes[i].is_connected) count++;
+            if (m_nodes[i].is_connected)
+                count++;
         }
         return count;
     }
@@ -181,13 +199,14 @@ private:
 class TestProxyBuffer {
 public:
     TestProxyBuffer() : m_write_pos(0), m_read_pos(0) {
-        m_buffer.resize(MAX_PROXY_DATA_SIZE * 4); // 4 packets
+        m_buffer.resize(MAX_PROXY_DATA_SIZE * 4);  // 4 packets
     }
 
-    bool write(const ProxyDataHeader& header, const uint8_t* data, size_t size) {
+    bool write(
+        const ProxyDataHeader& header, const uint8_t* data, size_t size) {
         size_t total_size = sizeof(header) + size;
         if (m_write_pos + total_size > m_buffer.size()) {
-            return false; // Buffer full
+            return false;  // Buffer full
         }
 
         std::memcpy(m_buffer.data() + m_write_pos, &header, sizeof(header));
@@ -202,16 +221,17 @@ public:
         return true;
     }
 
-    bool read(ProxyDataHeader& header, uint8_t* data, size_t& size, size_t max_size) {
+    bool read(
+        ProxyDataHeader& header, uint8_t* data, size_t& size, size_t max_size) {
         if (m_packet_sizes.empty()) {
-            return false; // No data
+            return false;  // No data
         }
 
         size_t packet_size = m_packet_sizes.front();
         size_t data_size = packet_size - sizeof(header);
 
         if (data_size > max_size) {
-            return false; // Buffer too small
+            return false;  // Buffer too small
         }
 
         std::memcpy(&header, m_buffer.data() + m_read_pos, sizeof(header));
@@ -396,7 +416,8 @@ TEST(node_mapper_max_nodes) {
         mapper.add_node(i, 0x0A720000 + i);
     }
 
-    ASSERT_EQ(mapper.get_connected_count(), static_cast<size_t>(TEST_MAX_NODES));
+    ASSERT_EQ(
+        mapper.get_connected_count(), static_cast<size_t>(TEST_MAX_NODES));
 
     // Broadcast from node 0 should target 7 nodes
     auto targets = mapper.get_broadcast_target_ips(0x0A720000);
@@ -427,7 +448,8 @@ TEST(proxy_buffer_write_read_small) {
     ProxyDataHeader read_header{};
     uint8_t read_data[64];
     size_t read_size;
-    ASSERT_TRUE(buffer.read(read_header, read_data, read_size, sizeof(read_data)));
+    ASSERT_TRUE(
+        buffer.read(read_header, read_data, read_size, sizeof(read_data)));
 
     ASSERT_EQ(read_header.info.dest_ipv4, TEST_IP_NODE1);
     ASSERT_EQ(read_header.info.source_ipv4, TEST_IP_NODE0);
@@ -509,7 +531,8 @@ TEST(proxy_buffer_header_only) {
     ProxyDataHeader read_header{};
     uint8_t read_data[64];
     size_t read_size;
-    ASSERT_TRUE(buffer.read(read_header, read_data, read_size, sizeof(read_data)));
+    ASSERT_TRUE(
+        buffer.read(read_header, read_data, read_size, sizeof(read_data)));
 
     ASSERT_EQ(read_header.info.dest_ipv4, TEST_IP_NODE1);
     ASSERT_EQ(read_header.info.source_ipv4, TEST_IP_NODE2);
@@ -521,9 +544,10 @@ TEST(proxy_buffer_header_only) {
 // ============================================================================
 
 // Simulates the routing decision based on IP addresses
-static bool should_route_to_ip(const ProxyDataHeader& header,
-                               uint32_t target_ip,
-                               const TestNodeMapper& mapper) {
+static bool should_route_to_ip(
+    const ProxyDataHeader& header,
+    uint32_t target_ip,
+    const TestNodeMapper& mapper) {
     // Broadcast: route to all connected IPs except source
     if (header.info.dest_ipv4 == BROADCAST_IP) {
         return mapper.is_ip_connected(target_ip) &&
@@ -545,8 +569,10 @@ TEST(routing_unicast_to_connected) {
     header.info.source_ipv4 = TEST_IP_NODE0;
 
     ASSERT_TRUE(should_route_to_ip(header, TEST_IP_NODE1, mapper));
-    ASSERT_FALSE(should_route_to_ip(header, TEST_IP_NODE0, mapper)); // Not destination
-    ASSERT_FALSE(should_route_to_ip(header, TEST_IP_NODE2, mapper)); // Not connected
+    ASSERT_FALSE(
+        should_route_to_ip(header, TEST_IP_NODE0, mapper));  // Not destination
+    ASSERT_FALSE(
+        should_route_to_ip(header, TEST_IP_NODE2, mapper));  // Not connected
 }
 
 TEST(routing_unicast_to_disconnected) {
@@ -558,7 +584,8 @@ TEST(routing_unicast_to_disconnected) {
     header.info.dest_ipv4 = TEST_IP_NODE1;
     header.info.source_ipv4 = TEST_IP_NODE0;
 
-    ASSERT_FALSE(should_route_to_ip(header, TEST_IP_NODE1, mapper)); // Not connected
+    ASSERT_FALSE(
+        should_route_to_ip(header, TEST_IP_NODE1, mapper));  // Not connected
 }
 
 TEST(routing_broadcast_all_nodes) {
@@ -571,10 +598,12 @@ TEST(routing_broadcast_all_nodes) {
     header.info.dest_ipv4 = BROADCAST_IP;
     header.info.source_ipv4 = TEST_IP_NODE0;
 
-    ASSERT_FALSE(should_route_to_ip(header, TEST_IP_NODE0, mapper)); // Source excluded
+    ASSERT_FALSE(
+        should_route_to_ip(header, TEST_IP_NODE0, mapper));  // Source excluded
     ASSERT_TRUE(should_route_to_ip(header, TEST_IP_NODE1, mapper));
     ASSERT_TRUE(should_route_to_ip(header, TEST_IP_NODE2, mapper));
-    ASSERT_FALSE(should_route_to_ip(header, 0x0A720004, mapper)); // Not connected
+    ASSERT_FALSE(
+        should_route_to_ip(header, 0x0A720004, mapper));  // Not connected
 }
 
 TEST(routing_broadcast_excludes_source) {
@@ -605,7 +634,8 @@ TEST(proxy_max_data_size) {
     ProxyDataHeader read_header{};
     std::vector<uint8_t> read_data(MAX_PROXY_DATA_SIZE);
     size_t read_size;
-    ASSERT_TRUE(buffer.read(read_header, read_data.data(), read_size, read_data.size()));
+    ASSERT_TRUE(buffer.read(
+        read_header, read_data.data(), read_size, read_data.size()));
     ASSERT_EQ(read_size, MAX_PROXY_DATA_SIZE);
 }
 
@@ -650,10 +680,10 @@ TEST(proxy_self_destination) {
 
 TEST(proxy_header_byte_layout) {
     ProxyDataHeader header{};
-    header.info.source_ipv4 = 0x01020304;    // 1.2.3.4
-    header.info.source_port = 0x0506;        // 1286
-    header.info.dest_ipv4 = 0x0708090A;      // 7.8.9.10
-    header.info.dest_port = 0x0B0C;          // 2828
+    header.info.source_ipv4 = 0x01020304;      // 1.2.3.4
+    header.info.source_port = 0x0506;          // 1286
+    header.info.dest_ipv4 = 0x0708090A;        // 7.8.9.10
+    header.info.dest_port = 0x0B0C;            // 2828
     header.info.protocol = ProtocolType::Udp;  // 17
     header.data_length = 0x12345678;
 
@@ -725,7 +755,10 @@ int main() {
     // Tests run automatically via static initializers
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

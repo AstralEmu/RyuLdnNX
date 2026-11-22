@@ -21,7 +21,8 @@
  *     // Handle ping
  * });
  *
- * dispatcher.set_connected_handler([](const LdnHeader& h, const NetworkInfo& i) {
+ * dispatcher.set_connected_handler([](const LdnHeader& h, const NetworkInfo& i)
+ * {
  *     // Handle connection confirmation
  * });
  *
@@ -44,8 +45,9 @@ namespace ryu_ldn::ldn {
 /**
  * @brief Handler type for packets with payload struct
  */
-template<typename T>
-using PacketHandler = void (*)(const protocol::LdnHeader& header, const T& payload);
+template <typename T>
+using PacketHandler =
+    void (*)(const protocol::LdnHeader& header, const T& payload);
 
 /**
  * @brief Handler type for packets with no payload
@@ -55,10 +57,11 @@ using EmptyPacketHandler = void (*)(const protocol::LdnHeader& header);
 /**
  * @brief Handler type for ProxyData packets (header + variable data)
  */
-using ProxyDataHandler = void (*)(const protocol::LdnHeader& header,
-                                   const protocol::ProxyDataHeader& proxy_header,
-                                   const uint8_t* data,
-                                   size_t data_size);
+using ProxyDataHandler = void (*)(
+    const protocol::LdnHeader& header,
+    const protocol::ProxyDataHeader& proxy_header,
+    const uint8_t* data,
+    size_t data_size);
 
 /**
  * @brief Packet dispatcher for routing received packets to handlers
@@ -91,7 +94,8 @@ public:
      * @brief Set handler for Initialize packets
      */
     /// @gdb{tag="LDN:DISPATCHER", msg="Set initialize handler"}
-    void set_initialize_handler(PacketHandler<protocol::InitializeMessage> handler);
+    void set_initialize_handler(
+        PacketHandler<protocol::InitializeMessage> handler);
 
     /**
      * @brief Set handler for Connected packets (join success)
@@ -121,7 +125,8 @@ public:
      * @brief Set handler for Disconnect packets
      */
     /// @gdb{tag="LDN:DISPATCHER", msg="Set disconnect handler"}
-    void set_disconnect_handler(PacketHandler<protocol::DisconnectMessage> handler);
+    void set_disconnect_handler(
+        PacketHandler<protocol::DisconnectMessage> handler);
 
     /**
      * @brief Set handler for Ping packets
@@ -133,7 +138,8 @@ public:
      * @brief Set handler for NetworkError packets
      */
     /// @gdb{tag="LDN:DISPATCHER", msg="Set network_error handler"}
-    void set_network_error_handler(PacketHandler<protocol::NetworkErrorMessage> handler);
+    void set_network_error_handler(
+        PacketHandler<protocol::NetworkErrorMessage> handler);
 
     /**
      * @brief Set handler for ProxyConfig packets
@@ -145,13 +151,15 @@ public:
      * @brief Set handler for ProxyConnect packets
      */
     /// @gdb{tag="LDN:DISPATCHER", msg="Set proxy_connect handler"}
-    void set_proxy_connect_handler(PacketHandler<protocol::ProxyConnectRequest> handler);
+    void set_proxy_connect_handler(
+        PacketHandler<protocol::ProxyConnectRequest> handler);
 
     /**
      * @brief Set handler for ProxyConnectReply packets
      */
     /// @gdb{tag="LDN:DISPATCHER", msg="Set proxy_connect_reply handler"}
-    void set_proxy_connect_reply_handler(PacketHandler<protocol::ProxyConnectResponse> handler);
+    void set_proxy_connect_reply_handler(
+        PacketHandler<protocol::ProxyConnectResponse> handler);
 
     /**
      * @brief Set handler for ProxyData packets
@@ -163,7 +171,8 @@ public:
      * @brief Set handler for ProxyDisconnect packets
      */
     /// @gdb{tag="LDN:DISPATCHER", msg="Set proxy_disconnect handler"}
-    void set_proxy_disconnect_handler(PacketHandler<protocol::ProxyDisconnectMessage> handler);
+    void set_proxy_disconnect_handler(
+        PacketHandler<protocol::ProxyDisconnectMessage> handler);
 
     /**
      * @brief Set handler for Reject packets
@@ -181,7 +190,8 @@ public:
      * @brief Set handler for SetAcceptPolicy packets
      */
     /// @gdb{tag="LDN:DISPATCHER", msg="Set accept_policy handler"}
-    void set_accept_policy_handler(PacketHandler<protocol::SetAcceptPolicyRequest> handler);
+    void set_accept_policy_handler(
+        PacketHandler<protocol::SetAcceptPolicyRequest> handler);
 
     // ========================================================================
     // Dispatch
@@ -202,35 +212,39 @@ public:
      *       the packet is silently ignored (invalid packet).
      */
     /// @gdb{tag="LDN:DISPATCHER", msg="Dispatching packet"}
-    void dispatch(const protocol::LdnHeader& header, const uint8_t* data, size_t data_size);
+    void dispatch(
+        const protocol::LdnHeader& header,
+        const uint8_t* data,
+        size_t data_size);
 
 private:
     // Handler pointers (nullptr = not registered)
-    PacketHandler<protocol::InitializeMessage>       m_initialize_handler;
-    PacketHandler<protocol::NetworkInfo>             m_connected_handler;
-    PacketHandler<protocol::NetworkInfo>             m_sync_network_handler;
-    PacketHandler<protocol::NetworkInfo>             m_scan_reply_handler;
-    EmptyPacketHandler                               m_scan_reply_end_handler;
-    PacketHandler<protocol::DisconnectMessage>       m_disconnect_handler;
-    PacketHandler<protocol::PingMessage>             m_ping_handler;
-    PacketHandler<protocol::NetworkErrorMessage>     m_network_error_handler;
-    PacketHandler<protocol::ProxyConfig>             m_proxy_config_handler;
-    PacketHandler<protocol::ProxyConnectRequest>     m_proxy_connect_handler;
-    PacketHandler<protocol::ProxyConnectResponse>    m_proxy_connect_reply_handler;
-    ProxyDataHandler                                 m_proxy_data_handler;
-    PacketHandler<protocol::ProxyDisconnectMessage>  m_proxy_disconnect_handler;
-    PacketHandler<protocol::RejectRequest>           m_reject_handler;
-    EmptyPacketHandler                               m_reject_reply_handler;
-    PacketHandler<protocol::SetAcceptPolicyRequest>  m_accept_policy_handler;
+    PacketHandler<protocol::InitializeMessage> m_initialize_handler;
+    PacketHandler<protocol::NetworkInfo> m_connected_handler;
+    PacketHandler<protocol::NetworkInfo> m_sync_network_handler;
+    PacketHandler<protocol::NetworkInfo> m_scan_reply_handler;
+    EmptyPacketHandler m_scan_reply_end_handler;
+    PacketHandler<protocol::DisconnectMessage> m_disconnect_handler;
+    PacketHandler<protocol::PingMessage> m_ping_handler;
+    PacketHandler<protocol::NetworkErrorMessage> m_network_error_handler;
+    PacketHandler<protocol::ProxyConfig> m_proxy_config_handler;
+    PacketHandler<protocol::ProxyConnectRequest> m_proxy_connect_handler;
+    PacketHandler<protocol::ProxyConnectResponse> m_proxy_connect_reply_handler;
+    ProxyDataHandler m_proxy_data_handler;
+    PacketHandler<protocol::ProxyDisconnectMessage> m_proxy_disconnect_handler;
+    PacketHandler<protocol::RejectRequest> m_reject_handler;
+    EmptyPacketHandler m_reject_reply_handler;
+    PacketHandler<protocol::SetAcceptPolicyRequest> m_accept_policy_handler;
 
     /**
      * @brief Helper to safely parse and dispatch typed packets
      */
-    template<typename T>
-    void dispatch_typed(const protocol::LdnHeader& header,
-                        const uint8_t* data,
-                        size_t data_size,
-                        PacketHandler<T> handler);
+    template <typename T>
+    void dispatch_typed(
+        const protocol::LdnHeader& header,
+        const uint8_t* data,
+        size_t data_size,
+        PacketHandler<T> handler);
 };
 
-} // namespace ryu_ldn::ldn
+}  // namespace ryu_ldn::ldn

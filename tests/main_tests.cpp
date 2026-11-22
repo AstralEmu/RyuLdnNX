@@ -32,7 +32,8 @@ public:
         char tmpl[] = "/tmp/ryu_boot_XXXXXX";
         m_root = ::mkdtemp(tmpl);
         m_previous = fsys::current_path();
-        fsys::create_directories(fsys::path(m_root) / "sdmc:" / "config" / "ryu_ldn_nx");
+        fsys::create_directories(
+            fsys::path(m_root) / "sdmc:" / "config" / "ryu_ldn_nx");
         fsys::current_path(m_root);
     }
     ~SdCardDir() {
@@ -59,14 +60,18 @@ bool aborts(Fn&& fn) {
 }
 
 std::vector<std::string> g_started_threads;
-void record_started_thread(const char* name) { g_started_threads.emplace_back(name); }
+void record_started_thread(const char* name) {
+    g_started_threads.emplace_back(name);
+}
 
 std::atomic<int> g_sleeps{0};
 std::int64_t g_last_sleep_ns = 0;
 int g_sleeps_before_exit = 1;
 void leave_log_thread_after_n_sleeps(std::int64_t ns) {
     g_last_sleep_ns = ns;
-    if (++g_sleeps >= g_sleeps_before_exit) { throw ams::os::HostThreadExit{}; }
+    if (++g_sleeps >= g_sleeps_before_exit) {
+        throw ams::os::HostThreadExit{};
+    }
 }
 
 }  // namespace
@@ -76,11 +81,15 @@ TEST(the_malloc_buffer_is_handed_to_the_global_allocator_at_startup) {
     boot::init::Startup();
     ASSERT_EQ(g_host_boot_calls.size(), 1u);
     ASSERT_TRUE(g_host_boot_calls[0] == "InitializeAllocator");
-    ASSERT_TRUE(boot::init::g_host_allocator_buffer == static_cast<void*>(boot::g_malloc_buffer));
-    ASSERT_EQ(boot::init::g_host_allocator_size, static_cast<size_t>(1024 * 1024));
+    ASSERT_TRUE(
+        boot::init::g_host_allocator_buffer ==
+        static_cast<void*>(boot::g_malloc_buffer));
+    ASSERT_EQ(
+        boot::init::g_host_allocator_size, static_cast<size_t>(1024 * 1024));
 }
 
-TEST(the_socket_buffers_are_the_documented_sizes_and_the_bsd_config_mirrors_them) {
+TEST(
+    the_socket_buffers_are_the_documented_sizes_and_the_bsd_config_mirrors_them) {
     const auto& socket = boot::LibnxSocketInitConfig;
     ASSERT_EQ(socket.tcp_tx_buf_size, 0x800u);
     ASSERT_EQ(socket.tcp_rx_buf_size, 0x1000u);
@@ -93,11 +102,13 @@ TEST(the_socket_buffers_are_the_documented_sizes_and_the_bsd_config_mirrors_them
     ASSERT_TRUE(socket.bsd_service_type == BsdServiceType_System);
 
     // 4 x page-aligned (max tcp tx + max tcp rx + udp tx + udp rx = 0x8000)
-    ASSERT_EQ(sizeof(boot::g_socket_tmem_buffer), static_cast<size_t>(4 * 0x8000));
+    ASSERT_EQ(
+        sizeof(boot::g_socket_tmem_buffer), static_cast<size_t>(4 * 0x8000));
 
     const auto& bsd = boot::LibnxBsdInitConfig;
     ASSERT_EQ(bsd.version, 1u);
-    ASSERT_TRUE(bsd.tmem_buffer == static_cast<void*>(boot::g_socket_tmem_buffer));
+    ASSERT_TRUE(
+        bsd.tmem_buffer == static_cast<void*>(boot::g_socket_tmem_buffer));
     ASSERT_EQ(bsd.tmem_buffer_size, sizeof(boot::g_socket_tmem_buffer));
     ASSERT_EQ(bsd.tcp_tx_buf_size, socket.tcp_tx_buf_size);
     ASSERT_EQ(bsd.tcp_rx_buf_size, socket.tcp_rx_buf_size);
@@ -122,7 +133,9 @@ TEST(every_operator_new_and_delete_goes_through_the_sysmodule_heap) {
     p[6] = ::operator new[](16, align);
     p[7] = ::operator new[](16, align, no);
     const int allocs = lm::g_host_heap_allocs - allocs_before;
-    for (void* each : p) { ASSERT_TRUE(each != nullptr); }
+    for (void* each : p) {
+        ASSERT_TRUE(each != nullptr);
+    }
 
     const int frees_before = lm::g_host_heap_frees;
     ::operator delete(p[0]);
@@ -141,7 +154,8 @@ TEST(every_operator_new_and_delete_goes_through_the_sysmodule_heap) {
 
 TEST(the_heap_is_created_once_on_the_static_buffer_and_thread_safe) {
     ASSERT_EQ(lm::g_host_heaps_created, 1);
-    ASSERT_TRUE(lm::g_host_heap_base == static_cast<void*>(boot::mitm::g_heap_memory));
+    ASSERT_TRUE(
+        lm::g_host_heap_base == static_cast<void*>(boot::mitm::g_heap_memory));
     ASSERT_EQ(lm::g_host_heap_size, static_cast<size_t>(384 * 1024));
     ASSERT_EQ(lm::g_host_heap_option, lm::CreateOption_ThreadSafe);
     ASSERT_TRUE(boot::mitm::GetHeapHandle() == boot::mitm::GetHeapHandle());
@@ -154,8 +168,14 @@ TEST(boot_initializes_services_in_order_with_the_documented_socket_setup) {
     boot::init::InitializeSystemModule();
 
     const std::vector<std::string> expected = {
-        "sm::Initialize", "fs::InitializeForSystem", "fs::SetAllocator", "fs::SetEnabledAutoAbort",
-        "fs::MountSdCard:sdmc", "nifmInitialize", "bsdInitialize", "socketInitialize"};
+        "sm::Initialize",
+        "fs::InitializeForSystem",
+        "fs::SetAllocator",
+        "fs::SetEnabledAutoAbort",
+        "fs::MountSdCard:sdmc",
+        "nifmInitialize",
+        "bsdInitialize",
+        "socketInitialize"};
     ASSERT_TRUE(g_host_boot_calls == expected);
 
     ASSERT_TRUE(ams::fs::g_host_fs_alloc == &boot::mitm::Allocate);
@@ -163,7 +183,8 @@ TEST(boot_initializes_services_in_order_with_the_documented_socket_setup) {
     ASSERT_FALSE(ams::fs::g_host_fs_auto_abort);
 
     ASSERT_TRUE(g_host_bsd_config == &boot::LibnxBsdInitConfig);
-    ASSERT_EQ(g_host_bsd_sessions, boot::LibnxSocketInitConfig.num_bsd_sessions);
+    ASSERT_EQ(
+        g_host_bsd_sessions, boot::LibnxSocketInitConfig.num_bsd_sessions);
     ASSERT_TRUE(g_host_bsd_type == BsdServiceType_System);
     ASSERT_TRUE(g_host_socket_config == &boot::LibnxSocketInitConfig);
 
@@ -175,7 +196,8 @@ TEST(teardown_runs_in_the_reverse_order_of_the_boot) {
     SdCardDir sd;
     g_host_boot_calls.clear();
     boot::init::FinalizeSystemModule();
-    const std::vector<std::string> expected = {"socketExit", "bsdExit", "nifmExit", "fs::Unmount:sdmc"};
+    const std::vector<std::string> expected = {
+        "socketExit", "bsdExit", "nifmExit", "fs::Unmount:sdmc"};
     ASSERT_TRUE(g_host_boot_calls == expected);
 }
 
@@ -192,13 +214,16 @@ TEST(an_accepted_ldn_session_gets_the_ldn_service_and_a_new_session_id) {
     const u32 before = boot::mitm::g_ldn_session_counter;
 
     manager.accept_result = ams::Result();
-    ASSERT_TRUE(manager.HostAccept(boot::mitm::PortIndex_LdnMitm, &server).IsSuccess());
+    ASSERT_TRUE(
+        manager.HostAccept(boot::mitm::PortIndex_LdnMitm, &server).IsSuccess());
     ASSERT_EQ(boot::mitm::g_ldn_session_counter, before + 1);
     ASSERT_EQ(manager.accepted.size(), 1u);
 
     // the manager's verdict is returned as is
     manager.accept_result = ams::Result(0x1234);
-    ASSERT_EQ(manager.HostAccept(boot::mitm::PortIndex_LdnMitm, &server).GetValue(), 0x1234u);
+    ASSERT_EQ(
+        manager.HostAccept(boot::mitm::PortIndex_LdnMitm, &server).GetValue(),
+        0x1234u);
     ASSERT_EQ(boot::mitm::g_ldn_session_counter, before + 2);
 
     manager.accept_result = ams::Result();
@@ -213,13 +238,16 @@ TEST(an_accepted_bsd_session_gets_the_bsd_service_and_a_new_session_id) {
     const u32 ldn_before = boot::mitm::g_ldn_session_counter;
 
     manager.accept_result = ams::Result();
-    ASSERT_TRUE(manager.HostAccept(boot::mitm::PortIndex_BsdMitm, &server).IsSuccess());
+    ASSERT_TRUE(
+        manager.HostAccept(boot::mitm::PortIndex_BsdMitm, &server).IsSuccess());
     ASSERT_EQ(boot::mitm::g_bsd_session_counter, before + 1);
     ASSERT_EQ(boot::mitm::g_ldn_session_counter, ldn_before);
     ASSERT_EQ(manager.accepted.size(), 1u);
 
     manager.accept_result = ams::Result(0x4321);
-    ASSERT_EQ(manager.HostAccept(boot::mitm::PortIndex_BsdMitm, &server).GetValue(), 0x4321u);
+    ASSERT_EQ(
+        manager.HostAccept(boot::mitm::PortIndex_BsdMitm, &server).GetValue(),
+        0x4321u);
 
     manager.accept_result = ams::Result();
     manager.accepted.clear();
@@ -227,7 +255,8 @@ TEST(an_accepted_bsd_session_gets_the_bsd_service_and_a_new_session_id) {
 
 TEST(a_session_on_an_unknown_port_aborts) {
     ams::sf::hipc::Server server;
-    ASSERT_TRUE(aborts([&] { boot::mitm::g_server_manager.HostAccept(7, &server); }));
+    ASSERT_TRUE(
+        aborts([&] { boot::mitm::g_server_manager.HostAccept(7, &server); }));
 }
 
 TEST(the_log_maintenance_thread_sleeps_two_seconds_between_idle_checks) {
@@ -276,7 +305,8 @@ TEST(main_registers_the_three_services_and_starts_the_four_threads) {
     ASSERT_TRUE(mitm.registrations[1].name == "bsd:u");
     ASSERT_EQ(mitm.registrations[1].port_index, boot::mitm::PortIndex_BsdMitm);
     // the main MITM thread plus its extra worker threads all pump the manager
-    ASSERT_EQ(mitm.loops.load(), static_cast<int>(1 + boot::mitm::NumExtraThreads));
+    ASSERT_EQ(
+        mitm.loops.load(), static_cast<int>(1 + boot::mitm::NumExtraThreads));
 
     ASSERT_EQ(g_started_threads.size(), 4u);
     ASSERT_TRUE(g_started_threads[0] == "ryu_ldn::CfgThread");
@@ -286,4 +316,6 @@ TEST(main_registers_the_three_services_and_starts_the_four_threads) {
     ASSERT_EQ(g_sleeps.load(), 1);
 }
 
-int main() { return test_report("main"); }
+int main() {
+    return test_report("main");
+}

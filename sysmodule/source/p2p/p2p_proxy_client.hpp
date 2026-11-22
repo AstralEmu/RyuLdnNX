@@ -54,8 +54,8 @@ namespace ams::mitm::p2p {
  * When the P2P client receives ProxyData, ProxyConnect, etc. from the host,
  * it forwards them to the BSD MITM layer via this callback.
  */
-using ProxyPacketCallback = void(*)(ryu_ldn::protocol::PacketId type,
-                                     const void* data, size_t size);
+using ProxyPacketCallback =
+    void (*)(ryu_ldn::protocol::PacketId type, const void* data, size_t size);
 
 /**
  * @brief P2P Proxy Client
@@ -220,7 +220,9 @@ public:
      * @brief Get our virtual IP address
      * @return Virtual IP assigned by host (valid after ready)
      */
-    uint32_t GetVirtualIp() const { return m_proxy_config.proxy_ip; }
+    uint32_t GetVirtualIp() const {
+        return m_proxy_config.proxy_ip;
+    }
 
     // =========================================================================
     // Sending Proxy Messages
@@ -234,8 +236,10 @@ public:
      * @return true if sent successfully
      */
     /// @gdb{tag="P2P:MSG", msg="Client sending proxy data"}
-    bool SendProxyData(const ryu_ldn::protocol::ProxyDataHeader& header,
-                       const uint8_t* data, size_t data_len);
+    bool SendProxyData(
+        const ryu_ldn::protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_len);
 
     /**
      * @brief Send ProxyConnect request to the host
@@ -243,7 +247,8 @@ public:
      * @return true if sent successfully
      */
     /// @gdb{tag="P2P:MSG", msg="Client sending proxy connect"}
-    bool SendProxyConnect(const ryu_ldn::protocol::ProxyConnectRequest& request);
+    bool SendProxyConnect(
+        const ryu_ldn::protocol::ProxyConnectRequest& request);
 
     /**
      * @brief Send ProxyConnectReply to the host
@@ -251,7 +256,8 @@ public:
      * @return true if sent successfully
      */
     /// @gdb{tag="P2P:MSG", msg="Client sending connect reply"}
-    bool SendProxyConnectReply(const ryu_ldn::protocol::ProxyConnectResponse& response);
+    bool SendProxyConnectReply(
+        const ryu_ldn::protocol::ProxyConnectResponse& response);
 
     /**
      * @brief Send ProxyDisconnect to the host
@@ -259,7 +265,8 @@ public:
      * @return true if sent successfully
      */
     /// @gdb{tag="P2P:MSG", msg="Client sending disconnect"}
-    bool SendProxyDisconnect(const ryu_ldn::protocol::ProxyDisconnectMessage& message);
+    bool SendProxyDisconnect(
+        const ryu_ldn::protocol::ProxyDisconnectMessage& message);
 
     /**
      * @brief Send raw packet data
@@ -299,14 +306,19 @@ private:
     /// @gdb{tag="P2P:MSG", msg="Client handling proxy config"}
     void HandleProxyConfig(const ryu_ldn::protocol::ProxyConfig& config);
     /// @gdb{tag="P2P:MSG", msg="Client handling proxy data"}
-    void HandleProxyData(const ryu_ldn::protocol::ProxyDataHeader& header,
-                         const uint8_t* data, size_t data_len);
+    void HandleProxyData(
+        const ryu_ldn::protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_len);
     /// @gdb{tag="P2P:MSG", msg="Client handling proxy connect"}
-    void HandleProxyConnect(const ryu_ldn::protocol::ProxyConnectRequest& request);
+    void HandleProxyConnect(
+        const ryu_ldn::protocol::ProxyConnectRequest& request);
     /// @gdb{tag="P2P:MSG", msg="Client handling connect reply"}
-    void HandleProxyConnectReply(const ryu_ldn::protocol::ProxyConnectResponse& response);
+    void HandleProxyConnectReply(
+        const ryu_ldn::protocol::ProxyConnectResponse& response);
     /// @gdb{tag="P2P:MSG", msg="Client handling disconnect"}
-    void HandleProxyDisconnect(const ryu_ldn::protocol::ProxyDisconnectMessage& message);
+    void HandleProxyDisconnect(
+        const ryu_ldn::protocol::ProxyDisconnectMessage& message);
 
     // =========================================================================
     // Member Variables
@@ -344,4 +356,4 @@ private:
     ProxyPacketCallback m_packet_callback;
 };
 
-} // namespace ams::mitm::p2p
+}  // namespace ams::mitm::p2p

@@ -49,18 +49,16 @@ namespace ryu_ldn::ldn {
  * No callbacks are registered initially.
  */
 LdnProxyHandler::LdnProxyHandler()
-    : m_configured(false)
-    , m_proxy_ip(0)
-    , m_proxy_subnet_mask(0)
-    , m_connections{}
-    , m_connection_count(0)
-    , m_config_callback(nullptr)
-    , m_connect_callback(nullptr)
-    , m_connect_reply_callback(nullptr)
-    , m_data_callback(nullptr)
-    , m_disconnect_callback(nullptr)
-{
-}
+    : m_configured(false),
+      m_proxy_ip(0),
+      m_proxy_subnet_mask(0),
+      m_connections{},
+      m_connection_count(0),
+      m_config_callback(nullptr),
+      m_connect_callback(nullptr),
+      m_connect_reply_callback(nullptr),
+      m_data_callback(nullptr),
+      m_disconnect_callback(nullptr) {}
 
 // ============================================================================
 // Callback Registration
@@ -98,7 +96,8 @@ void LdnProxyHandler::set_connect_callback(ProxyConnectCallback callback) {
  *
  * @param callback Function pointer or nullptr to disable
  */
-void LdnProxyHandler::set_connect_reply_callback(ProxyConnectReplyCallback callback) {
+void LdnProxyHandler::set_connect_reply_callback(
+    ProxyConnectReplyCallback callback) {
     m_connect_reply_callback = callback;
 }
 
@@ -122,7 +121,8 @@ void LdnProxyHandler::set_data_callback(ProxyDataCallback callback) {
  *
  * @param callback Function pointer or nullptr to disable
  */
-void LdnProxyHandler::set_disconnect_callback(ProxyDisconnectCallback callback) {
+void LdnProxyHandler::set_disconnect_callback(
+    ProxyDisconnectCallback callback) {
     m_disconnect_callback = callback;
 }
 
@@ -144,8 +144,8 @@ void LdnProxyHandler::set_disconnect_callback(ProxyDisconnectCallback callback) 
  * @param header Packet header (unused but kept for consistency)
  * @param config Proxy configuration with network settings
  */
-void LdnProxyHandler::handle_proxy_config(const protocol::LdnHeader& header,
-                                           const protocol::ProxyConfig& config) {
+void LdnProxyHandler::handle_proxy_config(
+    const protocol::LdnHeader& header, const protocol::ProxyConfig& config) {
     (void)header;  // Unused
 
     // Store configuration
@@ -173,8 +173,9 @@ void LdnProxyHandler::handle_proxy_config(const protocol::LdnHeader& header,
  * @param header Packet header (unused)
  * @param req Connect request with connection info
  */
-void LdnProxyHandler::handle_proxy_connect(const protocol::LdnHeader& header,
-                                            const protocol::ProxyConnectRequest& req) {
+void LdnProxyHandler::handle_proxy_connect(
+    const protocol::LdnHeader& header,
+    const protocol::ProxyConnectRequest& req) {
     (void)header;  // Unused
 
     // Add connection to table
@@ -182,8 +183,12 @@ void LdnProxyHandler::handle_proxy_connect(const protocol::LdnHeader& header,
         // FIX (#saturation): Surface silent connection drops so a full proxy
         // connection table is observable in logs instead of being a silent
         // failure that silently drops P2P connections.
-        LOG_WARN("LdnProxyHandler: proxy connection table full (%zu entries) - dropping ProxyConnect from 0x%08x:%u",
-                 MAX_PROXY_CONNECTIONS, req.info.source_ipv4, req.info.source_port);
+        LOG_WARN(
+            "LdnProxyHandler: proxy connection table full (%zu entries) - "
+            "dropping ProxyConnect from 0x%08x:%u",
+            MAX_PROXY_CONNECTIONS,
+            req.info.source_ipv4,
+            req.info.source_port);
     }
 
     // Notify application
@@ -204,8 +209,9 @@ void LdnProxyHandler::handle_proxy_connect(const protocol::LdnHeader& header,
  * @param header Packet header (unused)
  * @param resp Connect response with connection info
  */
-void LdnProxyHandler::handle_proxy_connect_reply(const protocol::LdnHeader& header,
-                                                  const protocol::ProxyConnectResponse& resp) {
+void LdnProxyHandler::handle_proxy_connect_reply(
+    const protocol::LdnHeader& header,
+    const protocol::ProxyConnectResponse& resp) {
     (void)header;  // Unused
 
     // Notify application
@@ -231,9 +237,11 @@ void LdnProxyHandler::handle_proxy_connect_reply(const protocol::LdnHeader& head
  * @param payload Pointer to game data (may be nullptr if length is 0)
  * @param payload_length Length of payload in bytes
  */
-void LdnProxyHandler::handle_proxy_data(const protocol::LdnHeader& header,
-                                         const protocol::ProxyDataHeader& data_header,
-                                         const uint8_t* payload, size_t payload_length) {
+void LdnProxyHandler::handle_proxy_data(
+    const protocol::LdnHeader& header,
+    const protocol::ProxyDataHeader& data_header,
+    const uint8_t* payload,
+    size_t payload_length) {
     (void)header;  // Unused
 
     // Notify application with data
@@ -255,8 +263,9 @@ void LdnProxyHandler::handle_proxy_data(const protocol::LdnHeader& header,
  * @param header Packet header (unused)
  * @param msg Disconnect message with connection info and reason
  */
-void LdnProxyHandler::handle_proxy_disconnect(const protocol::LdnHeader& header,
-                                               const protocol::ProxyDisconnectMessage& msg) {
+void LdnProxyHandler::handle_proxy_disconnect(
+    const protocol::LdnHeader& header,
+    const protocol::ProxyDisconnectMessage& msg) {
     (void)header;  // Unused
 
     // Remove connection from table
@@ -285,11 +294,15 @@ void LdnProxyHandler::handle_proxy_disconnect(const protocol::LdnHeader& header,
  * @param proto Protocol type (default UDP)
  * @return true if a matching connection exists
  */
-bool LdnProxyHandler::has_connection(uint32_t src_ip, uint16_t src_port,
-                                       uint32_t dest_ip, uint16_t dest_port,
-                                       protocol::ProtocolType proto) const {
+bool LdnProxyHandler::has_connection(
+    uint32_t src_ip,
+    uint16_t src_port,
+    uint32_t dest_ip,
+    uint16_t dest_port,
+    protocol::ProtocolType proto) const {
     for (size_t i = 0; i < m_connection_count; ++i) {
-        if (m_connections[i].matches(src_ip, src_port, dest_ip, dest_port, proto)) {
+        if (m_connections[i].matches(
+                src_ip, src_port, dest_ip, dest_port, proto)) {
             return true;
         }
     }
@@ -364,7 +377,8 @@ bool LdnProxyHandler::add_connection(const protocol::ProxyInfo& info) {
 void LdnProxyHandler::remove_connection(const protocol::ProxyInfo& info) {
     for (size_t i = 0; i < m_connection_count; ++i) {
         if (m_connections[i].matches(info)) {
-            // Shift subsequent entries down to keep the active region contiguous.
+            // Shift subsequent entries down to keep the active region
+            // contiguous.
             for (size_t j = i + 1; j < m_connection_count; ++j) {
                 m_connections[j - 1] = m_connections[j];
             }
@@ -374,4 +388,4 @@ void LdnProxyHandler::remove_connection(const protocol::ProxyInfo& info) {
     }
 }
 
-} // namespace ryu_ldn::ldn
+}  // namespace ryu_ldn::ldn

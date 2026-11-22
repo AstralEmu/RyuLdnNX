@@ -34,7 +34,7 @@ void record(CommState from, CommState to, void* user) {
     g_seen.push_back({from, to, user});
 }
 
-} // namespace
+}  // namespace
 
 TEST(a_new_machine_is_in_none_and_not_initialized) {
     LdnStateMachine sm;
@@ -171,14 +171,22 @@ TEST(the_callback_sees_each_change_with_old_new_and_user_data) {
     sm.CloseStation();
     sm.SetError();
     sm.Finalize();
-    sm.Finalize();       // already None: no callback
-    sm.OpenStation();    // invalid: no callback
+    sm.Finalize();     // already None: no callback
+    sm.OpenStation();  // invalid: no callback
 
     ASSERT_EQ(g_seen.size(), static_cast<size_t>(11));
-    ASSERT_TRUE(g_seen[0].from == CommState::None && g_seen[0].to == CommState::Initialized);
-    ASSERT_TRUE(g_seen[2].from == CommState::AccessPoint && g_seen[2].to == CommState::AccessPointCreated);
-    ASSERT_TRUE(g_seen[9].from == CommState::Initialized && g_seen[9].to == CommState::Error);
-    ASSERT_TRUE(g_seen[10].from == CommState::Error && g_seen[10].to == CommState::None);
+    ASSERT_TRUE(
+        g_seen[0].from == CommState::None &&
+        g_seen[0].to == CommState::Initialized);
+    ASSERT_TRUE(
+        g_seen[2].from == CommState::AccessPoint &&
+        g_seen[2].to == CommState::AccessPointCreated);
+    ASSERT_TRUE(
+        g_seen[9].from == CommState::Initialized &&
+        g_seen[9].to == CommState::Error);
+    ASSERT_TRUE(
+        g_seen[10].from == CommState::Error &&
+        g_seen[10].to == CommState::None);
     for (const Seen& s : g_seen) {
         ASSERT_TRUE(s.user == &token);
     }
@@ -190,19 +198,52 @@ TEST(the_callback_sees_each_change_with_old_new_and_user_data) {
 }
 
 TEST(state_and_result_names_cover_every_value_and_unknown) {
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::StateToString(CommState::None), "None") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::StateToString(CommState::Initialized), "Initialized") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::StateToString(CommState::AccessPoint), "AccessPoint") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::StateToString(CommState::AccessPointCreated), "AccessPointCreated") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::StateToString(CommState::Station), "Station") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::StateToString(CommState::StationConnected), "StationConnected") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::StateToString(CommState::Error), "Error") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::StateToString(static_cast<CommState>(99)), "Unknown") == 0);
+    ASSERT_TRUE(
+        std::strcmp(LdnStateMachine::StateToString(CommState::None), "None") ==
+        0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::StateToString(CommState::Initialized),
+            "Initialized") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::StateToString(CommState::AccessPoint),
+            "AccessPoint") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::StateToString(CommState::AccessPointCreated),
+            "AccessPointCreated") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::StateToString(CommState::Station), "Station") ==
+        0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::StateToString(CommState::StationConnected),
+            "StationConnected") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::StateToString(CommState::Error), "Error") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::StateToString(static_cast<CommState>(99)),
+            "Unknown") == 0);
 
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::ResultToString(R::Success), "Success") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::ResultToString(R::InvalidTransition), "InvalidTransition") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::ResultToString(R::AlreadyInState), "AlreadyInState") == 0);
-    ASSERT_TRUE(std::strcmp(LdnStateMachine::ResultToString(static_cast<R>(99)), "Unknown") == 0);
+    ASSERT_TRUE(
+        std::strcmp(LdnStateMachine::ResultToString(R::Success), "Success") ==
+        0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::ResultToString(R::InvalidTransition),
+            "InvalidTransition") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::ResultToString(R::AlreadyInState),
+            "AlreadyInState") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            LdnStateMachine::ResultToString(static_cast<R>(99)), "Unknown") ==
+        0);
 }
 
 int main() {

@@ -95,12 +95,16 @@ public:
     /**
      * @brief Check if initialized
      */
-    bool IsInitialized() const { return m_initialized; }
+    bool IsInitialized() const {
+        return m_initialized;
+    }
 
     /**
      * @brief Get current configuration (read-only)
      */
-    const Config& GetConfig() const { return m_config; }
+    const Config& GetConfig() const {
+        return m_config;
+    }
 
     /**
      * @brief Save current configuration to disk
@@ -127,7 +131,9 @@ public:
     /**
      * @brief Get server host
      */
-    const char* GetServerHost() const { return m_config.server.host; }
+    const char* GetServerHost() const {
+        return m_config.server.host;
+    }
 
     /**
      * @brief Set server host
@@ -140,14 +146,15 @@ public:
     /**
      * @brief Get server port
      */
-    uint16_t GetServerPort() const { return m_config.server.port; }
+    uint16_t GetServerPort() const {
+        return m_config.server.port;
+    }
 
     /**
      * @brief Set server port
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting server port"}
     void SetServerPort(uint16_t port);
-
 
     // =========================================================================
     // LDN Settings
@@ -156,7 +163,9 @@ public:
     /**
      * @brief Get LDN enabled state
      */
-    bool GetLdnEnabled() const { return m_config.ldn.enabled; }
+    bool GetLdnEnabled() const {
+        return m_config.ldn.enabled;
+    }
 
     /**
      * @brief Set LDN enabled state
@@ -167,7 +176,9 @@ public:
     /**
      * @brief Get passphrase
      */
-    const char* GetPassphrase() const { return m_config.ldn.passphrase; }
+    const char* GetPassphrase() const {
+        return m_config.ldn.passphrase;
+    }
 
     /**
      * @brief Set passphrase
@@ -184,7 +195,9 @@ public:
     /**
      * @brief Get use_passphrase state
      */
-    bool GetUsePassphrase() const { return m_config.ldn.use_passphrase; }
+    bool GetUsePassphrase() const {
+        return m_config.ldn.use_passphrase;
+    }
 
     /**
      * @brief Set use_passphrase state
@@ -197,7 +210,6 @@ public:
     /// @gdb{tag="CONFIG:MGR", msg="Setting use_passphrase"}
     void SetUsePassphrase(bool enabled);
 
-
     // =========================================================================
     // Debug Settings
     // =========================================================================
@@ -205,7 +217,9 @@ public:
     /**
      * @brief Get debug enabled state
      */
-    bool GetDebugEnabled() const { return m_config.debug.enabled; }
+    bool GetDebugEnabled() const {
+        return m_config.debug.enabled;
+    }
 
     /**
      * @brief Set debug enabled state
@@ -216,14 +230,15 @@ public:
     /**
      * @brief Get debug log level
      */
-    uint32_t GetDebugLevel() const { return m_config.debug.level; }
+    uint32_t GetDebugLevel() const {
+        return m_config.debug.level;
+    }
 
     /**
      * @brief Set debug log level (0-3)
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting debug level"}
     void SetDebugLevel(uint32_t level);
-
 
     // =========================================================================
     // Change Notification
@@ -240,7 +255,9 @@ public:
     /**
      * @brief Check if config has unsaved changes
      */
-    bool HasUnsavedChanges() const { return m_dirty; }
+    bool HasUnsavedChanges() const {
+        return m_dirty;
+    }
 
 private:
     ConfigManager() = default;
@@ -260,4 +277,4 @@ private:
     ConfigChangeCallback m_callback = nullptr;
 };
 
-} // namespace ryu_ldn::config
+}  // namespace ryu_ldn::config

@@ -23,56 +23,75 @@
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct test_##name##_register { \
-        test_##name##_register() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct test_##name##_register {    \
+        test_##name##_register() {            \
             printf("  [TEST] %s... ", #name); \
-            fflush(stdout); \
-            test_##name(); \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } \
-    } test_##name##_instance; \
+            fflush(stdout);                   \
+            test_##name();                    \
+            printf("PASS\n");                 \
+            g_tests_passed++;                 \
+        }                                     \
+    } test_##name##_instance;                 \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL\n    Assertion failed: %s\n    at %s:%d\n", #cond, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_TRUE(cond)                                         \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            printf(                                               \
+                "FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
+                #cond,                                            \
+                __FILE__,                                         \
+                __LINE__);                                        \
+            g_tests_failed++;                                     \
+            return;                                               \
+        }                                                         \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("FAIL\n    Expected: %s == %s\n    at %s:%d\n", #a, #b, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                         \
+    do {                                                        \
+        if ((a) != (b)) {                                       \
+            printf(                                             \
+                "FAIL\n    Expected: %s == %s\n    at %s:%d\n", \
+                #a,                                             \
+                #b,                                             \
+                __FILE__,                                       \
+                __LINE__);                                      \
+            g_tests_failed++;                                   \
+            return;                                             \
+        }                                                       \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
-            printf("FAIL\n    Expected: %s != %s\n    at %s:%d\n", #a, #b, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_NE(a, b)                                         \
+    do {                                                        \
+        if ((a) == (b)) {                                       \
+            printf(                                             \
+                "FAIL\n    Expected: %s != %s\n    at %s:%d\n", \
+                #a,                                             \
+                #b,                                             \
+                __FILE__,                                       \
+                __LINE__);                                      \
+            g_tests_failed++;                                   \
+            return;                                             \
+        }                                                       \
+    } while (0)
 
-#define ASSERT_STREQ(a, b) \
-    do { \
-        if (strcmp((a), (b)) != 0) { \
-            printf("FAIL\n    Expected: \"%s\" == \"%s\"\n    at %s:%d\n", (a), (b), __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_STREQ(a, b)                                              \
+    do {                                                                \
+        if (strcmp((a), (b)) != 0) {                                    \
+            printf(                                                     \
+                "FAIL\n    Expected: \"%s\" == \"%s\"\n    at %s:%d\n", \
+                (a),                                                    \
+                (b),                                                    \
+                __FILE__,                                               \
+                __LINE__);                                              \
+            g_tests_failed++;                                           \
+            return;                                                     \
+        }                                                               \
+    } while (0)
 
 // ============================================================================
 // Protocol Type Structure Size Tests
@@ -127,7 +146,9 @@ TEST(protocol_network_config_size) {
 }
 
 TEST(protocol_scan_filter_full_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::ScanFilterFull), 0x60u);  // 96 bytes with Pack=8 alignment
+    ASSERT_EQ(
+        sizeof(ryu_ldn::protocol::ScanFilterFull),
+        0x60u);  // 96 bytes with Pack=8 alignment
 }
 
 TEST(protocol_connect_request_size) {
@@ -135,7 +156,8 @@ TEST(protocol_connect_request_size) {
 }
 
 TEST(protocol_create_access_point_request_size) {
-    // SecurityConfig(0x44) + UserConfig(0x30) + NetworkConfig(0x20) + RyuNetworkConfig(0x28) = 0xBC
+    // SecurityConfig(0x44) + UserConfig(0x30) + NetworkConfig(0x20) +
+    // RyuNetworkConfig(0x28) = 0xBC
     ASSERT_EQ(sizeof(ryu_ldn::protocol::CreateAccessPointRequest), 0xBCu);
 }
 
@@ -264,7 +286,7 @@ TEST(network_config_fields) {
 
 TEST(node_info_fields) {
     ryu_ldn::protocol::NodeInfo node{};
-    node.ipv4_address = 0x0A720001; // 10.114.0.1
+    node.ipv4_address = 0x0A720001;  // 10.114.0.1
     node.node_id = 0;
     node.is_connected = 1;
     memcpy(node.user_name, "HostPlayer", 11);
@@ -289,7 +311,9 @@ TEST(scan_filter_full_fields) {
 
     ASSERT_EQ(filter.flag, 0x01u);
     ASSERT_EQ(filter.network_type, 2u);
-    ASSERT_EQ(filter.network_id.intent_id.local_communication_id, 0x0100000000001234ULL);
+    ASSERT_EQ(
+        filter.network_id.intent_id.local_communication_id,
+        0x0100000000001234ULL);
     ASSERT_EQ(filter.ssid.length, 4u);
 }
 
@@ -313,11 +337,14 @@ TEST(connect_request_structure) {
     req.option_unknown = 0;
 
     // Network info (just set network ID)
-    req.network_info.network_id.intent_id.local_communication_id = 0x0100000000001234ULL;
+    req.network_info.network_id.intent_id.local_communication_id =
+        0x0100000000001234ULL;
 
     ASSERT_EQ(req.security_config.security_mode, 1u);
     ASSERT_EQ(req.local_communication_version, 1u);
-    ASSERT_EQ(req.network_info.network_id.intent_id.local_communication_id, 0x0100000000001234ULL);
+    ASSERT_EQ(
+        req.network_info.network_id.intent_id.local_communication_id,
+        0x0100000000001234ULL);
 }
 
 // ============================================================================
@@ -433,7 +460,9 @@ TEST(network_info_complete_structure) {
     info.ldn.node_count = 1;
     info.ldn.security_mode = 1;
 
-    ASSERT_EQ(info.network_id.intent_id.local_communication_id, 0x0100000000001234ULL);
+    ASSERT_EQ(
+        info.network_id.intent_id.local_communication_id,
+        0x0100000000001234ULL);
     ASSERT_EQ(info.common.channel, 6);
     ASSERT_EQ(info.ldn.node_count_max, 8u);
 }
@@ -448,9 +477,9 @@ TEST(proxy_data_header_size) {
 
 TEST(proxy_data_header_fields) {
     ryu_ldn::protocol::ProxyDataHeader header{};
-    header.info.source_ipv4 = 0xC0A80101;   // 192.168.1.1
+    header.info.source_ipv4 = 0xC0A80101;  // 192.168.1.1
     header.info.source_port = 12345;
-    header.info.dest_ipv4 = 0xC0A80102;     // 192.168.1.2
+    header.info.dest_ipv4 = 0xC0A80102;  // 192.168.1.2
     header.info.dest_port = 54321;
     header.info.protocol = ryu_ldn::protocol::ProtocolType::Udp;
     header.data_length = 100;
@@ -500,7 +529,8 @@ TEST(protocol_address_entry_fields) {
 }
 
 TEST(protocol_address_list_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::AddressList), 0x60u);  // 96 bytes (8 * 12)
+    ASSERT_EQ(
+        sizeof(ryu_ldn::protocol::AddressList), 0x60u);  // 96 bytes (8 * 12)
 }
 
 TEST(protocol_address_list_fields) {
@@ -518,8 +548,10 @@ TEST(protocol_address_list_fields) {
 
 TEST(protocol_create_access_point_private_request_size) {
     // 0x13C = 316 bytes
-    // SecurityConfig(0x44) + SecurityParameter(0x20) + UserConfig(0x30) + NetworkConfig(0x20) + AddressList(0x60) + RyuNetworkConfig(0x28)
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::CreateAccessPointPrivateRequest), 0x13Cu);
+    // SecurityConfig(0x44) + SecurityParameter(0x20) + UserConfig(0x30) +
+    // NetworkConfig(0x20) + AddressList(0x60) + RyuNetworkConfig(0x28)
+    ASSERT_EQ(
+        sizeof(ryu_ldn::protocol::CreateAccessPointPrivateRequest), 0x13Cu);
 }
 
 TEST(protocol_create_access_point_private_request_fields) {
@@ -558,7 +590,8 @@ TEST(protocol_create_access_point_private_request_fields) {
 
 TEST(protocol_connect_private_request_size) {
     // 0xBC = 188 bytes
-    // SecurityConfig(0x44) + SecurityParameter(0x20) + UserConfig(0x30) + u32(4) + u32(4) + NetworkConfig(0x20)
+    // SecurityConfig(0x44) + SecurityParameter(0x20) + UserConfig(0x30) +
+    // u32(4) + u32(4) + NetworkConfig(0x20)
     ASSERT_EQ(sizeof(ryu_ldn::protocol::ConnectPrivateRequest), 0xBCu);
 }
 
@@ -598,7 +631,8 @@ TEST(protocol_connect_private_request_fields) {
 // ============================================================================
 
 TEST(protocol_external_proxy_config_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::ExternalProxyConfig), 0x26u);  // 38 bytes
+    ASSERT_EQ(
+        sizeof(ryu_ldn::protocol::ExternalProxyConfig), 0x26u);  // 38 bytes
 }
 
 TEST(protocol_external_proxy_config_fields) {
@@ -617,7 +651,8 @@ TEST(protocol_external_proxy_config_fields) {
 }
 
 TEST(protocol_external_proxy_token_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::ExternalProxyToken), 0x28u);  // 40 bytes
+    ASSERT_EQ(
+        sizeof(ryu_ldn::protocol::ExternalProxyToken), 0x28u);  // 40 bytes
 }
 
 TEST(protocol_external_proxy_token_fields) {
@@ -633,7 +668,9 @@ TEST(protocol_external_proxy_token_fields) {
 }
 
 TEST(protocol_external_proxy_connection_state_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::ExternalProxyConnectionState), 0x08u);  // 8 bytes
+    ASSERT_EQ(
+        sizeof(ryu_ldn::protocol::ExternalProxyConnectionState),
+        0x08u);  // 8 bytes
 }
 
 TEST(protocol_external_proxy_connection_state_fields) {
@@ -669,7 +706,10 @@ int main() {
     // Tests run automatically via static initializers
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

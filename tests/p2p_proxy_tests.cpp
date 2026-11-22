@@ -38,43 +38,45 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegister_##name { \
-        TestRegister_##name() { register_test(#name, test_##name); } \
-    } g_test_register_##name; \
+#define TEST(name)                             \
+    static void test_##name();                 \
+    static struct TestRegister_##name {        \
+        TestRegister_##name() {                \
+            register_test(#name, test_##name); \
+        }                                      \
+    } g_test_register_##name;                  \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT_TRUE(cond)                                      \
+    do {                                                       \
+        if (!(cond)) {                                         \
             printf("  FAIL: %s (line %d)\n", #cond, __LINE__); \
             throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+        }                                                      \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        auto _a = (a); \
-        auto _b = (b); \
-        if (_a != _b) { \
-            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
+#define ASSERT_EQ(a, b)                                                      \
+    do {                                                                     \
+        auto _a = (a);                                                       \
+        auto _b = (b);                                                       \
+        if (_a != _b) {                                                      \
+            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
             printf("    got: %lld vs %lld\n", (long long)_a, (long long)_b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            throw std::runtime_error("Test assertion failed");               \
+        }                                                                    \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        auto _a = (a); \
-        auto _b = (b); \
-        if (_a == _b) { \
+#define ASSERT_NE(a, b)                                               \
+    do {                                                              \
+        auto _a = (a);                                                \
+        auto _b = (b);                                                \
+        if (_a == _b) {                                               \
             printf("  FAIL: %s != %s (line %d)\n", #a, #b, __LINE__); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
+    } while (0)
 
 struct TestEntry {
     const char* name;
@@ -95,66 +97,66 @@ static void register_test(const char* name, void (*func)()) {
 // ============================================================================
 
 namespace p2p_proxy {
-    // Port configuration - must match Ryujinx for interoperability
-    constexpr uint16_t PRIVATE_PORT_BASE = 39990;
-    constexpr int PRIVATE_PORT_RANGE = 10;
-    constexpr uint16_t PUBLIC_PORT_BASE = 39990;
-    constexpr int PUBLIC_PORT_RANGE = 10;
+// Port configuration - must match Ryujinx for interoperability
+constexpr uint16_t PRIVATE_PORT_BASE = 39990;
+constexpr int PRIVATE_PORT_RANGE = 10;
+constexpr uint16_t PUBLIC_PORT_BASE = 39990;
+constexpr int PUBLIC_PORT_RANGE = 10;
 
-    // UPnP lease timing
-    constexpr int PORT_LEASE_LENGTH = 60;   // seconds
-    constexpr int PORT_LEASE_RENEW = 50;    // seconds
+// UPnP lease timing
+constexpr int PORT_LEASE_LENGTH = 60;  // seconds
+constexpr int PORT_LEASE_RENEW = 50;   // seconds
 
-    // Authentication
-    constexpr int AUTH_WAIT_SECONDS = 1;
-    constexpr int MAX_PLAYERS = 8;
+// Authentication
+constexpr int AUTH_WAIT_SECONDS = 1;
+constexpr int MAX_PLAYERS = 8;
 
-    // Network constants
-    constexpr uint32_t SUBNET_MASK = 0xFFFF0000;  // /16 subnet
-    constexpr uint32_t BROADCAST_SUFFIX = 0x000000FF;  // .255 for broadcast
+// Network constants
+constexpr uint32_t SUBNET_MASK = 0xFFFF0000;       // /16 subnet
+constexpr uint32_t BROADCAST_SUFFIX = 0x000000FF;  // .255 for broadcast
 
-    /**
-     * @brief Calculate broadcast address from IP and subnet mask
-     *
-     * @param ip IP address (host byte order)
-     * @param mask Subnet mask (host byte order)
-     * @return Broadcast address (host byte order)
-     */
-    inline uint32_t calculate_broadcast(uint32_t ip, uint32_t mask) {
-        return (ip & mask) | (~mask);
-    }
-
-    /**
-     * @brief Check if IP is a broadcast address for given subnet
-     */
-    inline bool is_broadcast(uint32_t ip, uint32_t broadcast) {
-        return ip == broadcast || ip == 0xFFFFFFFFU;
-    }
-
-    /**
-     * @brief Check if token is all zeros (private mode)
-     */
-    inline bool is_private_ip(const uint8_t physical_ip[16]) {
-        for (int i = 0; i < 16; i++) {
-            if (physical_ip[i] != 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * @brief Extract IPv4 from physical IP array
-     * @param physical_ip 16-byte array (network byte order)
-     * @return IPv4 in host byte order
-     */
-    inline uint32_t extract_ipv4(const uint8_t physical_ip[16]) {
-        return (static_cast<uint32_t>(physical_ip[0]) << 24) |
-               (static_cast<uint32_t>(physical_ip[1]) << 16) |
-               (static_cast<uint32_t>(physical_ip[2]) << 8)  |
-               static_cast<uint32_t>(physical_ip[3]);
-    }
+/**
+ * @brief Calculate broadcast address from IP and subnet mask
+ *
+ * @param ip IP address (host byte order)
+ * @param mask Subnet mask (host byte order)
+ * @return Broadcast address (host byte order)
+ */
+inline uint32_t calculate_broadcast(uint32_t ip, uint32_t mask) {
+    return (ip & mask) | (~mask);
 }
+
+/**
+ * @brief Check if IP is a broadcast address for given subnet
+ */
+inline bool is_broadcast(uint32_t ip, uint32_t broadcast) {
+    return ip == broadcast || ip == 0xFFFFFFFFU;
+}
+
+/**
+ * @brief Check if token is all zeros (private mode)
+ */
+inline bool is_private_ip(const uint8_t physical_ip[16]) {
+    for (int i = 0; i < 16; i++) {
+        if (physical_ip[i] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief Extract IPv4 from physical IP array
+ * @param physical_ip 16-byte array (network byte order)
+ * @return IPv4 in host byte order
+ */
+inline uint32_t extract_ipv4(const uint8_t physical_ip[16]) {
+    return (static_cast<uint32_t>(physical_ip[0]) << 24) |
+           (static_cast<uint32_t>(physical_ip[1]) << 16) |
+           (static_cast<uint32_t>(physical_ip[2]) << 8) |
+           static_cast<uint32_t>(physical_ip[3]);
+}
+}  // namespace p2p_proxy
 
 // ============================================================================
 // Constants Tests - Verify Ryujinx Compatibility
@@ -216,8 +218,10 @@ TEST(lease_timing_correct) {
 
 TEST(port_range_valid) {
     // All ports in range should be valid (< 65536)
-    uint16_t max_private = p2p_proxy::PRIVATE_PORT_BASE + p2p_proxy::PRIVATE_PORT_RANGE - 1;
-    uint16_t max_public = p2p_proxy::PUBLIC_PORT_BASE + p2p_proxy::PUBLIC_PORT_RANGE - 1;
+    uint16_t max_private =
+        p2p_proxy::PRIVATE_PORT_BASE + p2p_proxy::PRIVATE_PORT_RANGE - 1;
+    uint16_t max_public =
+        p2p_proxy::PUBLIC_PORT_BASE + p2p_proxy::PUBLIC_PORT_RANGE - 1;
 
     ASSERT_TRUE(max_private < 65536);
     ASSERT_TRUE(max_public < 65536);
@@ -231,7 +235,7 @@ TEST(port_range_valid) {
 
 TEST(broadcast_calculation_class_b) {
     // Virtual IP: 10.114.0.1 with /16 mask
-    uint32_t ip = 0x0A720001U;  // 10.114.0.1
+    uint32_t ip = 0x0A720001U;    // 10.114.0.1
     uint32_t mask = 0xFFFF0000U;  // /16
 
     uint32_t broadcast = p2p_proxy::calculate_broadcast(ip, mask);
@@ -242,7 +246,7 @@ TEST(broadcast_calculation_class_b) {
 
 TEST(broadcast_calculation_class_c) {
     // 192.168.1.100 with /24 mask
-    uint32_t ip = 0xC0A80164U;  // 192.168.1.100
+    uint32_t ip = 0xC0A80164U;    // 192.168.1.100
     uint32_t mask = 0xFFFFFF00U;  // /24
 
     uint32_t broadcast = p2p_proxy::calculate_broadcast(ip, mask);
@@ -282,7 +286,8 @@ TEST(is_private_ip_all_zeros) {
 }
 
 TEST(is_private_ip_has_bytes) {
-    uint8_t physical_ip[16] = {192, 168, 1, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    uint8_t physical_ip[16] = {
+        192, 168, 1, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     ASSERT_FALSE(p2p_proxy::is_private_ip(physical_ip));
 }
@@ -298,7 +303,8 @@ TEST(is_private_ip_last_byte_set) {
 // ============================================================================
 
 TEST(extract_ipv4_standard) {
-    uint8_t physical_ip[16] = {192, 168, 1, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    uint8_t physical_ip[16] = {
+        192, 168, 1, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     uint32_t ip = p2p_proxy::extract_ipv4(physical_ip);
 
@@ -307,7 +313,8 @@ TEST(extract_ipv4_standard) {
 }
 
 TEST(extract_ipv4_localhost) {
-    uint8_t physical_ip[16] = {127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    uint8_t physical_ip[16] = {
+        127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     uint32_t ip = p2p_proxy::extract_ipv4(physical_ip);
 
@@ -317,7 +324,8 @@ TEST(extract_ipv4_localhost) {
 
 TEST(extract_ipv4_ldn_network) {
     // LDN virtual network uses 10.114.x.x
-    uint8_t physical_ip[16] = {10, 114, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    uint8_t physical_ip[16] = {
+        10, 114, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     uint32_t ip = p2p_proxy::extract_ipv4(physical_ip);
 
@@ -338,28 +346,118 @@ TEST(extract_ipv4_zeros) {
 // ============================================================================
 
 TEST(token_compare_match) {
-    uint8_t token1[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                          0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
-    uint8_t token2[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                          0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
+    uint8_t token1[16] = {
+        0x01,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+        0x08,
+        0x09,
+        0x0A,
+        0x0B,
+        0x0C,
+        0x0D,
+        0x0E,
+        0x0F,
+        0x10};
+    uint8_t token2[16] = {
+        0x01,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+        0x08,
+        0x09,
+        0x0A,
+        0x0B,
+        0x0C,
+        0x0D,
+        0x0E,
+        0x0F,
+        0x10};
 
     ASSERT_EQ(std::memcmp(token1, token2, 16), 0);
 }
 
 TEST(token_compare_mismatch_first_byte) {
-    uint8_t token1[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                          0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
-    uint8_t token2[16] = {0xFF, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                          0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
+    uint8_t token1[16] = {
+        0x01,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+        0x08,
+        0x09,
+        0x0A,
+        0x0B,
+        0x0C,
+        0x0D,
+        0x0E,
+        0x0F,
+        0x10};
+    uint8_t token2[16] = {
+        0xFF,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+        0x08,
+        0x09,
+        0x0A,
+        0x0B,
+        0x0C,
+        0x0D,
+        0x0E,
+        0x0F,
+        0x10};
 
     ASSERT_NE(std::memcmp(token1, token2, 16), 0);
 }
 
 TEST(token_compare_mismatch_last_byte) {
-    uint8_t token1[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                          0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10};
-    uint8_t token2[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                          0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0xFF};
+    uint8_t token1[16] = {
+        0x01,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+        0x08,
+        0x09,
+        0x0A,
+        0x0B,
+        0x0C,
+        0x0D,
+        0x0E,
+        0x0F,
+        0x10};
+    uint8_t token2[16] = {
+        0x01,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+        0x08,
+        0x09,
+        0x0A,
+        0x0B,
+        0x0C,
+        0x0D,
+        0x0E,
+        0x0F,
+        0xFF};
 
     ASSERT_NE(std::memcmp(token1, token2, 16), 0);
 }

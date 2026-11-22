@@ -19,40 +19,55 @@
 static int g_tests_run = 0;
 static int g_tests_passed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegistrar_##name { \
-        TestRegistrar_##name() { \
+#define TEST(name)                              \
+    static void test_##name();                  \
+    static struct TestRegistrar_##name {        \
+        TestRegistrar_##name() {                \
             printf("  Running: %s... ", #name); \
-            g_tests_run++; \
-            test_##name(); \
-            g_tests_passed++; \
-            printf("PASSED\n"); \
-        } \
-    } g_registrar_##name; \
+            g_tests_run++;                      \
+            test_##name();                      \
+            g_tests_passed++;                   \
+            printf("PASSED\n");                 \
+        }                                       \
+    } g_registrar_##name;                       \
     static void test_##name()
 
-#define ASSERT_TRUE(expr) \
-    do { if (!(expr)) { printf("FAILED\n    Assertion failed: %s\n", #expr); exit(1); } } while(0)
+#define ASSERT_TRUE(expr)                                        \
+    do {                                                         \
+        if (!(expr)) {                                           \
+            printf("FAILED\n    Assertion failed: %s\n", #expr); \
+            exit(1);                                             \
+        }                                                        \
+    } while (0)
 
-#define ASSERT_FALSE(expr) \
-    do { if (expr) { printf("FAILED\n    Assertion failed: !(%s)\n", #expr); exit(1); } } while(0)
+#define ASSERT_FALSE(expr)                                          \
+    do {                                                            \
+        if (expr) {                                                 \
+            printf("FAILED\n    Assertion failed: !(%s)\n", #expr); \
+            exit(1);                                                \
+        }                                                           \
+    } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { if ((a) != (b)) { printf("FAILED\n    Expected: %s == %s\n", #a, #b); exit(1); } } while(0)
+#define ASSERT_EQ(a, b)                                         \
+    do {                                                        \
+        if ((a) != (b)) {                                       \
+            printf("FAILED\n    Expected: %s == %s\n", #a, #b); \
+            exit(1);                                            \
+        }                                                       \
+    } while (0)
 
 // =============================================================================
 // P2P Proxy Client Constants (matching implementation)
 // =============================================================================
 
 namespace p2p_client {
-    // Timeout constants (matching Ryujinx)
-    constexpr int FAILURE_TIMEOUT_MS = 4000;
-    constexpr int CONNECT_TIMEOUT_MS = 5000;
+// Timeout constants (matching Ryujinx)
+constexpr int FAILURE_TIMEOUT_MS = 4000;
+constexpr int CONNECT_TIMEOUT_MS = 5000;
 
-    // Receive buffer size
-    constexpr size_t RECV_BUFFER_SIZE = 0x10000;  // 64KB
-}
+// Receive buffer size
+constexpr size_t RECV_BUFFER_SIZE = 0x10000;  // 64KB
+}  // namespace p2p_client
 
 // =============================================================================
 // Helper Functions for Tests
@@ -64,7 +79,8 @@ namespace test_helpers {
  * @brief Parse IPv4 address string to network order uint32
  */
 bool parse_ipv4(const char* str, uint32_t& out_ip) {
-    if (!str) return false;
+    if (!str)
+        return false;
     struct in_addr addr;
     if (inet_pton(AF_INET, str, &addr) != 1) {
         return false;
@@ -90,13 +106,16 @@ bool is_private_ip(uint32_t ip) {
     uint32_t host_ip = ntohl(ip);
 
     // 10.0.0.0/8
-    if ((host_ip & 0xFF000000) == 0x0A000000) return true;
+    if ((host_ip & 0xFF000000) == 0x0A000000)
+        return true;
 
     // 172.16.0.0/12
-    if ((host_ip & 0xFFF00000) == 0xAC100000) return true;
+    if ((host_ip & 0xFFF00000) == 0xAC100000)
+        return true;
 
     // 192.168.0.0/16
-    if ((host_ip & 0xFFFF0000) == 0xC0A80000) return true;
+    if ((host_ip & 0xFFFF0000) == 0xC0A80000)
+        return true;
 
     return false;
 }
@@ -108,7 +127,7 @@ uint32_t calculate_broadcast(uint32_t ip, uint32_t mask) {
     return ip | (~mask);
 }
 
-} // namespace test_helpers
+}  // namespace test_helpers
 
 // =============================================================================
 // Constant Tests - Ryujinx Compatibility
@@ -329,7 +348,8 @@ TEST(state_ready_requires_proxy_config) {
 TEST(timeout_auth_less_than_connect) {
     // Auth timeout (4s) should be less than connect timeout (5s)
     // This ensures we don't wait forever for auth if connection is slow
-    ASSERT_TRUE(p2p_client::FAILURE_TIMEOUT_MS < p2p_client::CONNECT_TIMEOUT_MS);
+    ASSERT_TRUE(
+        p2p_client::FAILURE_TIMEOUT_MS < p2p_client::CONNECT_TIMEOUT_MS);
 }
 
 TEST(timeout_values_positive) {
@@ -353,7 +373,7 @@ TEST(port_range_valid) {
     constexpr uint16_t PORT_BASE = 39990;
     constexpr int PORT_RANGE = 10;
 
-    ASSERT_TRUE(PORT_BASE > 1024);  // Above privileged ports
+    ASSERT_TRUE(PORT_BASE > 1024);                // Above privileged ports
     ASSERT_TRUE(PORT_BASE < 65535 - PORT_RANGE);  // Leaves room for range
 
     for (int i = 0; i < PORT_RANGE; i++) {
@@ -374,10 +394,10 @@ TEST(external_proxy_config_size) {
 
     // This matches the protocol definition
     struct TestExternalProxyConfig {
-        uint8_t proxy_ip[16];       // 16 bytes
-        uint16_t proxy_port;        // 2 bytes
-        uint32_t address_family;    // 4 bytes
-        uint8_t token[16];          // 16 bytes
+        uint8_t proxy_ip[16];     // 16 bytes
+        uint16_t proxy_port;      // 2 bytes
+        uint32_t address_family;  // 4 bytes
+        uint8_t token[16];        // 16 bytes
     } __attribute__((packed));
 
     ASSERT_EQ(sizeof(TestExternalProxyConfig), EXPECTED_SIZE);

@@ -13,18 +13,22 @@
 #include <string>
 
 PassphraseEditorGui::PassphraseEditorGui() {
-    for (int i = 0; i < 8; i++) m_charIndices[i] = 0;
-    if (OverlayState::Instance().GetStatus() == OverlayState::InitStatus::Loaded) {
+    for (int i = 0; i < 8; i++)
+        m_charIndices[i] = 0;
+    if (OverlayState::Instance().GetStatus() ==
+        OverlayState::InitStatus::Loaded) {
         RyuLdnConfigService* svc = ryuLdnGetService();
         if (svc) {
             char passphrase[64];
             if (R_SUCCEEDED(ryuLdnGetPassphrase(svc, passphrase))) {
-                if (strlen(passphrase) == 16 && strncmp(passphrase, "Ryujinx-", 8) == 0) {
+                if (strlen(passphrase) == 16 &&
+                    strncmp(passphrase, "Ryujinx-", 8) == 0) {
                     const char* hex = HEX_CHARS;
                     for (int i = 0; i < 8; i++) {
                         char c = passphrase[8 + i];
                         const char* pos = strchr(hex, c);
-                        if (pos) m_charIndices[i] = static_cast<u8>(pos - hex);
+                        if (pos)
+                            m_charIndices[i] = static_cast<u8>(pos - hex);
                     }
                 }
             }
@@ -40,7 +44,8 @@ PassphraseEditorGui::~PassphraseEditorGui() {
 tsl::elm::Element* PassphraseEditorGui::createUI() {
     auto frame = new tsl::elm::OverlayFrame("Edit Passphrase", "Hex: 0-9, a-f");
     auto list = new tsl::elm::List();
-    if (OverlayState::Instance().GetStatus() != OverlayState::InitStatus::Loaded) {
+    if (OverlayState::Instance().GetStatus() !=
+        OverlayState::InitStatus::Loaded) {
         list->addItem(new tsl::elm::ListItem("Not available"));
         frame->setContent(list);
         return frame;
@@ -65,15 +70,21 @@ tsl::elm::Element* PassphraseEditorGui::createUI() {
 
 void PassphraseEditorGui::update() {
     m_updateCounter++;
-    if (m_updateCounter % 60 != 0) return;
+    if (m_updateCounter % 60 != 0)
+        return;
     // Skip live sync while an editor holds the update lock
-    if (OverlayState::Instance().IsUpdateLocked()) return;
-    if (OverlayState::Instance().GetStatus() != OverlayState::InitStatus::Loaded) return;
+    if (OverlayState::Instance().IsUpdateLocked())
+        return;
+    if (OverlayState::Instance().GetStatus() !=
+        OverlayState::InitStatus::Loaded)
+        return;
     RyuLdnConfigService* svc = ryuLdnGetService();
-    if (!svc) return;
+    if (!svc)
+        return;
     char passphrase[64];
     if (R_SUCCEEDED(ryuLdnGetPassphrase(svc, passphrase))) {
-        if (strlen(passphrase) == 16 && strncmp(passphrase, "Ryujinx-", 8) == 0) {
+        if (strlen(passphrase) == 16 &&
+            strncmp(passphrase, "Ryujinx-", 8) == 0) {
             const char* hex = HEX_CHARS;
             for (int i = 0; i < 8; i++) {
                 char c = passphrase[8 + i];
@@ -88,19 +99,26 @@ void PassphraseEditorGui::update() {
     }
 }
 
-bool PassphraseEditorGui::handleInput(u64 keysDown, u64 keysHeld, const HidTouchState &touchPos,
-                                       HidAnalogStickState joyStickPosLeft,
-                                       HidAnalogStickState joyStickPosRight) {
+bool PassphraseEditorGui::handleInput(
+    u64 keysDown,
+    u64 keysHeld,
+    const HidTouchState& touchPos,
+    HidAnalogStickState joyStickPosLeft,
+    HidAnalogStickState joyStickPosRight) {
     // Left/Right: move cursor
     if (keysDown & HidNpadButton_Left) {
-        if (m_cursorPos > 0) m_cursorPos--;
-        else m_cursorPos = 7;  // wrap around
+        if (m_cursorPos > 0)
+            m_cursorPos--;
+        else
+            m_cursorPos = 7;  // wrap around
         RefreshDisplay();
         return true;
     }
     if (keysDown & HidNpadButton_Right) {
-        if (m_cursorPos < 7) m_cursorPos++;
-        else m_cursorPos = 0;  // wrap around
+        if (m_cursorPos < 7)
+            m_cursorPos++;
+        else
+            m_cursorPos = 0;  // wrap around
         RefreshDisplay();
         return true;
     }
@@ -111,20 +129,29 @@ bool PassphraseEditorGui::handleInput(u64 keysDown, u64 keysHeld, const HidTouch
         return true;
     }
     if (keysDown & HidNpadButton_Down) {
-        m_charIndices[m_cursorPos] = (m_charIndices[m_cursorPos] == 0) ? 15 : (m_charIndices[m_cursorPos] - 1);
+        m_charIndices[m_cursorPos] = (m_charIndices[m_cursorPos] == 0)
+                                         ? 15
+                                         : (m_charIndices[m_cursorPos] - 1);
         RefreshDisplay();
         return true;
     }
     // B (back) = Apply passphrase and go back
-    if (keysDown & HidNpadButton_B) { ApplyPassphrase(); return true; }
+    if (keysDown & HidNpadButton_B) {
+        ApplyPassphrase();
+        return true;
+    }
     // Plus = Apply
-    if (keysDown & HidNpadButton_Plus) { ApplyPassphrase(); return true; }
+    if (keysDown & HidNpadButton_Plus) {
+        ApplyPassphrase();
+        return true;
+    }
     return false;
 }
 
 std::string PassphraseEditorGui::BuildHexString() {
     char buf[9];
-    for (int i = 0; i < 8; i++) buf[i] = HEX_CHARS[m_charIndices[i]];
+    for (int i = 0; i < 8; i++)
+        buf[i] = HEX_CHARS[m_charIndices[i]];
     buf[8] = 0;
     return std::string(buf);
 }
@@ -133,10 +160,13 @@ std::string PassphraseEditorGui::BuildCursorDisplay() {
     // Example: "[a] 3 f 7 9 b 2 c" with the selected char in brackets
     std::string result;
     for (int i = 0; i < 8; i++) {
-        if (i == m_cursorPos) result += '[';
+        if (i == m_cursorPos)
+            result += '[';
         result += HEX_CHARS[m_charIndices[i]];
-        if (i == m_cursorPos) result += ']';
-        if (i < 7) result += ' ';
+        if (i == m_cursorPos)
+            result += ']';
+        if (i < 7)
+            result += ' ';
     }
     return result;
 }
@@ -153,18 +183,23 @@ std::string PassphraseEditorGui::BuildCursorIndicator() {
 }
 
 void PassphraseEditorGui::RefreshDisplay() {
-    if (m_previewItem) m_previewItem->setValue(BuildHexString());
-    if (m_charsItem) m_charsItem->setText(BuildCursorDisplay());
-    if (m_cursorItem) m_cursorItem->setText(BuildCursorIndicator());
+    if (m_previewItem)
+        m_previewItem->setValue(BuildHexString());
+    if (m_charsItem)
+        m_charsItem->setText(BuildCursorDisplay());
+    if (m_cursorItem)
+        m_cursorItem->setText(BuildCursorIndicator());
 }
 
 void PassphraseEditorGui::ApplyPassphrase() {
     RyuLdnConfigService* svc = ryuLdnGetService();
-    if (!svc) return;
+    if (!svc)
+        return;
     char full[32];
     snprintf(full, sizeof(full), "Ryujinx-%s", BuildHexString().c_str());
     Result rc = ryuLdnSetPassphrase(svc, full);
-    if (R_SUCCEEDED(rc)) OverlayState::Instance().MarkDirty();
+    if (R_SUCCEEDED(rc))
+        OverlayState::Instance().MarkDirty();
     OverlayState::Instance().ReleaseUpdateLock();
     tsl::goBack();
 }

@@ -26,38 +26,47 @@
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct test_##name##_register { \
-        test_##name##_register() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct test_##name##_register {    \
+        test_##name##_register() {            \
             printf("  [TEST] %s... ", #name); \
-            fflush(stdout); \
-            test_##name(); \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } \
-    } test_##name##_instance; \
+            fflush(stdout);                   \
+            test_##name();                    \
+            printf("PASS\n");                 \
+            g_tests_passed++;                 \
+        }                                     \
+    } test_##name##_instance;                 \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL\n    Assertion failed: %s\n    at %s:%d\n", #cond, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_TRUE(cond)                                         \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            printf(                                               \
+                "FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
+                #cond,                                            \
+                __FILE__,                                         \
+                __LINE__);                                        \
+            g_tests_failed++;                                     \
+            return;                                               \
+        }                                                         \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("FAIL\n    Expected: %s == %s\n    at %s:%d\n", #a, #b, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                         \
+    do {                                                        \
+        if ((a) != (b)) {                                       \
+            printf(                                             \
+                "FAIL\n    Expected: %s == %s\n    at %s:%d\n", \
+                #a,                                             \
+                #b,                                             \
+                __FILE__,                                       \
+                __LINE__);                                      \
+            g_tests_failed++;                                   \
+            return;                                             \
+        }                                                       \
+    } while (0)
 
 // ============================================================================
 // Test Helpers
@@ -81,9 +90,12 @@ static LdnHeader make_test_header(PacketId type, int32_t data_size) {
 /**
  * @brief Create a test ProxyInfo structure
  */
-static ProxyInfo make_test_proxy_info(uint32_t src_ip, uint16_t src_port,
-                                       uint32_t dest_ip, uint16_t dest_port,
-                                       ProtocolType proto = ProtocolType::Udp) {
+static ProxyInfo make_test_proxy_info(
+    uint32_t src_ip,
+    uint16_t src_port,
+    uint32_t dest_ip,
+    uint16_t dest_port,
+    ProtocolType proto = ProtocolType::Udp) {
     ProxyInfo info{};
     info.source_ipv4 = src_ip;
     info.source_port = src_port;
@@ -147,7 +159,8 @@ static void on_proxy_connect_reply(const ProxyInfo& info) {
     g_callback_state.connect_reply_info = info;
 }
 
-static void on_proxy_data(const ProxyInfo& info, const uint8_t* data, size_t length) {
+static void on_proxy_data(
+    const ProxyInfo& info, const uint8_t* data, size_t length) {
     g_callback_state.data_received = true;
     g_callback_state.data_info = info;
     g_callback_state.data_payload.assign(data, data + length);
@@ -185,8 +198,8 @@ TEST(proxy_handler_process_config) {
     handler.set_config_callback(on_proxy_config);
 
     ProxyConfig config{};
-    config.proxy_ip = 0x0A720001;        // 10.114.0.1
-    config.proxy_subnet_mask = 0xFFFF0000; // 255.255.0.0
+    config.proxy_ip = 0x0A720001;           // 10.114.0.1
+    config.proxy_subnet_mask = 0xFFFF0000;  // 255.255.0.0
 
     LdnHeader header = make_test_header(PacketId::ProxyConfig, sizeof(config));
     handler.handle_proxy_config(header, config);
@@ -201,8 +214,8 @@ TEST(proxy_handler_config_stores_values) {
     ldn::LdnProxyHandler handler;
 
     ProxyConfig config{};
-    config.proxy_ip = 0xC0A80001;        // 192.168.0.1
-    config.proxy_subnet_mask = 0xFFFFFF00; // 255.255.255.0
+    config.proxy_ip = 0xC0A80001;           // 192.168.0.1
+    config.proxy_subnet_mask = 0xFFFFFF00;  // 255.255.255.0
 
     LdnHeader header = make_test_header(PacketId::ProxyConfig, sizeof(config));
     handler.handle_proxy_config(header, config);
@@ -222,7 +235,8 @@ TEST(proxy_handler_process_connect) {
     handler.set_connect_callback(on_proxy_connect);
 
     ProxyConnectRequest req{};
-    req.info = make_test_proxy_info(0x0A720001, 1234, 0x0A720002, 5678, ProtocolType::Tcp);
+    req.info = make_test_proxy_info(
+        0x0A720001, 1234, 0x0A720002, 5678, ProtocolType::Tcp);
 
     LdnHeader header = make_test_header(PacketId::ProxyConnect, sizeof(req));
     handler.handle_proxy_connect(header, req);
@@ -262,7 +276,8 @@ TEST(proxy_handler_process_connect_reply) {
     ProxyConnectResponse resp{};
     resp.info = make_test_proxy_info(0x0A720002, 5678, 0x0A720001, 1234);
 
-    LdnHeader header = make_test_header(PacketId::ProxyConnectReply, sizeof(resp));
+    LdnHeader header =
+        make_test_header(PacketId::ProxyConnectReply, sizeof(resp));
     handler.handle_proxy_connect_reply(header, resp);
 
     ASSERT_TRUE(g_callback_state.connect_reply_received);
@@ -286,7 +301,8 @@ TEST(proxy_handler_process_data) {
 
     uint8_t payload[] = {0xDE, 0xAD, 0xBE, 0xEF};
 
-    LdnHeader header = make_test_header(PacketId::ProxyData, sizeof(data_header) + 4);
+    LdnHeader header =
+        make_test_header(PacketId::ProxyData, sizeof(data_header) + 4);
     handler.handle_proxy_data(header, data_header, payload, 4);
 
     ASSERT_TRUE(g_callback_state.data_received);
@@ -306,7 +322,8 @@ TEST(proxy_handler_data_without_callback) {
 
     uint8_t payload[] = {0x01, 0x02, 0x03, 0x04};
 
-    LdnHeader header = make_test_header(PacketId::ProxyData, sizeof(data_header) + 4);
+    LdnHeader header =
+        make_test_header(PacketId::ProxyData, sizeof(data_header) + 4);
 
     // Should not crash
     handler.handle_proxy_data(header, data_header, payload, 4);
@@ -322,7 +339,8 @@ TEST(proxy_handler_data_empty_payload) {
     data_header.info = make_test_proxy_info(0x0A720001, 1234, 0x0A720002, 5678);
     data_header.data_length = 0;
 
-    LdnHeader header = make_test_header(PacketId::ProxyData, sizeof(data_header));
+    LdnHeader header =
+        make_test_header(PacketId::ProxyData, sizeof(data_header));
     handler.handle_proxy_data(header, data_header, nullptr, 0);
 
     ASSERT_TRUE(g_callback_state.data_received);
@@ -342,7 +360,8 @@ TEST(proxy_handler_process_disconnect) {
     // First establish a connection
     ProxyConnectRequest req{};
     req.info = make_test_proxy_info(0x0A720001, 1234, 0x0A720002, 5678);
-    LdnHeader connect_header = make_test_header(PacketId::ProxyConnect, sizeof(req));
+    LdnHeader connect_header =
+        make_test_header(PacketId::ProxyConnect, sizeof(req));
     handler.handle_proxy_connect(connect_header, req);
 
     ASSERT_EQ(handler.get_connection_count(), 1);
@@ -357,7 +376,9 @@ TEST(proxy_handler_process_disconnect) {
 
     ASSERT_TRUE(g_callback_state.disconnect_received);
     ASSERT_EQ(g_callback_state.disconnect_info.source_ipv4, 0x0A720001);
-    ASSERT_EQ(g_callback_state.disconnect_reason, static_cast<int32_t>(DisconnectReason::User));
+    ASSERT_EQ(
+        g_callback_state.disconnect_reason,
+        static_cast<int32_t>(DisconnectReason::User));
 }
 
 TEST(proxy_handler_disconnect_removes_connection) {
@@ -366,7 +387,8 @@ TEST(proxy_handler_disconnect_removes_connection) {
     // Establish connection
     ProxyConnectRequest req{};
     req.info = make_test_proxy_info(0x0A720001, 1234, 0x0A720002, 5678);
-    LdnHeader connect_header = make_test_header(PacketId::ProxyConnect, sizeof(req));
+    LdnHeader connect_header =
+        make_test_header(PacketId::ProxyConnect, sizeof(req));
     handler.handle_proxy_connect(connect_header, req);
 
     ASSERT_EQ(handler.get_connection_count(), 1);
@@ -394,7 +416,8 @@ TEST(proxy_handler_multiple_connections) {
     for (uint16_t port = 1000; port < 1003; port++) {
         ProxyConnectRequest req{};
         req.info = make_test_proxy_info(0x0A720001, port, 0x0A720002, 5678);
-        LdnHeader header = make_test_header(PacketId::ProxyConnect, sizeof(req));
+        LdnHeader header =
+            make_test_header(PacketId::ProxyConnect, sizeof(req));
         handler.handle_proxy_connect(header, req);
     }
 
@@ -424,14 +447,16 @@ TEST(proxy_handler_reset) {
     ProxyConfig config{};
     config.proxy_ip = 0x0A720001;
     config.proxy_subnet_mask = 0xFFFF0000;
-    LdnHeader config_header = make_test_header(PacketId::ProxyConfig, sizeof(config));
+    LdnHeader config_header =
+        make_test_header(PacketId::ProxyConfig, sizeof(config));
     handler.handle_proxy_config(config_header, config);
 
     // Add connections
     for (int i = 0; i < 3; i++) {
         ProxyConnectRequest req{};
         req.info = make_test_proxy_info(0x0A720001, 1000 + i, 0x0A720002, 5678);
-        LdnHeader header = make_test_header(PacketId::ProxyConnect, sizeof(req));
+        LdnHeader header =
+            make_test_header(PacketId::ProxyConnect, sizeof(req));
         handler.handle_proxy_connect(header, req);
     }
 
@@ -455,14 +480,18 @@ TEST(proxy_handler_tcp_and_udp_separate) {
 
     // Add TCP connection
     ProxyConnectRequest tcp_req{};
-    tcp_req.info = make_test_proxy_info(0x0A720001, 1234, 0x0A720002, 5678, ProtocolType::Tcp);
-    LdnHeader tcp_header = make_test_header(PacketId::ProxyConnect, sizeof(tcp_req));
+    tcp_req.info = make_test_proxy_info(
+        0x0A720001, 1234, 0x0A720002, 5678, ProtocolType::Tcp);
+    LdnHeader tcp_header =
+        make_test_header(PacketId::ProxyConnect, sizeof(tcp_req));
     handler.handle_proxy_connect(tcp_header, tcp_req);
 
     // Add UDP connection with same ports
     ProxyConnectRequest udp_req{};
-    udp_req.info = make_test_proxy_info(0x0A720001, 1234, 0x0A720002, 5678, ProtocolType::Udp);
-    LdnHeader udp_header = make_test_header(PacketId::ProxyConnect, sizeof(udp_req));
+    udp_req.info = make_test_proxy_info(
+        0x0A720001, 1234, 0x0A720002, 5678, ProtocolType::Udp);
+    LdnHeader udp_header =
+        make_test_header(PacketId::ProxyConnect, sizeof(udp_req));
     handler.handle_proxy_connect(udp_header, udp_req);
 
     // Should have 2 separate connections
@@ -470,7 +499,9 @@ TEST(proxy_handler_tcp_and_udp_separate) {
 }
 
 static int g_saturation_callbacks = 0;
-static void on_saturation_connect(const ProxyInfo&) { ++g_saturation_callbacks; }
+static void on_saturation_connect(const ProxyInfo&) {
+    ++g_saturation_callbacks;
+}
 
 TEST(proxy_connect_table_full_drops_new_connection_but_still_notifies) {
     g_saturation_callbacks = 0;
@@ -480,15 +511,19 @@ TEST(proxy_connect_table_full_drops_new_connection_but_still_notifies) {
     const size_t capacity = ldn::LdnProxyHandler::MAX_PROXY_CONNECTIONS;
     for (size_t i = 0; i < capacity; ++i) {
         ProxyConnectRequest req{};
-        req.info = make_test_proxy_info(0x0A720001, static_cast<uint16_t>(1000 + i), 0x0A720002, 5678);
-        handler.handle_proxy_connect(make_test_header(PacketId::ProxyConnect, sizeof(req)), req);
+        req.info = make_test_proxy_info(
+            0x0A720001, static_cast<uint16_t>(1000 + i), 0x0A720002, 5678);
+        handler.handle_proxy_connect(
+            make_test_header(PacketId::ProxyConnect, sizeof(req)), req);
     }
     ASSERT_EQ(handler.get_connection_count(), capacity);
 
-    // One more: the table is full, the entry is dropped, the count is unchanged.
+    // One more: the table is full, the entry is dropped, the count is
+    // unchanged.
     ProxyConnectRequest overflow{};
     overflow.info = make_test_proxy_info(0x0A720001, 60000, 0x0A720002, 5678);
-    handler.handle_proxy_connect(make_test_header(PacketId::ProxyConnect, sizeof(overflow)), overflow);
+    handler.handle_proxy_connect(
+        make_test_header(PacketId::ProxyConnect, sizeof(overflow)), overflow);
 
     ASSERT_EQ(handler.get_connection_count(), capacity);
     ASSERT_FALSE(handler.has_connection(0x0A720001, 60000, 0x0A720002, 5678));
@@ -508,7 +543,10 @@ int main() {
     // Tests run automatically via static initializers
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

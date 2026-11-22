@@ -67,11 +67,11 @@ extern "C" {
  * @brief Connection status enumeration
  */
 typedef enum {
-    RyuLdnStatus_Disconnected = 0,   ///< Not connected to server
-    RyuLdnStatus_Connecting = 1,     ///< Connection in progress
+    RyuLdnStatus_Disconnected = 0,  ///< Not connected to server
+    RyuLdnStatus_Connecting = 1,    ///< Connection in progress
     RyuLdnStatus_Connected = 2,     ///< Connected, handshake pending
-    RyuLdnStatus_Ready = 3,          ///< Fully connected and ready
-    RyuLdnStatus_Error = 4,          ///< Connection error
+    RyuLdnStatus_Ready = 3,         ///< Fully connected and ready
+    RyuLdnStatus_Error = 4,         ///< Connection error
 } RyuLdnConnectionStatus;
 
 /**
@@ -80,13 +80,15 @@ typedef enum {
  * Mirrors the CommState enum from the sysmodule.
  */
 typedef enum {
-    RyuLdnState_None = 0,               ///< Not initialized
-    RyuLdnState_Initialized = 1,        ///< Initialized, ready to open AP or Station
-    RyuLdnState_AccessPoint = 2,        ///< Access point mode, ready to create network
-    RyuLdnState_AccessPointCreated = 3, ///< Network created, accepting connections
-    RyuLdnState_Station = 4,            ///< Station mode, ready to scan/connect
-    RyuLdnState_StationConnected = 5,   ///< Connected to a network
-    RyuLdnState_Error = 6,              ///< Error state
+    RyuLdnState_None = 0,         ///< Not initialized
+    RyuLdnState_Initialized = 1,  ///< Initialized, ready to open AP or Station
+    RyuLdnState_AccessPoint =
+        2,  ///< Access point mode, ready to create network
+    RyuLdnState_AccessPointCreated =
+        3,                    ///< Network created, accepting connections
+    RyuLdnState_Station = 4,  ///< Station mode, ready to scan/connect
+    RyuLdnState_StationConnected = 5,  ///< Connected to a network
+    RyuLdnState_Error = 6,             ///< Error state
 } RyuLdnState;
 
 /**
@@ -95,11 +97,11 @@ typedef enum {
  * Contains runtime information about the current LDN session.
  */
 typedef struct {
-    u8 node_count;      ///< Current number of nodes in session
-    u8 max_nodes;       ///< Maximum nodes allowed in session
-    u8 local_node_id;   ///< This node's ID in the session
-    u8 is_host;         ///< 1 if this node is the host, 0 otherwise
-    u8 reserved[4];     ///< Reserved for future use
+    u8 node_count;     ///< Current number of nodes in session
+    u8 max_nodes;      ///< Maximum nodes allowed in session
+    u8 local_node_id;  ///< This node's ID in the session
+    u8 is_host;        ///< 1 if this node is the host, 0 otherwise
+    u8 reserved[4];    ///< Reserved for future use
 } RyuLdnSessionInfo;
 
 /**
@@ -162,7 +164,8 @@ Result ryuLdnGetVersion(RyuLdnConfigService* s, char* version);
  * @param status Output status
  * @return Result code
  */
-Result ryuLdnGetConnectionStatus(RyuLdnConfigService* s, RyuLdnConnectionStatus* status);
+Result ryuLdnGetConnectionStatus(
+    RyuLdnConfigService* s, RyuLdnConnectionStatus* status);
 
 /**
  * @brief Check if sysmodule is active
@@ -306,7 +309,8 @@ Result ryuLdnGetServerAddress(RyuLdnConfigService* s, char* host, u16* port);
  * @param port Server port
  * @return Result code
  */
-Result ryuLdnSetServerAddress(RyuLdnConfigService* s, const char* host, u16 port);
+Result ryuLdnSetServerAddress(
+    RyuLdnConfigService* s, const char* host, u16 port);
 
 /**
  * @brief Get LDN enabled state

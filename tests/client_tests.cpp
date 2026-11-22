@@ -26,7 +26,8 @@
  * Test state and packet callback registration and invocation.
  *
  * ### Connect Path Tests
- * Test connect success, fail, backoff, already-connected, null host, DI failure.
+ * Test connect success, fail, backoff, already-connected, null host, DI
+ * failure.
  *
  * ### Handshake / Update Path Tests
  * Test handshake send, timeout, success, NetworkError, VersionMismatch,
@@ -39,7 +40,8 @@
  * Test backoff expiry and retry, no-auto-reconnect stays in Backoff.
  *
  * ### State Machine Edge Case Tests
- * Test Disconnecting transition, Error state no-op, send with ConnectionLost callback.
+ * Test Disconnecting transition, Error state no-op, send with ConnectionLost
+ * callback.
  *
  * ### String Conversion Tests
  * Test ClientOpResult and NetworkErrorCode to-string functions.
@@ -73,58 +75,68 @@ static int g_tests_failed = 0;
  * @brief Assert macro with detailed failure message
  * @param cond Condition to evaluate
  */
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT_TRUE(cond)                                               \
+    do {                                                                \
+        if (!(cond)) {                                                  \
             printf("    FAIL: %s:%d: %s\n", __FILE__, __LINE__, #cond); \
-            return false; \
-        } \
-    } while(0)
+            return false;                                               \
+        }                                                               \
+    } while (0)
 
 /**
  * @brief Assert equality macro
  * @param a Left operand
  * @param b Right operand
  */
-#define ASSERT_EQ(a, b) \
-    do { \
-        auto _a = static_cast<long long>(a); \
-        auto _b = static_cast<long long>(b); \
-        if (_a != _b) { \
-            printf("    FAIL: %s:%d: %s == %s (%lld != %lld)\n", \
-                   __FILE__, __LINE__, #a, #b, _a, _b); \
-            return false; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                       \
+    do {                                                      \
+        auto _a = static_cast<long long>(a);                  \
+        auto _b = static_cast<long long>(b);                  \
+        if (_a != _b) {                                       \
+            printf(                                           \
+                "    FAIL: %s:%d: %s == %s (%lld != %lld)\n", \
+                __FILE__,                                     \
+                __LINE__,                                     \
+                #a,                                           \
+                #b,                                           \
+                _a,                                           \
+                _b);                                          \
+            return false;                                     \
+        }                                                     \
+    } while (0)
 
 /**
  * @brief Assert string equality macro
  * @param a First string
  * @param b Second string
  */
-#define ASSERT_STREQ(a, b) \
-    do { \
-        if (std::strcmp((a), (b)) != 0) { \
-            printf("    FAIL: %s:%d: \"%s\" != \"%s\"\n", \
-                   __FILE__, __LINE__, (a), (b)); \
-            return false; \
-        } \
-    } while(0)
+#define ASSERT_STREQ(a, b)                             \
+    do {                                               \
+        if (std::strcmp((a), (b)) != 0) {              \
+            printf(                                    \
+                "    FAIL: %s:%d: \"%s\" != \"%s\"\n", \
+                __FILE__,                              \
+                __LINE__,                              \
+                (a),                                   \
+                (b));                                  \
+            return false;                              \
+        }                                              \
+    } while (0)
 
 /**
  * @brief Test runner macro
  * @param test_func Function name to run
  */
-#define RUN_TEST(test_func) \
-    do { \
+#define RUN_TEST(test_func)                    \
+    do {                                       \
         printf("  [TEST] %s... ", #test_func); \
-        if (test_func()) { \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } else { \
-            g_tests_failed++; \
-        } \
-    } while(0)
+        if (test_func()) {                     \
+            printf("PASS\n");                  \
+            g_tests_passed++;                  \
+        } else {                               \
+            g_tests_failed++;                  \
+        }                                      \
+    } while (0)
 
 // ============================================================================
 // Helpers
@@ -150,7 +162,8 @@ static std::unique_ptr<RyuLdnClient> make_client(MockTcpClient*& mock_out) {
  * @param[out] mock_out Pointer to the injected MockTcpClient
  * @return Owning pointer to the constructed RyuLdnClient
  */
-static std::unique_ptr<RyuLdnClient> make_client_no_reconnect(MockTcpClient*& mock_out) {
+static std::unique_ptr<RyuLdnClient> make_client_no_reconnect(
+    MockTcpClient*& mock_out) {
     auto mock = std::make_unique<MockTcpClient>();
     mock_out = mock.get();
     RyuLdnClientConfig cfg;
@@ -177,7 +190,8 @@ static void* g_callback_ud = nullptr;
  * @param new_state New connection state
  * @param ud User data pointer
  */
-static void state_callback(ConnectionState old_state, ConnectionState new_state, void* ud) {
+static void state_callback(
+    ConnectionState old_state, ConnectionState new_state, void* ud) {
     g_state_changes.push_back({old_state, new_state});
     g_callback_ud = ud;
 }
@@ -190,8 +204,12 @@ static void state_callback(ConnectionState old_state, ConnectionState new_state,
  * @param size Data size
  * @param ud User data pointer
  */
-static void packet_callback(PacketId id, const uint8_t* data, size_t size, void* ud) {
-    (void)id; (void)data; (void)size; (void)ud;
+static void packet_callback(
+    PacketId id, const uint8_t* data, size_t size, void* ud) {
+    (void)id;
+    (void)data;
+    (void)size;
+    (void)ud;
 }
 
 /** @brief Clear accumulated state changes */
@@ -210,7 +228,8 @@ static void clear_state_changes() {
  * @param mock The associated MockTcpClient
  * @param start_time Starting time value for update() calls
  */
-static void drive_to_ready(RyuLdnClient* client, MockTcpClient* mock, uint64_t start_time) {
+static void drive_to_ready(
+    RyuLdnClient* client, MockTcpClient* mock, uint64_t start_time) {
     mock->next_connect_result = ClientResult::Success;
     client->connect("127.0.0.1", 30456);
 
@@ -257,7 +276,8 @@ bool test_config_defaults() {
  */
 bool test_config_from_app_config() {
     config::Config app_cfg = config::get_default_config();
-    std::strncpy(app_cfg.server.host, "192.168.1.100", sizeof(app_cfg.server.host));
+    std::strncpy(
+        app_cfg.server.host, "192.168.1.100", sizeof(app_cfg.server.host));
     app_cfg.server.port = 12345;
 
     RyuLdnClientConfig cfg(app_cfg);
@@ -483,12 +503,14 @@ bool test_send_connect_not_ready() {
 }
 
 /**
- * @brief Test send_create_access_point_private returns NotReady when disconnected
+ * @brief Test send_create_access_point_private returns NotReady when
+ * disconnected
  */
 bool test_send_create_access_point_private_not_ready() {
     RyuLdnClient client;
     CreateAccessPointPrivateRequest req{};
-    ASSERT_EQ(client.send_create_access_point_private(req), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_create_access_point_private(req), ClientOpResult::NotReady);
     return true;
 }
 
@@ -509,7 +531,9 @@ bool test_send_proxy_data_not_ready() {
     RyuLdnClient client;
     ProxyDataHeader hdr{};
     uint8_t data[10] = {0};
-    ASSERT_EQ(client.send_proxy_data(hdr, data, sizeof(data)), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_proxy_data(hdr, data, sizeof(data)),
+        ClientOpResult::NotReady);
     return true;
 }
 
@@ -545,7 +569,9 @@ bool test_send_disconnect_network_not_ready() {
  */
 bool test_send_set_accept_policy_not_ready() {
     RyuLdnClient client;
-    ASSERT_EQ(client.send_set_accept_policy(AcceptPolicy::AcceptAll), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_set_accept_policy(AcceptPolicy::AcceptAll),
+        ClientOpResult::NotReady);
     return true;
 }
 
@@ -555,7 +581,9 @@ bool test_send_set_accept_policy_not_ready() {
 bool test_send_set_advertise_data_not_ready() {
     RyuLdnClient client;
     uint8_t data[] = {0x01, 0x02};
-    ASSERT_EQ(client.send_set_advertise_data(data, sizeof(data)), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_set_advertise_data(data, sizeof(data)),
+        ClientOpResult::NotReady);
     return true;
 }
 
@@ -564,7 +592,9 @@ bool test_send_set_advertise_data_not_ready() {
  */
 bool test_send_reject_not_ready() {
     RyuLdnClient client;
-    ASSERT_EQ(client.send_reject(1, DisconnectReason::Rejected), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_reject(1, DisconnectReason::Rejected),
+        ClientOpResult::NotReady);
     return true;
 }
 
@@ -574,7 +604,8 @@ bool test_send_reject_not_ready() {
 bool test_send_raw_packet_not_ready() {
     RyuLdnClient client;
     uint8_t data[] = {0x01};
-    ASSERT_EQ(client.send_raw_packet(data, sizeof(data)), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_raw_packet(data, sizeof(data)), ClientOpResult::NotReady);
     return true;
 }
 
@@ -939,7 +970,8 @@ bool test_update_handshaking_recv_network_error() {
     err_pkt.id = PacketId::NetworkError;
     err_pkt.data.resize(sizeof(NetworkErrorMessage));
     auto* msg = reinterpret_cast<NetworkErrorMessage*>(err_pkt.data.data());
-    msg->error_code = static_cast<uint32_t>(NetworkErrorCode::ConnectionRejected);
+    msg->error_code =
+        static_cast<uint32_t>(NetworkErrorCode::ConnectionRejected);
     mock->recv_queue.push(std::move(err_pkt));
     mock->next_recv_result = ClientResult::Success;
 
@@ -1022,7 +1054,8 @@ bool test_update_handshaking_recv_disconnect() {
 }
 
 /**
- * @brief Test handshake timeout with auto_reconnect=false still transitions to Backoff
+ * @brief Test handshake timeout with auto_reconnect=false still transitions to
+ * Backoff
  */
 bool test_handshake_timeout_no_reconnect() {
     MockTcpClient* mock;
@@ -1116,12 +1149,13 @@ bool test_update_backoff_expiry_and_retry() {
     // After connect() fails, start_backoff() sets m_backoff_start_time_ms = 0
     // (because no update() has been called yet). On the first update(),
     // is_backoff_expired() captures the time and returns false.
-    // On the second update(), after the backoff delay has elapsed, it returns true.
+    // On the second update(), after the backoff delay has elapsed, it returns
+    // true.
     //
     // Backoff delay: record_failure() incremented retry_count to 1, which is
-    // >= fast_retries (1), so get_next_delay_ms() returns initial_delay_ms (1000).
-    // With ±10% jitter, the actual delay is between 900-1100ms.
-    // Use a time jump well past the maximum possible jittered delay.
+    // >= fast_retries (1), so get_next_delay_ms() returns initial_delay_ms
+    // (1000). With ±10% jitter, the actual delay is between 900-1100ms. Use a
+    // time jump well past the maximum possible jittered delay.
 
     mock->next_connect_result = ClientResult::Success;
     client->update(50000);  // Captures 50000 as start time, no retry yet
@@ -1236,17 +1270,34 @@ bool test_send_scan_connection_lost_callback() {
  * @brief Test client_op_result_to_string for all enum values and unknown
  */
 bool test_client_op_result_all_to_string() {
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::Success), "Success");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::NotConnected), "NotConnected");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::NotReady), "NotReady");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::AlreadyConnected), "AlreadyConnected");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::ConnectionFailed), "ConnectionFailed");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::SendFailed), "SendFailed");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::InvalidState), "InvalidState");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::Timeout), "Timeout");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::ProtocolError), "ProtocolError");
-    ASSERT_STREQ(client_op_result_to_string(ClientOpResult::InternalError), "InternalError");
-    ASSERT_STREQ(client_op_result_to_string(static_cast<ClientOpResult>(99)), "Unknown");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::Success), "Success");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::NotConnected),
+        "NotConnected");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::NotReady), "NotReady");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::AlreadyConnected),
+        "AlreadyConnected");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::ConnectionFailed),
+        "ConnectionFailed");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::SendFailed), "SendFailed");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::InvalidState),
+        "InvalidState");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::Timeout), "Timeout");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::ProtocolError),
+        "ProtocolError");
+    ASSERT_STREQ(
+        client_op_result_to_string(ClientOpResult::InternalError),
+        "InternalError");
+    ASSERT_STREQ(
+        client_op_result_to_string(static_cast<ClientOpResult>(99)), "Unknown");
     return true;
 }
 
@@ -1282,8 +1333,9 @@ bool test_get_last_rtt_initial() {
  */
 bool test_get_last_error_code_initial() {
     RyuLdnClient client;
-    ASSERT_EQ(static_cast<int>(client.get_last_error_code()),
-              static_cast<int>(NetworkErrorCode::None));
+    ASSERT_EQ(
+        static_cast<int>(client.get_last_error_code()),
+        static_cast<int>(NetworkErrorCode::None));
     return true;
 }
 
@@ -1378,8 +1430,9 @@ bool test_update_connecting_retries_and_succeeds() {
 
     // Force into Connecting state by doing a successful first half of connect
     // but we need the state machine in Connecting during update().
-    // The connect() method transitions Disconnected -> Connecting -> via try_connect.
-    // If connect() fails synchronously, we go to Backoff, not Connecting.
+    // The connect() method transitions Disconnected -> Connecting -> via
+    // try_connect. If connect() fails synchronously, we go to Backoff, not
+    // Connecting.
     //
     // To test update(Connecting), we force the state machine.
     mock->next_connect_result = ClientResult::Success;
@@ -1508,9 +1561,10 @@ bool test_handle_packet_disconnect() {
     client->update(2000);
 
     // Disconnect event moves state to Disconnecting (not Disconnected directly)
-    ASSERT_TRUE(client->get_state() == ConnectionState::Disconnecting
-                || client->get_state() == ConnectionState::Disconnected
-                || client->get_state() == ConnectionState::Backoff);
+    ASSERT_TRUE(
+        client->get_state() == ConnectionState::Disconnecting ||
+        client->get_state() == ConnectionState::Disconnected ||
+        client->get_state() == ConnectionState::Backoff);
     return true;
 }
 
@@ -1531,12 +1585,14 @@ bool test_handle_packet_unknown_forwarded_to_callback() {
     static size_t last_size;
     packet_count = 0;
 
-    client->set_packet_callback([](PacketId id, const uint8_t* data, size_t size, void* ud) {
-        (void)data; (void)ud;
-        packet_count++;
-        last_id = id;
-        last_size = size;
-    });
+    client->set_packet_callback(
+        [](PacketId id, const uint8_t* data, size_t size, void* ud) {
+            (void)data;
+            (void)ud;
+            packet_count++;
+            last_id = id;
+            last_size = size;
+        });
 
     drive_to_ready(client.get(), mock, 1000);
 
@@ -1787,7 +1843,8 @@ bool test_send_set_accept_policy_connection_lost() {
 
     clear_state_changes();
     mock->next_send_result = ClientResult::ConnectionLost;
-    ClientOpResult result = client->send_set_accept_policy(AcceptPolicy::AcceptAll);
+    ClientOpResult result =
+        client->send_set_accept_policy(AcceptPolicy::AcceptAll);
     ASSERT_EQ(result, ClientOpResult::SendFailed);
     ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
     return true;
@@ -1955,7 +2012,8 @@ bool test_send_set_accept_policy_success() {
     ASSERT_TRUE(drive_and_check_ready(mock, client.get()));
 
     mock->next_send_result = ClientResult::Success;
-    ClientOpResult result = client->send_set_accept_policy(AcceptPolicy::AcceptAll);
+    ClientOpResult result =
+        client->send_set_accept_policy(AcceptPolicy::AcceptAll);
     ASSERT_EQ(result, ClientOpResult::Success);
     ASSERT_EQ(mock->send_set_accept_policy_call_count, 1);
     return true;
@@ -1980,7 +2038,8 @@ bool test_send_reject_success() {
     ASSERT_TRUE(drive_and_check_ready(mock, client.get()));
 
     mock->next_send_result = ClientResult::Success;
-    ClientOpResult result = client->send_reject(5, DisconnectReason::SystemRequest);
+    ClientOpResult result =
+        client->send_reject(5, DisconnectReason::SystemRequest);
     ASSERT_EQ(result, ClientOpResult::Success);
     ASSERT_EQ(mock->send_reject_call_count, 1);
     return true;
@@ -2004,7 +2063,8 @@ bool test_send_raw_packet_success() {
 // ============================================================================
 
 /**
- * @brief Test send_scan with generic failure (not ConnectionLost) returns SendFailed
+ * @brief Test send_scan with generic failure (not ConnectionLost) returns
+ * SendFailed
  *
  * Per the pattern: when send returns a failure that is NOT ConnectionLost,
  * the state remains Ready and SendFailed is returned. Only ConnectionLost
@@ -2082,21 +2142,20 @@ bool test_send_initialize_connection_lost() {
     ASSERT_TRUE(client->is_connected());
 
     // First call (passphrase) succeeds, second call (Initialize) fails
-    // We need to return Success for passphrase, then ConnectionLost for initialize
-    // Since our mock uses next_send_result for all sends, we need to be creative:
-    // We can't distinguish between passphrase and initialize in the mock.
-    // The mock returns next_send_result for ALL sends.
-    // So if ConnectionLost, it applies to passphrase first.
-    // We validate the passphrase path already works (above test).
-    // The initialize path requires passphrase to succeed first.
-    // This is tested implicitly - send_initialize() checks passphrase_result
-    // then initialize_result. With our mock, if next_send_result = ConnectionLost,
-    // passphrase fails first. To test initialize specifically, we'd need
-    // a call-sequence mock.
+    // We need to return Success for passphrase, then ConnectionLost for
+    // initialize Since our mock uses next_send_result for all sends, we need to
+    // be creative: We can't distinguish between passphrase and initialize in
+    // the mock. The mock returns next_send_result for ALL sends. So if
+    // ConnectionLost, it applies to passphrase first. We validate the
+    // passphrase path already works (above test). The initialize path requires
+    // passphrase to succeed first. This is tested implicitly -
+    // send_initialize() checks passphrase_result then initialize_result. With
+    // our mock, if next_send_result = ConnectionLost, passphrase fails first.
+    // To test initialize specifically, we'd need a call-sequence mock.
     //
-    // For now, test that ConnectionLost during any handshake send triggers backoff.
-    // The passphrase test already covers the first path.
-    // The initialize path code is structurally identical.
+    // For now, test that ConnectionLost during any handshake send triggers
+    // backoff. The passphrase test already covers the first path. The
+    // initialize path code is structurally identical.
     return true;
 }
 
@@ -2160,11 +2219,12 @@ bool test_update_backoff_expired_no_reconnect_stays() {
     // Then BackoffExpired → Retrying → try_connect → fail → ...
     // but auto_reconnect=false so no start_backoff → stays in... what?
     // BackoffExpired → Retrying, try_connect fails → ConnectFailed → Backoff
-    // but no start_backoff means m_backoff_start_time_ms stays at previous value.
-    // Actually let's just check the state.
-    ASSERT_TRUE(client->get_state() == ConnectionState::Backoff
-                || client->get_state() == ConnectionState::Retrying
-                || client->get_state() == ConnectionState::Disconnected);
+    // but no start_backoff means m_backoff_start_time_ms stays at previous
+    // value. Actually let's just check the state.
+    ASSERT_TRUE(
+        client->get_state() == ConnectionState::Backoff ||
+        client->get_state() == ConnectionState::Retrying ||
+        client->get_state() == ConnectionState::Disconnected);
     return true;
 }
 
@@ -2192,7 +2252,8 @@ bool test_update_ready_no_packets() {
 }
 
 /**
- * @brief Test process_packets with non-Success, non-Timeout, non-ConnectionLost error
+ * @brief Test process_packets with non-Success, non-Timeout, non-ConnectionLost
+ * error
  *
  * When receive_packet returns a generic error (e.g., BufferTooSmall),
  * the client should stay in Ready and simply break out of the loop.
@@ -2279,13 +2340,15 @@ bool test_get_last_error_code_after_network_error() {
     err_pkt.id = PacketId::NetworkError;
     err_pkt.data.resize(sizeof(NetworkErrorMessage));
     auto* msg = reinterpret_cast<NetworkErrorMessage*>(err_pkt.data.data());
-    msg->error_code = static_cast<uint32_t>(NetworkErrorCode::ConnectionRejected);
+    msg->error_code =
+        static_cast<uint32_t>(NetworkErrorCode::ConnectionRejected);
     mock->recv_queue.push(std::move(err_pkt));
     mock->next_recv_result = ClientResult::Success;
     client->update(1500);
 
-    ASSERT_EQ(static_cast<int>(client->get_last_error_code()),
-              static_cast<int>(NetworkErrorCode::ConnectionRejected));
+    ASSERT_EQ(
+        static_cast<int>(client->get_last_error_code()),
+        static_cast<int>(NetworkErrorCode::ConnectionRejected));
     return true;
 }
 
@@ -2294,8 +2357,10 @@ bool test_get_last_error_code_after_network_error() {
 // handshake responses with a state callback registered
 // ============================================================================
 
-/** @brief Push a packet of the given type and payload bytes onto the mock queue */
-static void push_packet(MockTcpClient* mock, PacketId id, const void* payload, size_t size) {
+/** @brief Push a packet of the given type and payload bytes onto the mock queue
+ */
+static void push_packet(
+    MockTcpClient* mock, PacketId id, const void* payload, size_t size) {
     MockPacket pkt;
     pkt.id = id;
     pkt.data.resize(size);
@@ -2307,7 +2372,8 @@ static void push_packet(MockTcpClient* mock, PacketId id, const void* payload, s
 }
 
 /** @brief Connect and send the handshake so the client waits in Handshaking */
-static void drive_to_handshaking(RyuLdnClient* client, MockTcpClient* mock, uint64_t t) {
+static void drive_to_handshaking(
+    RyuLdnClient* client, MockTcpClient* mock, uint64_t t) {
     mock->next_connect_result = ClientResult::Success;
     client->connect("127.0.0.1", 30456);
     mock->next_send_result = ClientResult::Success;
@@ -2340,7 +2406,8 @@ bool test_server_disconnect_in_ready_walks_through_disconnecting() {
 }
 
 /**
- * @brief A Ping reply (requester != 0) is not echoed back and the client stays Ready.
+ * @brief A Ping reply (requester != 0) is not echoed back and the client stays
+ * Ready.
  */
 bool test_ping_reply_from_server_is_not_echoed() {
     MockTcpClient* mock;
@@ -2377,7 +2444,8 @@ bool test_ready_update_skips_packet_polling_when_tcp_is_down() {
 
 /**
  * @brief Initialize lost mid-send (passphrase succeeded): the client leaves
- * the Connected state through the connection-lost path and never reaches Handshaking.
+ * the Connected state through the connection-lost path and never reaches
+ * Handshaking.
  */
 bool test_send_initialize_connection_lost_aborts_handshake() {
     MockTcpClient* mock;
@@ -2436,7 +2504,8 @@ bool test_handshake_started_at_time_zero_never_times_out() {
 }
 
 /**
- * @brief NetworkError shorter than a NetworkErrorMessage is recorded as InternalError.
+ * @brief NetworkError shorter than a NetworkErrorMessage is recorded as
+ * InternalError.
  */
 bool test_handshake_network_error_truncated_payload_is_internal_error() {
     MockTcpClient* mock;
@@ -2445,13 +2514,15 @@ bool test_handshake_network_error_truncated_payload_is_internal_error() {
 
     push_packet(mock, PacketId::NetworkError, nullptr, 0);
     client->update(1500);
-    ASSERT_EQ(static_cast<int>(client->get_last_error_code()),
-              static_cast<int>(NetworkErrorCode::InternalError));
+    ASSERT_EQ(
+        static_cast<int>(client->get_last_error_code()),
+        static_cast<int>(NetworkErrorCode::InternalError));
     return true;
 }
 
 /**
- * @brief VersionMismatch during handshake notifies the state callback with the final state.
+ * @brief VersionMismatch during handshake notifies the state callback with the
+ * final state.
  */
 bool test_handshake_version_mismatch_notifies_state_callback() {
     MockTcpClient* mock;
@@ -2473,7 +2544,8 @@ bool test_handshake_version_mismatch_notifies_state_callback() {
 }
 
 /**
- * @brief SyncNetwork as handshake answer notifies the state callback with Ready.
+ * @brief SyncNetwork as handshake answer notifies the state callback with
+ * Ready.
  */
 bool test_handshake_sync_network_notifies_state_callback() {
     MockTcpClient* mock;
@@ -2507,17 +2579,20 @@ bool test_handshake_server_disconnect_notifies_state_callback() {
     push_packet(mock, PacketId::Disconnect, &msg, sizeof(msg));
     client->update(1500);
 
-    ASSERT_EQ(static_cast<int>(client->get_last_error_code()),
-              static_cast<int>(NetworkErrorCode::ConnectionRejected));
+    ASSERT_EQ(
+        static_cast<int>(client->get_last_error_code()),
+        static_cast<int>(NetworkErrorCode::ConnectionRejected));
     ASSERT_TRUE(!g_state_changes.empty());
     ASSERT_EQ(g_state_changes.back().old_state, ConnectionState::Handshaking);
-    ASSERT_TRUE(g_state_changes.back().new_state != ConnectionState::Handshaking);
+    ASSERT_TRUE(
+        g_state_changes.back().new_state != ConnectionState::Handshaking);
     return true;
 }
 
 static int g_unexpected_packets = 0;
 static PacketId g_unexpected_id = PacketId::Initialize;
-static void count_unexpected_packet(PacketId id, const uint8_t*, size_t, void*) {
+static void count_unexpected_packet(
+    PacketId id, const uint8_t*, size_t, void*) {
     ++g_unexpected_packets;
     g_unexpected_id = id;
 }
@@ -2726,8 +2801,10 @@ int main() {
     RUN_TEST(test_handshake_unexpected_packet_is_forwarded_and_keeps_waiting);
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n",
-           g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

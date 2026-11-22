@@ -22,44 +22,46 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegister_##name { \
-        TestRegister_##name() { register_test(#name, test_##name); } \
-    } g_test_register_##name; \
+#define TEST(name)                             \
+    static void test_##name();                 \
+    static struct TestRegister_##name {        \
+        TestRegister_##name() {                \
+            register_test(#name, test_##name); \
+        }                                      \
+    } g_test_register_##name;                  \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT_TRUE(cond)                                      \
+    do {                                                       \
+        if (!(cond)) {                                         \
             printf("  FAIL: %s (line %d)\n", #cond, __LINE__); \
             throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+        }                                                      \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        auto _a = (a); \
-        auto _b = (b); \
-        if (_a != _b) { \
-            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
+#define ASSERT_EQ(a, b)                                                      \
+    do {                                                                     \
+        auto _a = (a);                                                       \
+        auto _b = (b);                                                       \
+        if (_a != _b) {                                                      \
+            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
             printf("    got: %lld vs %lld\n", (long long)_a, (long long)_b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            throw std::runtime_error("Test assertion failed");               \
+        }                                                                    \
+    } while (0)
 
-#define ASSERT_STREQ(a, b) \
-    do { \
-        const char* _a = (a); \
-        const char* _b = (b); \
-        if (std::strcmp(_a, _b) != 0) { \
+#define ASSERT_STREQ(a, b)                                            \
+    do {                                                              \
+        const char* _a = (a);                                         \
+        const char* _b = (b);                                         \
+        if (std::strcmp(_a, _b) != 0) {                               \
             printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
-            printf("    got: \"%s\" vs \"%s\"\n", _a, _b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            printf("    got: \"%s\" vs \"%s\"\n", _a, _b);            \
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
+    } while (0)
 
 struct TestEntry {
     const char* name;
@@ -91,7 +93,9 @@ public:
         std::remove(m_path);
     }
 
-    const char* path() const { return m_path; }
+    const char* path() const {
+        return m_path;
+    }
 
 private:
     char m_path[256];
@@ -261,7 +265,9 @@ TEST(passphrase_truncated) {
     // Passphrase > 64 chars should be truncated
     const char* content =
         "[ldn]\n"
-        "passphrase = 12345678901234567890123456789012345678901234567890123456789012345678901234567890\n";
+        "passphrase = "
+        "1234567890123456789012345678901234567890123456789012345678901234567890"
+        "1234567890\n";
 
     TempConfigFile file(content);
     Config config = get_default_config();
@@ -451,13 +457,16 @@ static void expect_bool(const char* value, bool expected) {
 }
 
 TEST(every_config_result_has_its_own_name) {
-    using ryu_ldn::config::ConfigResult;
     using ryu_ldn::config::config_result_to_string;
+    using ryu_ldn::config::ConfigResult;
     ASSERT_STREQ(config_result_to_string(ConfigResult::Success), "Success");
-    ASSERT_STREQ(config_result_to_string(ConfigResult::FileNotFound), "FileNotFound");
-    ASSERT_STREQ(config_result_to_string(ConfigResult::ParseError), "ParseError");
+    ASSERT_STREQ(
+        config_result_to_string(ConfigResult::FileNotFound), "FileNotFound");
+    ASSERT_STREQ(
+        config_result_to_string(ConfigResult::ParseError), "ParseError");
     ASSERT_STREQ(config_result_to_string(ConfigResult::IoError), "IoError");
-    ASSERT_STREQ(config_result_to_string(static_cast<ConfigResult>(99)), "Unknown");
+    ASSERT_STREQ(
+        config_result_to_string(static_cast<ConfigResult>(99)), "Unknown");
 }
 
 TEST(parse_bool_accepts_only_the_four_documented_spellings) {
@@ -473,9 +482,9 @@ TEST(parse_bool_rejects_anything_else_as_false) {
     expect_bool("yes", false);
     expect_bool("on", false);
     expect_bool("2", false);
-    expect_bool("tru", false);      // prefix of a valid token
-    expect_bool("truee", false);    // valid token plus a trailing character
-    expect_bool("", false);         // empty value
+    expect_bool("tru", false);    // prefix of a valid token
+    expect_bool("truee", false);  // valid token plus a trailing character
+    expect_bool("", false);       // empty value
 }
 
 // Loads `[debug]\nlevel = <value>` over a config whose level is 77.
@@ -496,12 +505,12 @@ TEST(parse_uint32_accepts_clean_integers) {
 }
 
 TEST(parse_uint32_turns_malformed_values_into_zero) {
-    ASSERT_EQ(load_debug_level(""), 0);              // empty
-    ASSERT_EQ(load_debug_level("-1"), 0);            // negative
-    ASSERT_EQ(load_debug_level("4294967296"), 0);    // 2^32: exceeds uint32_t
+    ASSERT_EQ(load_debug_level(""), 0);            // empty
+    ASSERT_EQ(load_debug_level("-1"), 0);          // negative
+    ASSERT_EQ(load_debug_level("4294967296"), 0);  // 2^32: exceeds uint32_t
     ASSERT_EQ(load_debug_level("99999999999999999999999"), 0);  // ERANGE
-    ASSERT_EQ(load_debug_level("12abc"), 0);         // trailing garbage
-    ASSERT_EQ(load_debug_level("abc"), 0);           // nothing parsed
+    ASSERT_EQ(load_debug_level("12abc"), 0);  // trailing garbage
+    ASSERT_EQ(load_debug_level("abc"), 0);    // nothing parsed
 }
 
 TEST(server_port_with_empty_or_negative_value_is_zero) {
@@ -518,12 +527,12 @@ TEST(server_port_with_empty_or_negative_value_is_zero) {
 
 TEST(keys_outside_a_known_section_are_ignored) {
     const char* content =
-        "orphan = 1\n"             // before any section
+        "orphan = 1\n"  // before any section
         "[nonsense]\n"
-        "host = evil.example\n"    // unknown section
+        "host = evil.example\n"  // unknown section
         "port = 1\n"
         "[server]\n"
-        "no_equals_sign_here\n"    // known section, malformed line
+        "no_equals_sign_here\n"  // known section, malformed line
         "port = 4242\n";
     TempConfigFile file(content);
     Config config = get_default_config();
@@ -534,7 +543,8 @@ TEST(keys_outside_a_known_section_are_ignored) {
 }
 
 TEST(save_config_reports_io_error_when_the_file_cannot_be_created) {
-    // The parent "directory" is a regular file, so neither mkdir nor fopen can succeed.
+    // The parent "directory" is a regular file, so neither mkdir nor fopen can
+    // succeed.
     TempConfigFile blocker("x");
     char path[300];
     snprintf(path, sizeof(path), "%s/config.ini", blocker.path());
@@ -565,8 +575,11 @@ int main() {
     }
 
     printf("\n========================================\n");
-    printf("Results: %d passed, %d failed, %d total\n",
-           g_tests_passed, g_tests_failed, g_tests_run);
+    printf(
+        "Results: %d passed, %d failed, %d total\n",
+        g_tests_passed,
+        g_tests_failed,
+        g_tests_run);
 
     if (g_tests_failed == 0) {
         printf("ALL TESTS PASSED\n");

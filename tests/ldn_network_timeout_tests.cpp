@@ -16,9 +16,13 @@
 using ams::mitm::ldn::NetworkTimeout;
 
 static int g_fired = 0;
-static void on_timeout() { g_fired++; }
+static void on_timeout() {
+    g_fired++;
+}
 
-static void set_now(uint64_t ms) { ams::os::g_host_tick_ms = ms; }
+static void set_now(uint64_t ms) {
+    ams::os::g_host_tick_ms = ms;
+}
 
 TEST(a_new_timeout_is_inactive_and_never_fires) {
     g_fired = 0;
@@ -95,7 +99,8 @@ TEST(a_null_callback_never_fires_and_stays_active) {
 }
 
 TEST(the_default_idle_timeout_matches_the_reference_client) {
-    ASSERT_EQ(NetworkTimeout::DEFAULT_IDLE_TIMEOUT_MS, static_cast<uint64_t>(6000));
+    ASSERT_EQ(
+        NetworkTimeout::DEFAULT_IDLE_TIMEOUT_MS, static_cast<uint64_t>(6000));
 }
 
 int main() {

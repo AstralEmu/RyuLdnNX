@@ -19,38 +19,47 @@
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct test_##name##_register { \
-        test_##name##_register() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct test_##name##_register {    \
+        test_##name##_register() {            \
             printf("  [TEST] %s... ", #name); \
-            fflush(stdout); \
-            test_##name(); \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } \
-    } test_##name##_instance; \
+            fflush(stdout);                   \
+            test_##name();                    \
+            printf("PASS\n");                 \
+            g_tests_passed++;                 \
+        }                                     \
+    } test_##name##_instance;                 \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL\n    Assertion failed: %s\n    at %s:%d\n", #cond, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_TRUE(cond)                                         \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            printf(                                               \
+                "FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
+                #cond,                                            \
+                __FILE__,                                         \
+                __LINE__);                                        \
+            g_tests_failed++;                                     \
+            return;                                               \
+        }                                                         \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("FAIL\n    Expected: %s == %s\n    at %s:%d\n", #a, #b, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                         \
+    do {                                                        \
+        if ((a) != (b)) {                                       \
+            printf(                                             \
+                "FAIL\n    Expected: %s == %s\n    at %s:%d\n", \
+                #a,                                             \
+                #b,                                             \
+                __FILE__,                                       \
+                __LINE__);                                      \
+            g_tests_failed++;                                   \
+            return;                                             \
+        }                                                       \
+    } while (0)
 
 // ============================================================================
 // Types (mirroring sysmodule definitions)
@@ -156,7 +165,8 @@ public:
     // Session Info
     // =========================================================================
 
-    void SetSessionInfo(u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host) {
+    void SetSessionInfo(
+        u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host) {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_node_count = node_count;
         m_max_nodes = max_nodes;
@@ -164,7 +174,8 @@ public:
         m_is_host = is_host;
     }
 
-    void GetSessionInfo(u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const {
+    void GetSessionInfo(
+        u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const {
         std::lock_guard<std::mutex> lock(m_mutex);
         node_count = m_node_count;
         max_nodes = m_max_nodes;
@@ -397,7 +408,7 @@ TEST(update_session_info_node_count) {
     state.Reset();
 
     state.SetSessionInfo(2, 8, 0, true);
-    state.SetSessionInfo(5, 8, 0, true); // More players joined
+    state.SetSessionInfo(5, 8, 0, true);  // More players joined
 
     u8 count, max, local;
     bool is_host;
@@ -475,8 +486,9 @@ TEST(consume_reconnect_clears_flag) {
     auto& state = SharedState::GetInstance();
     state.Reset();
     state.RequestReconnect();
-    ASSERT_TRUE(state.ConsumeReconnectRequest()); // First consume
-    ASSERT_FALSE(state.ConsumeReconnectRequest()); // Second consume should be false
+    ASSERT_TRUE(state.ConsumeReconnectRequest());  // First consume
+    ASSERT_FALSE(
+        state.ConsumeReconnectRequest());  // Second consume should be false
 }
 
 TEST(multiple_reconnect_requests) {
@@ -590,7 +602,10 @@ int main() {
     // Tests run automatically via static initializers
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

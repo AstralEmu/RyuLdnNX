@@ -31,9 +31,8 @@ namespace ams::mitm::ldn {
  * - is_connected: false
  */
 LdnNodeMapper::LdnNodeMapper()
-    : 
-     m_nodes{}
-    , m_local_node_id(0xFF)  // 0xFF = not assigned
+    : m_nodes{},
+      m_local_node_id(0xFF)  // 0xFF = not assigned
 {
     // Initialize empty node entries with their respective IDs
     for (size_t i = 0; i < MaxNodes; i++) {
@@ -149,7 +148,7 @@ size_t LdnNodeMapper::GetConnectedCount() const {
 void LdnNodeMapper::Clear() {
     std::scoped_lock lk(m_mutex);
 
-    for (auto & m_node : m_nodes) {
+    for (auto& m_node : m_nodes) {
         m_node.ipv4_address = 0;
         m_node.is_connected = false;
     }
@@ -173,7 +172,7 @@ void LdnNodeMapper::UpdateFromNetworkInfo(const NetworkInfo& info) {
     std::scoped_lock lk(m_mutex);
 
     // Clear existing nodes first
-    for (auto & m_node : m_nodes) {
+    for (auto& m_node : m_nodes) {
         m_node.ipv4_address = 0;
         m_node.is_connected = false;
     }
@@ -186,7 +185,8 @@ void LdnNodeMapper::UpdateFromNetworkInfo(const NetworkInfo& info) {
         // Only add nodes that are marked as connected. nodeId comes from the
         // server and is signed: reject anything outside the table so a bad
         // packet cannot write out of bounds.
-        if (node.isConnected != 0 && node.nodeId >= 0 && node.nodeId < static_cast<s8>(MaxNodes)) {
+        if (node.isConnected != 0 && node.nodeId >= 0 &&
+            node.nodeId < static_cast<s8>(MaxNodes)) {
             m_nodes[node.nodeId].ipv4_address = node.ipv4Address;
             m_nodes[node.nodeId].is_connected = true;
         }
@@ -209,12 +209,14 @@ void LdnNodeMapper::UpdateFromNetworkInfo(const NetworkInfo& info) {
  * - Route ONLY to the destination node
  * - Destination must be connected
  *
- * @param dest_node_id Destination from packet header (or BroadcastNodeId for broadcast)
+ * @param dest_node_id Destination from packet header (or BroadcastNodeId for
+ * broadcast)
  * @param source_node_id Source from packet header (used to avoid echo)
  * @param target_node_id The node we're considering routing to
  * @return true if packet should be sent to target_node_id
  */
-bool LdnNodeMapper::ShouldRouteToNode(u32 dest_node_id, u32 source_node_id, u32 target_node_id) const {
+bool LdnNodeMapper::ShouldRouteToNode(
+    u32 dest_node_id, u32 source_node_id, u32 target_node_id) const {
     // Invalid target node IDs are never routed to
     if (target_node_id >= MaxNodes) {
         return false;
@@ -237,4 +239,4 @@ bool LdnNodeMapper::ShouldRouteToNode(u32 dest_node_id, u32 source_node_id, u32 
     return dest_node_id == target_node_id;
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

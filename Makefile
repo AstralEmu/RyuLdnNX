@@ -11,6 +11,8 @@
 #   make clean       # wipe build artifacts and output/
 #   make dist        # package SD card layout + release ZIP
 #   make lint        # run clang-tidy on project sources
+#   make style       # formatting + Doxygen-completeness gate (scripts/style.py)
+#   make style-fix   # clang-format every source in place
 #   make shell       # interactive shell inside the build container
 #   make debug IP=... [PID=...]  # interactive GDB session
 #   make hooks       # wire tracked git hooks (hooks/) and the wiki hook
@@ -35,7 +37,7 @@ PID ?=
 # to pin a digest: ACTIONLINT_IMAGE=rhysd/actionlint@sha256:...
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.7
 
-.PHONY: build test clean dist lint shell debug help hooks hooks-check workflow-lint docs
+.PHONY: build test clean dist lint style style-fix shell debug help hooks hooks-check workflow-lint docs
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} \
@@ -55,6 +57,12 @@ dist: ## Package SD card layout + release ZIP (runs the dist target in sysmodule
 
 lint: hooks-check ## Run clang-tidy on project sources (docker compose run --rm lint)
 	$(DOCKER_COMPOSE) run --rm lint
+
+style: hooks-check ## Formatting + Doxygen-completeness gate (docker compose run --rm style)
+	$(DOCKER_COMPOSE) run --rm style
+
+style-fix: hooks-check ## clang-format every C/C++ source in place (docker compose run --rm style format)
+	$(DOCKER_COMPOSE) run --rm style format
 
 shell: ## Interactive shell inside the build container (docker compose run --rm shell)
 	$(DOCKER_COMPOSE) run --rm shell

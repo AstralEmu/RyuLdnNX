@@ -113,33 +113,42 @@ static int g_tests_passed = 0;
  *
  * @param name Test name (must match a TEST(name) definition)
  */
-#define RUN_TEST(name) do { \
-    g_tests_run++; \
-    printf("  [TEST] %s... ", #name); \
-    try { \
-        test_##name(); \
-        g_tests_passed++; \
-        printf("PASS\n"); \
-    } catch (const std::exception& e) { \
-        printf("FAIL: %s\n", e.what()); \
-    } \
-} while(0)
+#define RUN_TEST(name)                      \
+    do {                                    \
+        g_tests_run++;                      \
+        printf("  [TEST] %s... ", #name);   \
+        try {                               \
+            test_##name();                  \
+            g_tests_passed++;               \
+            printf("PASS\n");               \
+        } catch (const std::exception& e) { \
+            printf("FAIL: %s\n", e.what()); \
+        }                                   \
+    } while (0)
 
 /**
  * @brief Assert that an expression evaluates to true
  * @param expr Expression to evaluate
  * @throws std::runtime_error if expression is false
  */
-#define ASSERT_TRUE(expr) \
-    do { if (!(expr)) { throw std::runtime_error(#expr " is false"); } } while(0)
+#define ASSERT_TRUE(expr)                                \
+    do {                                                 \
+        if (!(expr)) {                                   \
+            throw std::runtime_error(#expr " is false"); \
+        }                                                \
+    } while (0)
 
 /**
  * @brief Assert that an expression evaluates to false
  * @param expr Expression to evaluate
  * @throws std::runtime_error if expression is true
  */
-#define ASSERT_FALSE(expr) \
-    do { if (expr) { throw std::runtime_error(#expr " is true"); } } while(0)
+#define ASSERT_FALSE(expr)                              \
+    do {                                                \
+        if (expr) {                                     \
+            throw std::runtime_error(#expr " is true"); \
+        }                                               \
+    } while (0)
 
 /**
  * @brief Assert that two values are equal
@@ -151,16 +160,17 @@ static int g_tests_passed = 0;
  * @param b Second value
  * @throws std::runtime_error if values are not equal
  */
-#define ASSERT_EQ(a, b) \
-    do { \
-        auto _a = static_cast<long long>(a); \
-        auto _b = static_cast<long long>(b); \
-        if (_a != _b) { \
-            char buf[128]; \
-            snprintf(buf, sizeof(buf), "%s != %s (%lld vs %lld)", #a, #b, _a, _b); \
-            throw std::runtime_error(buf); \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                                       \
+    do {                                                                      \
+        auto _a = static_cast<long long>(a);                                  \
+        auto _b = static_cast<long long>(b);                                  \
+        if (_a != _b) {                                                       \
+            char buf[128];                                                    \
+            snprintf(                                                         \
+                buf, sizeof(buf), "%s != %s (%lld vs %lld)", #a, #b, _a, _b); \
+            throw std::runtime_error(buf);                                    \
+        }                                                                     \
+    } while (0)
 
 /**
  * @brief Assert that two C strings are equal
@@ -168,8 +178,12 @@ static int g_tests_passed = 0;
  * @param b Second string
  * @throws std::runtime_error if strings are not equal
  */
-#define ASSERT_STREQ(a, b) \
-    do { if (strcmp(a, b) != 0) { throw std::runtime_error(#a " != " #b); } } while(0)
+#define ASSERT_STREQ(a, b)                          \
+    do {                                            \
+        if (strcmp(a, b) != 0) {                    \
+            throw std::runtime_error(#a " != " #b); \
+        }                                           \
+    } while (0)
 
 // ============================================================================
 // Callback Tracking for Tests
@@ -206,8 +220,10 @@ static int g_callback_count = 0;
  * @param new_state State after transition
  * @param event Event that triggered transition
  */
-static void test_callback(ConnectionState old_state, ConnectionState new_state,
-                          ConnectionEvent event) {
+static void test_callback(
+    ConnectionState old_state,
+    ConnectionState new_state,
+    ConnectionEvent event) {
     g_last_old_state = old_state;
     g_last_new_state = new_state;
     g_last_event = event;
@@ -235,8 +251,9 @@ static void reset_callback_tracking() {
  */
 TEST(initial_state_disconnected) {
     ConnectionStateMachine sm;
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Disconnected));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Disconnected));
 }
 
 /**
@@ -281,9 +298,11 @@ TEST(initial_not_transitioning) {
 TEST(transition_disconnected_to_connecting) {
     ConnectionStateMachine sm;
     TransitionResult result = sm.process_event(ConnectionEvent::Connect);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Connecting));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Connecting));
 }
 
 /**
@@ -293,9 +312,11 @@ TEST(transition_connecting_to_connected) {
     ConnectionStateMachine sm;
     sm.process_event(ConnectionEvent::Connect);
     TransitionResult result = sm.process_event(ConnectionEvent::ConnectSuccess);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Connected));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Connected));
 }
 
 /**
@@ -305,10 +326,13 @@ TEST(transition_connected_to_ready) {
     ConnectionStateMachine sm;
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectSuccess);
-    TransitionResult result = sm.process_event(ConnectionEvent::HandshakeSuccess);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Ready));
+    TransitionResult result =
+        sm.process_event(ConnectionEvent::HandshakeSuccess);
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Ready));
 }
 
 /**
@@ -344,9 +368,11 @@ TEST(transition_connecting_to_backoff_on_failure) {
     ConnectionStateMachine sm;
     sm.process_event(ConnectionEvent::Connect);
     TransitionResult result = sm.process_event(ConnectionEvent::ConnectFailed);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Backoff));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Backoff));
 }
 
 /**
@@ -357,9 +383,11 @@ TEST(transition_backoff_to_retrying) {
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectFailed);
     TransitionResult result = sm.process_event(ConnectionEvent::BackoffExpired);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Retrying));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Retrying));
 }
 
 /**
@@ -371,9 +399,11 @@ TEST(transition_retrying_to_connected) {
     sm.process_event(ConnectionEvent::ConnectFailed);
     sm.process_event(ConnectionEvent::BackoffExpired);
     TransitionResult result = sm.process_event(ConnectionEvent::ConnectSuccess);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Connected));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Connected));
 }
 
 /**
@@ -385,9 +415,11 @@ TEST(transition_ready_to_backoff_on_connection_lost) {
     sm.process_event(ConnectionEvent::ConnectSuccess);
     sm.process_event(ConnectionEvent::HandshakeSuccess);
     TransitionResult result = sm.process_event(ConnectionEvent::ConnectionLost);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Backoff));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Backoff));
 }
 
 /**
@@ -397,10 +429,13 @@ TEST(transition_connected_to_backoff_on_handshake_failed) {
     ConnectionStateMachine sm;
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectSuccess);
-    TransitionResult result = sm.process_event(ConnectionEvent::HandshakeFailed);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Backoff));
+    TransitionResult result =
+        sm.process_event(ConnectionEvent::HandshakeFailed);
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Backoff));
 }
 
 /**
@@ -410,10 +445,13 @@ TEST(transition_connected_to_handshaking) {
     ConnectionStateMachine sm;
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectSuccess);
-    TransitionResult result = sm.process_event(ConnectionEvent::HandshakeStarted);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Handshaking));
+    TransitionResult result =
+        sm.process_event(ConnectionEvent::HandshakeStarted);
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Handshaking));
 }
 
 /**
@@ -424,10 +462,13 @@ TEST(transition_handshaking_to_ready) {
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectSuccess);
     sm.process_event(ConnectionEvent::HandshakeStarted);
-    TransitionResult result = sm.process_event(ConnectionEvent::HandshakeSuccess);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Ready));
+    TransitionResult result =
+        sm.process_event(ConnectionEvent::HandshakeSuccess);
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Ready));
 }
 
 /**
@@ -438,10 +479,13 @@ TEST(transition_handshaking_to_backoff_on_failure) {
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectSuccess);
     sm.process_event(ConnectionEvent::HandshakeStarted);
-    TransitionResult result = sm.process_event(ConnectionEvent::HandshakeFailed);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Backoff));
+    TransitionResult result =
+        sm.process_event(ConnectionEvent::HandshakeFailed);
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Backoff));
 }
 
 /**
@@ -453,9 +497,11 @@ TEST(transition_handshaking_to_backoff_on_connection_lost) {
     sm.process_event(ConnectionEvent::ConnectSuccess);
     sm.process_event(ConnectionEvent::HandshakeStarted);
     TransitionResult result = sm.process_event(ConnectionEvent::ConnectionLost);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Backoff));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Backoff));
 }
 
 // ============================================================================
@@ -471,9 +517,11 @@ TEST(transition_ready_to_disconnecting) {
     sm.process_event(ConnectionEvent::ConnectSuccess);
     sm.process_event(ConnectionEvent::HandshakeSuccess);
     TransitionResult result = sm.process_event(ConnectionEvent::Disconnect);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Disconnecting));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Disconnecting));
 }
 
 /**
@@ -486,9 +534,11 @@ TEST(transition_disconnecting_to_disconnected) {
     sm.process_event(ConnectionEvent::HandshakeSuccess);
     sm.process_event(ConnectionEvent::Disconnect);
     TransitionResult result = sm.process_event(ConnectionEvent::ConnectionLost);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Disconnected));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Disconnected));
 }
 
 /**
@@ -499,9 +549,11 @@ TEST(transition_backoff_to_disconnected_on_disconnect) {
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectFailed);
     TransitionResult result = sm.process_event(ConnectionEvent::Disconnect);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Disconnected));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Disconnected));
 }
 
 // ============================================================================
@@ -516,9 +568,11 @@ TEST(transition_to_error_on_fatal) {
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectSuccess);
     TransitionResult result = sm.process_event(ConnectionEvent::FatalError);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Error));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Error));
 }
 
 /**
@@ -529,9 +583,11 @@ TEST(recover_from_error_with_retry) {
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::FatalError);
     TransitionResult result = sm.process_event(ConnectionEvent::RetryRequested);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Connecting));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Connecting));
 }
 
 /**
@@ -542,9 +598,11 @@ TEST(recover_from_error_with_disconnect) {
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::FatalError);
     TransitionResult result = sm.process_event(ConnectionEvent::Disconnect);
-    ASSERT_EQ(static_cast<int>(result), static_cast<int>(TransitionResult::Success));
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Disconnected));
+    ASSERT_EQ(
+        static_cast<int>(result), static_cast<int>(TransitionResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Disconnected));
 }
 
 // ============================================================================
@@ -558,8 +616,9 @@ TEST(invalid_connect_when_connecting) {
     ConnectionStateMachine sm;
     sm.process_event(ConnectionEvent::Connect);
     TransitionResult result = sm.process_event(ConnectionEvent::Connect);
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(TransitionResult::InvalidTransition));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(TransitionResult::InvalidTransition));
 }
 
 /**
@@ -567,9 +626,11 @@ TEST(invalid_connect_when_connecting) {
  */
 TEST(invalid_handshake_when_disconnected) {
     ConnectionStateMachine sm;
-    TransitionResult result = sm.process_event(ConnectionEvent::HandshakeSuccess);
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(TransitionResult::InvalidTransition));
+    TransitionResult result =
+        sm.process_event(ConnectionEvent::HandshakeSuccess);
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(TransitionResult::InvalidTransition));
 }
 
 /**
@@ -580,8 +641,9 @@ TEST(invalid_backoff_expired_when_connected) {
     sm.process_event(ConnectionEvent::Connect);
     sm.process_event(ConnectionEvent::ConnectSuccess);
     TransitionResult result = sm.process_event(ConnectionEvent::BackoffExpired);
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(TransitionResult::InvalidTransition));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(TransitionResult::InvalidTransition));
 }
 
 /**
@@ -590,8 +652,9 @@ TEST(invalid_backoff_expired_when_connected) {
 TEST(already_in_state_disconnect_when_disconnected) {
     ConnectionStateMachine sm;
     TransitionResult result = sm.process_event(ConnectionEvent::Disconnect);
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(TransitionResult::AlreadyInState));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(TransitionResult::AlreadyInState));
 }
 
 // ============================================================================
@@ -609,12 +672,15 @@ TEST(callback_invoked_on_transition) {
     sm.process_event(ConnectionEvent::Connect);
 
     ASSERT_EQ(g_callback_count, 1);
-    ASSERT_EQ(static_cast<int>(g_last_old_state),
-              static_cast<int>(ConnectionState::Disconnected));
-    ASSERT_EQ(static_cast<int>(g_last_new_state),
-              static_cast<int>(ConnectionState::Connecting));
-    ASSERT_EQ(static_cast<int>(g_last_event),
-              static_cast<int>(ConnectionEvent::Connect));
+    ASSERT_EQ(
+        static_cast<int>(g_last_old_state),
+        static_cast<int>(ConnectionState::Disconnected));
+    ASSERT_EQ(
+        static_cast<int>(g_last_new_state),
+        static_cast<int>(ConnectionState::Connecting));
+    ASSERT_EQ(
+        static_cast<int>(g_last_event),
+        static_cast<int>(ConnectionEvent::Connect));
 }
 
 /**
@@ -643,8 +709,9 @@ TEST(callback_tracks_multiple_transitions) {
     sm.process_event(ConnectionEvent::HandshakeSuccess);
 
     ASSERT_EQ(g_callback_count, 3);
-    ASSERT_EQ(static_cast<int>(g_last_new_state),
-              static_cast<int>(ConnectionState::Ready));
+    ASSERT_EQ(
+        static_cast<int>(g_last_new_state),
+        static_cast<int>(ConnectionState::Ready));
 }
 
 /**
@@ -736,8 +803,9 @@ TEST(manual_retry_count_reset) {
 TEST(force_state_works) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Ready);
-    ASSERT_EQ(static_cast<int>(sm.get_state()),
-              static_cast<int>(ConnectionState::Ready));
+    ASSERT_EQ(
+        static_cast<int>(sm.get_state()),
+        static_cast<int>(ConnectionState::Ready));
 }
 
 /**
@@ -761,64 +829,93 @@ TEST(force_state_does_not_trigger_callback) {
  * @brief Test state_to_string() for all states
  */
 TEST(state_to_string_all_states) {
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Disconnected),
-                 "Disconnected");
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Connecting),
-                 "Connecting");
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Connected),
-                 "Connected");
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Handshaking),
-                 "Handshaking");
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Ready),
-                 "Ready");
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Backoff),
-                 "Backoff");
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Retrying),
-                 "Retrying");
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Disconnecting),
-                 "Disconnecting");
-    ASSERT_STREQ(ConnectionStateMachine::state_to_string(ConnectionState::Error),
-                 "Error");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Disconnected),
+        "Disconnected");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Connecting),
+        "Connecting");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Connected),
+        "Connected");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Handshaking),
+        "Handshaking");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Ready),
+        "Ready");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Backoff),
+        "Backoff");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Retrying),
+        "Retrying");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Disconnecting),
+        "Disconnecting");
+    ASSERT_STREQ(
+        ConnectionStateMachine::state_to_string(ConnectionState::Error),
+        "Error");
 }
 
 /**
  * @brief Test event_to_string() for all events
  */
 TEST(event_to_string_all_events) {
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::Connect),
-                 "Connect");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::ConnectSuccess),
-                 "ConnectSuccess");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::ConnectFailed),
-                 "ConnectFailed");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::HandshakeStarted),
-                 "HandshakeStarted");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::HandshakeSuccess),
-                 "HandshakeSuccess");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::HandshakeFailed),
-                 "HandshakeFailed");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::Disconnect),
-                 "Disconnect");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::ConnectionLost),
-                 "ConnectionLost");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::BackoffExpired),
-                 "BackoffExpired");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::RetryRequested),
-                 "RetryRequested");
-    ASSERT_STREQ(ConnectionStateMachine::event_to_string(ConnectionEvent::FatalError),
-                 "FatalError");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(ConnectionEvent::Connect),
+        "Connect");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(
+            ConnectionEvent::ConnectSuccess),
+        "ConnectSuccess");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(ConnectionEvent::ConnectFailed),
+        "ConnectFailed");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(
+            ConnectionEvent::HandshakeStarted),
+        "HandshakeStarted");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(
+            ConnectionEvent::HandshakeSuccess),
+        "HandshakeSuccess");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(
+            ConnectionEvent::HandshakeFailed),
+        "HandshakeFailed");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(ConnectionEvent::Disconnect),
+        "Disconnect");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(
+            ConnectionEvent::ConnectionLost),
+        "ConnectionLost");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(
+            ConnectionEvent::BackoffExpired),
+        "BackoffExpired");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(
+            ConnectionEvent::RetryRequested),
+        "RetryRequested");
+    ASSERT_STREQ(
+        ConnectionStateMachine::event_to_string(ConnectionEvent::FatalError),
+        "FatalError");
 }
 
 /**
  * @brief Test transition_result_to_string() for all results
  */
 TEST(transition_result_to_string_all) {
-    ASSERT_STREQ(transition_result_to_string(TransitionResult::Success),
-                 "Success");
-    ASSERT_STREQ(transition_result_to_string(TransitionResult::InvalidTransition),
-                 "InvalidTransition");
-    ASSERT_STREQ(transition_result_to_string(TransitionResult::AlreadyInState),
-                 "AlreadyInState");
+    ASSERT_STREQ(
+        transition_result_to_string(TransitionResult::Success), "Success");
+    ASSERT_STREQ(
+        transition_result_to_string(TransitionResult::InvalidTransition),
+        "InvalidTransition");
+    ASSERT_STREQ(
+        transition_result_to_string(TransitionResult::AlreadyInState),
+        "AlreadyInState");
 }
 
 // ============================================================================
@@ -1054,7 +1151,8 @@ TEST(ready_connect_success_noop) {
 TEST(connected_handshake_started) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Connected);
-    TransitionResult result = sm.process_event(ConnectionEvent::HandshakeStarted);
+    TransitionResult result =
+        sm.process_event(ConnectionEvent::HandshakeStarted);
     ASSERT_EQ(result, TransitionResult::Success);
     ASSERT_TRUE(sm.get_state() == ConnectionState::Handshaking);
 }
@@ -1085,26 +1183,34 @@ TEST(is_connected_in_handshaking_detailed) {
 }
 
 TEST(state_to_string_unknown) {
-    const char* result = ConnectionStateMachine::state_to_string(static_cast<ConnectionState>(99));
+    const char* result = ConnectionStateMachine::state_to_string(
+        static_cast<ConnectionState>(99));
     ASSERT_STREQ(result, "Unknown");
 }
 
 TEST(event_to_string_unknown) {
-    const char* result = ConnectionStateMachine::event_to_string(static_cast<ConnectionEvent>(99));
+    const char* result = ConnectionStateMachine::event_to_string(
+        static_cast<ConnectionEvent>(99));
     ASSERT_STREQ(result, "Unknown");
 }
 
 TEST(transition_result_to_string_unknown) {
-    ASSERT_STREQ(transition_result_to_string(static_cast<TransitionResult>(99)), "Unknown");
+    ASSERT_STREQ(
+        transition_result_to_string(static_cast<TransitionResult>(99)),
+        "Unknown");
 }
 
 TEST(process_event_rejects_out_of_range_state_and_event) {
     ConnectionStateMachine sm;
     sm.force_state(static_cast<ConnectionState>(99));
-    ASSERT_TRUE(sm.process_event(ConnectionEvent::Connect) == TransitionResult::InvalidTransition);
+    ASSERT_TRUE(
+        sm.process_event(ConnectionEvent::Connect) ==
+        TransitionResult::InvalidTransition);
 
     sm.force_state(ConnectionState::Disconnected);
-    ASSERT_TRUE(sm.process_event(static_cast<ConnectionEvent>(99)) == TransitionResult::InvalidTransition);
+    ASSERT_TRUE(
+        sm.process_event(static_cast<ConnectionEvent>(99)) ==
+        TransitionResult::InvalidTransition);
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
 }
 

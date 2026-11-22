@@ -55,13 +55,24 @@ struct Script {
 };
 Script g;
 
-bool on_data(uint32_t sip, uint16_t sp, uint32_t dip, uint16_t dp, bsdt::ProtocolType p,
-             const void*, size_t len) {
+bool on_data(
+    uint32_t sip,
+    uint16_t sp,
+    uint32_t dip,
+    uint16_t dp,
+    bsdt::ProtocolType p,
+    const void*,
+    size_t len) {
     g.data.push_back({sip, sp, dip, dp, p, len});
     return g.data_result;
 }
 
-bool on_connect(uint32_t sip, uint16_t sp, uint32_t dip, uint16_t dp, bsdt::ProtocolType p) {
+bool on_connect(
+    uint32_t sip,
+    uint16_t sp,
+    uint32_t dip,
+    uint16_t dp,
+    bsdt::ProtocolType p) {
     g.connect.push_back({sip, sp, dip, dp, p, 0});
     if (g.connect_result && g.answer_to != nullptr) {
         proto::ProxyConnectResponse response{};
@@ -71,12 +82,22 @@ bool on_connect(uint32_t sip, uint16_t sp, uint32_t dip, uint16_t dp, bsdt::Prot
     return g.connect_result;
 }
 
-bool on_reply(uint32_t sip, uint16_t sp, uint32_t dip, uint16_t dp, bsdt::ProtocolType p) {
+bool on_reply(
+    uint32_t sip,
+    uint16_t sp,
+    uint32_t dip,
+    uint16_t dp,
+    bsdt::ProtocolType p) {
     g.reply.push_back({sip, sp, dip, dp, p, 0});
     return g.reply_result;
 }
 
-bool on_disconnect(uint32_t sip, uint16_t sp, uint32_t dip, uint16_t dp, bsdt::ProtocolType p) {
+bool on_disconnect(
+    uint32_t sip,
+    uint16_t sp,
+    uint32_t dip,
+    uint16_t dp,
+    bsdt::ProtocolType p) {
     g.disconnect.push_back({sip, sp, dip, dp, p, 0});
     return g.disconnect_result;
 }
@@ -97,7 +118,8 @@ void reset_world() {
 // ---------------------------------------------------------------------------
 
 /// Address as the game hands it over / as Bind stores it.
-bsdt::SockAddrIn addr_with(uint32_t addr_field, uint16_t port, uint8_t family = 2) {
+bsdt::SockAddrIn addr_with(
+    uint32_t addr_field, uint16_t port, uint8_t family = 2) {
     bsdt::SockAddrIn a{};
     a.sin_len = sizeof(a);
     a.sin_family = family;
@@ -107,24 +129,38 @@ bsdt::SockAddrIn addr_with(uint32_t addr_field, uint16_t port, uint8_t family = 
 }
 
 /// Local (Ryujinx-format) address, as stored by Bind.
-bsdt::SockAddrIn local(uint32_t ryu_ip, uint16_t port) { return addr_with(ryu_ip, port); }
+bsdt::SockAddrIn local(uint32_t ryu_ip, uint16_t port) {
+    return addr_with(ryu_ip, port);
+}
 
 /// Peer address in network byte order, as sent by the game.
 bsdt::SockAddrIn peer(uint32_t ryu_ip, uint16_t port) {
     return addr_with(__builtin_bswap32(ryu_ip), port);
 }
 
-uint32_t errval(ams::Result r) { return r.GetValue(); }
-uint32_t errno_of(Errno e) { return static_cast<uint32_t>(e); }
-s32 neg(Errno e) { return -static_cast<s32>(e); }
+uint32_t errval(ams::Result r) {
+    return r.GetValue();
+}
+uint32_t errno_of(Errno e) {
+    return static_cast<uint32_t>(e);
+}
+s32 neg(Errno e) {
+    return -static_cast<s32>(e);
+}
 
 constexpr uint32_t IP_A = 0x0A720001;
 constexpr uint32_t IP_B = 0x0A720002;
 
-ProxySocket make_udp() { return ProxySocket(bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp); }
-ProxySocket make_tcp() { return ProxySocket(bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp); }
+ProxySocket make_udp() {
+    return ProxySocket(bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
+}
+ProxySocket make_tcp() {
+    return ProxySocket(bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+}
 
-void sleep_ms(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+void sleep_ms(int ms) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
 
 }  // namespace
 
@@ -153,7 +189,9 @@ TEST(a_new_socket_is_unbound_blocking_and_remembers_its_type_and_flags) {
 TEST(bind_stores_the_address_once_and_only_for_inet) {
     reset_world();
     ProxySocket s = make_udp();
-    ASSERT_EQ(errval(s.Bind(addr_with(IP_A, 5000, 28))), errno_of(Errno::AfNoSupport));
+    ASSERT_EQ(
+        errval(s.Bind(addr_with(IP_A, 5000, 28))),
+        errno_of(Errno::AfNoSupport));
     ASSERT_TRUE(s.GetState() == ProxySocketState::Created);
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
     ASSERT_TRUE(s.GetState() == ProxySocketState::Bound);
@@ -203,7 +241,8 @@ TEST(a_udp_connect_only_records_the_default_destination) {
     reset_world();
     ProxySocket s = make_udp();
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
-    ASSERT_EQ(errval(s.Connect(addr_with(0, 1, 28))), errno_of(Errno::AfNoSupport));
+    ASSERT_EQ(
+        errval(s.Connect(addr_with(0, 1, 28))), errno_of(Errno::AfNoSupport));
     ASSERT_TRUE(s.Connect(peer(IP_B, 6000)).IsSuccess());
     ASSERT_TRUE(s.GetState() == ProxySocketState::Connected);
     ASSERT_TRUE(g.connect.empty());
@@ -255,7 +294,8 @@ TEST(a_blocking_tcp_connect_is_refused_when_the_answer_carries_a_protocol) {
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
     g.answer_to = &s;
     g.answer_protocol = proto::ProtocolType::Tcp;
-    ASSERT_EQ(errval(s.Connect(peer(IP_B, 6000))), errno_of(Errno::ConnRefused));
+    ASSERT_EQ(
+        errval(s.Connect(peer(IP_B, 6000))), errno_of(Errno::ConnRefused));
     ASSERT_TRUE(s.GetState() == ProxySocketState::Bound);
 }
 
@@ -291,7 +331,8 @@ TEST(sendto_refuses_a_shut_down_closed_or_unbound_socket) {
     const char msg[] = "abc";
 
     ProxySocket unbound = make_udp();
-    ASSERT_EQ(unbound.SendTo(msg, 3, 0, peer(IP_B, 6000)), neg(Errno::DestAddrReq));
+    ASSERT_EQ(
+        unbound.SendTo(msg, 3, 0, peer(IP_B, 6000)), neg(Errno::DestAddrReq));
 
     ProxySocket shut = make_udp();
     ASSERT_TRUE(shut.Bind(local(IP_A, 5000)).IsSuccess());
@@ -312,12 +353,15 @@ TEST(sendto_validates_the_payload_before_routing_it) {
     std::vector<uint8_t> big(PROXY_SOCKET_MAX_PAYLOAD + 1, 0x11);
 
     ASSERT_EQ(s.SendTo(nullptr, 4, 0, peer(IP_B, 6000)), neg(Errno::Fault));
-    ASSERT_EQ(s.SendTo(big.data(), big.size(), 0, peer(IP_B, 6000)), neg(Errno::MsgSize));
+    ASSERT_EQ(
+        s.SendTo(big.data(), big.size(), 0, peer(IP_B, 6000)),
+        neg(Errno::MsgSize));
     ASSERT_TRUE(g.data.empty());
 
     // The largest payload and an empty datagram both go through.
-    ASSERT_EQ(s.SendTo(big.data(), PROXY_SOCKET_MAX_PAYLOAD, 0, peer(IP_B, 6000)),
-              static_cast<s32>(PROXY_SOCKET_MAX_PAYLOAD));
+    ASSERT_EQ(
+        s.SendTo(big.data(), PROXY_SOCKET_MAX_PAYLOAD, 0, peer(IP_B, 6000)),
+        static_cast<s32>(PROXY_SOCKET_MAX_PAYLOAD));
     ASSERT_EQ(s.SendTo(nullptr, 0, 0, peer(IP_B, 6000)), 0);
     ASSERT_EQ(g.data.size(), static_cast<size_t>(2));
 }
@@ -352,7 +396,8 @@ TEST(sendto_is_unreachable_when_the_manager_cannot_send) {
 // Receive
 // ---------------------------------------------------------------------------
 
-TEST(recv_on_an_unconnected_socket_is_not_connected_and_on_a_connected_one_reads) {
+TEST(
+    recv_on_an_unconnected_socket_is_not_connected_and_on_a_connected_one_reads) {
     reset_world();
     ProxySocket s = make_udp();
     uint8_t buf[8];
@@ -397,7 +442,7 @@ TEST(recvfrom_copies_truncates_reports_the_sender_and_pops_unless_peeking) {
 
     uint8_t buf[8] = {};
     bsdt::SockAddrIn from{};
-    ASSERT_EQ(s.RecvFrom(buf, 3, 0x2, &from), 3);          // MSG_PEEK, truncated
+    ASSERT_EQ(s.RecvFrom(buf, 3, 0x2, &from), 3);  // MSG_PEEK, truncated
     ASSERT_EQ(buf[2], static_cast<uint8_t>(30));
     ASSERT_EQ(from.GetPort(), static_cast<uint16_t>(6000));
     ASSERT_EQ(s.GetPendingDataSize(), static_cast<size_t>(7));
@@ -424,7 +469,8 @@ TEST(a_blocking_read_waits_for_the_next_datagram) {
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
     std::atomic<int> result{-9999};
     uint8_t buf[8] = {};
-    std::thread reader([&] { result = s.RecvFrom(buf, sizeof(buf), 0, nullptr); });
+    std::thread reader(
+        [&] { result = s.RecvFrom(buf, sizeof(buf), 0, nullptr); });
     sleep_ms(100);
     ASSERT_EQ(result.load(), -9999);  // still blocked
     s.IncomingData("zz", 2, peer(IP_B, 6000));
@@ -438,7 +484,8 @@ TEST(a_shutdown_wakes_a_blocked_reader_which_then_reports_would_block) {
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
     std::atomic<int> result{-9999};
     uint8_t buf[8];
-    std::thread reader([&] { result = s.RecvFrom(buf, sizeof(buf), 0, nullptr); });
+    std::thread reader(
+        [&] { result = s.RecvFrom(buf, sizeof(buf), 0, nullptr); });
     sleep_ms(100);
     ASSERT_TRUE(s.Shutdown(bsdt::ShutdownHow::Both).IsSuccess());
     reader.join();
@@ -500,12 +547,14 @@ TEST(an_empty_or_null_payload_is_queued_as_an_empty_datagram) {
 TEST(a_verbose_logger_gets_a_hex_dump_of_the_first_bytes) {
     reset_world();
     const std::string path =
-        (std::filesystem::temp_directory_path() / "proxy_socket_tests.log").string();
+        (std::filesystem::temp_directory_path() / "proxy_socket_tests.log")
+            .string();
     ryu_ldn::config::DebugConfig cfg{};
     cfg.enabled = true;
     cfg.level = 3;
     ryu_ldn::debug::g_logger.init(cfg, path.c_str());
-    ASSERT_TRUE(ryu_ldn::debug::g_logger.should_log(ryu_ldn::debug::LogLevel::Verbose));
+    ASSERT_TRUE(
+        ryu_ldn::debug::g_logger.should_log(ryu_ldn::debug::LogLevel::Verbose));
 
     ProxySocket s = make_udp();
     std::vector<uint8_t> payload(100, 0xAB);
@@ -533,19 +582,35 @@ TEST(setsockopt_toggles_broadcast_and_accepts_the_common_options) {
     ASSERT_TRUE(s.IsBroadcastEnabled());
     ASSERT_TRUE(s.SetSockOpt(sol, bc, &off, sizeof(off)).IsSuccess());
     ASSERT_FALSE(s.IsBroadcastEnabled());
-    ASSERT_EQ(errval(s.SetSockOpt(sol, bc, nullptr, sizeof(on))), errno_of(Errno::Inval));
+    ASSERT_EQ(
+        errval(s.SetSockOpt(sol, bc, nullptr, sizeof(on))),
+        errno_of(Errno::Inval));
     ASSERT_EQ(errval(s.SetSockOpt(sol, bc, &on, 1)), errno_of(Errno::Inval));
 
     using O = bsdt::SocketOption;
-    const O ignored[] = {O::ReuseAddr, O::KeepAlive, O::DontRoute, O::Linger, O::OobInline,
-                         O::ReusePort, O::SndBuf, O::RcvBuf, O::SndLoWat, O::RcvLoWat,
-                         O::SndTimeo, O::RcvTimeo};
+    const O ignored[] = {
+        O::ReuseAddr,
+        O::KeepAlive,
+        O::DontRoute,
+        O::Linger,
+        O::OobInline,
+        O::ReusePort,
+        O::SndBuf,
+        O::RcvBuf,
+        O::SndLoWat,
+        O::RcvLoWat,
+        O::SndTimeo,
+        O::RcvTimeo};
     for (O o : ignored) {
-        ASSERT_TRUE(s.SetSockOpt(sol, static_cast<s32>(o), &on, sizeof(on)).IsSuccess());
+        ASSERT_TRUE(s.SetSockOpt(sol, static_cast<s32>(o), &on, sizeof(on))
+                        .IsSuccess());
     }
     // Unknown option, and options of other levels, are accepted and ignored.
     ASSERT_TRUE(s.SetSockOpt(sol, 0x7777, &on, sizeof(on)).IsSuccess());
-    ASSERT_TRUE(s.SetSockOpt(static_cast<s32>(bsdt::SocketOptionLevel::Tcp), 1, &on, sizeof(on)).IsSuccess());
+    ASSERT_TRUE(
+        s.SetSockOpt(
+             static_cast<s32>(bsdt::SocketOptionLevel::Tcp), 1, &on, sizeof(on))
+            .IsSuccess());
 }
 
 TEST(getsockopt_reports_type_error_and_broadcast_and_refuses_the_rest) {
@@ -555,33 +620,63 @@ TEST(getsockopt_reports_type_error_and_broadcast_and_refuses_the_rest) {
     s32 value = -1;
     size_t len = sizeof(value);
 
-    ASSERT_EQ(errval(s.GetSockOpt(sol, 1, nullptr, &len)), errno_of(Errno::Fault));
-    ASSERT_EQ(errval(s.GetSockOpt(sol, 1, &value, nullptr)), errno_of(Errno::Fault));
+    ASSERT_EQ(
+        errval(s.GetSockOpt(sol, 1, nullptr, &len)), errno_of(Errno::Fault));
+    ASSERT_EQ(
+        errval(s.GetSockOpt(sol, 1, &value, nullptr)), errno_of(Errno::Fault));
 
-    ASSERT_TRUE(s.GetSockOpt(sol, static_cast<s32>(bsdt::SocketOption::Type), &value, &len).IsSuccess());
+    ASSERT_TRUE(
+        s.GetSockOpt(
+             sol, static_cast<s32>(bsdt::SocketOption::Type), &value, &len)
+            .IsSuccess());
     ASSERT_EQ(value, static_cast<s32>(bsdt::SocketType::Stream));
     ASSERT_EQ(len, sizeof(s32));
 
-    value = -1; len = 16;
-    ASSERT_TRUE(s.GetSockOpt(sol, static_cast<s32>(bsdt::SocketOption::Error), &value, &len).IsSuccess());
+    value = -1;
+    len = 16;
+    ASSERT_TRUE(
+        s.GetSockOpt(
+             sol, static_cast<s32>(bsdt::SocketOption::Error), &value, &len)
+            .IsSuccess());
     ASSERT_EQ(value, 0);
     ASSERT_EQ(len, sizeof(s32));
 
     s.SetBroadcastEnabled(true);
-    value = -1; len = sizeof(value);
-    ASSERT_TRUE(s.GetSockOpt(sol, static_cast<s32>(bsdt::SocketOption::Broadcast), &value, &len).IsSuccess());
+    value = -1;
+    len = sizeof(value);
+    ASSERT_TRUE(
+        s.GetSockOpt(
+             sol, static_cast<s32>(bsdt::SocketOption::Broadcast), &value, &len)
+            .IsSuccess());
     ASSERT_EQ(value, 1);
 
     // Buffer too small for an int, unknown option, other level.
     len = 1;
-    ASSERT_EQ(errval(s.GetSockOpt(sol, static_cast<s32>(bsdt::SocketOption::Type), &value, &len)), errno_of(Errno::NoProtoOpt));
+    ASSERT_EQ(
+        errval(s.GetSockOpt(
+            sol, static_cast<s32>(bsdt::SocketOption::Type), &value, &len)),
+        errno_of(Errno::NoProtoOpt));
     len = 1;
-    ASSERT_EQ(errval(s.GetSockOpt(sol, static_cast<s32>(bsdt::SocketOption::Error), &value, &len)), errno_of(Errno::NoProtoOpt));
+    ASSERT_EQ(
+        errval(s.GetSockOpt(
+            sol, static_cast<s32>(bsdt::SocketOption::Error), &value, &len)),
+        errno_of(Errno::NoProtoOpt));
     len = 1;
-    ASSERT_EQ(errval(s.GetSockOpt(sol, static_cast<s32>(bsdt::SocketOption::Broadcast), &value, &len)), errno_of(Errno::NoProtoOpt));
+    ASSERT_EQ(
+        errval(s.GetSockOpt(
+            sol,
+            static_cast<s32>(bsdt::SocketOption::Broadcast),
+            &value,
+            &len)),
+        errno_of(Errno::NoProtoOpt));
     len = sizeof(value);
-    ASSERT_EQ(errval(s.GetSockOpt(sol, 0x7777, &value, &len)), errno_of(Errno::NoProtoOpt));
-    ASSERT_EQ(errval(s.GetSockOpt(static_cast<s32>(bsdt::SocketOptionLevel::Tcp), 1, &value, &len)), errno_of(Errno::NoProtoOpt));
+    ASSERT_EQ(
+        errval(s.GetSockOpt(sol, 0x7777, &value, &len)),
+        errno_of(Errno::NoProtoOpt));
+    ASSERT_EQ(
+        errval(s.GetSockOpt(
+            static_cast<s32>(bsdt::SocketOptionLevel::Tcp), 1, &value, &len)),
+        errno_of(Errno::NoProtoOpt));
 }
 
 // ---------------------------------------------------------------------------
@@ -610,7 +705,8 @@ TEST(listen_needs_a_bound_tcp_socket) {
     ASSERT_TRUE(tcp.GetState() == ProxySocketState::Listening);
 }
 
-TEST(accept_only_works_on_a_listening_socket_and_never_blocks_when_non_blocking) {
+TEST(
+    accept_only_works_on_a_listening_socket_and_never_blocks_when_non_blocking) {
     reset_world();
     ProxySocket s = make_tcp();
     ASSERT_TRUE(s.Accept(nullptr) == nullptr);
@@ -662,14 +758,17 @@ TEST(a_full_accept_queue_drops_new_connections_but_still_answers_the_peer) {
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
     ASSERT_TRUE(s.Listen(4).IsSuccess());
     for (size_t i = 0; i < MAX_ACCEPT_QUEUE + 1; i++) {
-        s.IncomingConnection(request_from(IP_B, static_cast<uint16_t>(6000 + i)));
+        s.IncomingConnection(
+            request_from(IP_B, static_cast<uint16_t>(6000 + i)));
     }
     ASSERT_EQ(g.reply.size(), MAX_ACCEPT_QUEUE + 1);
     s.SetNonBlocking(true);
     size_t accepted = 0;
     bsdt::SockAddrIn from{};
     while (auto a = s.Accept(&from)) {
-        ASSERT_EQ(from.GetPort(), static_cast<uint16_t>(6000 + accepted));  // arrival order
+        ASSERT_EQ(
+            from.GetPort(),
+            static_cast<uint16_t>(6000 + accepted));  // arrival order
         accepted++;
     }
     ASSERT_EQ(accepted, MAX_ACCEPT_QUEUE);
@@ -691,7 +790,8 @@ TEST(a_blocking_accept_waits_for_a_connection) {
     ASSERT_EQ(from.GetPort(), static_cast<uint16_t>(6000));
 }
 
-TEST(of_two_blocked_acceptors_woken_by_one_connection_one_gets_it_and_one_gets_nothing) {
+TEST(
+    of_two_blocked_acceptors_woken_by_one_connection_one_gets_it_and_one_gets_nothing) {
     reset_world();
     ProxySocket s = make_tcp();
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
@@ -715,7 +815,9 @@ TEST(shutdown_sets_the_requested_directions_and_refuses_unknown_ones) {
     reset_world();
     ProxySocket s = make_udp();
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
-    ASSERT_EQ(errval(s.Shutdown(static_cast<bsdt::ShutdownHow>(7))), errno_of(Errno::Inval));
+    ASSERT_EQ(
+        errval(s.Shutdown(static_cast<bsdt::ShutdownHow>(7))),
+        errno_of(Errno::Inval));
     ASSERT_TRUE(s.Shutdown(bsdt::ShutdownHow::Write).IsSuccess());
     uint8_t buf[2];
     ASSERT_EQ(s.SendTo("x", 1, 0, peer(IP_B, 6000)), neg(Errno::Inval));
@@ -752,14 +854,16 @@ TEST(close_drops_queued_data_and_only_announces_a_connected_tcp_peer) {
     ASSERT_EQ(g.disconnect[0].src_port, static_cast<uint16_t>(5002));
 }
 
-TEST(waiting_for_data_returns_at_once_when_data_is_queued_and_times_out_otherwise) {
+TEST(
+    waiting_for_data_returns_at_once_when_data_is_queued_and_times_out_otherwise) {
     reset_world();
     ams::os::g_host_wait_divisor = 1000;
     ProxySocket s = make_udp();
     ASSERT_FALSE(s.WaitForData(50));
     s.IncomingData("x", 1, peer(IP_B, 6000));
     ASSERT_TRUE(s.WaitForData(50));
-    ASSERT_TRUE(s.WaitForData(0));  // data already there: no wait even without a timeout
+    ASSERT_TRUE(s.WaitForData(
+        0));  // data already there: no wait even without a timeout
 }
 
 TEST(waiting_without_a_timeout_blocks_until_data_arrives) {
@@ -788,21 +892,30 @@ TEST(the_receive_event_is_the_one_the_queue_signals) {
 
 namespace {
 
-ProxySocketManager& mgr() { return ProxySocketManager::GetInstance(); }
+ProxySocketManager& mgr() {
+    return ProxySocketManager::GetInstance();
+}
 
 /// A manager-owned UDP socket bound to `port` on `sin_addr` (0 = any).
 ProxySocket* bound_udp(s32 fd, uint16_t port, uint32_t sin_addr = 0) {
-    ProxySocket* s = mgr().CreateProxySocket(fd, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
+    ProxySocket* s = mgr().CreateProxySocket(
+        fd, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
     if (s != nullptr) {
         (void)s->Bind(addr_with(sin_addr, port));
     }
     return s;
 }
 
-bool route(uint32_t src_ip, uint16_t src_port, uint32_t dst_ip, uint16_t dst_port,
-           const void* data = "ab", size_t len = 2,
-           bsdt::ProtocolType p = bsdt::ProtocolType::Udp) {
-    return mgr().RouteIncomingData(src_ip, src_port, dst_ip, dst_port, p, data, len);
+bool route(
+    uint32_t src_ip,
+    uint16_t src_port,
+    uint32_t dst_ip,
+    uint16_t dst_port,
+    const void* data = "ab",
+    size_t len = 2,
+    bsdt::ProtocolType p = bsdt::ProtocolType::Udp) {
+    return mgr().RouteIncomingData(
+        src_ip, src_port, dst_ip, dst_port, p, data, len);
 }
 
 int read_one(ProxySocket* s, bsdt::SockAddrIn* from = nullptr) {
@@ -816,11 +929,14 @@ TEST(the_manager_creates_finds_and_closes_sockets_by_descriptor) {
     reset_world();
     ASSERT_FALSE(mgr().IsProxySocket(10));
     ASSERT_TRUE(mgr().GetProxySocket(10) == nullptr);
-    ProxySocket* s = mgr().CreateProxySocket(10, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
+    ProxySocket* s = mgr().CreateProxySocket(
+        10, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
     ASSERT_TRUE(s != nullptr);
     ASSERT_TRUE(mgr().IsProxySocket(10));
     ASSERT_TRUE(mgr().GetProxySocket(10) == s);
-    ASSERT_TRUE(mgr().CreateProxySocket(10, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp) == s);
+    ASSERT_TRUE(
+        mgr().CreateProxySocket(
+            10, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp) == s);
     ASSERT_EQ(mgr().GetActiveSocketCount(), static_cast<size_t>(1));
 
     ASSERT_FALSE(mgr().CloseProxySocket(11));
@@ -832,11 +948,18 @@ TEST(the_manager_creates_finds_and_closes_sockets_by_descriptor) {
 TEST(the_manager_holds_at_most_max_proxy_sockets_and_reuses_freed_slots) {
     reset_world();
     for (s32 fd = 0; fd < static_cast<s32>(MAX_PROXY_SOCKETS); fd++) {
-        ASSERT_TRUE(mgr().CreateProxySocket(fd, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp) != nullptr);
+        ASSERT_TRUE(
+            mgr().CreateProxySocket(
+                fd, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp) !=
+            nullptr);
     }
-    ASSERT_TRUE(mgr().CreateProxySocket(1000, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp) == nullptr);
+    ASSERT_TRUE(
+        mgr().CreateProxySocket(
+            1000, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp) == nullptr);
     ASSERT_TRUE(mgr().CloseProxySocket(5));
-    ASSERT_TRUE(mgr().CreateProxySocket(1000, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp) != nullptr);
+    ASSERT_TRUE(
+        mgr().CreateProxySocket(
+            1000, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp) != nullptr);
     ASSERT_EQ(mgr().GetActiveSocketCount(), MAX_PROXY_SOCKETS);
 }
 
@@ -852,7 +975,9 @@ TEST(closing_a_socket_gives_its_port_back_to_the_pool) {
     ASSERT_EQ(mgr().GetAvailablePortCount(bsdt::ProtocolType::Udp), before);
 
     // A socket that never bound has no port to give back.
-    ASSERT_TRUE(mgr().CreateProxySocket(4, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp) != nullptr);
+    ASSERT_TRUE(
+        mgr().CreateProxySocket(
+            4, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp) != nullptr);
     ASSERT_TRUE(mgr().CloseProxySocket(4));
     ASSERT_EQ(mgr().GetAvailablePortCount(bsdt::ProtocolType::Udp), before);
 }
@@ -872,7 +997,8 @@ TEST(close_all_and_reset_drop_every_socket_and_reset_clears_the_rest) {
     ASSERT_TRUE(mgr().ReservePort(50001, bsdt::ProtocolType::Udp));
     mgr().CloseAllProxySockets();
     ASSERT_EQ(mgr().GetActiveSocketCount(), static_cast<size_t>(0));
-    ASSERT_TRUE(mgr().ReservePort(50001, bsdt::ProtocolType::Udp));  // ports released
+    ASSERT_TRUE(
+        mgr().ReservePort(50001, bsdt::ProtocolType::Udp));  // ports released
 
     ASSERT_TRUE(bound_udp(1, 5000) != nullptr);
     mgr().SetLocalIp(IP_A);
@@ -880,7 +1006,9 @@ TEST(close_all_and_reset_drop_every_socket_and_reset_clears_the_rest) {
     mgr().Reset();
     ASSERT_EQ(mgr().GetActiveSocketCount(), static_cast<size_t>(0));
     ASSERT_EQ(mgr().GetLocalIp(), static_cast<uint32_t>(0));
-    ASSERT_FALSE(mgr().SendProxyData(1, 2, 3, 4, bsdt::ProtocolType::Udp, "x", 1));  // callback gone
+    ASSERT_FALSE(
+        mgr().SendProxyData(
+            1, 2, 3, 4, bsdt::ProtocolType::Udp, "x", 1));  // callback gone
     ProxySocket* late = bound_udp(1, 9999);
     mgr().DeliverPendingPackets(late, 9999, bsdt::ProtocolType::Udp);
     ASSERT_FALSE(late->HasPendingData());  // ring emptied
@@ -892,7 +1020,8 @@ TEST(the_local_ip_is_stored) {
     ASSERT_EQ(mgr().GetLocalIp(), IP_A);
 }
 
-TEST(send_helpers_report_false_without_a_callback_and_forward_the_callback_result) {
+TEST(
+    send_helpers_report_false_without_a_callback_and_forward_the_callback_result) {
     reset_world();
     auto& m = mgr();
     m.SetSendCallback(nullptr);
@@ -915,7 +1044,8 @@ TEST(send_helpers_report_false_without_a_callback_and_forward_the_callback_resul
     ASSERT_TRUE(m.SendProxyDisconnect(1, 2, 3, 4, u));
     ASSERT_EQ(g.data[0].dst_port, static_cast<uint16_t>(4));
 
-    g.data_result = g.connect_result = g.reply_result = g.disconnect_result = false;
+    g.data_result = g.connect_result = g.reply_result = g.disconnect_result =
+        false;
     ASSERT_FALSE(m.SendProxyData(1, 2, 3, 4, u, "x", 1));
     ASSERT_FALSE(m.SendProxyConnect(1, 2, 3, 4, u));
     ASSERT_FALSE(m.SendProxyConnectReply(1, 2, 3, 4, u));
@@ -924,17 +1054,24 @@ TEST(send_helpers_report_false_without_a_callback_and_forward_the_callback_resul
 
 TEST(a_connect_response_reaches_the_connecting_socket_it_answers) {
     reset_world();
-    ProxySocket* waiting = mgr().CreateProxySocket(1, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+    ProxySocket* waiting = mgr().CreateProxySocket(
+        1, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
     waiting->SetNonBlocking(true);
     ASSERT_TRUE(waiting->Bind(addr_with(0, 5000)).IsSuccess());
-    ASSERT_EQ(errval(waiting->Connect(peer(IP_B, 6000))), errno_of(Errno::InProgress));
-    ProxySocket* idle = mgr().CreateProxySocket(2, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+    ASSERT_EQ(
+        errval(waiting->Connect(peer(IP_B, 6000))),
+        errno_of(Errno::InProgress));
+    ProxySocket* idle = mgr().CreateProxySocket(
+        2, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
     ASSERT_TRUE(idle->Bind(addr_with(0, 5001)).IsSuccess());
-    mgr().CloseProxySocket(2);  // leaves a free slot before `waiting`'s siblings
-    ProxySocket* other = mgr().CreateProxySocket(3, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+    mgr().CloseProxySocket(
+        2);  // leaves a free slot before `waiting`'s siblings
+    ProxySocket* other = mgr().CreateProxySocket(
+        3, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
     other->SetNonBlocking(true);
     ASSERT_TRUE(other->Bind(addr_with(0, 5002)).IsSuccess());
-    ASSERT_EQ(errval(other->Connect(peer(IP_B, 6000))), errno_of(Errno::InProgress));
+    ASSERT_EQ(
+        errval(other->Connect(peer(IP_B, 6000))), errno_of(Errno::InProgress));
 
     proto::ProxyConnectResponse response{};
     response.info.source_ipv4 = 0;
@@ -945,7 +1082,8 @@ TEST(a_connect_response_reaches_the_connecting_socket_it_answers) {
     response.info.source_port = 5002;
     ASSERT_TRUE(mgr().RouteConnectResponse(response));
     // Only Connecting sockets are candidates: a merely bound one is skipped.
-    ProxySocket* bound = mgr().CreateProxySocket(4, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+    ProxySocket* bound = mgr().CreateProxySocket(
+        4, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
     ASSERT_TRUE(bound->Bind(addr_with(0, 5003)).IsSuccess());
     response.info.source_port = 5003;
     ASSERT_FALSE(mgr().RouteConnectResponse(response));
@@ -954,12 +1092,14 @@ TEST(a_connect_response_reaches_the_connecting_socket_it_answers) {
 TEST(a_connect_request_reaches_the_matching_tcp_listener) {
     reset_world();
     auto listener = [](s32 fd, uint16_t port, uint32_t sin_addr) {
-        ProxySocket* s = mgr().CreateProxySocket(fd, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+        ProxySocket* s = mgr().CreateProxySocket(
+            fd, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
         (void)s->Bind(addr_with(sin_addr, port));
         (void)s->Listen(4);
         return s;
     };
-    ProxySocket* unbound = mgr().CreateProxySocket(1, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+    ProxySocket* unbound = mgr().CreateProxySocket(
+        1, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
     ProxySocket* wrong_port = listener(2, 5001, 0);
     ProxySocket* wrong_ip = listener(3, 5000, __builtin_bswap32(IP_B));
     ProxySocket* right = listener(4, 5000, __builtin_bswap32(IP_A));
@@ -976,7 +1116,8 @@ TEST(a_connect_request_reaches_the_matching_tcp_listener) {
     ASSERT_FALSE(wrong_port->HasPendingConnections());
     ASSERT_FALSE(unbound->HasPendingConnections());
 
-    request.info.dest_port = 5002;  // listener bound to INADDR_ANY accepts any address
+    request.info.dest_port =
+        5002;  // listener bound to INADDR_ANY accepts any address
     ASSERT_TRUE(mgr().RouteConnectRequest(request));
     ASSERT_TRUE(any->HasPendingConnections());
 
@@ -996,15 +1137,19 @@ TEST(incoming_unicast_data_goes_to_the_socket_bound_to_that_address_and_port) {
 
     bsdt::SockAddrIn from{};
     ASSERT_EQ(read_one(a, &from), 2);
-    ASSERT_EQ(from.sin_addr, __builtin_bswap32(IP_B));  // network byte order for the game
+    ASSERT_EQ(
+        from.sin_addr,
+        __builtin_bswap32(IP_B));  // network byte order for the game
     ASSERT_EQ(from.GetPort(), static_cast<uint16_t>(6000));
     ASSERT_EQ(from.sin_len, static_cast<uint8_t>(sizeof(from)));
 }
 
-TEST(a_wildcard_socket_gets_data_for_any_address_but_only_for_its_own_protocol_and_port) {
+TEST(
+    a_wildcard_socket_gets_data_for_any_address_but_only_for_its_own_protocol_and_port) {
     reset_world();
     ProxySocket* any = bound_udp(1, 5000, 0);
-    ProxySocket* tcp = mgr().CreateProxySocket(2, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+    ProxySocket* tcp = mgr().CreateProxySocket(
+        2, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
     ASSERT_TRUE(tcp->Bind(addr_with(0, 5000)).IsSuccess());
     ASSERT_TRUE(route(IP_B, 6000, IP_A, 5000));
     ASSERT_TRUE(any->HasPendingData());
@@ -1043,14 +1188,17 @@ TEST(a_delivery_is_capped_at_eight_sockets) {
     ASSERT_EQ(delivered, static_cast<size_t>(8));
 }
 
-TEST(data_without_a_listener_is_buffered_then_delivered_on_bind_in_arrival_order) {
+TEST(
+    data_without_a_listener_is_buffered_then_delivered_on_bind_in_arrival_order) {
     reset_world();
     ASSERT_FALSE(route(IP_B, 6000, IP_A, 7000, "A", 1));
     ASSERT_FALSE(route(IP_B, 6001, IP_A, 7001, "B", 1));
     ASSERT_FALSE(route(IP_B, 6002, IP_A, 7000, "C", 1));
-    ASSERT_FALSE(route(IP_B, 6003, IP_A, 7000, "T", 1, bsdt::ProtocolType::Tcp));
+    ASSERT_FALSE(
+        route(IP_B, 6003, IP_A, 7000, "T", 1, bsdt::ProtocolType::Tcp));
 
-    mgr().DeliverPendingPackets(nullptr, 7000, bsdt::ProtocolType::Udp);  // nothing to deliver to
+    mgr().DeliverPendingPackets(
+        nullptr, 7000, bsdt::ProtocolType::Udp);  // nothing to deliver to
 
     ProxySocket* first = bound_udp(1, 7000);
     mgr().DeliverPendingPackets(first, 7000, bsdt::ProtocolType::Udp);
@@ -1070,7 +1218,8 @@ TEST(data_without_a_listener_is_buffered_then_delivered_on_bind_in_arrival_order
     ASSERT_EQ(second->RecvFrom(buf, sizeof(buf), 0x80, nullptr), 1);
     ASSERT_EQ(buf[0], static_cast<uint8_t>('B'));
 
-    // Delivering again finds nothing for the first socket and keeps the TCP packet.
+    // Delivering again finds nothing for the first socket and keeps the TCP
+    // packet.
     mgr().DeliverPendingPackets(first, 7000, bsdt::ProtocolType::Udp);
     ASSERT_FALSE(first->HasPendingData());
 }
@@ -1100,7 +1249,8 @@ TEST(the_pending_ring_keeps_the_newest_sixteen_and_clamps_the_payload) {
         ASSERT_EQ(buf[0], expected);
     }
     ASSERT_EQ(s->RecvFrom(buf, sizeof(buf), 0x80, nullptr), 1400);
-    // Null data with a length keeps that length (the slot's bytes are not written).
+    // Null data with a length keeps that length (the slot's bytes are not
+    // written).
     ASSERT_EQ(s->RecvFrom(buf, sizeof(buf), 0x80, nullptr), 3);
     ASSERT_FALSE(s->HasPendingData());
 }

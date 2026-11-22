@@ -52,7 +52,6 @@
 #include <algorithm>
 #endif
 
-
 namespace ryu_ldn::network {
 
 // =============================================================================
@@ -77,7 +76,6 @@ constexpr bool AUTO_RECONNECT_DEFAULT = true;
 /// @brief Fixed-size receive buffer for handshake + packet polling (bytes)
 constexpr size_t RECV_BUFFER_SIZE = 2048;
 
-
 // ============================================================================
 // RyuLdnClientConfig Implementation
 // ============================================================================
@@ -94,23 +92,25 @@ constexpr size_t RECV_BUFFER_SIZE = 2048;
  * - Auto reconnect: enabled
  */
 RyuLdnClientConfig::RyuLdnClientConfig()
-    : port(config::DEFAULT_PORT)
-    , connect_timeout_ms(CONNECT_TIMEOUT_MS)
-    , recv_timeout_ms(RECV_TIMEOUT_MS)  // 20 ms — short poll so process_packets drains
+    : port(config::DEFAULT_PORT),
+      connect_timeout_ms(CONNECT_TIMEOUT_MS),
+      recv_timeout_ms(
+          RECV_TIMEOUT_MS)  // 20 ms — short poll so process_packets drains
                             // bursts quickly. Sends from MITM no longer take
                             // m_client_mutex, so this only bounds how long
                             // the BG thread itself stays in poll() and does
                             // not block game sends.
-    , ping_interval_ms(PING_INTERVAL_DISABLED)  // Disabled — RyuLdn protocol is unidirectional:
-                            // only the SERVER initiates pings (Requester=0)
-                            // and the client echoes them back. The server's
-                            // HandlePing ignores client-initiated pings
-                            // (Requester=1), so sending one and waiting for
-                            // a pong always times out and incorrectly tears
-                            // down the connection. Mirrors Ryujinx's behavior.
-    , 
-     auto_reconnect(AUTO_RECONNECT_DEFAULT)
-{
+      ,
+      ping_interval_ms(PING_INTERVAL_DISABLED)  // Disabled — RyuLdn protocol is
+                                                // unidirectional:
+      // only the SERVER initiates pings (Requester=0)
+      // and the client echoes them back. The server's
+      // HandlePing ignores client-initiated pings
+      // (Requester=1), so sending one and waiting for
+      // a pong always times out and incorrectly tears
+      // down the connection. Mirrors Ryujinx's behavior.
+      ,
+      auto_reconnect(AUTO_RECONNECT_DEFAULT) {
     std::strncpy(host, "127.0.0.1", sizeof(host) - 1);
     host[sizeof(host) - 1] = '\0';
     passphrase[0] = '\0';  // Empty passphrase = public rooms
@@ -124,12 +124,17 @@ RyuLdnClientConfig::RyuLdnClientConfig()
  * @param cfg Application configuration from INI file
  */
 RyuLdnClientConfig::RyuLdnClientConfig(const config::Config& cfg)
-    : port(cfg.server.port)
-    , connect_timeout_ms(CONNECT_TIMEOUT_MS)  // Hardcoded: 5s connection timeout
-    , recv_timeout_ms(RECV_TIMEOUT_MS)  // 20 ms — see default ctor
-    , ping_interval_ms(PING_INTERVAL_DISABLED)  // Forced 0 — server drives pings
-    , 
-     auto_reconnect(AUTO_RECONNECT_DEFAULT)  // Hardcoded: auto-reconnect always enabled
+    : port(cfg.server.port),
+      connect_timeout_ms(
+          CONNECT_TIMEOUT_MS)  // Hardcoded: 5s connection timeout
+      ,
+      recv_timeout_ms(RECV_TIMEOUT_MS)  // 20 ms — see default ctor
+      ,
+      ping_interval_ms(
+          PING_INTERVAL_DISABLED)  // Forced 0 — server drives pings
+      ,
+      auto_reconnect(
+          AUTO_RECONNECT_DEFAULT)  // Hardcoded: auto-reconnect always enabled
 {
     // Copy host, ensuring null termination
     std::memset(host, 0, sizeof(host));
@@ -144,11 +149,15 @@ RyuLdnClientConfig::RyuLdnClientConfig(const config::Config& cfg)
     // ReconnectConfig default of 30000 (30s). Kept as a distinct literal to
     // preserve existing behavior; do NOT replace with RECONNECT_MAX_DELAY_MS
     // (which is 30000) without an explicit behavior-change decision.
-    reconnect.initial_delay_ms = RECONNECT_INITIAL_DELAY_MS;  // 1s initial delay
-    reconnect.max_delay_ms = 10000;     // 10s max (intentional override of the 30s default)
+    reconnect.initial_delay_ms =
+        RECONNECT_INITIAL_DELAY_MS;  // 1s initial delay
+    reconnect.max_delay_ms =
+        10000;  // 10s max (intentional override of the 30s default)
     reconnect.multiplier_percent = RECONNECT_MULTIPLIER_PERCENT;  // 2x
     reconnect.jitter_percent = RECONNECT_JITTER_PERCENT;
-    reconnect.max_retries = RECONNECT_MAX_RETRIES_DEFAULT;  // 0 disables auto-reconnect (see AGENTS.md)
+    reconnect.max_retries =
+        RECONNECT_MAX_RETRIES_DEFAULT;  // 0 disables auto-reconnect (see
+                                        // AGENTS.md)
 }
 
 // ============================================================================
@@ -162,29 +171,26 @@ RyuLdnClientConfig::RyuLdnClientConfig(const config::Config& cfg)
  * deferred until first connection attempt.
  */
 RyuLdnClient::RyuLdnClient()
-    : 
-     m_tcp_client(std::make_unique<TcpClient>())
-    , 
-     m_state_callback(nullptr)
-    , m_packet_callback(nullptr)
-    , m_packet_callback_user_data(nullptr)
-    , m_last_ping_time_ms(0)
-    , m_backoff_start_time_ms(0)
-    , m_current_backoff_delay_ms(0)
-    , m_last_update_time_ms(0)
-    , m_session_id{}
-    , m_mac_address{}
-    , m_handshake_sent(false)
-    , m_initialized(false)
-    , m_handshake_start_time_ms(0)
-    , m_handshake_timeout_ms(5000)
-    , m_last_error_code(protocol::NetworkErrorCode::None)
-    , m_last_pong_time_ms(0)
-    , m_ping_timeout_ms(10000)
-    , m_pending_ping_count(0)
-    , m_last_rtt_ms(0)
-    , m_ping_id(0)
-{
+    : m_tcp_client(std::make_unique<TcpClient>()),
+      m_state_callback(nullptr),
+      m_packet_callback(nullptr),
+      m_packet_callback_user_data(nullptr),
+      m_last_ping_time_ms(0),
+      m_backoff_start_time_ms(0),
+      m_current_backoff_delay_ms(0),
+      m_last_update_time_ms(0),
+      m_session_id{},
+      m_mac_address{},
+      m_handshake_sent(false),
+      m_initialized(false),
+      m_handshake_start_time_ms(0),
+      m_handshake_timeout_ms(5000),
+      m_last_error_code(protocol::NetworkErrorCode::None),
+      m_last_pong_time_ms(0),
+      m_ping_timeout_ms(10000),
+      m_pending_ping_count(0),
+      m_last_rtt_ms(0),
+      m_ping_id(0) {
     generate_mac_address();
 }
 
@@ -194,58 +200,55 @@ RyuLdnClient::RyuLdnClient()
  * @param config Client configuration including server address
  */
 RyuLdnClient::RyuLdnClient(const RyuLdnClientConfig& config)
-    : m_config(config)
-    , m_tcp_client(std::make_unique<TcpClient>())
-    ,
-     m_reconnect_manager(config.reconnect)
-    , m_state_callback(nullptr)
-    , m_packet_callback(nullptr)
-    , m_packet_callback_user_data(nullptr)
-    , m_last_ping_time_ms(0)
-    , m_backoff_start_time_ms(0)
-    , m_current_backoff_delay_ms(0)
-    , m_last_update_time_ms(0)
-    , m_session_id{}
-    , m_mac_address{}
-    , m_handshake_sent(false)
-    , m_initialized(false)
-    , m_handshake_start_time_ms(0)
-    , m_handshake_timeout_ms(5000)
-    , m_last_error_code(protocol::NetworkErrorCode::None)
-    , m_last_pong_time_ms(0)
-    , m_ping_timeout_ms(10000)
-    , m_pending_ping_count(0)
-    , m_last_rtt_ms(0)
-    , m_ping_id(0)
-{
+    : m_config(config),
+      m_tcp_client(std::make_unique<TcpClient>()),
+      m_reconnect_manager(config.reconnect),
+      m_state_callback(nullptr),
+      m_packet_callback(nullptr),
+      m_packet_callback_user_data(nullptr),
+      m_last_ping_time_ms(0),
+      m_backoff_start_time_ms(0),
+      m_current_backoff_delay_ms(0),
+      m_last_update_time_ms(0),
+      m_session_id{},
+      m_mac_address{},
+      m_handshake_sent(false),
+      m_initialized(false),
+      m_handshake_start_time_ms(0),
+      m_handshake_timeout_ms(5000),
+      m_last_error_code(protocol::NetworkErrorCode::None),
+      m_last_pong_time_ms(0),
+      m_ping_timeout_ms(10000),
+      m_pending_ping_count(0),
+      m_last_rtt_ms(0),
+      m_ping_id(0) {
     generate_mac_address();
 }
 
-RyuLdnClient::RyuLdnClient(const RyuLdnClientConfig& config, std::unique_ptr<ITcpClient> tcp_client)
-    : m_config(config)
-    , m_tcp_client(std::move(tcp_client))
-    ,
-     m_reconnect_manager(config.reconnect)
-    , m_state_callback(nullptr)
-    , m_packet_callback(nullptr)
-    , m_packet_callback_user_data(nullptr)
-    , m_last_ping_time_ms(0)
-    , m_backoff_start_time_ms(0)
-    , m_current_backoff_delay_ms(0)
-    , m_last_update_time_ms(0)
-    , m_session_id{}
-    , m_mac_address{}
-    , m_handshake_sent(false)
-    , m_initialized(false)
-    , m_handshake_start_time_ms(0)
-    , m_handshake_timeout_ms(5000)
-    , m_last_error_code(protocol::NetworkErrorCode::None)
-    , m_last_pong_time_ms(0)
-    , m_ping_timeout_ms(10000)
-    , m_pending_ping_count(0)
-    , m_last_rtt_ms(0)
-    , m_ping_id(0)
-{
+RyuLdnClient::RyuLdnClient(
+    const RyuLdnClientConfig& config, std::unique_ptr<ITcpClient> tcp_client)
+    : m_config(config),
+      m_tcp_client(std::move(tcp_client)),
+      m_reconnect_manager(config.reconnect),
+      m_state_callback(nullptr),
+      m_packet_callback(nullptr),
+      m_packet_callback_user_data(nullptr),
+      m_last_ping_time_ms(0),
+      m_backoff_start_time_ms(0),
+      m_current_backoff_delay_ms(0),
+      m_last_update_time_ms(0),
+      m_session_id{},
+      m_mac_address{},
+      m_handshake_sent(false),
+      m_initialized(false),
+      m_handshake_start_time_ms(0),
+      m_handshake_timeout_ms(5000),
+      m_last_error_code(protocol::NetworkErrorCode::None),
+      m_last_pong_time_ms(0),
+      m_ping_timeout_ms(10000),
+      m_pending_ping_count(0),
+      m_last_rtt_ms(0),
+      m_ping_id(0) {
     generate_mac_address();
 }
 
@@ -268,30 +271,29 @@ RyuLdnClient::~RyuLdnClient() {
  * @param other Source client to move from
  */
 RyuLdnClient::RyuLdnClient(RyuLdnClient&& other) noexcept
-    : m_config(other.m_config)
-    , m_tcp_client(std::move(other.m_tcp_client))
-    ,   m_reconnect_manager(other.m_reconnect_manager.get_config())
-    , m_state_callback(other.m_state_callback)
-    , m_state_callback_user_data(other.m_state_callback_user_data)
-    , m_packet_callback(other.m_packet_callback)
-    , m_packet_callback_user_data(other.m_packet_callback_user_data)
-    , m_last_ping_time_ms(other.m_last_ping_time_ms)
-    , m_backoff_start_time_ms(other.m_backoff_start_time_ms)
-    , m_current_backoff_delay_ms(other.m_current_backoff_delay_ms)
-    , m_last_update_time_ms(other.m_last_update_time_ms)
-    , m_session_id(other.m_session_id)
-    , m_mac_address(other.m_mac_address)
-    , m_handshake_sent(other.m_handshake_sent)
-    , m_initialized(other.m_initialized)
-    , m_handshake_start_time_ms(other.m_handshake_start_time_ms)
-    , m_handshake_timeout_ms(other.m_handshake_timeout_ms)
-    , m_last_error_code(other.m_last_error_code)
-    , m_last_pong_time_ms(other.m_last_pong_time_ms)
-    , m_ping_timeout_ms(other.m_ping_timeout_ms)
-    , m_pending_ping_count(other.m_pending_ping_count)
-    , m_last_rtt_ms(other.m_last_rtt_ms)
-    , m_ping_id(other.m_ping_id)
-{
+    : m_config(other.m_config),
+      m_tcp_client(std::move(other.m_tcp_client)),
+      m_reconnect_manager(other.m_reconnect_manager.get_config()),
+      m_state_callback(other.m_state_callback),
+      m_state_callback_user_data(other.m_state_callback_user_data),
+      m_packet_callback(other.m_packet_callback),
+      m_packet_callback_user_data(other.m_packet_callback_user_data),
+      m_last_ping_time_ms(other.m_last_ping_time_ms),
+      m_backoff_start_time_ms(other.m_backoff_start_time_ms),
+      m_current_backoff_delay_ms(other.m_current_backoff_delay_ms),
+      m_last_update_time_ms(other.m_last_update_time_ms),
+      m_session_id(other.m_session_id),
+      m_mac_address(other.m_mac_address),
+      m_handshake_sent(other.m_handshake_sent),
+      m_initialized(other.m_initialized),
+      m_handshake_start_time_ms(other.m_handshake_start_time_ms),
+      m_handshake_timeout_ms(other.m_handshake_timeout_ms),
+      m_last_error_code(other.m_last_error_code),
+      m_last_pong_time_ms(other.m_last_pong_time_ms),
+      m_ping_timeout_ms(other.m_ping_timeout_ms),
+      m_pending_ping_count(other.m_pending_ping_count),
+      m_last_rtt_ms(other.m_last_rtt_ms),
+      m_ping_id(other.m_ping_id) {
     other.m_state_callback = nullptr;
     other.m_packet_callback = nullptr;
     other.m_packet_callback_user_data = nullptr;
@@ -364,7 +366,8 @@ void RyuLdnClient::set_config(const RyuLdnClientConfig& config) {
  *
  * @param callback Function to call when state changes
  */
-void RyuLdnClient::set_state_callback(ClientStateCallback callback, void* user_data) {
+void RyuLdnClient::set_state_callback(
+    ClientStateCallback callback, void* user_data) {
     m_state_callback = callback;
     m_state_callback_user_data = user_data;
 }
@@ -375,7 +378,8 @@ void RyuLdnClient::set_state_callback(ClientStateCallback callback, void* user_d
  * @param callback Function to call for each received packet
  * @param user_data User-provided context pointer passed to callback
  */
-void RyuLdnClient::set_packet_callback(ClientPacketCallback callback, void* user_data) {
+void RyuLdnClient::set_packet_callback(
+    ClientPacketCallback callback, void* user_data) {
     m_packet_callback = callback;
     m_packet_callback_user_data = user_data;
 }
@@ -444,9 +448,13 @@ ClientOpResult RyuLdnClient::connect(const char* host, uint16_t port) {
     // Actually try to connect
     try_connect();
 
-    // State callback: transitioned from Disconnected → Connecting/Connected/Backoff
+    // State callback: transitioned from Disconnected →
+    // Connecting/Connected/Backoff
     if (m_state_callback != nullptr) {
-        m_state_callback(ConnectionState::Disconnected, m_state_machine.get_state(), m_state_callback_user_data);
+        m_state_callback(
+            ConnectionState::Disconnected,
+            m_state_machine.get_state(),
+            m_state_callback_user_data);
     }
 
     return ClientOpResult::Success;
@@ -476,7 +484,8 @@ void RyuLdnClient::disconnect() {
     // Update state machine - Disconnect moves to Disconnecting state
     m_state_machine.process_event(ConnectionEvent::Disconnect);
 
-    // Complete the disconnect - ConnectionLost moves Disconnecting -> Disconnected
+    // Complete the disconnect - ConnectionLost moves Disconnecting ->
+    // Disconnected
     if (m_state_machine.get_state() == ConnectionState::Disconnecting) {
         m_state_machine.process_event(ConnectionEvent::ConnectionLost);
     }
@@ -487,7 +496,10 @@ void RyuLdnClient::disconnect() {
 
     // State callback: transitioned to Disconnected
     if (m_state_callback != nullptr) {
-        m_state_callback(prev_state, m_state_machine.get_state(), m_state_callback_user_data);
+        m_state_callback(
+            prev_state,
+            m_state_machine.get_state(),
+            m_state_callback_user_data);
     }
 
     LOG_VERBOSE("Disconnect complete");
@@ -521,18 +533,27 @@ void RyuLdnClient::update(uint64_t current_time_ms) {
                     m_handshake_sent = true;
                     m_handshake_start_time_ms = current_time_ms;
                     // Transition to Handshaking state to wait for response
-                    m_state_machine.process_event(ConnectionEvent::HandshakeStarted);
+                    m_state_machine.process_event(
+                        ConnectionEvent::HandshakeStarted);
                     if (m_state_callback != nullptr) {
-                        m_state_callback(ConnectionState::Connected, ConnectionState::Handshaking, m_state_callback_user_data);
+                        m_state_callback(
+                            ConnectionState::Connected,
+                            ConnectionState::Handshaking,
+                            m_state_callback_user_data);
                     }
                 } else {
                     ConnectionState before_state = m_state_machine.get_state();
-                    m_state_machine.process_event(ConnectionEvent::HandshakeFailed);
+                    m_state_machine.process_event(
+                        ConnectionEvent::HandshakeFailed);
                     if (m_config.auto_reconnect) {
                         start_backoff();
                     }
-                    if ((m_state_callback != nullptr) && before_state != m_state_machine.get_state()) {
-                        m_state_callback(before_state, m_state_machine.get_state(), m_state_callback_user_data);
+                    if ((m_state_callback != nullptr) &&
+                        before_state != m_state_machine.get_state()) {
+                        m_state_callback(
+                            before_state,
+                            m_state_machine.get_state(),
+                            m_state_callback_user_data);
                     }
                 }
             }
@@ -553,8 +574,12 @@ void RyuLdnClient::update(uint64_t current_time_ms) {
                 // This transitions to Retrying, then we try to connect
                 ConnectionState before_connect = m_state_machine.get_state();
                 try_connect();
-                if ((m_state_callback != nullptr) && before_connect != m_state_machine.get_state()) {
-                    m_state_callback(before_connect, m_state_machine.get_state(), m_state_callback_user_data);
+                if ((m_state_callback != nullptr) &&
+                    before_connect != m_state_machine.get_state()) {
+                    m_state_callback(
+                        before_connect,
+                        m_state_machine.get_state(),
+                        m_state_callback_user_data);
                 }
             }
             break;
@@ -569,8 +594,6 @@ void RyuLdnClient::update(uint64_t current_time_ms) {
             break;
     }
 }
-
-
 
 /**
  * @brief Handle Handshaking state in update loop
@@ -589,8 +612,12 @@ void RyuLdnClient::handle_handshaking_state(uint64_t current_time_ms) {
         if (m_config.auto_reconnect) {
             start_backoff();
         }
-        if ((m_state_callback != nullptr) && before_state != m_state_machine.get_state()) {
-            m_state_callback(before_state, m_state_machine.get_state(), m_state_callback_user_data);
+        if ((m_state_callback != nullptr) &&
+            before_state != m_state_machine.get_state()) {
+            m_state_callback(
+                before_state,
+                m_state_machine.get_state(),
+                m_state_callback_user_data);
         }
         return;
     }
@@ -605,8 +632,7 @@ void RyuLdnClient::handle_handshaking_state(uint64_t current_time_ms) {
         recv_buffer,
         sizeof(recv_buffer),
         recv_size,
-        static_cast<int32_t>(m_config.recv_timeout_ms)
-    );
+        static_cast<int32_t>(m_config.recv_timeout_ms));
 
     if (result == ClientResult::Success) {
         // Process the handshake response
@@ -615,7 +641,8 @@ void RyuLdnClient::handle_handshaking_state(uint64_t current_time_ms) {
             // Handshake completed - notify via state callback
             ConnectionState after_state = m_state_machine.get_state();
             if ((m_state_callback != nullptr) && before_state != after_state) {
-                m_state_callback(before_state, after_state, m_state_callback_user_data);
+                m_state_callback(
+                    before_state, after_state, m_state_callback_user_data);
             }
         }
     } else if (result == ClientResult::ConnectionLost) {
@@ -639,8 +666,11 @@ void RyuLdnClient::handle_ready_state(uint64_t current_time_ms) {
     // Check for ping timeout (no pong received)
     if (m_pending_ping_count > 0 && m_ping_timeout_ms > 0) {
         if (current_time_ms - m_last_ping_time_ms >= m_ping_timeout_ms) {
-            LOG_INFO("update(Ready): ping timeout (%u pending, %lu ms since last ping)",
-                     m_pending_ping_count, current_time_ms - m_last_ping_time_ms);
+            LOG_INFO(
+                "update(Ready): ping timeout (%u pending, %lu ms since last "
+                "ping)",
+                m_pending_ping_count,
+                current_time_ms - m_last_ping_time_ms);
             handle_connection_lost(true);
             return;
         }
@@ -660,15 +690,19 @@ void RyuLdnClient::handle_ready_state(uint64_t current_time_ms) {
     // retained as a structural anchor documenting the intended client
     // ping path, in case a future bidirectional ping extension is added.
     if (m_config.ping_interval_ms > 0) {
-        if (current_time_ms - m_last_ping_time_ms >= m_config.ping_interval_ms) {
+        if (current_time_ms - m_last_ping_time_ms >=
+            m_config.ping_interval_ms) {
             ClientOpResult ping_result = send_ping();
             if (ping_result == ClientOpResult::Success) {
-                LOG_INFO("update(Ready): sent ping (pending=%u)", m_pending_ping_count + 1);
+                LOG_INFO(
+                    "update(Ready): sent ping (pending=%u)",
+                    m_pending_ping_count + 1);
                 m_last_ping_time_ms = current_time_ms;
                 m_pending_ping_count++;
             } else {
-                LOG_INFO("update(Ready): send_ping failed: %s",
-                         client_op_result_to_string(ping_result));
+                LOG_INFO(
+                    "update(Ready): send_ping failed: %s",
+                    client_op_result_to_string(ping_result));
             }
         }
     }
@@ -776,9 +810,12 @@ ClientOpResult RyuLdnClient::send_create_access_point(
         return ClientOpResult::NotReady;
     }
 
-    ClientResult result = m_tcp_client->send_create_access_point(request, advertise_data, advertise_size);
+    ClientResult result = m_tcp_client->send_create_access_point(
+        request, advertise_data, advertise_size);
     if (result != ClientResult::Success) {
-        LOG_INFO("send_create_access_point: TCP send returned %d", static_cast<int>(result));
+        LOG_INFO(
+            "send_create_access_point: TCP send returned %d",
+            static_cast<int>(result));
     }
     return handle_send_result(result);
 }
@@ -789,14 +826,16 @@ ClientOpResult RyuLdnClient::send_create_access_point(
  * @param request Connection parameters
  * @return ClientOpResult indicating success or failure
  */
-ClientOpResult RyuLdnClient::send_connect(const protocol::ConnectRequest& request) {
+ClientOpResult RyuLdnClient::send_connect(
+    const protocol::ConnectRequest& request) {
     if (!is_ready()) {
         return ClientOpResult::NotReady;
     }
 
     ClientResult result = m_tcp_client->send_connect(request);
     if (result != ClientResult::Success) {
-        LOG_INFO("send_connect: TCP send returned %d", static_cast<int>(result));
+        LOG_INFO(
+            "send_connect: TCP send returned %d", static_cast<int>(result));
     }
     return handle_send_result(result);
 }
@@ -813,9 +852,12 @@ ClientOpResult RyuLdnClient::send_create_access_point_private(
         return ClientOpResult::NotReady;
     }
 
-    ClientResult result = m_tcp_client->send_create_access_point_private(request, nullptr, 0);
+    ClientResult result =
+        m_tcp_client->send_create_access_point_private(request, nullptr, 0);
     if (result != ClientResult::Success) {
-        LOG_INFO("send_create_access_point_private: TCP send returned %d", static_cast<int>(result));
+        LOG_INFO(
+            "send_create_access_point_private: TCP send returned %d",
+            static_cast<int>(result));
     }
     return handle_send_result(result);
 }
@@ -826,14 +868,17 @@ ClientOpResult RyuLdnClient::send_create_access_point_private(
  * @param request Connection parameters with security settings
  * @return ClientOpResult indicating success or failure
  */
-ClientOpResult RyuLdnClient::send_connect_private(const protocol::ConnectPrivateRequest& request) {
+ClientOpResult RyuLdnClient::send_connect_private(
+    const protocol::ConnectPrivateRequest& request) {
     if (!is_ready()) {
         return ClientOpResult::NotReady;
     }
 
     ClientResult result = m_tcp_client->send_connect_private(request);
     if (result != ClientResult::Success) {
-        LOG_INFO("send_connect_private: TCP send returned %d", static_cast<int>(result));
+        LOG_INFO(
+            "send_connect_private: TCP send returned %d",
+            static_cast<int>(result));
     }
     return handle_send_result(result);
 }
@@ -846,16 +891,16 @@ ClientOpResult RyuLdnClient::send_connect_private(const protocol::ConnectPrivate
  * @param size Size of data
  * @return ClientOpResult indicating success or failure
  */
-ClientOpResult RyuLdnClient::send_proxy_data(const protocol::ProxyDataHeader& header,
-                                              const uint8_t* data,
-                                              size_t size) {
+ClientOpResult RyuLdnClient::send_proxy_data(
+    const protocol::ProxyDataHeader& header, const uint8_t* data, size_t size) {
     if (!is_ready()) {
         return ClientOpResult::NotReady;
     }
 
     ClientResult result = m_tcp_client->send_proxy_data(header, data, size);
     if (result != ClientResult::Success) {
-        LOG_INFO("send_proxy_data: TCP send returned %d", static_cast<int>(result));
+        LOG_INFO(
+            "send_proxy_data: TCP send returned %d", static_cast<int>(result));
     }
     return handle_send_result(result);
 }
@@ -900,7 +945,8 @@ ClientOpResult RyuLdnClient::send_disconnect_network() {
     return handle_send_result(result);
 }
 
-ClientOpResult RyuLdnClient::send_set_accept_policy(protocol::AcceptPolicy policy) {
+ClientOpResult RyuLdnClient::send_set_accept_policy(
+    protocol::AcceptPolicy policy) {
     if (!is_ready()) {
         return ClientOpResult::NotReady;
     }
@@ -911,7 +957,8 @@ ClientOpResult RyuLdnClient::send_set_accept_policy(protocol::AcceptPolicy polic
     return handle_send_result(result);
 }
 
-ClientOpResult RyuLdnClient::send_set_advertise_data(const uint8_t* data, size_t size) {
+ClientOpResult RyuLdnClient::send_set_advertise_data(
+    const uint8_t* data, size_t size) {
     if (!is_ready()) {
         return ClientOpResult::NotReady;
     }
@@ -920,7 +967,8 @@ ClientOpResult RyuLdnClient::send_set_advertise_data(const uint8_t* data, size_t
     return handle_send_result(result);
 }
 
-ClientOpResult RyuLdnClient::send_reject(uint32_t node_id, protocol::DisconnectReason reason) {
+ClientOpResult RyuLdnClient::send_reject(
+    uint32_t node_id, protocol::DisconnectReason reason) {
     if (!is_ready()) {
         return ClientOpResult::NotReady;
     }
@@ -951,13 +999,11 @@ ClientOpResult RyuLdnClient::send_raw_packet(const void* data, size_t size) {
  * Called when state machine enters Connecting or Retrying state.
  */
 void RyuLdnClient::try_connect() {
-    LOG_VERBOSE("Attempting TCP connection to %s:%u", m_config.host, m_config.port);
+    LOG_VERBOSE(
+        "Attempting TCP connection to %s:%u", m_config.host, m_config.port);
 
     ClientResult result = m_tcp_client->connect(
-        m_config.host,
-        m_config.port,
-        m_config.connect_timeout_ms
-    );
+        m_config.host, m_config.port, m_config.connect_timeout_ms);
 
     if (result == ClientResult::Success) {
         LOG_INFO("TCP connection established");
@@ -966,7 +1012,10 @@ void RyuLdnClient::try_connect() {
         m_state_machine.process_event(ConnectionEvent::ConnectSuccess);
         m_reconnect_manager.reset();
         if (m_state_callback != nullptr) {
-            m_state_callback(before_state, m_state_machine.get_state(), m_state_callback_user_data);
+            m_state_callback(
+                before_state,
+                m_state_machine.get_state(),
+                m_state_callback_user_data);
         }
     } else {
         LOG_WARN("TCP connection failed: %s", client_result_to_string(result));
@@ -977,11 +1026,16 @@ void RyuLdnClient::try_connect() {
 
         // Start backoff if auto-reconnect is enabled
         if (m_config.auto_reconnect) {
-            LOG_VERBOSE("Starting backoff, retry %u", m_reconnect_manager.get_retry_count());
+            LOG_VERBOSE(
+                "Starting backoff, retry %u",
+                m_reconnect_manager.get_retry_count());
             start_backoff();
         }
         if (m_state_callback != nullptr) {
-            m_state_callback(before_state, m_state_machine.get_state(), m_state_callback_user_data);
+            m_state_callback(
+                before_state,
+                m_state_machine.get_state(),
+                m_state_callback_user_data);
         }
     }
 }
@@ -1007,8 +1061,7 @@ void RyuLdnClient::process_packets() {
             recv_buffer,
             sizeof(recv_buffer),
             recv_size,
-            m_config.recv_timeout_ms
-        );
+            m_config.recv_timeout_ms);
 
         if (result == ClientResult::Timeout) {
             // No more packets available
@@ -1016,14 +1069,18 @@ void RyuLdnClient::process_packets() {
         }
 
         if (result == ClientResult::ConnectionLost) {
-            LOG_INFO("process_packets: receive_packet returned ConnectionLost (server closed TCP)");
+            LOG_INFO(
+                "process_packets: receive_packet returned ConnectionLost "
+                "(server closed TCP)");
             handle_connection_lost(true);
             break;
         }
 
         if (result != ClientResult::Success) {
-            LOG_INFO("process_packets: receive_packet returned %d (non-success), breaking",
-                     static_cast<int>(result));
+            LOG_INFO(
+                "process_packets: receive_packet returned %d (non-success), "
+                "breaking",
+                static_cast<int>(result));
             break;
         }
 
@@ -1039,9 +1096,8 @@ void RyuLdnClient::process_packets() {
  * @param data Packet payload
  * @param size Payload size
  */
-void RyuLdnClient::handle_packet(protocol::PacketId id,
-                                  const uint8_t* data,
-                                  size_t size) {
+void RyuLdnClient::handle_packet(
+    protocol::PacketId id, const uint8_t* data, size_t size) {
     // Handle protocol-level packets
     switch (id) {
         case protocol::PacketId::Ping: {
@@ -1054,10 +1110,12 @@ void RyuLdnClient::handle_packet(protocol::PacketId id,
                     // Server requested ping - echo it back immediately
                     protocol::PingMessage response = *ping_msg;
                     m_tcp_client->send_ping(response);
-                    LOG_VERBOSE("Echoed ping id=%u back to server", ping_msg->id);
+                    LOG_VERBOSE(
+                        "Echoed ping id=%u back to server", ping_msg->id);
                 } else {
                     // Response to our ping - connection is alive
-                    m_pending_ping_count = std::min<uint32_t>(m_pending_ping_count, 0);
+                    m_pending_ping_count =
+                        std::min<uint32_t>(m_pending_ping_count, 0);
                     m_last_pong_time_ms = m_last_ping_time_ms;
                 }
             }
@@ -1088,14 +1146,17 @@ ClientOpResult RyuLdnClient::send_initialize() {
 
     // Send passphrase first (required by RyuLDN protocol)
     // This must be sent before Initialize, even if empty
-    ClientResult passphrase_result = m_tcp_client->send_passphrase(m_config.passphrase);
+    ClientResult passphrase_result =
+        m_tcp_client->send_passphrase(m_config.passphrase);
     if (passphrase_result == ClientResult::ConnectionLost) {
         LOG_ERROR("Connection lost while sending Passphrase");
         handle_connection_lost(true);
         return ClientOpResult::SendFailed;
     }
     if (passphrase_result != ClientResult::Success) {
-        LOG_ERROR("Failed to send Passphrase: %s", client_result_to_string(passphrase_result));
+        LOG_ERROR(
+            "Failed to send Passphrase: %s",
+            client_result_to_string(passphrase_result));
         return ClientOpResult::SendFailed;
     }
     if (m_config.passphrase[0] != '\0') {
@@ -1136,7 +1197,8 @@ ClientOpResult RyuLdnClient::send_initialize() {
     }
 
     // Copy our MAC address
-    std::memcpy(msg.mac_address.data, m_mac_address.data, sizeof(msg.mac_address.data));
+    std::memcpy(
+        msg.mac_address.data, m_mac_address.data, sizeof(msg.mac_address.data));
 
     ClientResult result = m_tcp_client->send_initialize(msg);
     if (result == ClientResult::ConnectionLost) {
@@ -1145,7 +1207,8 @@ ClientOpResult RyuLdnClient::send_initialize() {
         return ClientOpResult::SendFailed;
     }
     if (result != ClientResult::Success) {
-        LOG_ERROR("Failed to send Initialize: %s", client_result_to_string(result));
+        LOG_ERROR(
+            "Failed to send Initialize: %s", client_result_to_string(result));
         return ClientOpResult::SendFailed;
     }
 
@@ -1181,18 +1244,25 @@ void RyuLdnClient::generate_mac_address() {
  */
 void RyuLdnClient::start_backoff() {
     // Use m_last_update_time_ms if available (called from within update()),
-    // otherwise leave as 0 so is_backoff_expired() captures time on first check.
-    // This handles the case where start_backoff() is called from connect()
-    // (before any update() has been called) or from try_connect() (same).
+    // otherwise leave as 0 so is_backoff_expired() captures time on first
+    // check. This handles the case where start_backoff() is called from
+    // connect() (before any update() has been called) or from try_connect()
+    // (same).
     m_backoff_start_time_ms = m_last_update_time_ms;
     // Use jitter to prevent thundering herd when multiple clients reconnect
     // simultaneously (e.g., after a server restart).
     // Combine retry count and a simple counter for seed diversity.
     static uint32_t backoff_counter = 0;
-    uint32_t seed = ((m_reconnect_manager.get_retry_count() + 1) * 2654435761U) + (++backoff_counter * 40503U);
-    m_current_backoff_delay_ms = m_reconnect_manager.get_next_delay_ms_with_jitter(seed);
-    LOG_INFO("start_backoff: delay=%u ms, retry=%u, start_time=%lu",
-             m_current_backoff_delay_ms, m_reconnect_manager.get_retry_count(), m_backoff_start_time_ms);
+    uint32_t seed =
+        ((m_reconnect_manager.get_retry_count() + 1) * 2654435761U) +
+        (++backoff_counter * 40503U);
+    m_current_backoff_delay_ms =
+        m_reconnect_manager.get_next_delay_ms_with_jitter(seed);
+    LOG_INFO(
+        "start_backoff: delay=%u ms, retry=%u, start_time=%lu",
+        m_current_backoff_delay_ms,
+        m_reconnect_manager.get_retry_count(),
+        m_backoff_start_time_ms);
 }
 
 /**
@@ -1202,16 +1272,18 @@ void RyuLdnClient::start_backoff() {
  * @return true if backoff period has elapsed
  */
 bool RyuLdnClient::is_backoff_expired(uint64_t current_time_ms) {
-    // If start_backoff() was called before the first update() (m_backoff_start_time_ms == 0),
-    // capture current_time_ms as the start time now. This means the first update()
-    // after start_backoff() starts the timer but doesn't expire it — expiry is checked
-    // on the subsequent update() call.
+    // If start_backoff() was called before the first update()
+    // (m_backoff_start_time_ms == 0), capture current_time_ms as the start time
+    // now. This means the first update() after start_backoff() starts the timer
+    // but doesn't expire it — expiry is checked on the subsequent update()
+    // call.
     if (m_backoff_start_time_ms == 0) {
         m_backoff_start_time_ms = current_time_ms;
         return false;  // Start timer this tick, check expiry next tick
     }
 
-    return (current_time_ms - m_backoff_start_time_ms) >= m_current_backoff_delay_ms;
+    return (current_time_ms - m_backoff_start_time_ms) >=
+           m_current_backoff_delay_ms;
 }
 
 // ============================================================================
@@ -1242,8 +1314,12 @@ void RyuLdnClient::handle_connection_lost(bool start_reconnect) {
     if (start_reconnect && m_config.auto_reconnect) {
         start_backoff();
     }
-    if ((m_state_callback != nullptr) && before_state != m_state_machine.get_state()) {
-        m_state_callback(before_state, m_state_machine.get_state(), m_state_callback_user_data);
+    if ((m_state_callback != nullptr) &&
+        before_state != m_state_machine.get_state()) {
+        m_state_callback(
+            before_state,
+            m_state_machine.get_state(),
+            m_state_callback_user_data);
     }
 }
 
@@ -1280,7 +1356,8 @@ bool RyuLdnClient::is_handshake_timeout(uint64_t current_time_ms) const {
         return false;
     }
 
-    return (current_time_ms - m_handshake_start_time_ms) >= m_handshake_timeout_ms;
+    return (current_time_ms - m_handshake_start_time_ms) >=
+           m_handshake_timeout_ms;
 }
 
 /**
@@ -1298,12 +1375,13 @@ bool RyuLdnClient::is_handshake_timeout(uint64_t current_time_ms) const {
  * @param size Packet size
  * @return true if handshake completed (success or failure)
  */
-bool RyuLdnClient::process_handshake_response(protocol::PacketId id,
-                                               const uint8_t* data,
-                                               size_t size) {
-    LOG_VERBOSE("Received handshake response: packet_id=%u", static_cast<uint32_t>(id));
+bool RyuLdnClient::process_handshake_response(
+    protocol::PacketId id, const uint8_t* data, size_t size) {
+    LOG_VERBOSE(
+        "Received handshake response: packet_id=%u", static_cast<uint32_t>(id));
 
-    switch (id) { // codeql[cpp/long-switch] natural dispatch: 4 handshake packet types
+    switch (id) {  // codeql[cpp/long-switch] natural dispatch: 4 handshake
+                   // packet types
         case protocol::PacketId::Initialize: {
             // Server responds with Initialize containing assigned ID and MAC
             // This is the expected response from RyuLDN server
@@ -1312,19 +1390,34 @@ bool RyuLdnClient::process_handshake_response(protocol::PacketId id,
                     reinterpret_cast<const protocol::InitializeMessage*>(data);
 
                 // Store assigned session ID and MAC address
-                std::memcpy(m_session_id.data, init_msg->id.data, sizeof(m_session_id.data));
-                std::memcpy(m_mac_address.data, init_msg->mac_address.data, sizeof(m_mac_address.data));
+                std::memcpy(
+                    m_session_id.data,
+                    init_msg->id.data,
+                    sizeof(m_session_id.data));
+                std::memcpy(
+                    m_mac_address.data,
+                    init_msg->mac_address.data,
+                    sizeof(m_mac_address.data));
 
-                LOG_INFO("Handshake successful - assigned MAC: %02X:%02X:%02X:%02X:%02X:%02X",
-                         m_mac_address.data[0], m_mac_address.data[1], m_mac_address.data[2],
-                         m_mac_address.data[3], m_mac_address.data[4], m_mac_address.data[5]);
+                LOG_INFO(
+                    "Handshake successful - assigned MAC: "
+                    "%02X:%02X:%02X:%02X:%02X:%02X",
+                    m_mac_address.data[0],
+                    m_mac_address.data[1],
+                    m_mac_address.data[2],
+                    m_mac_address.data[3],
+                    m_mac_address.data[4],
+                    m_mac_address.data[5]);
             }
 
             m_last_error_code = protocol::NetworkErrorCode::None;
             ConnectionState before_hs = m_state_machine.get_state();
             m_state_machine.process_event(ConnectionEvent::HandshakeSuccess);
             if (m_state_callback != nullptr) {
-                m_state_callback(before_hs, m_state_machine.get_state(), m_state_callback_user_data);
+                m_state_callback(
+                    before_hs,
+                    m_state_machine.get_state(),
+                    m_state_callback_user_data);
             }
             return true;
         }
@@ -1333,23 +1426,30 @@ bool RyuLdnClient::process_handshake_response(protocol::PacketId id,
             // Server rejected our handshake
             if (size >= sizeof(protocol::NetworkErrorMessage)) {
                 const auto* error_msg =
-                    reinterpret_cast<const protocol::NetworkErrorMessage*>(data);
-                m_last_error_code =
-                    static_cast<protocol::NetworkErrorCode>(error_msg->error_code);
+                    reinterpret_cast<const protocol::NetworkErrorMessage*>(
+                        data);
+                m_last_error_code = static_cast<protocol::NetworkErrorCode>(
+                    error_msg->error_code);
             } else {
                 m_last_error_code = protocol::NetworkErrorCode::InternalError;
             }
 
-            LOG_ERROR("Handshake rejected: error_code=%u", static_cast<uint32_t>(m_last_error_code));
+            LOG_ERROR(
+                "Handshake rejected: error_code=%u",
+                static_cast<uint32_t>(m_last_error_code));
 
             // Check for version mismatch specifically
-            if (m_last_error_code == protocol::NetworkErrorCode::VersionMismatch) {
+            if (m_last_error_code ==
+                protocol::NetworkErrorCode::VersionMismatch) {
                 // Version mismatch is a fatal error - no point retrying
                 LOG_ERROR("Version mismatch - fatal error");
                 ConnectionState before_err = m_state_machine.get_state();
                 m_state_machine.process_event(ConnectionEvent::FatalError);
                 if (m_state_callback != nullptr) {
-                    m_state_callback(before_err, m_state_machine.get_state(), m_state_callback_user_data);
+                    m_state_callback(
+                        before_err,
+                        m_state_machine.get_state(),
+                        m_state_callback_user_data);
                 }
             } else {
                 // Other errors might be recoverable
@@ -1359,7 +1459,10 @@ bool RyuLdnClient::process_handshake_response(protocol::PacketId id,
                     start_backoff();
                 }
                 if (m_state_callback != nullptr) {
-                    m_state_callback(before_err, m_state_machine.get_state(), m_state_callback_user_data);
+                    m_state_callback(
+                        before_err,
+                        m_state_machine.get_state(),
+                        m_state_callback_user_data);
                 }
             }
             return true;
@@ -1371,9 +1474,13 @@ bool RyuLdnClient::process_handshake_response(protocol::PacketId id,
             m_last_error_code = protocol::NetworkErrorCode::None;
             {
                 ConnectionState before_hs = m_state_machine.get_state();
-                m_state_machine.process_event(ConnectionEvent::HandshakeSuccess);
+                m_state_machine.process_event(
+                    ConnectionEvent::HandshakeSuccess);
                 if (m_state_callback != nullptr) {
-                    m_state_callback(before_hs, m_state_machine.get_state(), m_state_callback_user_data);
+                    m_state_callback(
+                        before_hs,
+                        m_state_machine.get_state(),
+                        m_state_callback_user_data);
                 }
             }
             return true;
@@ -1390,7 +1497,10 @@ bool RyuLdnClient::process_handshake_response(protocol::PacketId id,
                     start_backoff();
                 }
                 if (m_state_callback != nullptr) {
-                    m_state_callback(before_disc, m_state_machine.get_state(), m_state_callback_user_data);
+                    m_state_callback(
+                        before_disc,
+                        m_state_machine.get_state(),
+                        m_state_callback_user_data);
                 }
             }
             return true;
@@ -1399,7 +1509,9 @@ bool RyuLdnClient::process_handshake_response(protocol::PacketId id,
         default:
             // Unexpected packet during handshake
             // Could be out-of-order delivery, just ignore and keep waiting
-            LOG_VERBOSE("Unexpected packet during handshake: %u", static_cast<uint32_t>(id));
+            LOG_VERBOSE(
+                "Unexpected packet during handshake: %u",
+                static_cast<uint32_t>(id));
             // Pass to user callback if set
             if (m_packet_callback != nullptr) {
                 m_packet_callback(id, data, size, m_packet_callback_user_data);
@@ -1420,19 +1532,29 @@ bool RyuLdnClient::process_handshake_response(protocol::PacketId id,
  */
 const char* client_op_result_to_string(ClientOpResult result) {
     switch (result) {
-        case ClientOpResult::Success:          return "Success";
-        case ClientOpResult::NotConnected:     return "NotConnected";
-        case ClientOpResult::NotReady:         return "NotReady";
-        case ClientOpResult::AlreadyConnected: return "AlreadyConnected";
-        case ClientOpResult::ConnectionFailed: return "ConnectionFailed";
-        case ClientOpResult::SendFailed:       return "SendFailed";
-        case ClientOpResult::InvalidState:     return "InvalidState";
-        case ClientOpResult::Timeout:          return "Timeout";
-        case ClientOpResult::ProtocolError:    return "ProtocolError";
-        case ClientOpResult::InternalError:    return "InternalError";
-        default:                               return "Unknown";
+        case ClientOpResult::Success:
+            return "Success";
+        case ClientOpResult::NotConnected:
+            return "NotConnected";
+        case ClientOpResult::NotReady:
+            return "NotReady";
+        case ClientOpResult::AlreadyConnected:
+            return "AlreadyConnected";
+        case ClientOpResult::ConnectionFailed:
+            return "ConnectionFailed";
+        case ClientOpResult::SendFailed:
+            return "SendFailed";
+        case ClientOpResult::InvalidState:
+            return "InvalidState";
+        case ClientOpResult::Timeout:
+            return "Timeout";
+        case ClientOpResult::ProtocolError:
+            return "ProtocolError";
+        case ClientOpResult::InternalError:
+            return "InternalError";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ryu_ldn::network
-
+}  // namespace ryu_ldn::network

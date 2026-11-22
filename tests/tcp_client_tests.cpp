@@ -46,44 +46,44 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegister_##name { \
-        TestRegister_##name() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct TestRegister_##name {       \
+        TestRegister_##name() {               \
             printf("  [TEST] " #name "... "); \
-            fflush(stdout); \
-            g_tests_run++; \
-            try { \
-                test_##name(); \
-                printf("PASS\n"); \
-                g_tests_passed++; \
-            } catch (const char* msg) { \
-                printf("FAIL: %s\n", msg); \
-                g_tests_failed++; \
-            } \
-        } \
-    } g_test_register_##name; \
+            fflush(stdout);                   \
+            g_tests_run++;                    \
+            try {                             \
+                test_##name();                \
+                printf("PASS\n");             \
+                g_tests_passed++;             \
+            } catch (const char* msg) {       \
+                printf("FAIL: %s\n", msg);    \
+                g_tests_failed++;             \
+            }                                 \
+        }                                     \
+    } g_test_register_##name;                 \
     static void test_##name()
 
-#define ASSERT(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT(cond)                          \
+    do {                                      \
+        if (!(cond)) {                        \
             throw "Assertion failed: " #cond; \
-        } \
+        }                                     \
     } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
+#define ASSERT_EQ(a, b)                              \
+    do {                                             \
+        if ((a) != (b)) {                            \
             throw "Assertion failed: " #a " != " #b; \
-        } \
+        }                                            \
     } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
+#define ASSERT_NE(a, b)                              \
+    do {                                             \
+        if ((a) == (b)) {                            \
             throw "Assertion failed: " #a " == " #b; \
-        } \
+        }                                            \
     } while (0)
 
 #define ASSERT_TRUE(cond) ASSERT(cond)
@@ -186,7 +186,8 @@ TEST(connect_invalid_host) {
     socket_init();
 
     TcpClient client;
-    ClientResult result = client.connect("invalid.host.that.does.not.exist.local", 30456, 500);
+    ClientResult result =
+        client.connect("invalid.host.that.does.not.exist.local", 30456, 500);
 
     ASSERT_NE(result, ClientResult::Success);
     ASSERT_FALSE(client.is_connected());
@@ -305,7 +306,8 @@ TEST(send_packet_not_connected) {
     TcpClient client;
 
     uint8_t data[] = {0x01, 0x02, 0x03};
-    ClientResult result = client.send_packet(PacketId::Ping, data, sizeof(data));
+    ClientResult result =
+        client.send_packet(PacketId::Ping, data, sizeof(data));
 
     ASSERT_EQ(result, ClientResult::NotConnected);
 }
@@ -361,9 +363,9 @@ TEST(send_proxy_data_not_connected) {
     TcpClient client;
 
     ProxyDataHeader header{};
-    header.info.source_ipv4 = 0xC0A80101;   // 192.168.1.1
+    header.info.source_ipv4 = 0xC0A80101;  // 192.168.1.1
     header.info.source_port = 12345;
-    header.info.dest_ipv4 = 0xC0A80102;     // 192.168.1.2
+    header.info.dest_ipv4 = 0xC0A80102;  // 192.168.1.2
     header.info.dest_port = 54321;
     header.info.protocol = ProtocolType::Udp;
     header.data_length = 3;
@@ -390,7 +392,8 @@ TEST(receive_packet_not_connected) {
     uint8_t payload[256];
     size_t payload_size;
 
-    ClientResult result = client.receive_packet(type, payload, sizeof(payload), payload_size, 0);
+    ClientResult result =
+        client.receive_packet(type, payload, sizeof(payload), payload_size, 0);
 
     ASSERT_EQ(result, ClientResult::NotConnected);
 }
@@ -431,51 +434,83 @@ TEST(set_nodelay_not_connected) {
  * @test client_result_to_string covers all values
  */
 TEST(result_to_string_success) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::Success), "Success") == 0);
+    ASSERT(
+        strcmp(client_result_to_string(ClientResult::Success), "Success") == 0);
 }
 
 TEST(result_to_string_not_connected) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::NotConnected), "NotConnected") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::NotConnected),
+            "NotConnected") == 0);
 }
 
 TEST(result_to_string_already_connected) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::AlreadyConnected), "AlreadyConnected") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::AlreadyConnected),
+            "AlreadyConnected") == 0);
 }
 
 TEST(result_to_string_connection_failed) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::ConnectionFailed), "ConnectionFailed") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::ConnectionFailed),
+            "ConnectionFailed") == 0);
 }
 
 TEST(result_to_string_connection_lost) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::ConnectionLost), "ConnectionLost") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::ConnectionLost),
+            "ConnectionLost") == 0);
 }
 
 TEST(result_to_string_timeout) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::Timeout), "Timeout") == 0);
+    ASSERT(
+        strcmp(client_result_to_string(ClientResult::Timeout), "Timeout") == 0);
 }
 
 TEST(result_to_string_invalid_packet) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::InvalidPacket), "InvalidPacket") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::InvalidPacket),
+            "InvalidPacket") == 0);
 }
 
 TEST(result_to_string_protocol_error) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::ProtocolError), "ProtocolError") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::ProtocolError),
+            "ProtocolError") == 0);
 }
 
 TEST(result_to_string_buffer_too_small) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::BufferTooSmall), "BufferTooSmall") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::BufferTooSmall),
+            "BufferTooSmall") == 0);
 }
 
 TEST(result_to_string_encoding_error) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::EncodingError), "EncodingError") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::EncodingError),
+            "EncodingError") == 0);
 }
 
 TEST(result_to_string_not_initialized) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::NotInitialized), "NotInitialized") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::NotInitialized),
+            "NotInitialized") == 0);
 }
 
 TEST(result_to_string_internal_error) {
-    ASSERT(strcmp(client_result_to_string(ClientResult::InternalError), "InternalError") == 0);
+    ASSERT(
+        strcmp(
+            client_result_to_string(ClientResult::InternalError),
+            "InternalError") == 0);
 }
 
 TEST(result_to_string_unknown) {
@@ -613,7 +648,8 @@ TEST(send_create_access_point_private_not_connected) {
 }
 
 /**
- * @test send_create_access_point_private with advertise data fails when disconnected
+ * @test send_create_access_point_private with advertise data fails when
+ * disconnected
  */
 TEST(send_create_access_point_private_with_advertise_not_connected) {
     socket_init();
@@ -624,7 +660,8 @@ TEST(send_create_access_point_private_with_advertise_not_connected) {
     request.security_config.security_mode = 2;
 
     uint8_t advertise_data[] = {0x01, 0x02, 0x03, 0x04};
-    ClientResult result = client.send_create_access_point_private(request, advertise_data, sizeof(advertise_data));
+    ClientResult result = client.send_create_access_point_private(
+        request, advertise_data, sizeof(advertise_data));
 
     ASSERT_EQ(result, ClientResult::NotConnected);
 }
@@ -731,7 +768,8 @@ TEST(send_passphrase_cstr_null_not_connected) {
     socket_init();
     TcpClient client;
 
-    ClientResult result = client.send_passphrase(static_cast<const char*>(nullptr));
+    ClientResult result =
+        client.send_passphrase(static_cast<const char*>(nullptr));
 
     ASSERT_EQ(result, ClientResult::NotConnected);
 }
@@ -831,12 +869,30 @@ TEST(tcp_client_set_nodelay_not_connected) {
 }
 
 TEST(client_result_to_string_additional) {
-    ASSERT_TRUE(strcmp(client_result_to_string(ClientResult::ConnectionFailed), "ConnectionFailed") == 0);
-    ASSERT_TRUE(strcmp(client_result_to_string(ClientResult::ProtocolError), "ProtocolError") == 0);
-    ASSERT_TRUE(strcmp(client_result_to_string(ClientResult::BufferTooSmall), "BufferTooSmall") == 0);
-    ASSERT_TRUE(strcmp(client_result_to_string(ClientResult::EncodingError), "EncodingError") == 0);
-    ASSERT_TRUE(strcmp(client_result_to_string(ClientResult::NotInitialized), "NotInitialized") == 0);
-    ASSERT_TRUE(strcmp(client_result_to_string(ClientResult::InternalError), "InternalError") == 0);
+    ASSERT_TRUE(
+        strcmp(
+            client_result_to_string(ClientResult::ConnectionFailed),
+            "ConnectionFailed") == 0);
+    ASSERT_TRUE(
+        strcmp(
+            client_result_to_string(ClientResult::ProtocolError),
+            "ProtocolError") == 0);
+    ASSERT_TRUE(
+        strcmp(
+            client_result_to_string(ClientResult::BufferTooSmall),
+            "BufferTooSmall") == 0);
+    ASSERT_TRUE(
+        strcmp(
+            client_result_to_string(ClientResult::EncodingError),
+            "EncodingError") == 0);
+    ASSERT_TRUE(
+        strcmp(
+            client_result_to_string(ClientResult::NotInitialized),
+            "NotInitialized") == 0);
+    ASSERT_TRUE(
+        strcmp(
+            client_result_to_string(ClientResult::InternalError),
+            "InternalError") == 0);
 }
 
 TEST(tcp_client_send_create_access_point_private_not_connected) {
@@ -887,7 +943,9 @@ public:
     Peer(const Peer&) = delete;
     Peer& operator=(const Peer&) = delete;
 
-    uint16_t port() const { return m_port; }
+    uint16_t port() const {
+        return m_port;
+    }
 
     /// Accept the pending client connection (the client already connected).
     bool accept_client() {
@@ -900,7 +958,8 @@ public:
         return true;
     }
 
-    /// Read exactly `size` bytes; returns what was read (shorter on EOF/timeout).
+    /// Read exactly `size` bytes; returns what was read (shorter on
+    /// EOF/timeout).
     std::vector<uint8_t> read_bytes(size_t size) {
         std::vector<uint8_t> out(size);
         size_t got = 0;
@@ -923,13 +982,15 @@ public:
         }
         LdnHeader h{};
         std::memcpy(&h, pkt.data(), sizeof(h));
-        std::vector<uint8_t> body = read_bytes(static_cast<size_t>(h.data_size));
+        std::vector<uint8_t> body =
+            read_bytes(static_cast<size_t>(h.data_size));
         pkt.insert(pkt.end(), body.begin(), body.end());
         return pkt;
     }
 
     bool write_bytes(const void* data, size_t size) {
-        return ::send(m_conn, data, size, MSG_NOSIGNAL) == static_cast<ssize_t>(size);
+        return ::send(m_conn, data, size, MSG_NOSIGNAL) ==
+               static_cast<ssize_t>(size);
     }
 
     void close_connection() {
@@ -955,27 +1016,38 @@ private:
 };
 
 /// Connect `client` to `peer` and accept on the peer side; asserts both.
-#define CONNECT_PAIR(client, peer) \
-    do { \
-        socket_init(); \
-        ASSERT_EQ((client).connect("127.0.0.1", (peer).port(), 2000), ClientResult::Success); \
-        ASSERT_TRUE((peer).accept_client()); \
+#define CONNECT_PAIR(client, peer)                              \
+    do {                                                        \
+        socket_init();                                          \
+        ASSERT_EQ(                                              \
+            (client).connect("127.0.0.1", (peer).port(), 2000), \
+            ClientResult::Success);                             \
+        ASSERT_TRUE((peer).accept_client());                    \
     } while (0)
 
 /// Same as CONNECT_PAIR for helpers returning bool instead of asserting.
-#define CONNECT_PAIR_BOOL(client, peer) \
-    do { \
-        socket_init(); \
-        if ((client).connect("127.0.0.1", (peer).port(), 2000) != ClientResult::Success) return false; \
-        if (!(peer).accept_client()) return false; \
+#define CONNECT_PAIR_BOOL(client, peer)                           \
+    do {                                                          \
+        socket_init();                                            \
+        if ((client).connect("127.0.0.1", (peer).port(), 2000) != \
+            ClientResult::Success)                                \
+            return false;                                         \
+        if (!(peer).accept_client())                              \
+            return false;                                         \
     } while (0)
 
 /// Build one wire packet (header + payload) the way the server would.
-static std::vector<uint8_t> make_packet(PacketId type, const void* payload, size_t size) {
+static std::vector<uint8_t> make_packet(
+    PacketId type, const void* payload, size_t size) {
     std::vector<uint8_t> buf(sizeof(LdnHeader) + size);
     size_t written = 0;
-    EncodeResult r = encode_raw(buf.data(), buf.size(), type,
-                                static_cast<const uint8_t*>(payload), size, written);
+    EncodeResult r = encode_raw(
+        buf.data(),
+        buf.size(),
+        type,
+        static_cast<const uint8_t*>(payload),
+        size,
+        written);
     if (r != EncodeResult::Success || written != buf.size()) {
         throw "make_packet: encode_raw failed";
     }
@@ -983,15 +1055,17 @@ static std::vector<uint8_t> make_packet(PacketId type, const void* payload, size
 }
 
 /// Assert a received wire packet has the expected type and payload size.
-#define ASSERT_WIRE(pkt, expect_type, expect_payload) \
-    do { \
+#define ASSERT_WIRE(pkt, expect_type, expect_payload)                  \
+    do {                                                               \
         ASSERT_EQ((pkt).size(), sizeof(LdnHeader) + (expect_payload)); \
-        LdnHeader hdr_{}; \
-        std::memcpy(&hdr_, (pkt).data(), sizeof(hdr_)); \
-        ASSERT_EQ(hdr_.magic, PROTOCOL_MAGIC); \
-        ASSERT_EQ(hdr_.type, static_cast<uint8_t>(expect_type)); \
-        ASSERT_EQ(hdr_.version, PROTOCOL_VERSION); \
-        ASSERT_EQ(static_cast<size_t>(hdr_.data_size), static_cast<size_t>(expect_payload)); \
+        LdnHeader hdr_{};                                              \
+        std::memcpy(&hdr_, (pkt).data(), sizeof(hdr_));                \
+        ASSERT_EQ(hdr_.magic, PROTOCOL_MAGIC);                         \
+        ASSERT_EQ(hdr_.type, static_cast<uint8_t>(expect_type));       \
+        ASSERT_EQ(hdr_.version, PROTOCOL_VERSION);                     \
+        ASSERT_EQ(                                                     \
+            static_cast<size_t>(hdr_.data_size),                       \
+            static_cast<size_t>(expect_payload));                      \
     } while (0)
 
 TEST(connected_connect_enables_nodelay_and_rejects_second_connect) {
@@ -1001,7 +1075,9 @@ TEST(connected_connect_enables_nodelay_and_rejects_second_connect) {
     ASSERT_TRUE(client.is_connected());
     ASSERT_EQ(client.set_nodelay(true), ClientResult::Success);
     ASSERT_EQ(client.set_nodelay(false), ClientResult::Success);
-    ASSERT_EQ(client.connect("127.0.0.1", peer.port(), 2000), ClientResult::AlreadyConnected);
+    ASSERT_EQ(
+        client.connect("127.0.0.1", peer.port(), 2000),
+        ClientResult::AlreadyConnected);
     ASSERT_TRUE(client.is_connected());
     client.disconnect();
     ASSERT_FALSE(client.is_connected());
@@ -1024,10 +1100,14 @@ TEST(connected_send_packet_writes_header_and_payload) {
     TcpClient client;
     CONNECT_PAIR(client, peer);
     const uint8_t payload[5] = {1, 2, 3, 4, 5};
-    ASSERT_EQ(client.send_packet(PacketId::Ping, payload, sizeof(payload)), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_packet(PacketId::Ping, payload, sizeof(payload)),
+        ClientResult::Success);
     auto pkt = peer.read_packet();
     ASSERT_WIRE(pkt, PacketId::Ping, sizeof(payload));
-    ASSERT_EQ(std::memcmp(pkt.data() + sizeof(LdnHeader), payload, sizeof(payload)), 0);
+    ASSERT_EQ(
+        std::memcmp(pkt.data() + sizeof(LdnHeader), payload, sizeof(payload)),
+        0);
 }
 
 TEST(connected_send_packet_larger_than_buffer_is_an_encoding_error) {
@@ -1035,7 +1115,9 @@ TEST(connected_send_packet_larger_than_buffer_is_an_encoding_error) {
     TcpClient client;
     CONNECT_PAIR(client, peer);
     std::vector<uint8_t> big(4096, 0x5A);
-    ASSERT_EQ(client.send_packet(PacketId::Ping, big.data(), big.size()), ClientResult::EncodingError);
+    ASSERT_EQ(
+        client.send_packet(PacketId::Ping, big.data(), big.size()),
+        ClientResult::EncodingError);
 }
 
 TEST(connected_send_raw_forwards_bytes_unchanged_and_validates_input) {
@@ -1121,34 +1203,68 @@ static bool wire_matches_reference(PacketId id, const T& msg, SendFn send) {
     Peer peer;
     TcpClient client;
     CONNECT_PAIR_BOOL(client, peer);
-    if (send(client, msg) != ClientResult::Success) return false;
+    if (send(client, msg) != ClientResult::Success)
+        return false;
 
     std::vector<uint8_t> expected(get_packet_size<T>());
     size_t written = 0;
-    if (encode(expected.data(), expected.size(), id, msg, written) != EncodeResult::Success) return false;
+    if (encode(expected.data(), expected.size(), id, msg, written) !=
+        EncodeResult::Success)
+        return false;
 
     auto got = peer.read_packet();
     return written == expected.size() && got == expected;
 }
 
-TEST(connected_fixed_size_messages_are_byte_identical_to_the_reference_encoder) {
-    ASSERT_TRUE(wire_matches_reference(PacketId::Initialize, patterned<InitializeMessage>(1),
-        [](TcpClient& c, const InitializeMessage& m) { return c.send_initialize(m); }));
-    ASSERT_TRUE(wire_matches_reference(PacketId::Passphrase, patterned<PassphraseMessage>(2),
-        [](TcpClient& c, const PassphraseMessage& m) { return c.send_passphrase(m); }));
-    ASSERT_TRUE(wire_matches_reference(PacketId::Ping, patterned<PingMessage>(3),
+TEST(
+    connected_fixed_size_messages_are_byte_identical_to_the_reference_encoder) {
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::Initialize,
+        patterned<InitializeMessage>(1),
+        [](TcpClient& c, const InitializeMessage& m) {
+            return c.send_initialize(m);
+        }));
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::Passphrase,
+        patterned<PassphraseMessage>(2),
+        [](TcpClient& c, const PassphraseMessage& m) {
+            return c.send_passphrase(m);
+        }));
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::Ping,
+        patterned<PingMessage>(3),
         [](TcpClient& c, const PingMessage& m) { return c.send_ping(m); }));
-    ASSERT_TRUE(wire_matches_reference(PacketId::Disconnect, patterned<DisconnectMessage>(4),
-        [](TcpClient& c, const DisconnectMessage& m) { return c.send_disconnect(m); }));
-    ASSERT_TRUE(wire_matches_reference(PacketId::Connect, patterned<ConnectRequest>(5),
-        [](TcpClient& c, const ConnectRequest& m) { return c.send_connect(m); }));
-    ASSERT_TRUE(wire_matches_reference(PacketId::ConnectPrivate, patterned<ConnectPrivateRequest>(6),
-        [](TcpClient& c, const ConnectPrivateRequest& m) { return c.send_connect_private(m); }));
-    ASSERT_TRUE(wire_matches_reference(PacketId::Scan, patterned<ScanFilterFull>(7),
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::Disconnect,
+        patterned<DisconnectMessage>(4),
+        [](TcpClient& c, const DisconnectMessage& m) {
+            return c.send_disconnect(m);
+        }));
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::Connect,
+        patterned<ConnectRequest>(5),
+        [](TcpClient& c, const ConnectRequest& m) {
+            return c.send_connect(m);
+        }));
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::ConnectPrivate,
+        patterned<ConnectPrivateRequest>(6),
+        [](TcpClient& c, const ConnectPrivateRequest& m) {
+            return c.send_connect_private(m);
+        }));
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::Scan,
+        patterned<ScanFilterFull>(7),
         [](TcpClient& c, const ScanFilterFull& m) { return c.send_scan(m); }));
-    ASSERT_TRUE(wire_matches_reference(PacketId::SetAcceptPolicy, patterned<SetAcceptPolicyRequest>(8),
-        [](TcpClient& c, const SetAcceptPolicyRequest& m) { return c.send_set_accept_policy(m); }));
-    ASSERT_TRUE(wire_matches_reference(PacketId::Reject, patterned<RejectRequest>(9),
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::SetAcceptPolicy,
+        patterned<SetAcceptPolicyRequest>(8),
+        [](TcpClient& c, const SetAcceptPolicyRequest& m) {
+            return c.send_set_accept_policy(m);
+        }));
+    ASSERT_TRUE(wire_matches_reference(
+        PacketId::Reject,
+        patterned<RejectRequest>(9),
         [](TcpClient& c, const RejectRequest& m) { return c.send_reject(m); }));
 }
 
@@ -1163,7 +1279,9 @@ TEST(connected_send_passphrase_string_copies_and_truncates) {
     ASSERT_EQ(std::memcmp(p.data() + sizeof(LdnHeader), "hello", 5), 0);
     ASSERT_EQ(p[sizeof(LdnHeader) + 5], static_cast<uint8_t>(0));
 
-    ASSERT_EQ(client.send_passphrase(static_cast<const char*>(nullptr)), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_passphrase(static_cast<const char*>(nullptr)),
+        ClientResult::Success);
     p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::Passphrase, sizeof(PassphraseMessage));
     ASSERT_EQ(p[sizeof(LdnHeader)], static_cast<uint8_t>(0));
@@ -1184,13 +1302,17 @@ TEST(connected_send_create_access_point_appends_advertise_data) {
     CreateAccessPointRequest req{};
     const uint8_t adv[40] = {0xAA, 0xBB};
 
-    ASSERT_EQ(client.send_create_access_point(req, adv, sizeof(adv)), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_create_access_point(req, adv, sizeof(adv)),
+        ClientResult::Success);
     auto p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::CreateAccessPoint, sizeof(req) + sizeof(adv));
     ASSERT_EQ(p[sizeof(LdnHeader) + sizeof(req)], static_cast<uint8_t>(0xAA));
 
     // No advertise data: request only.
-    ASSERT_EQ(client.send_create_access_point(req, nullptr, 0), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_create_access_point(req, nullptr, 0),
+        ClientResult::Success);
     p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::CreateAccessPoint, sizeof(req));
 }
@@ -1201,7 +1323,9 @@ TEST(connected_send_create_access_point_rejects_oversized_advertise_data) {
     CONNECT_PAIR(client, peer);
     CreateAccessPointRequest req{};
     std::vector<uint8_t> adv(4096, 1);
-    ASSERT_EQ(client.send_create_access_point(req, adv.data(), adv.size()), ClientResult::BufferTooSmall);
+    ASSERT_EQ(
+        client.send_create_access_point(req, adv.data(), adv.size()),
+        ClientResult::BufferTooSmall);
 }
 
 TEST(connected_send_create_access_point_private_appends_advertise_data) {
@@ -1211,18 +1335,24 @@ TEST(connected_send_create_access_point_private_appends_advertise_data) {
     CreateAccessPointPrivateRequest req{};
     const uint8_t adv[16] = {0xCC};
 
-    ASSERT_EQ(client.send_create_access_point_private(req, adv, sizeof(adv)), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_create_access_point_private(req, adv, sizeof(adv)),
+        ClientResult::Success);
     auto p = peer.read_packet();
-    ASSERT_WIRE(p, PacketId::CreateAccessPointPrivate, sizeof(req) + sizeof(adv));
+    ASSERT_WIRE(
+        p, PacketId::CreateAccessPointPrivate, sizeof(req) + sizeof(adv));
     ASSERT_EQ(p[sizeof(LdnHeader) + sizeof(req)], static_cast<uint8_t>(0xCC));
 
-    ASSERT_EQ(client.send_create_access_point_private(req, nullptr, 0), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_create_access_point_private(req, nullptr, 0),
+        ClientResult::Success);
     p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::CreateAccessPointPrivate, sizeof(req));
 
     std::vector<uint8_t> big(4096, 1);
-    ASSERT_EQ(client.send_create_access_point_private(req, big.data(), big.size()),
-              ClientResult::BufferTooSmall);
+    ASSERT_EQ(
+        client.send_create_access_point_private(req, big.data(), big.size()),
+        ClientResult::BufferTooSmall);
 }
 
 TEST(connected_send_proxy_data_encodes_header_and_payload) {
@@ -1234,12 +1364,16 @@ TEST(connected_send_proxy_data_encodes_header_and_payload) {
     const uint8_t data[6] = {1, 2, 3, 4, 5, 6};
     header.data_length = sizeof(data);
 
-    ASSERT_EQ(client.send_proxy_data(header, data, sizeof(data)), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_proxy_data(header, data, sizeof(data)),
+        ClientResult::Success);
     auto p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::ProxyData, sizeof(ProxyDataHeader) + sizeof(data));
 
     std::vector<uint8_t> big(4096, 1);
-    ASSERT_EQ(client.send_proxy_data(header, big.data(), big.size()), ClientResult::EncodingError);
+    ASSERT_EQ(
+        client.send_proxy_data(header, big.data(), big.size()),
+        ClientResult::EncodingError);
 }
 
 TEST(connected_send_set_advertise_data_clamps_to_protocol_maximum) {
@@ -1248,16 +1382,21 @@ TEST(connected_send_set_advertise_data_clamps_to_protocol_maximum) {
     CONNECT_PAIR(client, peer);
 
     const uint8_t small[4] = {1, 2, 3, 4};
-    ASSERT_EQ(client.send_set_advertise_data(small, sizeof(small)), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_set_advertise_data(small, sizeof(small)),
+        ClientResult::Success);
     auto p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::SetAdvertiseData, sizeof(small));
 
-    ASSERT_EQ(client.send_set_advertise_data(nullptr, 0), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_set_advertise_data(nullptr, 0), ClientResult::Success);
     p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::SetAdvertiseData, static_cast<size_t>(0));
 
     std::vector<uint8_t> big(1000, 7);
-    ASSERT_EQ(client.send_set_advertise_data(big.data(), big.size()), ClientResult::Success);
+    ASSERT_EQ(
+        client.send_set_advertise_data(big.data(), big.size()),
+        ClientResult::Success);
     p = peer.read_packet();
     ASSERT_WIRE(p, PacketId::SetAdvertiseData, static_cast<size_t>(384));
 }
@@ -1277,9 +1416,11 @@ TEST(connected_send_fails_once_the_peer_is_gone) {
     }
     ASSERT_NE(last, ClientResult::Success);
 
-    // The failure is sticky: a later send on the same dead connection fails too.
+    // The failure is sticky: a later send on the same dead connection fails
+    // too.
     uint8_t one = 1;
-    ASSERT_NE(client.send_packet(PacketId::Ping, &one, 1), ClientResult::Success);
+    ASSERT_NE(
+        client.send_packet(PacketId::Ping, &one, 1), ClientResult::Success);
 }
 
 TEST(connected_receive_packet_returns_payload_and_consumes_it) {
@@ -1293,7 +1434,9 @@ TEST(connected_receive_packet_returns_payload_and_consumes_it) {
     PacketId type{};
     uint8_t out[16] = {};
     size_t out_size = 0;
-    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::Success);
+    ASSERT_EQ(
+        client.receive_packet(type, out, sizeof(out), out_size, 2000),
+        ClientResult::Success);
     ASSERT_EQ(type, PacketId::Ping);
     ASSERT_EQ(out_size, sizeof(payload));
     ASSERT_EQ(std::memcmp(out, payload, sizeof(payload)), 0);
@@ -1310,7 +1453,9 @@ TEST(connected_receive_packet_without_payload) {
     PacketId type{};
     uint8_t out[4];
     size_t out_size = 99;
-    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::Success);
+    ASSERT_EQ(
+        client.receive_packet(type, out, sizeof(out), out_size, 2000),
+        ClientResult::Success);
     ASSERT_EQ(type, PacketId::ScanReplyEnd);
     ASSERT_EQ(out_size, static_cast<size_t>(0));
 }
@@ -1328,7 +1473,9 @@ TEST(connected_receive_packet_reassembles_a_split_packet) {
     PacketId type{};
     uint8_t out[16] = {};
     size_t out_size = 0;
-    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::Success);
+    ASSERT_EQ(
+        client.receive_packet(type, out, sizeof(out), out_size, 2000),
+        ClientResult::Success);
     ASSERT_EQ(out_size, sizeof(payload));
     ASSERT_EQ(std::memcmp(out, payload, sizeof(payload)), 0);
 }
@@ -1344,12 +1491,16 @@ TEST(connected_receive_packet_keeps_the_packet_when_the_buffer_is_too_small) {
     PacketId type{};
     uint8_t small[2];
     size_t out_size = 0;
-    ASSERT_EQ(client.receive_packet(type, small, sizeof(small), out_size, 2000), ClientResult::BufferTooSmall);
+    ASSERT_EQ(
+        client.receive_packet(type, small, sizeof(small), out_size, 2000),
+        ClientResult::BufferTooSmall);
     ASSERT_EQ(out_size, sizeof(payload));
     ASSERT_TRUE(client.has_packet_available());
 
     uint8_t big[16] = {};
-    ASSERT_EQ(client.receive_packet(type, big, sizeof(big), out_size, 2000), ClientResult::Success);
+    ASSERT_EQ(
+        client.receive_packet(type, big, sizeof(big), out_size, 2000),
+        ClientResult::Success);
     ASSERT_EQ(std::memcmp(big, payload, sizeof(payload)), 0);
 }
 
@@ -1360,8 +1511,12 @@ TEST(connected_receive_packet_times_out_without_data) {
     PacketId type{};
     uint8_t out[4];
     size_t out_size = 0;
-    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 50), ClientResult::Timeout);
-    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 0), ClientResult::Timeout);
+    ASSERT_EQ(
+        client.receive_packet(type, out, sizeof(out), out_size, 50),
+        ClientResult::Timeout);
+    ASSERT_EQ(
+        client.receive_packet(type, out, sizeof(out), out_size, 0),
+        ClientResult::Timeout);
 }
 
 TEST(connected_receive_packet_reports_connection_lost_on_peer_close) {
@@ -1372,7 +1527,9 @@ TEST(connected_receive_packet_reports_connection_lost_on_peer_close) {
     PacketId type{};
     uint8_t out[4];
     size_t out_size = 0;
-    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::ConnectionLost);
+    ASSERT_EQ(
+        client.receive_packet(type, out, sizeof(out), out_size, 2000),
+        ClientResult::ConnectionLost);
 }
 
 TEST(connected_receive_packet_rejects_a_corrupt_header) {
@@ -1387,7 +1544,9 @@ TEST(connected_receive_packet_rejects_a_corrupt_header) {
     size_t out_size = 0;
     // A header with an invalid magic is never "complete": the client keeps
     // waiting, then reports a timeout rather than handing back garbage.
-    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 100), ClientResult::Timeout);
+    ASSERT_EQ(
+        client.receive_packet(type, out, sizeof(out), out_size, 100),
+        ClientResult::Timeout);
 }
 
 TEST(connected_receive_packet_overflowing_the_stream_buffer_is_invalid) {
@@ -1424,7 +1583,9 @@ TEST(connected_receive_packet_maps_a_connection_reset) {
     PacketId type{};
     uint8_t out[4];
     size_t out_size = 0;
-    ASSERT_EQ(client.receive_packet(type, out, sizeof(out), out_size, 2000), ClientResult::ConnectionLost);
+    ASSERT_EQ(
+        client.receive_packet(type, out, sizeof(out), out_size, 2000),
+        ClientResult::ConnectionLost);
 }
 
 TEST(connect_times_out_when_the_server_never_accepts) {
@@ -1455,7 +1616,10 @@ TEST(connect_times_out_when_the_server_never_accepts) {
 }
 
 TEST(socket_result_mapping_covers_every_socket_outcome) {
-    struct Row { SocketResult in; ClientResult out; };
+    struct Row {
+        SocketResult in;
+        ClientResult out;
+    };
     const Row rows[] = {
         {SocketResult::Success, ClientResult::Success},
         {SocketResult::WouldBlock, ClientResult::Success},

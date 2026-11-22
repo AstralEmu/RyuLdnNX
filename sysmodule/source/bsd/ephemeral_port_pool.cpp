@@ -17,7 +17,8 @@ namespace ams::mitm::bsd {
 // Bitset Access Helpers
 // =============================================================================
 
-std::bitset<EPHEMERAL_PORT_COUNT>& EphemeralPortPool::GetBitset(ryu_ldn::bsd::ProtocolType protocol) {
+std::bitset<EPHEMERAL_PORT_COUNT>& EphemeralPortPool::GetBitset(
+    ryu_ldn::bsd::ProtocolType protocol) {
     switch (protocol) {
         case ryu_ldn::bsd::ProtocolType::Udp:
             return m_udp_ports;
@@ -29,7 +30,8 @@ std::bitset<EPHEMERAL_PORT_COUNT>& EphemeralPortPool::GetBitset(ryu_ldn::bsd::Pr
     }
 }
 
-const std::bitset<EPHEMERAL_PORT_COUNT>& EphemeralPortPool::GetBitset(ryu_ldn::bsd::ProtocolType protocol) const {
+const std::bitset<EPHEMERAL_PORT_COUNT>& EphemeralPortPool::GetBitset(
+    ryu_ldn::bsd::ProtocolType protocol) const {
     switch (protocol) {
         case ryu_ldn::bsd::ProtocolType::Udp:
             return m_udp_ports;
@@ -48,7 +50,8 @@ uint16_t EphemeralPortPool::AllocatePort(ryu_ldn::bsd::ProtocolType protocol) {
     std::scoped_lock lock(m_mutex);
 
     auto& bitset = GetBitset(protocol);
-    size_t& hint = (protocol == ryu_ldn::bsd::ProtocolType::Tcp) ? m_tcp_hint : m_udp_hint;
+    size_t& hint =
+        (protocol == ryu_ldn::bsd::ProtocolType::Tcp) ? m_tcp_hint : m_udp_hint;
 
     // Search for an available port starting from the hint (round-robin)
     for (size_t i = 0; i < EPHEMERAL_PORT_COUNT; ++i) {
@@ -70,7 +73,8 @@ uint16_t EphemeralPortPool::AllocatePort(ryu_ldn::bsd::ProtocolType protocol) {
     return 0;
 }
 
-bool EphemeralPortPool::AllocateSpecificPort(uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
+bool EphemeralPortPool::AllocateSpecificPort(
+    uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
     // Validate port is in ephemeral range
     const size_t index = PortToIndex(port);
     if (index >= EPHEMERAL_PORT_COUNT) {
@@ -85,7 +89,7 @@ bool EphemeralPortPool::AllocateSpecificPort(uint16_t port, ryu_ldn::bsd::Protoc
 
     // Check if already allocated
     if (bitset.test(index)) {
-        return false; // Port in use
+        return false;  // Port in use
     }
 
     // Mark as allocated
@@ -97,10 +101,11 @@ bool EphemeralPortPool::AllocateSpecificPort(uint16_t port, ryu_ldn::bsd::Protoc
 // Port Release
 // =============================================================================
 
-void EphemeralPortPool::ReleasePort(uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
+void EphemeralPortPool::ReleasePort(
+    uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
     const size_t index = PortToIndex(port);
     if (index >= EPHEMERAL_PORT_COUNT) {
-        return; // Port not in ephemeral range, nothing to release
+        return;  // Port not in ephemeral range, nothing to release
     }
 
     std::scoped_lock lock(m_mutex);
@@ -115,10 +120,11 @@ void EphemeralPortPool::ReleasePort(uint16_t port, ryu_ldn::bsd::ProtocolType pr
 // Query Methods
 // =============================================================================
 
-bool EphemeralPortPool::IsPortAllocated(uint16_t port, ryu_ldn::bsd::ProtocolType protocol) const {
+bool EphemeralPortPool::IsPortAllocated(
+    uint16_t port, ryu_ldn::bsd::ProtocolType protocol) const {
     const size_t index = PortToIndex(port);
     if (index >= EPHEMERAL_PORT_COUNT) {
-        return false; // Port not in ephemeral range
+        return false;  // Port not in ephemeral range
     }
 
     std::scoped_lock lock(m_mutex);
@@ -127,7 +133,8 @@ bool EphemeralPortPool::IsPortAllocated(uint16_t port, ryu_ldn::bsd::ProtocolTyp
     return bitset.test(index);
 }
 
-size_t EphemeralPortPool::GetAvailableCount(ryu_ldn::bsd::ProtocolType protocol) const {
+size_t EphemeralPortPool::GetAvailableCount(
+    ryu_ldn::bsd::ProtocolType protocol) const {
     std::scoped_lock lock(m_mutex);
 
     const auto& bitset = GetBitset(protocol);
@@ -145,4 +152,4 @@ void EphemeralPortPool::ReleaseAll() {
     m_tcp_hint = 0;
 }
 
-} // namespace ams::mitm::bsd
+}  // namespace ams::mitm::bsd

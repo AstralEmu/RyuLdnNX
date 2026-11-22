@@ -102,26 +102,31 @@ public:
      * @param target_node_id Node to check for routing
      * @return true if packet should be sent to target_node_id
      */
-    bool ShouldRouteToNode(u32 dest_node_id, u32 source_node_id, u32 target_node_id) const;
+    bool ShouldRouteToNode(
+        u32 dest_node_id, u32 source_node_id, u32 target_node_id) const;
 
     /**
      * @brief Get local node ID (this client's node)
      *
      * @return Local node ID (0xFF if not set)
      */
-    u8 GetLocalNodeId() const { return m_local_node_id; }
+    u8 GetLocalNodeId() const {
+        return m_local_node_id;
+    }
 
     /**
      * @brief Set local node ID
      *
      * @param node_id Local node ID
      */
-    void SetLocalNodeId(u8 node_id) { m_local_node_id = node_id; }
+    void SetLocalNodeId(u8 node_id) {
+        m_local_node_id = node_id;
+    }
 
 private:
-    mutable os::SdkMutex m_mutex;       ///< Thread safety mutex
-    NodeEntry m_nodes[MaxNodes];        ///< Node entries
-    u8 m_local_node_id;                 ///< This client's node ID
+    mutable os::SdkMutex m_mutex;  ///< Thread safety mutex
+    NodeEntry m_nodes[MaxNodes];   ///< Node entries
+    u8 m_local_node_id;            ///< This client's node ID
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

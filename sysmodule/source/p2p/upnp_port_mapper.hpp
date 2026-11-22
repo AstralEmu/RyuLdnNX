@@ -152,8 +152,11 @@ public:
      * @note Requires Discover() to have succeeded
      */
     /// @gdb{tag="P2P:NAT", msg="Adding port mapping"}
-    bool AddPortMapping(uint16_t internal_port, uint16_t external_port,
-                        const char* description, int lease_duration = PORT_LEASE_DURATION);
+    bool AddPortMapping(
+        uint16_t internal_port,
+        uint16_t external_port,
+        const char* description,
+        int lease_duration = PORT_LEASE_DURATION);
 
     /**
      * @brief Delete a TCP port mapping
@@ -180,8 +183,10 @@ public:
      * @return true if lease was refreshed, false on error
      */
     /// @gdb{tag="P2P:NAT", msg="Refreshing port mapping"}
-    bool RefreshPortMapping(uint16_t internal_port, uint16_t external_port,
-                            const char* description);
+    bool RefreshPortMapping(
+        uint16_t internal_port,
+        uint16_t external_port,
+        const char* description);
 
     // =========================================================================
     // Information
@@ -268,4 +273,4 @@ private:
     bool m_available;
 };
 
-} // namespace ams::mitm::p2p
+}  // namespace ams::mitm::p2p

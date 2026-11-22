@@ -29,7 +29,7 @@ namespace ams::mitm::ldn {
 /**
  * @brief Callback type for timeout expiration
  */
-using TimeoutCallback = void(*)();
+using TimeoutCallback = void (*)();
 
 /**
  * @brief Network inactivity timeout manager
@@ -99,11 +99,11 @@ public:
     bool IsActive() const;
 
 private:
-    uint64_t m_idle_timeout_ms;      ///< Timeout duration
-    TimeoutCallback m_callback;       ///< Callback to invoke on timeout
-    uint64_t m_timeout_start_ms;     ///< When timeout was started
-    bool m_active;                    ///< True if timeout is active
-    mutable os::Mutex m_mutex;        ///< Thread safety
+    uint64_t m_idle_timeout_ms;   ///< Timeout duration
+    TimeoutCallback m_callback;   ///< Callback to invoke on timeout
+    uint64_t m_timeout_start_ms;  ///< When timeout was started
+    bool m_active;                ///< True if timeout is active
+    mutable os::Mutex m_mutex;    ///< Thread safety
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

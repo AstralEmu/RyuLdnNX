@@ -31,17 +31,17 @@ enum class ConnectionState : uint8_t {
  * @brief Events that can trigger state transitions
  */
 enum class ConnectionEvent : uint8_t {
-    Connect,            ///< Request to connect
-    ConnectSuccess,     ///< TCP connection established
-    ConnectFailed,      ///< TCP connection failed
-    HandshakeStarted,   ///< Protocol handshake initiated (sent Initialize)
-    HandshakeSuccess,   ///< Protocol handshake completed
-    HandshakeFailed,    ///< Protocol handshake failed
-    Disconnect,         ///< Request to disconnect
-    ConnectionLost,     ///< Connection unexpectedly lost
-    BackoffExpired,     ///< Backoff timer expired, ready to retry
-    RetryRequested,     ///< Manual retry requested
-    FatalError          ///< Unrecoverable error occurred
+    Connect,           ///< Request to connect
+    ConnectSuccess,    ///< TCP connection established
+    ConnectFailed,     ///< TCP connection failed
+    HandshakeStarted,  ///< Protocol handshake initiated (sent Initialize)
+    HandshakeSuccess,  ///< Protocol handshake completed
+    HandshakeFailed,   ///< Protocol handshake failed
+    Disconnect,        ///< Request to disconnect
+    ConnectionLost,    ///< Connection unexpectedly lost
+    BackoffExpired,    ///< Backoff timer expired, ready to retry
+    RetryRequested,    ///< Manual retry requested
+    FatalError         ///< Unrecoverable error occurred
 };
 
 /**
@@ -59,9 +59,10 @@ enum class TransitionResult : uint8_t {
  * @param new_state New state
  * @param event Event that triggered the transition
  */
-using StateChangeCallback = void (*)(ConnectionState old_state,
-                                      ConnectionState new_state,
-                                      ConnectionEvent event);
+using StateChangeCallback = void (*)(
+    ConnectionState old_state,
+    ConnectionState new_state,
+    ConnectionEvent event);
 
 /**
  * @brief Connection state machine
@@ -103,7 +104,9 @@ public:
      * @brief Get current connection state
      * @return Current state
      */
-    ConnectionState get_state() const { return m_state; }
+    ConnectionState get_state() const {
+        return m_state;
+    }
 
     /**
      * @brief Check if currently connected (Connected, Handshaking, or Ready)
@@ -116,7 +119,9 @@ public:
      * @brief Check if fully ready (handshake complete)
      * @return true if in Ready state
      */
-    bool is_ready() const { return m_state == ConnectionState::Ready; }
+    bool is_ready() const {
+        return m_state == ConnectionState::Ready;
+    }
 
     /**
      * @brief Check if in a transitional state (Connecting, Handshaking, etc.)
@@ -137,19 +142,24 @@ public:
      * @brief Set callback for state changes
      * @param callback Function to call on state change (nullptr to disable)
      */
-    /// @gdb{tag="NETWORK:STATE_MACHINE", msg="set_state_change_callback: cb=%p", args="$x0"}
+    /// @gdb{tag="NETWORK:STATE_MACHINE", msg="set_state_change_callback:
+    /// cb=%p", args="$x0"}
     void set_state_change_callback(StateChangeCallback callback);
 
     /**
      * @brief Get retry count since last successful connection
      * @return Number of retry attempts
      */
-    uint32_t get_retry_count() const { return m_retry_count; }
+    uint32_t get_retry_count() const {
+        return m_retry_count;
+    }
 
     /**
      * @brief Reset retry count (call on successful connection)
      */
-    void reset_retry_count() { m_retry_count = 0; }
+    void reset_retry_count() {
+        m_retry_count = 0;
+    }
 
     /**
      * @brief Force state (use with caution, bypasses transition validation)
@@ -185,15 +195,16 @@ private:
      * @return true if transition is valid
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="is_valid_transition"}
-    static bool is_valid_transition(ConnectionState from, ConnectionEvent event,
-                             ConnectionState& to) ;
+    static bool is_valid_transition(
+        ConnectionState from, ConnectionEvent event, ConnectionState& to);
 
     /**
      * @brief Perform the state transition
      * @param new_state Target state
      * @param event Event that caused transition
      */
-    /// @gdb{tag="NETWORK:STATE_MACHINE", msg="transition_to: old=%d new=%d event=%d", args="$x1, $x2, $x3"}
+    /// @gdb{tag="NETWORK:STATE_MACHINE", msg="transition_to: old=%d new=%d
+    /// event=%d", args="$x1, $x2, $x3"}
     void transition_to(ConnectionState new_state, ConnectionEvent event);
 };
 
@@ -204,12 +215,16 @@ private:
  */
 inline const char* transition_result_to_string(TransitionResult result) {
     switch (result) {
-        case TransitionResult::Success:           return "Success";
-        case TransitionResult::InvalidTransition: return "InvalidTransition";
-        case TransitionResult::AlreadyInState:    return "AlreadyInState";
-        default:                                  return "Unknown";
+        case TransitionResult::Success:
+            return "Success";
+        case TransitionResult::InvalidTransition:
+            return "InvalidTransition";
+        case TransitionResult::AlreadyInState:
+            return "AlreadyInState";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace network
-} // namespace ryu_ldn
+}  // namespace network
+}  // namespace ryu_ldn

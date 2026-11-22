@@ -50,8 +50,8 @@
  * ConfigResult result = load_config("/config/ryu_ldn_nx/config.ini", config);
  *
  * if (result == ConfigResult::Success) {
- *     printf("Loaded config, server: %s:%d\n", config.server.host, config.server.port);
- * } else if (result == ConfigResult::FileNotFound) {
+ *     printf("Loaded config, server: %s:%d\n", config.server.host,
+ * config.server.port); } else if (result == ConfigResult::FileNotFound) {
  *     printf("Using default config\n");
  * }
  * @endcode
@@ -110,7 +110,8 @@ constexpr const char* LOG_PATH = "sdmc:/config/ryu_ldn_nx/ryu_ldn_nx.log";
 // Default Values - Server
 // -----------------------------------------------------------------------------
 
-/** @brief Default server hostname (Temporary private RyuLDN server for development and testing) */
+/** @brief Default server hostname (Temporary private RyuLDN server for
+ * development and testing) */
 constexpr const char* DEFAULT_HOST = "ryuldnnx.ddns.net";
 
 /** @brief Default server port */
@@ -125,7 +126,8 @@ constexpr bool DEFAULT_LDN_ENABLED = true;
 /** @brief Default use_passphrase state (false = public rooms, no filtering) */
 constexpr bool DEFAULT_USE_PASSPHRASE = false;
 
-/** @brief Default P2P proxy disabled state (matches config.ini.example: disable_p2p = 1) */
+/** @brief Default P2P proxy disabled state (matches config.ini.example:
+ * disable_p2p = 1) */
 constexpr bool DEFAULT_DISABLE_P2P = true;
 
 // -----------------------------------------------------------------------------
@@ -138,7 +140,6 @@ constexpr bool DEFAULT_DEBUG_ENABLED = false;
 /** @brief Default debug log level (1 = warnings) */
 constexpr uint32_t DEFAULT_DEBUG_LEVEL = 1;
 
-
 // =============================================================================
 // Result Codes
 // =============================================================================
@@ -147,10 +148,10 @@ constexpr uint32_t DEFAULT_DEBUG_LEVEL = 1;
  * @brief Result codes for configuration operations
  */
 enum class ConfigResult {
-    Success = 0,       ///< Configuration loaded successfully
-    FileNotFound,      ///< Configuration file does not exist
-    ParseError,        ///< File exists but contains syntax errors
-    IoError            ///< File I/O error (permissions, disk full, etc.)
+    Success = 0,   ///< Configuration loaded successfully
+    FileNotFound,  ///< Configuration file does not exist
+    ParseError,    ///< File exists but contains syntax errors
+    IoError        ///< File I/O error (permissions, disk full, etc.)
 };
 
 // =============================================================================
@@ -169,7 +170,7 @@ enum class ConfigResult {
  */
 struct ServerConfig {
     char host[MAX_HOST_LENGTH + 1];  ///< Server hostname/IP (null-terminated)
-    uint16_t port;                    ///< Server port number
+    uint16_t port;                   ///< Server port number
 };
 
 /**
@@ -185,10 +186,12 @@ struct ServerConfig {
  * - `disable_p2p`: Disable P2P proxy (0/1) - like Ryujinx MultiplayerDisableP2p
  */
 struct LdnConfig {
-    bool enabled;                                    ///< Enable LDN emulation
-    char passphrase[MAX_PASSPHRASE_LENGTH + 1];      ///< Room passphrase (null-terminated)
-    bool use_passphrase;                             ///< Enable passphrase filtering (false = public rooms)
-    bool disable_p2p;                                ///< Disable P2P proxy (like Ryujinx)
+    bool enabled;                                ///< Enable LDN emulation
+    char passphrase[MAX_PASSPHRASE_LENGTH + 1];  ///< Room passphrase
+                                                 ///< (null-terminated)
+    bool
+        use_passphrase;  ///< Enable passphrase filtering (false = public rooms)
+    bool disable_p2p;    ///< Disable P2P proxy (like Ryujinx)
 };
 
 /**
@@ -212,8 +215,8 @@ struct LdnConfig {
  * - 3: Verbose (detailed debugging)
  */
 struct DebugConfig {
-    bool enabled;       ///< Enable debug logging (also enables file logging)
-    uint32_t level;     ///< Log level (0-3)
+    bool enabled;    ///< Enable debug logging (also enables file logging)
+    uint32_t level;  ///< Log level (0-3)
 };
 
 /**
@@ -224,9 +227,9 @@ struct DebugConfig {
  * load_config() to override with file settings.
  */
 struct Config {
-    ServerConfig server;    ///< Server connection settings
-    LdnConfig ldn;          ///< LDN emulation settings
-    DebugConfig debug;      ///< Debug/logging settings
+    ServerConfig server;  ///< Server connection settings
+    LdnConfig ldn;        ///< LDN emulation settings
+    DebugConfig debug;    ///< Debug/logging settings
 };
 
 // =============================================================================
@@ -253,8 +256,8 @@ struct Config {
  *
  * ## Bool Parsing
  * Accepts ONLY: "true"/"1" → true; "false"/"0" → false (case-insensitive).
- * Any other value (including "yes"/"no"/"on"/"off"/empty) → false (parse error).
- * This is stricter than the original implementation, which defaulted to
+ * Any other value (including "yes"/"no"/"on"/"off"/empty) → false (parse
+ * error). This is stricter than the original implementation, which defaulted to
  * true for any unrecognized value — see parse_bool() in config.cpp.
  */
 Config get_default_config();
@@ -316,12 +319,17 @@ ConfigResult ensure_config_exists(const char* path);
  */
 inline const char* config_result_to_string(ConfigResult result) {
     switch (result) {
-        case ConfigResult::Success:      return "Success";
-        case ConfigResult::FileNotFound: return "FileNotFound";
-        case ConfigResult::ParseError:   return "ParseError";
-        case ConfigResult::IoError:      return "IoError";
-        default:                         return "Unknown";
+        case ConfigResult::Success:
+            return "Success";
+        case ConfigResult::FileNotFound:
+            return "FileNotFound";
+        case ConfigResult::ParseError:
+            return "ParseError";
+        case ConfigResult::IoError:
+            return "IoError";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ryu_ldn::config
+}  // namespace ryu_ldn::config

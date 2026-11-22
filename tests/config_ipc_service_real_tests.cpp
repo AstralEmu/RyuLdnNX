@@ -1,6 +1,7 @@
 /**
  * @file config_ipc_service_real_tests.cpp
- * @brief Unit tests for the real ryu:cfg service (config/config_ipc_service.cpp)
+ * @brief Unit tests for the real ryu:cfg service
+ * (config/config_ipc_service.cpp)
  *
  * Built against the host Stratosphere stand-in in tests/stubs. Save, reload and
  * InitializeConfig work on config::CONFIG_PATH, a fixed absolute path: the
@@ -29,9 +30,7 @@ T get(Fn fn) {
     T value{};
     // ASSERT_* returns from the enclosing function: run it in a void lambda so
     // the value is still handed back after a failure has been recorded.
-    [&] {
-        ASSERT_TRUE(fn(Out<T>(value)).IsSuccess());
-    }();
+    [&] { ASSERT_TRUE(fn(Out<T>(value)).IsSuccess()); }();
     return value;
 }
 
@@ -39,7 +38,8 @@ u32 get_u32(ams::Result (*fn)(Out<u32>)) {
     return get<u32>(fn);
 }
 
-RyuCfgPassphraseString make_passphrase(const char* text, std::size_t fill_to = 0) {
+RyuCfgPassphraseString make_passphrase(
+    const char* text, std::size_t fill_to = 0) {
     RyuCfgPassphraseString p{};
     p.buf.fill(0);
     std::size_t n = std::strlen(text);
@@ -78,7 +78,8 @@ void remove_config_tree() {
 TEST(status_getters_report_version_and_liveness) {
     auto version = get<RyuCfgVersionString>(&ConfigService::GetVersion);
     ASSERT_TRUE(std::strcmp(version.buf.data(), "1.0.0") == 0);
-    ASSERT_EQ(get_u32(&ConfigService::GetConnectionStatus), static_cast<u32>(0));
+    ASSERT_EQ(
+        get_u32(&ConfigService::GetConnectionStatus), static_cast<u32>(0));
     ASSERT_EQ(get_u32(&ConfigService::IsServiceActive), static_cast<u32>(1));
 }
 
@@ -100,12 +101,15 @@ TEST(the_ldn_flags_round_trip) {
 }
 
 TEST(a_valid_passphrase_is_stored_and_read_back) {
-    ASSERT_TRUE(ConfigService::SetPassphrase(make_passphrase("room 42 !~")).IsSuccess());
+    ASSERT_TRUE(
+        ConfigService::SetPassphrase(make_passphrase("room 42 !~"))
+            .IsSuccess());
     auto got = get<RyuCfgPassphraseString>(&ConfigService::GetPassphrase);
     ASSERT_TRUE(std::strcmp(got.buf.data(), "room 42 !~") == 0);
 }
 
-TEST(the_longest_passphrase_is_63_characters_and_an_unterminated_buffer_is_rejected) {
+TEST(
+    the_longest_passphrase_is_63_characters_and_an_unterminated_buffer_is_rejected) {
     // Regression: the scan used to be bounded by MAX_PASSPHRASE_LENGTH (64),
     // one more than the 64-byte IPC buffer holds with its terminator, so a
     // buffer full of characters was read one byte past its end.
@@ -121,7 +125,8 @@ TEST(the_longest_passphrase_is_63_characters_and_an_unterminated_buffer_is_rejec
 }
 
 TEST(invalid_passphrases_are_rejected_and_leave_the_stored_one_untouched) {
-    ASSERT_TRUE(ConfigService::SetPassphrase(make_passphrase("keep")).IsSuccess());
+    ASSERT_TRUE(
+        ConfigService::SetPassphrase(make_passphrase("keep")).IsSuccess());
 
     // Longer than the maximum: the 64-byte buffer is full, no terminator.
     RyuCfgPassphraseString too_long{};
@@ -130,23 +135,38 @@ TEST(invalid_passphrases_are_rejected_and_leave_the_stored_one_untouched) {
     ASSERT_TRUE(r.IsFailure());
     ASSERT_EQ(r.GetValue(), result::ResultInvalidIpcInput().GetValue());
 
-    ASSERT_TRUE(ConfigService::SetPassphrase(make_passphrase("bad\x01" "char")).IsFailure());
-    ASSERT_TRUE(ConfigService::SetPassphrase(make_passphrase("bad\x7f" "char")).IsFailure());
-    ASSERT_TRUE(ConfigService::SetPassphrase(make_passphrase("bad\xc3\xa9")).IsFailure());
+    ASSERT_TRUE(
+        ConfigService::SetPassphrase(make_passphrase(
+                                         "bad\x01"
+                                         "char"))
+            .IsFailure());
+    ASSERT_TRUE(
+        ConfigService::SetPassphrase(make_passphrase(
+                                         "bad\x7f"
+                                         "char"))
+            .IsFailure());
+    ASSERT_TRUE(
+        ConfigService::SetPassphrase(make_passphrase("bad\xc3\xa9"))
+            .IsFailure());
 
     auto got = get<RyuCfgPassphraseString>(&ConfigService::GetPassphrase);
     ASSERT_TRUE(std::strcmp(got.buf.data(), "keep") == 0);
 }
 
 TEST(the_server_address_round_trips_through_the_service) {
-    ASSERT_TRUE(ConfigService::SetServerAddress(make_address("ldn.example.org", 31337)).IsSuccess());
+    ASSERT_TRUE(
+        ConfigService::SetServerAddress(make_address("ldn.example.org", 31337))
+            .IsSuccess());
     auto got = get<ServerAddressIpc>(&ConfigService::GetServerAddress);
     ASSERT_TRUE(std::strcmp(got.host, "ldn.example.org") == 0);
     ASSERT_EQ(got.port, 31337);
 }
 
-TEST(hosts_with_shell_metacharacters_are_rejected_and_leave_the_address_untouched) {
-    ASSERT_TRUE(ConfigService::SetServerAddress(make_address("keep.example.org", 1)).IsSuccess());
+TEST(
+    hosts_with_shell_metacharacters_are_rejected_and_leave_the_address_untouched) {
+    ASSERT_TRUE(
+        ConfigService::SetServerAddress(make_address("keep.example.org", 1))
+            .IsSuccess());
     const char* bad[] = {"a;b", "a|b", "a&b", "a`b"};
     for (const char* host : bad) {
         ams::Result r = ConfigService::SetServerAddress(make_address(host, 2));
@@ -161,7 +181,9 @@ TEST(hosts_with_shell_metacharacters_are_rejected_and_leave_the_address_untouche
 TEST(a_host_filling_the_whole_field_without_terminator_is_rejected) {
     // Regression: the scan used to be bounded by MAX_HOST_LENGTH (128) while
     // the IPC field is 64 bytes, so it ran on into the port/padding bytes.
-    ASSERT_TRUE(ConfigService::SetServerAddress(make_address("keep.example.org", 1)).IsSuccess());
+    ASSERT_TRUE(
+        ConfigService::SetServerAddress(make_address("keep.example.org", 1))
+            .IsSuccess());
     ServerAddressIpc a{};
     std::memset(a.host, 'h', sizeof(a.host));
     a.port = 3;
@@ -197,9 +219,12 @@ TEST(the_runtime_state_comes_from_the_shared_state) {
     s.SetSessionInfo(3, 8, 1, true);
 
     ASSERT_EQ(get_u32(&ConfigService::IsGameActive), static_cast<u32>(1));
-    ASSERT_EQ(get_u32(&ConfigService::GetLdnState), static_cast<u32>(ams::mitm::ldn::CommState::Station));
+    ASSERT_EQ(
+        get_u32(&ConfigService::GetLdnState),
+        static_cast<u32>(ams::mitm::ldn::CommState::Station));
     ASSERT_EQ(get_u32(&ConfigService::GetLastRtt), static_cast<u32>(55));
-    ASSERT_EQ(get<u64>(&ConfigService::GetActiveProcessId), static_cast<u64>(0x1234));
+    ASSERT_EQ(
+        get<u64>(&ConfigService::GetActiveProcessId), static_cast<u64>(0x1234));
 
     auto info = get<SessionInfoIpc>(&ConfigService::GetSessionInfo);
     ASSERT_EQ(info.node_count, 3);
@@ -226,21 +251,27 @@ TEST(save_and_reload_follow_the_state_of_the_config_file) {
     ASSERT_FALSE(ec);
 
     // No file yet.
-    ASSERT_TRUE(get<ConfigResult>(&ConfigService::ReloadConfig) == ConfigResult::FileNotFound);
+    ASSERT_TRUE(
+        get<ConfigResult>(&ConfigService::ReloadConfig) ==
+        ConfigResult::FileNotFound);
 
     // Save creates it and a reload brings the saved values back.
     ASSERT_TRUE(ConfigService::SetDebugLevel(1).IsSuccess());
-    ASSERT_TRUE(get<ConfigResult>(&ConfigService::SaveConfig) == ConfigResult::Success);
+    ASSERT_TRUE(
+        get<ConfigResult>(&ConfigService::SaveConfig) == ConfigResult::Success);
     ASSERT_TRUE(fsys::exists(config_file));
     ASSERT_TRUE(ConfigService::SetDebugLevel(3).IsSuccess());
-    ASSERT_TRUE(get<ConfigResult>(&ConfigService::ReloadConfig) == ConfigResult::Success);
+    ASSERT_TRUE(
+        get<ConfigResult>(&ConfigService::ReloadConfig) ==
+        ConfigResult::Success);
     ASSERT_EQ(get_u32(&ConfigService::GetDebugLevel), static_cast<u32>(1));
 
     // A directory in place of the file: it cannot be written.
     fsys::remove(config_file, ec);
     fsys::create_directory(config_file, ec);
     ASSERT_FALSE(ec);
-    ASSERT_TRUE(get<ConfigResult>(&ConfigService::SaveConfig) == ConfigResult::IoError);
+    ASSERT_TRUE(
+        get<ConfigResult>(&ConfigService::SaveConfig) == ConfigResult::IoError);
 
     remove_config_tree();
 }
@@ -263,8 +294,10 @@ TEST(initialize_config_loads_the_defaults_then_the_file) {
     // Without the file the defaults come back.
     remove_config_tree();
     InitializeConfig();
-    ASSERT_TRUE(std::strcmp(get<ServerAddressIpc>(&ConfigService::GetServerAddress).host,
-                            config::get_default_config().server.host) == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            get<ServerAddressIpc>(&ConfigService::GetServerAddress).host,
+            config::get_default_config().server.host) == 0);
 }
 
 int main() {

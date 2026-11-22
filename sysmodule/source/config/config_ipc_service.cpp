@@ -20,7 +20,8 @@
  *
  * ## IPC Protocol
  *
- * Commands are defined in config_ipc_service.hpp with the following conventions:
+ * Commands are defined in config_ipc_service.hpp with the following
+ * conventions:
  * - Get* commands: Read configuration values (no side effects)
  * - Set* commands: Write configuration values (in-memory only until SaveConfig)
  * - SaveConfig: Persist current configuration to SD card
@@ -158,7 +159,7 @@ bool ValidateHost(const char* str, size_t max_len) {
     return true;
 }
 
-} // anonymous namespace
+}  // anonymous namespace
 
 // =============================================================================
 // ConfigService Implementation - Version & Status
@@ -241,7 +242,10 @@ ams::Result ConfigService::GetPassphrase(RyuCfgOutPassphraseString out) {
     std::scoped_lock lk(g_config_mutex);
 
     std::memset(out->buf.data(), 0, RyuCfgPassphraseString::size());
-    safe_strcpy(out->buf.data(), g_config.ldn.passphrase, RyuCfgPassphraseString::size() - 1);
+    safe_strcpy(
+        out->buf.data(),
+        g_config.ldn.passphrase,
+        RyuCfgPassphraseString::size() - 1);
 
     LOG_VERBOSE("Config IPC: GetPassphrase called");
     R_SUCCEED();
@@ -261,17 +265,22 @@ ams::Result ConfigService::GetPassphrase(RyuCfgOutPassphraseString out) {
  * @return Success or `result::ResultInvalidIpcInput` on validation failure
  */
 ams::Result ConfigService::SetPassphrase(RyuCfgPassphraseString passphrase) {
-    // Bound the scan by the 64-byte IPC buffer (63 characters + terminator), not
-    // by the larger config limit: an unterminated buffer must be rejected, never
-    // read past its end.
+    // Bound the scan by the 64-byte IPC buffer (63 characters + terminator),
+    // not by the larger config limit: an unterminated buffer must be rejected,
+    // never read past its end.
     if (!ValidatePassphrase(passphrase.buf.data(), passphrase.buf.size() - 1)) {
-        LOG_WARN("Config IPC: SetPassphrase rejected (invalid length or non-printable chars)");
+        LOG_WARN(
+            "Config IPC: SetPassphrase rejected (invalid length or "
+            "non-printable chars)");
         R_THROW(result::ResultInvalidIpcInput());
     }
 
     std::scoped_lock lk(g_config_mutex);
 
-    safe_strcpy(g_config.ldn.passphrase, passphrase.buf.data(), config::MAX_PASSPHRASE_LENGTH);
+    safe_strcpy(
+        g_config.ldn.passphrase,
+        passphrase.buf.data(),
+        config::MAX_PASSPHRASE_LENGTH);
 
     LOG_INFO("Config IPC: SetPassphrase -> '%s'", g_config.ldn.passphrase);
     R_SUCCEED();
@@ -307,7 +316,9 @@ ams::Result ConfigService::SetLdnEnabled(u32 enabled) {
 
     g_config.ldn.enabled = (enabled != 0);
 
-    LOG_INFO("Config IPC: SetLdnEnabled -> %s", g_config.ldn.enabled ? "true" : "false");
+    LOG_INFO(
+        "Config IPC: SetLdnEnabled -> %s",
+        g_config.ldn.enabled ? "true" : "false");
     R_SUCCEED();
 }
 
@@ -342,8 +353,8 @@ ams::Result ConfigService::GetServerAddress(RyuCfgOutServerAddress out) {
  *
  * Validates that the host string is at most MAX_HOST_LENGTH characters long
  * and does not contain shell-injection metacharacters (`;`, `|`, `&`,
- * backtick). Returns `result::ResultInvalidIpcInput` if the input is rejected; in
- * that case the in-memory host is left untouched.
+ * backtick). Returns `result::ResultInvalidIpcInput` if the input is rejected;
+ * in that case the in-memory host is left untouched.
  *
  * @param address New server address structure
  * @return Success or `result::ResultInvalidIpcInput` on validation failure
@@ -353,7 +364,9 @@ ams::Result ConfigService::SetServerAddress(RyuCfgInServerAddress address) {
     // config limit, so an unterminated field is rejected instead of being read
     // past its end into the port and padding bytes.
     if (!ValidateHost(address.host, sizeof(address.host) - 1)) {
-        LOG_WARN("Config IPC: SetServerAddress rejected (invalid host length or shell metacharacters)");
+        LOG_WARN(
+            "Config IPC: SetServerAddress rejected (invalid host length or "
+            "shell metacharacters)");
         R_THROW(result::ResultInvalidIpcInput());
     }
 
@@ -362,7 +375,10 @@ ams::Result ConfigService::SetServerAddress(RyuCfgInServerAddress address) {
     safe_strcpy(g_config.server.host, address.host, config::MAX_HOST_LENGTH);
     g_config.server.port = address.port;
 
-    LOG_INFO("Config IPC: SetServerAddress -> %s:%u", g_config.server.host, g_config.server.port);
+    LOG_INFO(
+        "Config IPC: SetServerAddress -> %s:%u",
+        g_config.server.host,
+        g_config.server.port);
     R_SUCCEED();
 }
 
@@ -380,7 +396,9 @@ ams::Result ConfigService::GetDebugEnabled(ams::sf::Out<u32> out) {
 ams::Result ConfigService::SetDebugEnabled(u32 enabled) {
     std::scoped_lock lk(g_config_mutex);
     g_config.debug.enabled = (enabled != 0);
-    LOG_INFO("Config IPC: SetDebugEnabled -> %s", g_config.debug.enabled ? "true" : "false");
+    LOG_INFO(
+        "Config IPC: SetDebugEnabled -> %s",
+        g_config.debug.enabled ? "true" : "false");
     R_SUCCEED();
 }
 
@@ -397,7 +415,9 @@ ams::Result ConfigService::SetDebugLevel(u32 level) {
     // Out-of-range values would corrupt the in-memory config and could lead
     // to undefined behavior in the logger's level comparisons.
     if (level > 4) {
-        LOG_WARN("Config IPC: SetDebugLevel rejected (level=%u out of range 0..4)", level);
+        LOG_WARN(
+            "Config IPC: SetDebugLevel rejected (level=%u out of range 0..4)",
+            level);
         R_THROW(result::ResultInvalidIpcInput());
     }
 
@@ -413,12 +433,15 @@ ams::Result ConfigService::SetDebugLevel(u32 level) {
 
 ams::Result ConfigService::SaveConfig(RyuCfgOutConfigResult out) {
     std::scoped_lock lk(g_config_mutex);
-    config::ConfigResult result = config::save_config(config::CONFIG_PATH, g_config);
+    config::ConfigResult result =
+        config::save_config(config::CONFIG_PATH, g_config);
     *out = static_cast<ConfigResult>(result);
     if (result == config::ConfigResult::Success) {
         LOG_INFO("Config IPC: SaveConfig -> Success");
     } else {
-        LOG_WARN("Config IPC: SaveConfig -> %s", config::config_result_to_string(result));
+        LOG_WARN(
+            "Config IPC: SaveConfig -> %s",
+            config::config_result_to_string(result));
     }
     R_SUCCEED();
 }
@@ -426,12 +449,15 @@ ams::Result ConfigService::SaveConfig(RyuCfgOutConfigResult out) {
 ams::Result ConfigService::ReloadConfig(ams::sf::Out<ConfigResult> out) {
     std::scoped_lock lk(g_config_mutex);
     g_config = config::get_default_config();
-    config::ConfigResult result = config::load_config(config::CONFIG_PATH, g_config);
+    config::ConfigResult result =
+        config::load_config(config::CONFIG_PATH, g_config);
     *out = static_cast<ConfigResult>(result);
     if (result == config::ConfigResult::Success) {
         LOG_INFO("Config IPC: ReloadConfig -> Success");
     } else {
-        LOG_WARN("Config IPC: ReloadConfig -> %s (using defaults)", config::config_result_to_string(result));
+        LOG_WARN(
+            "Config IPC: ReloadConfig -> %s (using defaults)",
+            config::config_result_to_string(result));
     }
     R_SUCCEED();
 }
@@ -450,7 +476,9 @@ ams::Result ConfigService::GetUsePassphrase(ams::sf::Out<u32> out) {
 ams::Result ConfigService::SetUsePassphrase(u32 enabled) {
     std::scoped_lock lk(g_config_mutex);
     g_config.ldn.use_passphrase = (enabled != 0);
-    LOG_INFO("Config IPC: SetUsePassphrase -> %s", g_config.ldn.use_passphrase ? "true" : "false");
+    LOG_INFO(
+        "Config IPC: SetUsePassphrase -> %s",
+        g_config.ldn.use_passphrase ? "true" : "false");
     R_SUCCEED();
 }
 
@@ -486,8 +514,12 @@ ams::Result ConfigService::GetSessionInfo(RyuCfgOutSessionInfo out) {
     out->local_node_id = local_node_id;
     out->is_host = is_host ? 1 : 0;
 
-    LOG_VERBOSE("Config IPC: GetSessionInfo -> nodes=%u/%u local=%u host=%u",
-                out->node_count, out->max_nodes, out->local_node_id, out->is_host);
+    LOG_VERBOSE(
+        "Config IPC: GetSessionInfo -> nodes=%u/%u local=%u host=%u",
+        out->node_count,
+        out->max_nodes,
+        out->local_node_id,
+        out->is_host);
     R_SUCCEED();
 }
 
@@ -526,8 +558,10 @@ ams::Result ConfigService::GetDisableP2p(ams::sf::Out<u32> out) {
 ams::Result ConfigService::SetDisableP2p(u32 disabled) {
     std::scoped_lock lk(g_config_mutex);
     g_config.ldn.disable_p2p = (disabled != 0);
-    LOG_INFO("Config IPC: SetDisableP2p -> %s", g_config.ldn.disable_p2p ? "true" : "false");
+    LOG_INFO(
+        "Config IPC: SetDisableP2p -> %s",
+        g_config.ldn.disable_p2p ? "true" : "false");
     R_SUCCEED();
 }
 
-} // namespace ryu_ldn::ipc
+}  // namespace ryu_ldn::ipc

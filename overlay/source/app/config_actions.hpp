@@ -17,9 +17,12 @@
 
 /** @brief Save config via IPC. Returns true on success. */
 inline bool DoSaveConfig() {
-    if (OverlayState::Instance().GetStatus() != OverlayState::InitStatus::Loaded) return false;
+    if (OverlayState::Instance().GetStatus() !=
+        OverlayState::InitStatus::Loaded)
+        return false;
     RyuLdnConfigService* svc = ryuLdnGetService();
-    if (!svc) return false;
+    if (!svc)
+        return false;
     RyuLdnConfigResult result;
     Result rc = ryuLdnSaveConfig(svc, &result);
     if (R_SUCCEEDED(rc) && result == RyuLdnConfigResult_Success) {
@@ -31,9 +34,12 @@ inline bool DoSaveConfig() {
 
 /** @brief Reload config from disk via IPC. Returns true on success. */
 inline bool DoReloadConfig() {
-    if (OverlayState::Instance().GetStatus() != OverlayState::InitStatus::Loaded) return false;
+    if (OverlayState::Instance().GetStatus() !=
+        OverlayState::InitStatus::Loaded)
+        return false;
     RyuLdnConfigService* svc = ryuLdnGetService();
-    if (!svc) return false;
+    if (!svc)
+        return false;
     RyuLdnConfigResult result;
     Result rc = ryuLdnReloadConfig(svc, &result);
     return R_SUCCEEDED(rc) && result == RyuLdnConfigResult_Success;

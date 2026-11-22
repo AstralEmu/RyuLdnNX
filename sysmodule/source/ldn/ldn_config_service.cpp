@@ -18,15 +18,15 @@
 namespace ams::mitm::ldn {
 
 LdnConfigService::LdnConfigService(ICommunicationService* communication)
-    : m_communication(communication)
-{
+    : m_communication(communication) {
     // m_communication can be null if created without a parent service
 }
 
 Result LdnConfigService::GetVersion(sf::Out<std::array<char, 32>> out) {
     std::array<char, 32> version{};
     std::strncpy(version.data(), RYU_LDN_VERSION, 31);
-    version[31] = '\0';  // Guarantee null-termination even if RYU_LDN_VERSION >= 31 chars
+    version[31] =
+        '\0';  // Guarantee null-termination even if RYU_LDN_VERSION >= 31 chars
     *out = version;
     R_SUCCEED();
 }
@@ -77,7 +77,7 @@ Result LdnConfigService::GetServerAddress(sf::Out<ServerAddress> out) {
     R_SUCCEED();
 }
 
-Result LdnConfigService::SetServerAddress(const ServerAddress &address) {
+Result LdnConfigService::SetServerAddress(const ServerAddress& address) {
     auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     cfg.SetServerHost(address.host);
     cfg.SetServerPort(address.port);
@@ -191,7 +191,8 @@ Result LdnConfigService::GetMaxReconnectAttempts(sf::Out<u32> out) {
 }
 
 Result LdnConfigService::SetMaxReconnectAttempts(u32 attempts) {
-    // Max reconnect attempts is now hardcoded. Kept for IPC protocol compatibility.
+    // Max reconnect attempts is now hardcoded. Kept for IPC protocol
+    // compatibility.
     (void)attempts;  // Suppress unused warning
     R_SUCCEED();
 }
@@ -224,7 +225,8 @@ Result LdnConfigService::SetLogToFile(u32 enabled) {
     R_SUCCEED();
 }
 
-ConfigResult LdnConfigService::ToIpcResult(ryu_ldn::config::ConfigResult result) {
+ConfigResult LdnConfigService::ToIpcResult(
+    ryu_ldn::config::ConfigResult result) {
     switch (result) {
         case ryu_ldn::config::ConfigResult::Success:
             return ConfigResult::Success;
@@ -248,4 +250,4 @@ Result LdnConfigService::ReloadConfig(sf::Out<ConfigResult> out) {
     R_SUCCEED();
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

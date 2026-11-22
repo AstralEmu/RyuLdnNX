@@ -56,15 +56,15 @@ enum class BufferResult {
  * }
  * @endcode
  */
-template<size_t BufferSize = 0x10000>
+template <size_t BufferSize = 0x10000>
 class PacketBuffer {
 public:
     /**
      * @brief Default constructor - initializes empty buffer
      *
-     * Note: For production use, BufferSize should be >= sizeof(LdnHeader) + MAX_PACKET_SIZE
-     * to handle maximum-sized packets. Smaller buffers can be used for testing or
-     * when only small packets are expected.
+     * Note: For production use, BufferSize should be >= sizeof(LdnHeader) +
+     * MAX_PACKET_SIZE to handle maximum-sized packets. Smaller buffers can be
+     * used for testing or when only small packets are expected.
      */
     PacketBuffer() : m_write_pos(0) {
         // Production code should use large enough buffers
@@ -141,7 +141,8 @@ public:
         }
 
         size_t packet_size;
-        DecodeResult result = check_complete_packet(m_buffer, m_write_pos, packet_size);
+        DecodeResult result =
+            check_complete_packet(m_buffer, m_write_pos, packet_size);
         return result == DecodeResult::Success;
     }
 
@@ -156,7 +157,8 @@ public:
             return BufferResult::NoCompletePacket;
         }
 
-        DecodeResult result = check_complete_packet(m_buffer, m_write_pos, packet_size);
+        DecodeResult result =
+            check_complete_packet(m_buffer, m_write_pos, packet_size);
 
         switch (result) {
             case DecodeResult::Success:
@@ -238,7 +240,8 @@ public:
      *
      * Copies the packet to output buffer and consumes it from internal buffer.
      */
-    BufferResult extract_packet(uint8_t* out_buffer, size_t out_buffer_size, size_t& packet_size) {
+    BufferResult extract_packet(
+        uint8_t* out_buffer, size_t out_buffer_size, size_t& packet_size) {
         BufferResult result = peek_packet_info(packet_size);
         if (result != BufferResult::Success) {
             return result;
@@ -330,13 +333,19 @@ private:
  */
 inline const char* buffer_result_to_string(BufferResult result) {
     switch (result) {
-        case BufferResult::Success:         return "Success";
-        case BufferResult::BufferFull:      return "BufferFull";
-        case BufferResult::NoCompletePacket: return "NoCompletePacket";
-        case BufferResult::PacketTooLarge:  return "PacketTooLarge";
-        case BufferResult::InvalidPacket:   return "InvalidPacket";
-        default:                            return "Unknown";
+        case BufferResult::Success:
+            return "Success";
+        case BufferResult::BufferFull:
+            return "BufferFull";
+        case BufferResult::NoCompletePacket:
+            return "NoCompletePacket";
+        case BufferResult::PacketTooLarge:
+            return "PacketTooLarge";
+        case BufferResult::InvalidPacket:
+            return "InvalidPacket";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ryu_ldn::protocol
+}  // namespace ryu_ldn::protocol

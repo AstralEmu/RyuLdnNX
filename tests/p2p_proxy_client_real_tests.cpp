@@ -42,14 +42,16 @@ namespace proto = ryu_ldn::protocol;
 // Fault injection through --wrap (pass-through while every mode is 0)
 // ---------------------------------------------------------------------------
 namespace {
-std::atomic<int> g_socket_mode{0};      // 1: EMFILE
-std::atomic<int> g_nodelay_mode{0};     // 1: TCP_NODELAY fails
-std::atomic<int> g_getfl_mode{0};       // 1: F_GETFL fails
-std::atomic<int> g_connect_mode{0};     // 1: ECONNREFUSED at once, 2: always EINPROGRESS
-std::atomic<int> g_select_mode{0};      // 1: times out (0), 2: error (-1)
-std::atomic<int> g_soerror_mode{0};     // 1: getsockopt fails, 2: SO_ERROR = ECONNREFUSED
-std::atomic<int> g_send_mode{0};        // 1: fails, 2: sends one byte less
-std::atomic<int> g_recv_mode{0};        // 1: ECONNRESET, 2: EINTR
+std::atomic<int> g_socket_mode{0};   // 1: EMFILE
+std::atomic<int> g_nodelay_mode{0};  // 1: TCP_NODELAY fails
+std::atomic<int> g_getfl_mode{0};    // 1: F_GETFL fails
+std::atomic<int> g_connect_mode{
+    0};  // 1: ECONNREFUSED at once, 2: always EINPROGRESS
+std::atomic<int> g_select_mode{0};  // 1: times out (0), 2: error (-1)
+std::atomic<int> g_soerror_mode{
+    0};  // 1: getsockopt fails, 2: SO_ERROR = ECONNREFUSED
+std::atomic<int> g_send_mode{0};  // 1: fails, 2: sends one byte less
+std::atomic<int> g_recv_mode{0};  // 1: ECONNRESET, 2: EINTR
 }  // namespace
 
 extern "C" {
@@ -63,11 +65,15 @@ ssize_t __real_send(int, const void*, size_t, int);
 ssize_t __real_recv(int, void*, size_t, int);
 
 int __wrap_socket(int domain, int type, int protocol) {
-    if (g_socket_mode == 1) { errno = EMFILE; return -1; }
+    if (g_socket_mode == 1) {
+        errno = EMFILE;
+        return -1;
+    }
     return __real_socket(domain, type, protocol);
 }
 
-int __wrap_setsockopt(int fd, int level, int name, const void* value, socklen_t len) {
+int __wrap_setsockopt(
+    int fd, int level, int name, const void* value, socklen_t len) {
     if (g_nodelay_mode == 1 && level == IPPROTO_TCP && name == TCP_NODELAY) {
         errno = ENOPROTOOPT;
         return -1;
@@ -77,7 +83,10 @@ int __wrap_setsockopt(int fd, int level, int name, const void* value, socklen_t 
 
 int __wrap_fcntl(int fd, int cmd, ...) {
     if (cmd == F_GETFL) {
-        if (g_getfl_mode == 1) { errno = EBADF; return -1; }
+        if (g_getfl_mode == 1) {
+            errno = EBADF;
+            return -1;
+        }
         return __real_fcntl(fd, cmd);
     }
     va_list ap;
@@ -88,21 +97,36 @@ int __wrap_fcntl(int fd, int cmd, ...) {
 }
 
 int __wrap_connect(int fd, const struct sockaddr* addr, socklen_t len) {
-    if (g_connect_mode == 1) { errno = ECONNREFUSED; return -1; }
+    if (g_connect_mode == 1) {
+        errno = ECONNREFUSED;
+        return -1;
+    }
     const int r = __real_connect(fd, addr, len);
-    if (g_connect_mode == 2 && r == 0) { errno = EINPROGRESS; return -1; }
+    if (g_connect_mode == 2 && r == 0) {
+        errno = EINPROGRESS;
+        return -1;
+    }
     return r;
 }
 
 int __wrap_select(int n, fd_set* r, fd_set* w, fd_set* e, struct timeval* t) {
-    if (g_select_mode == 1) { return 0; }
-    if (g_select_mode == 2) { errno = EBADF; return -1; }
+    if (g_select_mode == 1) {
+        return 0;
+    }
+    if (g_select_mode == 2) {
+        errno = EBADF;
+        return -1;
+    }
     return __real_select(n, r, w, e, t);
 }
 
-int __wrap_getsockopt(int fd, int level, int name, void* value, socklen_t* len) {
+int __wrap_getsockopt(
+    int fd, int level, int name, void* value, socklen_t* len) {
     if (level == SOL_SOCKET && name == SO_ERROR) {
-        if (g_soerror_mode == 1) { errno = EBADF; return -1; }
+        if (g_soerror_mode == 1) {
+            errno = EBADF;
+            return -1;
+        }
         if (g_soerror_mode == 2) {
             *static_cast<int*>(value) = ECONNREFUSED;
             return 0;
@@ -112,14 +136,25 @@ int __wrap_getsockopt(int fd, int level, int name, void* value, socklen_t* len) 
 }
 
 ssize_t __wrap_send(int fd, const void* data, size_t size, int flags) {
-    if (g_send_mode == 1) { errno = EPIPE; return -1; }
-    if (g_send_mode == 2) { return __real_send(fd, data, size - 1, flags); }
+    if (g_send_mode == 1) {
+        errno = EPIPE;
+        return -1;
+    }
+    if (g_send_mode == 2) {
+        return __real_send(fd, data, size - 1, flags);
+    }
     return __real_send(fd, data, size, flags);
 }
 
 ssize_t __wrap_recv(int fd, void* buf, size_t size, int flags) {
-    if (g_recv_mode == 1) { errno = ECONNRESET; return -1; }
-    if (g_recv_mode == 2) { errno = EINTR; return -1; }
+    if (g_recv_mode == 1) {
+        errno = ECONNRESET;
+        return -1;
+    }
+    if (g_recv_mode == 2) {
+        errno = EINTR;
+        return -1;
+    }
     return __real_recv(fd, buf, size, flags);
 }
 }  // extern "C"
@@ -153,13 +188,18 @@ struct Host {
 
     bool accept_peer() {
         pollfd p{listen_fd, POLLIN, 0};
-        if (::poll(&p, 1, 3000) <= 0) { return false; }
+        if (::poll(&p, 1, 3000) <= 0) {
+            return false;
+        }
         peer_fd = ::accept(listen_fd, nullptr, nullptr);
         return peer_fd >= 0;
     }
 
     void close_peer() {
-        if (peer_fd >= 0) { ::close(peer_fd); peer_fd = -1; }
+        if (peer_fd >= 0) {
+            ::close(peer_fd);
+            peer_fd = -1;
+        }
     }
 
     void write_all(const std::vector<uint8_t>& bytes) const {
@@ -171,10 +211,15 @@ struct Host {
         std::vector<uint8_t> out;
         while (out.size() < n) {
             pollfd p{peer_fd, POLLIN, 0};
-            if (::poll(&p, 1, 3000) <= 0) { break; }
+            if (::poll(&p, 1, 3000) <= 0) {
+                break;
+            }
             uint8_t buf[512];
-            const ssize_t got = ::read(peer_fd, buf, std::min(sizeof(buf), n - out.size()));
-            if (got <= 0) { break; }
+            const ssize_t got =
+                ::read(peer_fd, buf, std::min(sizeof(buf), n - out.size()));
+            if (got <= 0) {
+                break;
+            }
             out.insert(out.end(), buf, buf + got);
         }
         return out;
@@ -202,8 +247,9 @@ void on_packet(proto::PacketId type, const void* data, size_t size) {
 
 bool wait_recorded(size_t count, int ms = 3000) {
     std::unique_lock<std::mutex> lock(g_rec_mutex);
-    return g_rec_cv.wait_for(lock, std::chrono::milliseconds(ms),
-                             [&] { return g_rec.size() >= count; });
+    return g_rec_cv.wait_for(lock, std::chrono::milliseconds(ms), [&] {
+        return g_rec.size() >= count;
+    });
 }
 
 size_t recorded_count() {
@@ -213,9 +259,12 @@ size_t recorded_count() {
 
 template <class Pred>
 bool wait_until(Pred pred, int ms = 3000) {
-    const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+    const auto end =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
     while (!pred()) {
-        if (std::chrono::steady_clock::now() > end) { return false; }
+        if (std::chrono::steady_clock::now() > end) {
+            return false;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     return true;
@@ -223,7 +272,9 @@ bool wait_until(Pred pred, int ms = 3000) {
 
 /// Let the receive thread consume what was just written (used to prove that
 /// something was NOT forwarded: there is no event to wait for in that case).
-void settle() { std::this_thread::sleep_for(std::chrono::milliseconds(120)); }
+void settle() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(120));
+}
 
 void reset_world() {
     g_socket_mode = g_nodelay_mode = g_getfl_mode = g_connect_mode = 0;
@@ -233,16 +284,24 @@ void reset_world() {
     g_rec.clear();
 }
 
-std::vector<uint8_t> packet(proto::PacketId id, const void* payload, size_t size) {
+std::vector<uint8_t> packet(
+    proto::PacketId id, const void* payload, size_t size) {
     std::vector<uint8_t> out(sizeof(proto::LdnHeader) + size);
     size_t written = 0;
-    proto::encode_raw(out.data(), out.size(), id, static_cast<const uint8_t*>(payload), size,
-                      written);
+    proto::encode_raw(
+        out.data(),
+        out.size(),
+        id,
+        static_cast<const uint8_t*>(payload),
+        size,
+        written);
     out.resize(written);
     return out;
 }
 
-std::vector<uint8_t> blob(size_t size, uint8_t fill) { return std::vector<uint8_t>(size, fill); }
+std::vector<uint8_t> blob(size_t size, uint8_t fill) {
+    return std::vector<uint8_t>(size, fill);
+}
 
 void append(std::vector<uint8_t>& to, const std::vector<uint8_t>& from) {
     to.insert(to.end(), from.begin(), from.end());
@@ -409,9 +468,11 @@ TEST(authentication_needs_a_connection_and_sends_the_external_proxy_packet) {
     proto::LdnHeader header{};
     std::memcpy(&header, got.data(), sizeof(header));
     ASSERT_EQ(header.magic, proto::PROTOCOL_MAGIC);
-    ASSERT_EQ(header.type, static_cast<uint8_t>(proto::PacketId::ExternalProxy));
+    ASSERT_EQ(
+        header.type, static_cast<uint8_t>(proto::PacketId::ExternalProxy));
     ASSERT_EQ(header.data_size, static_cast<int32_t>(sizeof(config)));
-    ASSERT_EQ(std::memcmp(got.data() + sizeof(header), &config, sizeof(config)), 0);
+    ASSERT_EQ(
+        std::memcmp(got.data() + sizeof(header), &config, sizeof(config)), 0);
 }
 
 TEST(authentication_reports_a_failed_or_short_send) {
@@ -445,7 +506,8 @@ TEST(ensure_ready_waits_for_the_proxy_config_the_host_sends) {
     const auto config = make_config(0x0A720002, 0xFFFF0000);
     std::thread sender([&] {
         std::this_thread::sleep_for(std::chrono::milliseconds(80));
-        host.write_all(packet(proto::PacketId::ProxyConfig, &config, sizeof(config)));
+        host.write_all(
+            packet(proto::PacketId::ProxyConfig, &config, sizeof(config)));
     });
     ASSERT_TRUE(client.EnsureProxyReady(3000));
     sender.join();
@@ -503,7 +565,8 @@ TEST(every_proxy_message_is_encoded_with_its_packet_type) {
     ASSERT_TRUE(client.SendProxyDisconnect(bye));
 
     const size_t h = sizeof(proto::LdnHeader);
-    const size_t total = (h + sizeof(data_header) + 3) + (h + sizeof(proto::ProxyConnectRequest)) +
+    const size_t total = (h + sizeof(data_header) + 3) +
+                         (h + sizeof(proto::ProxyConnectRequest)) +
                          (h + sizeof(proto::ProxyConnectResponse)) +
                          (h + sizeof(proto::ProxyDisconnectMessage));
     const auto got = host.read_n(total);
@@ -513,18 +576,23 @@ TEST(every_proxy_message_is_encoded_with_its_packet_type) {
     auto next_header = [&](proto::PacketId expected, size_t expected_payload) {
         proto::LdnHeader header{};
         std::memcpy(&header, got.data() + at, sizeof(header));
-        const bool ok = header.type == static_cast<uint8_t>(expected) &&
-                        static_cast<size_t>(header.data_size) == expected_payload;
+        const bool ok =
+            header.type == static_cast<uint8_t>(expected) &&
+            static_cast<size_t>(header.data_size) == expected_payload;
         at += sizeof(header) + expected_payload;
         return ok;
     };
-    ASSERT_TRUE(next_header(proto::PacketId::ProxyData, sizeof(data_header) + 3));
+    ASSERT_TRUE(
+        next_header(proto::PacketId::ProxyData, sizeof(data_header) + 3));
     ASSERT_EQ(std::memcmp(got.data() + h + sizeof(data_header), payload, 3), 0);
-    ASSERT_TRUE(next_header(proto::PacketId::ProxyConnect, sizeof(proto::ProxyConnectRequest)));
-    ASSERT_TRUE(next_header(proto::PacketId::ProxyConnectReply,
-                            sizeof(proto::ProxyConnectResponse)));
-    ASSERT_TRUE(next_header(proto::PacketId::ProxyDisconnect,
-                            sizeof(proto::ProxyDisconnectMessage)));
+    ASSERT_TRUE(next_header(
+        proto::PacketId::ProxyConnect, sizeof(proto::ProxyConnectRequest)));
+    ASSERT_TRUE(next_header(
+        proto::PacketId::ProxyConnectReply,
+        sizeof(proto::ProxyConnectResponse)));
+    ASSERT_TRUE(next_header(
+        proto::PacketId::ProxyDisconnect,
+        sizeof(proto::ProxyDisconnectMessage)));
 }
 
 TEST(a_failed_send_is_reported) {
@@ -551,17 +619,27 @@ TEST(every_packet_type_is_dispatched_in_order_from_one_stream) {
 
     const auto config = make_config(0x0A720003, 0xFFFFFF00);
     auto data = blob(sizeof(proto::ProxyDataHeader) + 5, 0x11);
-    for (size_t i = 0; i < 5; ++i) { data[sizeof(proto::ProxyDataHeader) + i] = uint8_t(0xA0 + i); }
+    for (size_t i = 0; i < 5; ++i) {
+        data[sizeof(proto::ProxyDataHeader) + i] = uint8_t(0xA0 + i);
+    }
     const auto connect = blob(sizeof(proto::ProxyConnectRequest), 0x22);
     const auto reply = blob(sizeof(proto::ProxyConnectResponse), 0x33);
     const auto bye = blob(sizeof(proto::ProxyDisconnectMessage), 0x44);
 
     std::vector<uint8_t> stream;
-    append(stream, packet(proto::PacketId::ProxyConfig, &config, sizeof(config)));
-    append(stream, packet(proto::PacketId::ProxyData, data.data(), data.size()));
-    append(stream, packet(proto::PacketId::ProxyConnect, connect.data(), connect.size()));
-    append(stream, packet(proto::PacketId::ProxyConnectReply, reply.data(), reply.size()));
-    append(stream, packet(proto::PacketId::ProxyDisconnect, bye.data(), bye.size()));
+    append(
+        stream, packet(proto::PacketId::ProxyConfig, &config, sizeof(config)));
+    append(
+        stream, packet(proto::PacketId::ProxyData, data.data(), data.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyConnect, connect.data(), connect.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyConnectReply, reply.data(), reply.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyDisconnect, bye.data(), bye.size()));
     host.write_all(stream);
 
     ASSERT_TRUE(wait_recorded(4));
@@ -592,11 +670,19 @@ TEST(a_client_without_a_callback_still_handles_the_stream) {
     const auto reply = blob(sizeof(proto::ProxyConnectResponse), 3);
     const auto bye = blob(sizeof(proto::ProxyDisconnectMessage), 4);
     std::vector<uint8_t> stream;
-    append(stream, packet(proto::PacketId::ProxyData, data.data(), data.size()));
-    append(stream, packet(proto::PacketId::ProxyConnect, connect.data(), connect.size()));
-    append(stream, packet(proto::PacketId::ProxyConnectReply, reply.data(), reply.size()));
-    append(stream, packet(proto::PacketId::ProxyDisconnect, bye.data(), bye.size()));
-    append(stream, packet(proto::PacketId::ProxyConfig, &config, sizeof(config)));
+    append(
+        stream, packet(proto::PacketId::ProxyData, data.data(), data.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyConnect, connect.data(), connect.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyConnectReply, reply.data(), reply.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyDisconnect, bye.data(), bye.size()));
+    append(
+        stream, packet(proto::PacketId::ProxyConfig, &config, sizeof(config)));
     host.write_all(stream);
 
     ASSERT_TRUE(client.EnsureProxyReady(3000));
@@ -612,13 +698,25 @@ TEST(a_payload_smaller_than_its_struct_is_ignored_but_parsing_goes_on) {
     const auto tiny = blob(1, 0xEE);
     const auto short_data = blob(sizeof(proto::ProxyDataHeader) - 1, 0xEE);
     std::vector<uint8_t> stream;
-    append(stream, packet(proto::PacketId::ProxyConfig, tiny.data(), tiny.size()));
-    append(stream, packet(proto::PacketId::ProxyData, short_data.data(), short_data.size()));
-    append(stream, packet(proto::PacketId::ProxyConnect, tiny.data(), tiny.size()));
-    append(stream, packet(proto::PacketId::ProxyConnectReply, tiny.data(), tiny.size()));
-    append(stream, packet(proto::PacketId::ProxyDisconnect, tiny.data(), tiny.size()));
+    append(
+        stream, packet(proto::PacketId::ProxyConfig, tiny.data(), tiny.size()));
+    append(
+        stream,
+        packet(
+            proto::PacketId::ProxyData, short_data.data(), short_data.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyConnect, tiny.data(), tiny.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyConnectReply, tiny.data(), tiny.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyDisconnect, tiny.data(), tiny.size()));
     const auto valid = blob(sizeof(proto::ProxyConnectRequest), 0x55);
-    append(stream, packet(proto::PacketId::ProxyConnect, valid.data(), valid.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyConnect, valid.data(), valid.size()));
     host.write_all(stream);
 
     ASSERT_TRUE(wait_recorded(1));
@@ -636,8 +734,12 @@ TEST(an_unknown_packet_type_is_skipped) {
     const auto junk = blob(4, 0x99);
     const auto valid = blob(sizeof(proto::ProxyConnectRequest), 0x66);
     std::vector<uint8_t> stream;
-    append(stream, packet(static_cast<proto::PacketId>(0x7F), junk.data(), junk.size()));
-    append(stream, packet(proto::PacketId::ProxyConnect, valid.data(), valid.size()));
+    append(
+        stream,
+        packet(static_cast<proto::PacketId>(0x7F), junk.data(), junk.size()));
+    append(
+        stream,
+        packet(proto::PacketId::ProxyConnect, valid.data(), valid.size()));
     host.write_all(stream);
 
     ASSERT_TRUE(wait_recorded(1));
@@ -650,7 +752,8 @@ TEST(a_truncated_header_a_bad_magic_or_a_truncated_packet_stop_the_parsing) {
     P2pProxyClient client(on_packet);
     ASSERT_TRUE(connect_pair(client, host));
     const auto valid = blob(sizeof(proto::ProxyConnectRequest), 0x77);
-    const auto good = packet(proto::PacketId::ProxyConnect, valid.data(), valid.size());
+    const auto good =
+        packet(proto::PacketId::ProxyConnect, valid.data(), valid.size());
 
     // Fewer bytes than a header.
     host.write_all(std::vector<uint8_t>(good.begin(), good.begin() + 5));

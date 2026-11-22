@@ -20,34 +20,64 @@
 // Test Framework (simple macros)
 // =============================================================================
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegister_##name { \
-        TestRegister_##name() { \
+#define TEST(name)                             \
+    static void test_##name();                 \
+    static struct TestRegister_##name {        \
+        TestRegister_##name() {                \
             printf("  Running %s... ", #name); \
-            test_##name(); \
-            printf("OK\n"); \
-        } \
-    } test_register_##name; \
+            test_##name();                     \
+            printf("OK\n");                    \
+        }                                      \
+    } test_register_##name;                    \
     static void test_##name()
 
-#define ASSERT_TRUE(x) \
-    do { if (!(x)) { printf("FAILED\n    Expected true: %s\n", #x); exit(1); } } while(0)
+#define ASSERT_TRUE(x)                                     \
+    do {                                                   \
+        if (!(x)) {                                        \
+            printf("FAILED\n    Expected true: %s\n", #x); \
+            exit(1);                                       \
+        }                                                  \
+    } while (0)
 
-#define ASSERT_FALSE(x) \
-    do { if (x) { printf("FAILED\n    Expected false: %s\n", #x); exit(1); } } while(0)
+#define ASSERT_FALSE(x)                                     \
+    do {                                                    \
+        if (x) {                                            \
+            printf("FAILED\n    Expected false: %s\n", #x); \
+            exit(1);                                        \
+        }                                                   \
+    } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { if ((a) != (b)) { printf("FAILED\n    Expected: %s == %s\n", #a, #b); exit(1); } } while(0)
+#define ASSERT_EQ(a, b)                                         \
+    do {                                                        \
+        if ((a) != (b)) {                                       \
+            printf("FAILED\n    Expected: %s == %s\n", #a, #b); \
+            exit(1);                                            \
+        }                                                       \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { if ((a) == (b)) { printf("FAILED\n    Expected: %s != %s\n", #a, #b); exit(1); } } while(0)
+#define ASSERT_NE(a, b)                                         \
+    do {                                                        \
+        if ((a) == (b)) {                                       \
+            printf("FAILED\n    Expected: %s != %s\n", #a, #b); \
+            exit(1);                                            \
+        }                                                       \
+    } while (0)
 
-#define ASSERT_GE(a, b) \
-    do { if ((a) < (b)) { printf("FAILED\n    Expected: %s >= %s\n", #a, #b); exit(1); } } while(0)
+#define ASSERT_GE(a, b)                                         \
+    do {                                                        \
+        if ((a) < (b)) {                                        \
+            printf("FAILED\n    Expected: %s >= %s\n", #a, #b); \
+            exit(1);                                            \
+        }                                                       \
+    } while (0)
 
-#define ASSERT_LE(a, b) \
-    do { if ((a) > (b)) { printf("FAILED\n    Expected: %s <= %s\n", #a, #b); exit(1); } } while(0)
+#define ASSERT_LE(a, b)                                         \
+    do {                                                        \
+        if ((a) > (b)) {                                        \
+            printf("FAILED\n    Expected: %s <= %s\n", #a, #b); \
+            exit(1);                                            \
+        }                                                       \
+    } while (0)
 
 // =============================================================================
 // Protocol Types (matching implementation)
@@ -60,8 +90,8 @@ constexpr uint16_t PRIVATE_PORT_BASE = 39990;
 constexpr int PRIVATE_PORT_RANGE = 10;
 constexpr uint16_t PUBLIC_PORT_BASE = 39990;
 constexpr int PUBLIC_PORT_RANGE = 10;
-constexpr int PORT_LEASE_LENGTH = 60;   // seconds
-constexpr int PORT_LEASE_RENEW = 50;    // seconds
+constexpr int PORT_LEASE_LENGTH = 60;  // seconds
+constexpr int PORT_LEASE_RENEW = 50;   // seconds
 constexpr int AUTH_WAIT_SECONDS = 1;
 constexpr int MAX_PLAYERS = 8;
 
@@ -82,9 +112,9 @@ enum class PacketId : uint8_t {
 // RyuNetworkConfig structure (from protocol/types.hpp)
 #pragma pack(push, 1)
 struct RyuNetworkConfig {
-    char game_version[16];      // Game version string
-    uint8_t private_ip[16];     // Local IP (IPv4 in first 4 bytes)
-    uint32_t address_family;    // 2 = IPv4, 10 = IPv6
+    char game_version[16];         // Game version string
+    uint8_t private_ip[16];        // Local IP (IPv4 in first 4 bytes)
+    uint32_t address_family;       // 2 = IPv4, 10 = IPv6
     uint16_t external_proxy_port;  // UPnP public port
     uint16_t internal_proxy_port;  // Local TCP port
 };
@@ -93,10 +123,10 @@ struct RyuNetworkConfig {
 // ExternalProxyToken structure (from protocol/types.hpp)
 #pragma pack(push, 1)
 struct ExternalProxyToken {
-    uint32_t virtual_ip;       // Virtual IP for the joiner
-    uint8_t physical_ip[16];   // Physical IP of joiner
-    uint32_t address_family;   // 2 = IPv4, 10 = IPv6
-    uint8_t token[16];         // Authentication token
+    uint32_t virtual_ip;      // Virtual IP for the joiner
+    uint8_t physical_ip[16];  // Physical IP of joiner
+    uint32_t address_family;  // 2 = IPv4, 10 = IPv6
+    uint8_t token[16];        // Authentication token
 };
 #pragma pack(pop)
 
@@ -109,7 +139,7 @@ struct CreateAccessPointRequest {
 };
 #pragma pack(pop)
 
-} // namespace protocol
+}  // namespace protocol
 
 // =============================================================================
 // P2P Proxy Server Constants Tests
@@ -321,9 +351,13 @@ TEST(p2p_server_upnp_port_calculation) {
 
     // Both should be in valid range
     ASSERT_GE(private_port, protocol::PRIVATE_PORT_BASE);
-    ASSERT_LE(private_port, protocol::PRIVATE_PORT_BASE + protocol::PRIVATE_PORT_RANGE - 1);
+    ASSERT_LE(
+        private_port,
+        protocol::PRIVATE_PORT_BASE + protocol::PRIVATE_PORT_RANGE - 1);
     ASSERT_GE(public_port, protocol::PUBLIC_PORT_BASE);
-    ASSERT_LE(public_port, protocol::PUBLIC_PORT_BASE + protocol::PUBLIC_PORT_RANGE - 1);
+    ASSERT_LE(
+        public_port,
+        protocol::PUBLIC_PORT_BASE + protocol::PUBLIC_PORT_RANGE - 1);
 }
 
 // =============================================================================
@@ -521,7 +555,8 @@ TEST(master_send_callback_user_data_pattern) {
 
 TEST(port_selection_first_available) {
     // Simulate port selection logic - try ports until one works
-    bool port_available[10] = {false, false, true, true, true, true, true, true, true, true};
+    bool port_available[10] = {
+        false, false, true, true, true, true, true, true, true, true};
 
     int selected_port = -1;
     for (int i = 0; i < protocol::PRIVATE_PORT_RANGE; i++) {
@@ -537,7 +572,8 @@ TEST(port_selection_first_available) {
 
 TEST(port_selection_all_busy) {
     // Simulate all ports busy
-    bool port_available[10] = {false, false, false, false, false, false, false, false, false, false};
+    bool port_available[10] = {
+        false, false, false, false, false, false, false, false, false, false};
 
     int selected_port = -1;
     for (int i = 0; i < protocol::PRIVATE_PORT_RANGE; i++) {

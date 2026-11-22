@@ -1,6 +1,7 @@
 /**
  * @file bsd.h
- * @brief Host stand-in for the libnx pieces of <switch/services/bsd.h> the BSD MITM uses.
+ * @brief Host stand-in for the libnx pieces of <switch/services/bsd.h> the BSD
+ * MITM uses.
  */
 #pragma once
 
@@ -61,17 +62,22 @@ inline std::uint32_t g_host_bsd_sessions = 0;
 inline BsdServiceType g_host_bsd_type = BsdServiceType_Auto;
 inline const SocketInitConfig* g_host_socket_config = nullptr;
 
-inline std::uint32_t bsdInitialize(const BsdInitConfig* config, std::uint32_t sessions, BsdServiceType type) {
+inline std::uint32_t bsdInitialize(
+    const BsdInitConfig* config, std::uint32_t sessions, BsdServiceType type) {
     g_host_boot_calls.emplace_back("bsdInitialize");
     g_host_bsd_config = config;
     g_host_bsd_sessions = sessions;
     g_host_bsd_type = type;
     return 0;
 }
-inline void bsdExit() { g_host_boot_calls.emplace_back("bsdExit"); }
+inline void bsdExit() {
+    g_host_boot_calls.emplace_back("bsdExit");
+}
 inline std::uint32_t socketInitialize(const SocketInitConfig* config) {
     g_host_boot_calls.emplace_back("socketInitialize");
     g_host_socket_config = config;
     return 0;
 }
-inline void socketExit() { g_host_boot_calls.emplace_back("socketExit"); }
+inline void socketExit() {
+    g_host_boot_calls.emplace_back("socketExit");
+}

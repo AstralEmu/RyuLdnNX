@@ -18,10 +18,12 @@ public:
     PassphraseEditorGui();
     virtual tsl::elm::Element* createUI() override;
     virtual void update() override;
-    virtual bool handleInput(u64 keysDown, u64 keysHeld,
-                             const HidTouchState& touchPos,
-                             HidAnalogStickState joyStickPosLeft,
-                             HidAnalogStickState joyStickPosRight) override;
+    virtual bool handleInput(
+        u64 keysDown,
+        u64 keysHeld,
+        const HidTouchState& touchPos,
+        HidAnalogStickState joyStickPosLeft,
+        HidAnalogStickState joyStickPosRight) override;
     ~PassphraseEditorGui();
 
 private:
@@ -36,7 +38,8 @@ private:
     tsl::elm::MiniListItem* m_previewItem = nullptr;
     /** Display line showing the 8 hex chars with cursor highlighted. */
     tsl::elm::ListItem* m_charsItem = nullptr;
-    /** Cursor indicator line showing spaces and a caret at the selected position. */
+    /** Cursor indicator line showing spaces and a caret at the selected
+     * position. */
     tsl::elm::MiniListItem* m_cursorItem = nullptr;
 
     static constexpr const char* HEX_CHARS = "0123456789abcdef";

@@ -41,8 +41,10 @@ public:
      * @param s Shared pointer to the original service
      * @param c MITM process info for the client
      */
-    /// @gdb{tag="BSD:LIFECYCLE", msg="Constructor: program_id=0x%lx, pid=%lu", args="$x2, $x1"}
-    BsdMitmService(std::shared_ptr<::Service>&& s, const sm::MitmProcessInfo& c);
+    /// @gdb{tag="BSD:LIFECYCLE", msg="Constructor: program_id=0x%lx, pid=%lu",
+    /// args="$x2, $x1"}
+    BsdMitmService(
+        std::shared_ptr<::Service>&& s, const sm::MitmProcessInfo& c);
 
     /**
      * @brief Destructor - cleanup tracked sockets
@@ -59,7 +61,8 @@ public:
      * @param client_info Process information for the client
      * @return true Always intercept
      */
-    /// @gdb{tag="BSD:LIFECYCLE", msg="ShouldMitm: program_id=0x%lx", args="$x1"}
+    /// @gdb{tag="BSD:LIFECYCLE", msg="ShouldMitm: program_id=0x%lx",
+    /// args="$x1"}
     static bool ShouldMitm(const sm::MitmProcessInfo& client_info);
 
     /**
@@ -93,7 +96,8 @@ public:
      * @param transfer_memory Handle to the client transfer memory
      * @return Result code
      */
-    /// @gdb{tag="BSD:LIFECYCLE", msg="RegisterClient: config_size=%u", args="$x2"}
+    /// @gdb{tag="BSD:LIFECYCLE", msg="RegisterClient: config_size=%u",
+    /// args="$x2"}
     Result RegisterClient(
         sf::Out<u64> out_result,
         const ryu_ldn::bsd::LibraryConfigData& config,
@@ -130,10 +134,14 @@ public:
      * @param protocol Protocol number
      * @return Result code
      */
-    /// @gdb{tag="BSD:SOCKET", msg="Socket: domain=%d type=%d protocol=%d", args="$x3, $x4, $x5"}
+    /// @gdb{tag="BSD:SOCKET", msg="Socket: domain=%d type=%d protocol=%d",
+    /// args="$x3, $x4, $x5"}
     Result Socket(
-        sf::Out<s32> out_errno, sf::Out<s32> out_fd,
-        s32 domain, s32 type, s32 protocol);
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_fd,
+        s32 domain,
+        s32 type,
+        s32 protocol);
 
     /**
      * @brief Create a new exempt socket
@@ -149,10 +157,14 @@ public:
      * @param protocol Protocol number
      * @return Result code
      */
-    /// @gdb{tag="BSD:SOCKET", msg="SocketExempt: domain=%d type=%d protocol=%d", args="$x3, $x4, $x5"}
+    /// @gdb{tag="BSD:SOCKET", msg="SocketExempt: domain=%d type=%d
+    /// protocol=%d", args="$x3, $x4, $x5"}
     Result SocketExempt(
-        sf::Out<s32> out_errno, sf::Out<s32> out_fd,
-        s32 domain, s32 type, s32 protocol);
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_fd,
+        s32 domain,
+        s32 type,
+        s32 protocol);
 
     /**
      * @brief Open a file descriptor by path
@@ -167,8 +179,7 @@ public:
      */
     /// @gdb{tag="BSD:SOCKET", msg="Open"}
     Result Open(
-        sf::Out<s32> out_errno, sf::Out<s32> out_fd,
-        const sf::InBuffer& path);
+        sf::Out<s32> out_errno, sf::Out<s32> out_fd, const sf::InBuffer& path);
 
     /**
      * @brief Monitor multiple file descriptors for readiness
@@ -191,8 +202,10 @@ public:
      */
     /// @gdb{tag="BSD:CONFIG", msg="Select: nfds=%d", args="$x3"}
     Result Select(
-        sf::Out<s32> out_errno, sf::Out<s32> out_count,
-        s32 nfds, const sf::InAutoSelectBuffer& readfds_in,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_count,
+        s32 nfds,
+        const sf::InAutoSelectBuffer& readfds_in,
         const sf::InAutoSelectBuffer& writefds_in,
         const sf::InAutoSelectBuffer& errorfds_in,
         const sf::InAutoSelectBuffer& timeout,
@@ -216,10 +229,12 @@ public:
      */
     /// @gdb{tag="BSD:CONFIG", msg="Poll: nfds=%d timeout=%d", args="$x4, $x5"}
     Result Poll(
-        sf::Out<s32> out_errno, sf::Out<s32> out_count,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_count,
         const sf::InAutoSelectBuffer& fds_in,
         sf::OutAutoSelectBuffer fds_out,
-        s32 nfds, s32 timeout);
+        s32 nfds,
+        s32 timeout);
 
     /**
      * @brief Query or set kernel sysctl values
@@ -258,8 +273,10 @@ public:
      */
     /// @gdb{tag="BSD:DATA", msg="Recv: fd=%d flags=%d", args="$x3, $x4"}
     Result Recv(
-        sf::Out<s32> out_errno, sf::Out<s32> out_size,
-        s32 fd, s32 flags,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_size,
+        s32 fd,
+        s32 flags,
         sf::OutAutoSelectBuffer buffer);
 
     /**
@@ -279,8 +296,11 @@ public:
      */
     /// @gdb{tag="BSD:DATA", msg="RecvFrom: fd=%d flags=%d", args="$x3, $x4"}
     Result RecvFrom(
-        sf::Out<s32> out_ret, sf::Out<s32> out_errno, sf::Out<u32> out_addrlen,
-        s32 fd, s32 flags,
+        sf::Out<s32> out_ret,
+        sf::Out<s32> out_errno,
+        sf::Out<u32> out_addrlen,
+        s32 fd,
+        s32 flags,
         sf::OutAutoSelectBuffer buffer,
         sf::OutAutoSelectBuffer addr_out);
 
@@ -300,8 +320,10 @@ public:
      */
     /// @gdb{tag="BSD:DATA", msg="Send: fd=%d flags=%d", args="$x3, $x4"}
     Result Send(
-        sf::Out<s32> out_errno, sf::Out<s32> out_size,
-        s32 fd, s32 flags,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_size,
+        s32 fd,
+        s32 flags,
         const sf::InAutoSelectBuffer& buffer);
 
     /**
@@ -322,8 +344,10 @@ public:
      */
     /// @gdb{tag="BSD:DATA", msg="SendTo: fd=%d flags=%d", args="$x3, $x4"}
     Result SendTo(
-        sf::Out<s32> out_errno, sf::Out<s32> out_size,
-        s32 fd, s32 flags,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_size,
+        s32 fd,
+        s32 flags,
         const sf::InAutoSelectBuffer& buffer,
         const sf::InAutoSelectBuffer& addr);
 
@@ -341,7 +365,8 @@ public:
      */
     /// @gdb{tag="BSD:CONNECT", msg="Accept: fd=%d", args="$x3"}
     Result Accept(
-        sf::Out<s32> out_errno, sf::Out<s32> out_fd,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_fd,
         s32 fd,
         sf::OutAutoSelectBuffer addr_out);
 
@@ -360,9 +385,7 @@ public:
      */
     /// @gdb{tag="BSD:CONNECT", msg="Bind: fd=%d", args="$x2"}
     Result Bind(
-        sf::Out<s32> out_errno,
-        s32 fd,
-        const sf::InAutoSelectBuffer& addr);
+        sf::Out<s32> out_errno, s32 fd, const sf::InAutoSelectBuffer& addr);
 
     /**
      * @brief Connect a socket to a remote address
@@ -380,9 +403,7 @@ public:
      */
     /// @gdb{tag="BSD:CONNECT", msg="Connect: fd=%d", args="$x2"}
     Result Connect(
-        sf::Out<s32> out_errno,
-        s32 fd,
-        const sf::InAutoSelectBuffer& addr);
+        sf::Out<s32> out_errno, s32 fd, const sf::InAutoSelectBuffer& addr);
 
     /**
      * @brief Get the address of the peer connected to a socket
@@ -398,9 +419,7 @@ public:
      */
     /// @gdb{tag="BSD:CONNECT", msg="GetPeerName: fd=%d", args="$x2"}
     Result GetPeerName(
-        sf::Out<s32> out_errno,
-        s32 fd,
-        sf::OutAutoSelectBuffer addr_out);
+        sf::Out<s32> out_errno, s32 fd, sf::OutAutoSelectBuffer addr_out);
 
     /**
      * @brief Get the local address bound to a socket
@@ -416,9 +435,7 @@ public:
      */
     /// @gdb{tag="BSD:CONNECT", msg="GetSockName: fd=%d", args="$x2"}
     Result GetSockName(
-        sf::Out<s32> out_errno,
-        s32 fd,
-        sf::OutAutoSelectBuffer addr_out);
+        sf::Out<s32> out_errno, s32 fd, sf::OutAutoSelectBuffer addr_out);
 
     /**
      * @brief Retrieve a socket option value
@@ -434,10 +451,13 @@ public:
      * @param optval Output option value buffer
      * @return Result code
      */
-    /// @gdb{tag="BSD:CONFIG", msg="GetSockOpt: fd=%d level=%d optname=%d", args="$x2, $x3, $x4"}
+    /// @gdb{tag="BSD:CONFIG", msg="GetSockOpt: fd=%d level=%d optname=%d",
+    /// args="$x2, $x3, $x4"}
     Result GetSockOpt(
         sf::Out<s32> out_errno,
-        s32 fd, s32 level, s32 optname,
+        s32 fd,
+        s32 level,
+        s32 optname,
         sf::OutAutoSelectBuffer optval);
 
     /**
@@ -452,9 +472,7 @@ public:
      * @return Result code
      */
     /// @gdb{tag="BSD:CONNECT", msg="Listen: fd=%d backlog=%d", args="$x2, $x3"}
-    Result Listen(
-        sf::Out<s32> out_errno,
-        s32 fd, s32 backlog);
+    Result Listen(sf::Out<s32> out_errno, s32 fd, s32 backlog);
 
     /**
      * @brief Perform an ioctl on a socket
@@ -473,8 +491,11 @@ public:
      */
     /// @gdb{tag="BSD:CONFIG", msg="Ioctl: fd=%d request=0x%x", args="$x3, $x4"}
     Result Ioctl(
-        sf::Out<s32> out_errno, sf::Out<s32> out_result,
-        s32 fd, u32 request, u32 bufcount,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_result,
+        s32 fd,
+        u32 request,
+        u32 bufcount,
         const sf::InAutoSelectBuffer& buf_in,
         sf::OutAutoSelectBuffer buf_out);
 
@@ -491,10 +512,14 @@ public:
      * @param arg Command argument
      * @return Result code
      */
-    /// @gdb{tag="BSD:CONFIG", msg="Fcntl: fd=%d cmd=%d arg=%d", args="$x3, $x4, $x5"}
+    /// @gdb{tag="BSD:CONFIG", msg="Fcntl: fd=%d cmd=%d arg=%d", args="$x3, $x4,
+    /// $x5"}
     Result Fcntl(
-        sf::Out<s32> out_errno, sf::Out<s32> out_result,
-        s32 fd, s32 cmd, s32 arg);
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_result,
+        s32 fd,
+        s32 cmd,
+        s32 arg);
 
     /**
      * @brief Set a socket option
@@ -510,10 +535,13 @@ public:
      * @param optval Input option value buffer
      * @return Result code
      */
-    /// @gdb{tag="BSD:CONFIG", msg="SetSockOpt: fd=%d level=%d optname=%d", args="$x2, $x3, $x4"}
+    /// @gdb{tag="BSD:CONFIG", msg="SetSockOpt: fd=%d level=%d optname=%d",
+    /// args="$x2, $x3, $x4"}
     Result SetSockOpt(
         sf::Out<s32> out_errno,
-        s32 fd, s32 level, s32 optname,
+        s32 fd,
+        s32 level,
+        s32 optname,
         const sf::InAutoSelectBuffer& optval);
 
     /**
@@ -529,9 +557,7 @@ public:
      * @return Result code
      */
     /// @gdb{tag="BSD:CONNECT", msg="Shutdown: fd=%d how=%d", args="$x2, $x3"}
-    Result Shutdown(
-        sf::Out<s32> out_errno,
-        s32 fd, s32 how);
+    Result Shutdown(sf::Out<s32> out_errno, s32 fd, s32 how);
 
     /**
      * @brief Shut down all sockets owned by a process
@@ -545,10 +571,9 @@ public:
      * @param how Direction to shut down
      * @return Result code
      */
-    /// @gdb{tag="BSD:CONNECT", msg="ShutdownAllSockets: pid=%lu how=%d", args="$x2, $x3"}
-    Result ShutdownAllSockets(
-        sf::Out<s32> out_errno,
-        u64 pid, s32 how);
+    /// @gdb{tag="BSD:CONNECT", msg="ShutdownAllSockets: pid=%lu how=%d",
+    /// args="$x2, $x3"}
+    Result ShutdownAllSockets(sf::Out<s32> out_errno, u64 pid, s32 how);
 
     /**
      * @brief Write data to a socket (BSD write path)
@@ -565,7 +590,8 @@ public:
      */
     /// @gdb{tag="BSD:DATA", msg="Write: fd=%d", args="$x3"}
     Result Write(
-        sf::Out<s32> out_errno, sf::Out<s32> out_size,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_size,
         s32 fd,
         const sf::InAutoSelectBuffer& buffer);
 
@@ -583,7 +609,8 @@ public:
      */
     /// @gdb{tag="BSD:DATA", msg="Read: fd=%d", args="$x3"}
     Result Read(
-        sf::Out<s32> out_errno, sf::Out<s32> out_size,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_size,
         s32 fd,
         sf::OutAutoSelectBuffer buffer);
 
@@ -599,9 +626,7 @@ public:
      * @return Result code
      */
     /// @gdb{tag="BSD:SOCKET", msg="Close: fd=%d", args="$x2"}
-    Result Close(
-        sf::Out<s32> out_errno,
-        s32 fd);
+    Result Close(sf::Out<s32> out_errno, s32 fd);
 
     /**
      * @brief Duplicate a socket file descriptor to another process
@@ -615,10 +640,10 @@ public:
      * @param target_pid Target process ID
      * @return Result code
      */
-    /// @gdb{tag="BSD:SOCKET", msg="DuplicateSocket: fd=%d target_pid=%lu", args="$x3, $x4"}
+    /// @gdb{tag="BSD:SOCKET", msg="DuplicateSocket: fd=%d target_pid=%lu",
+    /// args="$x3, $x4"}
     Result DuplicateSocket(
-        sf::Out<s32> out_errno, sf::Out<s32> out_fd,
-        s32 fd, u64 target_pid);
+        sf::Out<s32> out_errno, sf::Out<s32> out_fd, s32 fd, u64 target_pid);
 
     /**
      * @brief Retrieve resource statistics for a process
@@ -632,9 +657,7 @@ public:
      * @return Result code
      */
     Result GetResourceStatistics(
-        sf::Out<s32> out_errno,
-        sf::OutBuffer out_stats,
-        u64 pid);
+        sf::Out<s32> out_errno, sf::OutBuffer out_stats, u64 pid);
 
     /**
      * @brief Receive multiple messages in a single call (recvmmsg)
@@ -652,8 +675,12 @@ public:
      * @return Result code
      */
     Result RecvMMsg(
-        sf::Out<s32> out_errno, sf::Out<s32> out_count,
-        s32 fd, s32 vlen, s32 flags, s32 timeout,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_count,
+        s32 fd,
+        s32 vlen,
+        s32 flags,
+        s32 timeout,
         sf::OutAutoSelectBuffer out_data);
 
     /**
@@ -671,8 +698,11 @@ public:
      * @return Result code
      */
     Result SendMMsg(
-        sf::Out<s32> out_errno, sf::Out<s32> out_count,
-        s32 fd, s32 vlen, s32 flags,
+        sf::Out<s32> out_errno,
+        sf::Out<s32> out_count,
+        s32 fd,
+        s32 vlen,
+        s32 flags,
         const sf::InAutoSelectBuffer& in_data);
 
     /**
@@ -688,8 +718,7 @@ public:
      * @return Result code
      */
     Result EventFd(
-        sf::Out<s32> out_errno, sf::Out<s32> out_fd,
-        u64 initval, s32 flags);
+        sf::Out<s32> out_errno, sf::Out<s32> out_fd, u64 initval, s32 flags);
 
     /**
      * @brief Register a name with the resource statistics subsystem
@@ -703,12 +732,11 @@ public:
      * @return Result code
      */
     Result RegisterResourceStatisticsName(
-        sf::Out<s32> out_errno,
-        u64 pid,
-        const sf::InBuffer& name);
+        sf::Out<s32> out_errno, u64 pid, const sf::InBuffer& name);
 
     /**
-     * @brief Register a BSD client with shared configuration (no transfer memory)
+     * @brief Register a BSD client with shared configuration (no transfer
+     * memory)
      *
      * Variant of RegisterClient used by processes that share BSD
      * configuration with another process. Behaves like RegisterClient
@@ -743,4 +771,4 @@ private:
 // Verify interface compliance
 static_assert(ams::mitm::bsd::IsIBsdMitmService<BsdMitmService>);
 
-} // namespace ams::mitm::bsd
+}  // namespace ams::mitm::bsd

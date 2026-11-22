@@ -26,44 +26,46 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegister_##name { \
-        TestRegister_##name() { register_test(#name, test_##name); } \
-    } g_test_register_##name; \
+#define TEST(name)                             \
+    static void test_##name();                 \
+    static struct TestRegister_##name {        \
+        TestRegister_##name() {                \
+            register_test(#name, test_##name); \
+        }                                      \
+    } g_test_register_##name;                  \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT_TRUE(cond)                                      \
+    do {                                                       \
+        if (!(cond)) {                                         \
             printf("  FAIL: %s (line %d)\n", #cond, __LINE__); \
             throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+        }                                                      \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        auto _a = (a); \
-        auto _b = (b); \
-        if (_a != _b) { \
-            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
+#define ASSERT_EQ(a, b)                                                      \
+    do {                                                                     \
+        auto _a = (a);                                                       \
+        auto _b = (b);                                                       \
+        if (_a != _b) {                                                      \
+            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
             printf("    got: %lld vs %lld\n", (long long)_a, (long long)_b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            throw std::runtime_error("Test assertion failed");               \
+        }                                                                    \
+    } while (0)
 
-#define ASSERT_STREQ(a, b) \
-    do { \
-        const char* _a = (a); \
-        const char* _b = (b); \
-        if (std::strcmp(_a, _b) != 0) { \
+#define ASSERT_STREQ(a, b)                                            \
+    do {                                                              \
+        const char* _a = (a);                                         \
+        const char* _b = (b);                                         \
+        if (std::strcmp(_a, _b) != 0) {                               \
             printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
-            printf("    got: \"%s\" vs \"%s\"\n", _a, _b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            printf("    got: \"%s\" vs \"%s\"\n", _a, _b);            \
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
+    } while (0)
 
 struct TestEntry {
     const char* name;
@@ -86,8 +88,11 @@ static void register_test(const char* name, void (*func)()) {
 static char g_test_config_path[256];
 
 static void create_test_config_file() {
-    snprintf(g_test_config_path, sizeof(g_test_config_path),
-             "/tmp/config_manager_test_%d.ini", rand());
+    snprintf(
+        g_test_config_path,
+        sizeof(g_test_config_path),
+        "/tmp/config_manager_test_%d.ini",
+        rand());
 
     FILE* f = fopen(g_test_config_path, "w");
     if (f) {
@@ -166,7 +171,11 @@ TEST(save_writes_the_file_and_clears_the_dirty_flag) {
 TEST(save_failure_keeps_the_dirty_flag) {
     // Parent directory does not exist and mkdir only creates the last level.
     char path[256];
-    snprintf(path, sizeof(path), "/tmp/config_manager_missing_%d/sub/config.ini", rand());
+    snprintf(
+        path,
+        sizeof(path),
+        "/tmp/config_manager_missing_%d/sub/config.ini",
+        rand());
     ASSERT_TRUE(ConfigManager::Instance().Initialize(path));
     ConfigManager::Instance().SetServerPort(4321);
     ASSERT_EQ(ConfigManager::Instance().Save(), ConfigResult::IoError);
@@ -191,11 +200,11 @@ TEST(use_passphrase_setter_updates_value_and_notifies) {
 TEST(generate_random_passphrase_rejects_null_and_undersized_buffers) {
     char buf[17];
     std::memset(buf, 'x', sizeof(buf));
-    GenerateRandomPassphrase(nullptr, 32);               // must not crash
-    GenerateRandomPassphrase(buf, 16);                   // too small: emptied
+    GenerateRandomPassphrase(nullptr, 32);  // must not crash
+    GenerateRandomPassphrase(buf, 16);      // too small: emptied
     ASSERT_EQ(buf[0], '\0');
     std::memset(buf, 'x', sizeof(buf));
-    GenerateRandomPassphrase(buf, 0);                    // zero size: untouched
+    GenerateRandomPassphrase(buf, 0);  // zero size: untouched
     ASSERT_EQ(buf[0], 'x');
     GenerateRandomPassphrase(buf, sizeof(buf));
     ASSERT_TRUE(IsValidPassphrase(buf));
@@ -204,7 +213,8 @@ TEST(generate_random_passphrase_rejects_null_and_undersized_buffers) {
 
 TEST(initialize_with_missing_file) {
     // Initialize with non-existent file should use defaults
-    bool result = ConfigManager::Instance().Initialize("/tmp/nonexistent_config_12345.ini");
+    bool result = ConfigManager::Instance().Initialize(
+        "/tmp/nonexistent_config_12345.ini");
     // Should still succeed with defaults
     ASSERT_TRUE(result || !result);  // Just ensure no crash
 }
@@ -240,7 +250,8 @@ TEST(set_server_host_truncates_long_name) {
     long_host[255] = '\0';
     ConfigManager::Instance().SetServerHost(long_host);
     // Should be truncated to MAX_HOST_LENGTH
-    ASSERT_TRUE(strlen(ConfigManager::Instance().GetServerHost()) <= MAX_HOST_LENGTH);
+    ASSERT_TRUE(
+        strlen(ConfigManager::Instance().GetServerHost()) <= MAX_HOST_LENGTH);
 }
 
 TEST(get_default_server_port) {
@@ -339,18 +350,18 @@ TEST(is_valid_passphrase_wrong_prefix) {
 }
 
 TEST(is_valid_passphrase_wrong_hex_length) {
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234567"));   // 7 chars
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-123456789")); // 9 chars
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-"));          // 0 chars
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234"));      // 4 chars
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234567"));    // 7 chars
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-123456789"));  // 9 chars
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-"));           // 0 chars
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234"));       // 4 chars
 }
 
 TEST(is_valid_passphrase_invalid_hex_chars) {
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234567g")); // 'g' not hex
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-ABCDEF01")); // uppercase hex
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234 678")); // space
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234-678")); // extra dash
-    ASSERT_FALSE(IsValidPassphrase("Ryujinx-!@#$%^&*")); // special chars
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234567g"));  // 'g' not hex
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-ABCDEF01"));  // uppercase hex
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234 678"));  // space
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234-678"));  // extra dash
+    ASSERT_FALSE(IsValidPassphrase("Ryujinx-!@#$%^&*"));  // special chars
 }
 
 TEST(is_valid_passphrase_missing_dash) {
@@ -428,14 +439,14 @@ TEST(generate_random_passphrase_only_lowercase_hex) {
     }
 }
 
-
 // ============================================================================
 // Debug Settings Tests
 // ============================================================================
 
 TEST(get_default_debug_enabled) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
-    ASSERT_EQ(ConfigManager::Instance().GetDebugEnabled(), DEFAULT_DEBUG_ENABLED);
+    ASSERT_EQ(
+        ConfigManager::Instance().GetDebugEnabled(), DEFAULT_DEBUG_ENABLED);
 }
 
 TEST(set_debug_enabled) {
@@ -471,7 +482,8 @@ TEST(set_debug_level_clamps_to_max) {
 
 TEST(save_creates_file) {
     char save_path[256];
-    snprintf(save_path, sizeof(save_path), "/tmp/config_save_test_%d.ini", rand());
+    snprintf(
+        save_path, sizeof(save_path), "/tmp/config_save_test_%d.ini", rand());
 
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     // Reinitialize with save path would require modifying the path
@@ -638,8 +650,11 @@ int main() {
     }
 
     printf("\n========================================\n");
-    printf("Results: %d passed, %d failed, %d total\n",
-           g_tests_passed, g_tests_failed, g_tests_run);
+    printf(
+        "Results: %d passed, %d failed, %d total\n",
+        g_tests_passed,
+        g_tests_failed,
+        g_tests_run);
 
     if (g_tests_failed == 0) {
         printf("ALL TESTS PASSED\n");

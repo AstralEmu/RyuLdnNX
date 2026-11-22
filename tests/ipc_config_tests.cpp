@@ -36,7 +36,7 @@ typedef int32_t s32;
 typedef int32_t Result;
 
 #define R_SUCCEEDED(res) ((res) == 0)
-#define R_FAILED(res)    ((res) != 0)
+#define R_FAILED(res) ((res) != 0)
 
 //=============================================================================
 // IPC Command IDs (from ldn_config_service.hpp)
@@ -88,14 +88,16 @@ struct IpcServerAddress {
     u16 port;
     u16 padding;
 };
-static_assert(sizeof(IpcServerAddress) == 68, "IpcServerAddress must be 68 bytes");
+static_assert(
+    sizeof(IpcServerAddress) == 68, "IpcServerAddress must be 68 bytes");
 
 // Debug settings structure (for batch get)
 struct IpcDebugSettings {
-    u32 enabled;      // bool as u32
-    u32 level;        // 0-3
+    u32 enabled;  // bool as u32
+    u32 level;    // 0-3
 };
-static_assert(sizeof(IpcDebugSettings) == 8, "IpcDebugSettings must be 8 bytes");
+static_assert(
+    sizeof(IpcDebugSettings) == 8, "IpcDebugSettings must be 8 bytes");
 
 // Config result codes
 enum class IpcConfigResult : u32 {
@@ -119,9 +121,14 @@ void FormatPassphraseMasked(const char* passphrase, char* buf, size_t bufSize) {
         if (len <= 4) {
             snprintf(buf, bufSize, "****");
         } else {
-            snprintf(buf, bufSize, "%c%c****%c%c",
-                     passphrase[0], passphrase[1],
-                     passphrase[len-2], passphrase[len-1]);
+            snprintf(
+                buf,
+                bufSize,
+                "%c%c****%c%c",
+                passphrase[0],
+                passphrase[1],
+                passphrase[len - 2],
+                passphrase[len - 1]);
         }
     }
 }
@@ -143,11 +150,16 @@ void FormatTimeout(u32 timeout_ms, char* buf, size_t bufSize) {
 // Format debug level
 const char* FormatDebugLevel(u32 level) {
     switch (level) {
-        case 0: return "Error";
-        case 1: return "Warning";
-        case 2: return "Info";
-        case 3: return "Verbose";
-        default: return "Unknown";
+        case 0:
+            return "Error";
+        case 1:
+            return "Warning";
+        case 2:
+            return "Info";
+        case 3:
+            return "Verbose";
+        default:
+            return "Unknown";
     }
 }
 
@@ -158,7 +170,7 @@ bool IsValidPort(u16 port) {
 
 // Validate timeout (reasonable range)
 bool IsValidTimeout(u32 timeout_ms) {
-    return timeout_ms >= 100 && timeout_ms <= 300000; // 100ms to 5 minutes
+    return timeout_ms >= 100 && timeout_ms <= 300000;  // 100ms to 5 minutes
 }
 
 // Validate debug level
@@ -174,21 +186,26 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 
 #define TEST(name) void name()
-#define RUN_TEST(name) do { \
-    g_tests_run++; \
-    printf("  [TEST] %s...", #name); \
-    name(); \
-    g_tests_passed++; \
-    printf(" PASS\n"); \
-} while(0)
+#define RUN_TEST(name)                   \
+    do {                                 \
+        g_tests_run++;                   \
+        printf("  [TEST] %s...", #name); \
+        name();                          \
+        g_tests_passed++;                \
+        printf(" PASS\n");               \
+    } while (0)
 
-#define ASSERT(cond) do { \
-    if (!(cond)) { \
-        printf(" FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
-               #cond, __FILE__, __LINE__); \
-        exit(1); \
-    } \
-} while(0)
+#define ASSERT(cond)                                               \
+    do {                                                           \
+        if (!(cond)) {                                             \
+            printf(                                                \
+                " FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
+                #cond,                                             \
+                __FILE__,                                          \
+                __LINE__);                                         \
+            exit(1);                                               \
+        }                                                          \
+    } while (0)
 
 #define ASSERT_EQ(a, b) ASSERT((a) == (b))
 #define ASSERT_NE(a, b) ASSERT((a) != (b))
@@ -221,7 +238,9 @@ TEST(command_ids_paired_get_set) {
     ASSERT_EQ(IPC_CMD_SET_CONNECT_TIMEOUT, IPC_CMD_GET_CONNECT_TIMEOUT + 1);
     ASSERT_EQ(IPC_CMD_SET_PING_INTERVAL, IPC_CMD_GET_PING_INTERVAL + 1);
     ASSERT_EQ(IPC_CMD_SET_RECONNECT_DELAY, IPC_CMD_GET_RECONNECT_DELAY + 1);
-    ASSERT_EQ(IPC_CMD_SET_MAX_RECONNECT_ATTEMPTS, IPC_CMD_GET_MAX_RECONNECT_ATTEMPTS + 1);
+    ASSERT_EQ(
+        IPC_CMD_SET_MAX_RECONNECT_ATTEMPTS,
+        IPC_CMD_GET_MAX_RECONNECT_ATTEMPTS + 1);
     ASSERT_EQ(IPC_CMD_SET_DEBUG_LEVEL, IPC_CMD_GET_DEBUG_LEVEL + 1);
 }
 
@@ -295,7 +314,7 @@ TEST(passphrase_five_chars_shows_partial) {
 
 TEST(bool_enabled_format) {
     ASSERT_STREQ(FormatBoolSetting(1), "Enabled");
-    ASSERT_STREQ(FormatBoolSetting(42), "Enabled"); // Any non-zero
+    ASSERT_STREQ(FormatBoolSetting(42), "Enabled");  // Any non-zero
 }
 
 TEST(bool_disabled_format) {
@@ -377,10 +396,10 @@ TEST(port_invalid_zero) {
 }
 
 TEST(timeout_valid_range) {
-    ASSERT_TRUE(IsValidTimeout(100));    // Min
-    ASSERT_TRUE(IsValidTimeout(5000));   // Typical
-    ASSERT_TRUE(IsValidTimeout(30000));  // 30s
-    ASSERT_TRUE(IsValidTimeout(300000)); // 5 min max
+    ASSERT_TRUE(IsValidTimeout(100));     // Min
+    ASSERT_TRUE(IsValidTimeout(5000));    // Typical
+    ASSERT_TRUE(IsValidTimeout(30000));   // 30s
+    ASSERT_TRUE(IsValidTimeout(300000));  // 5 min max
 }
 
 TEST(timeout_invalid_too_small) {
@@ -460,7 +479,9 @@ TEST(server_address_long_hostname) {
 TEST(server_address_truncates_too_long) {
     IpcServerAddress addr = {};
     // Try to copy a 70+ char hostname into 64-byte buffer
-    const char* tooLong = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const char* tooLong =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "a";
     strncpy(addr.host, tooLong, sizeof(addr.host) - 1);
     addr.host[sizeof(addr.host) - 1] = '\0';
     ASSERT_EQ(strlen(addr.host), 63u);
@@ -546,7 +567,6 @@ int main() {
 
     printf("\n--- Config Result Tests ---\n");
     RUN_TEST(config_result_values);
-
 
     printf("\n--- Debug Settings Tests ---\n");
     RUN_TEST(debug_settings_zero_init);

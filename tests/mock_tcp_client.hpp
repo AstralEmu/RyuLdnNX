@@ -33,7 +33,8 @@ public:
     ClientResult next_send_result = ClientResult::Success;
     ClientResult next_recv_result = ClientResult::Timeout;
 
-    /// When true, send_initialize() returns next_initialize_result instead of next_send_result.
+    /// When true, send_initialize() returns next_initialize_result instead of
+    /// next_send_result.
     bool use_initialize_result = false;
     ClientResult next_initialize_result = ClientResult::Success;
 
@@ -64,12 +65,14 @@ public:
     uint32_t last_connect_timeout_ms = 0;
 
     bool initialize() override {
-        if (initialize_should_fail) return false;
+        if (initialize_should_fail)
+            return false;
         initialized = true;
         return true;
     }
 
-    ClientResult connect(const char* host, uint16_t port, uint32_t timeout_ms) override {
+    ClientResult connect(
+        const char* host, uint16_t port, uint32_t timeout_ms) override {
         connect_call_count++;
         last_connect_host = host ? host : "";
         last_connect_port = port;
@@ -89,7 +92,10 @@ public:
         return connected;
     }
 
-    ClientResult send_packet(protocol::PacketId type, const void* payload, size_t payload_size) override {
+    ClientResult send_packet(
+        protocol::PacketId type,
+        const void* payload,
+        size_t payload_size) override {
         send_packet_call_count++;
         return next_send_result;
     }
@@ -99,15 +105,18 @@ public:
         return next_send_result;
     }
 
-    ClientResult send_initialize(const protocol::InitializeMessage& msg) override {
+    ClientResult send_initialize(
+        const protocol::InitializeMessage& msg) override {
         send_initialize_call_count++;
         // Lets a test fail the Initialize message alone while the preceding
         // Passphrase message (which uses next_send_result) still succeeds.
-        if (use_initialize_result) return next_initialize_result;
+        if (use_initialize_result)
+            return next_initialize_result;
         return next_send_result;
     }
 
-    ClientResult send_passphrase(const protocol::PassphraseMessage& msg) override {
+    ClientResult send_passphrase(
+        const protocol::PassphraseMessage& msg) override {
         send_passphrase_msg_call_count++;
         return next_send_result;
     }
@@ -122,31 +131,36 @@ public:
         return next_send_result;
     }
 
-    ClientResult send_disconnect(const protocol::DisconnectMessage& msg) override {
+    ClientResult send_disconnect(
+        const protocol::DisconnectMessage& msg) override {
         send_disconnect_call_count++;
         return next_send_result;
     }
 
-    ClientResult send_create_access_point(const protocol::CreateAccessPointRequest& request,
-                                            const uint8_t* advertise_data,
-                                            size_t advertise_size) override {
+    ClientResult send_create_access_point(
+        const protocol::CreateAccessPointRequest& request,
+        const uint8_t* advertise_data,
+        size_t advertise_size) override {
         send_create_access_point_call_count++;
         return next_send_result;
     }
 
-    ClientResult send_create_access_point_private(const protocol::CreateAccessPointPrivateRequest& request,
-                                                    const uint8_t* advertise_data,
-                                                    size_t advertise_size) override {
+    ClientResult send_create_access_point_private(
+        const protocol::CreateAccessPointPrivateRequest& request,
+        const uint8_t* advertise_data,
+        size_t advertise_size) override {
         send_create_access_point_private_call_count++;
         return next_send_result;
     }
 
-    ClientResult send_connect(const protocol::ConnectRequest& request) override {
+    ClientResult send_connect(
+        const protocol::ConnectRequest& request) override {
         send_connect_call_count++;
         return next_send_result;
     }
 
-    ClientResult send_connect_private(const protocol::ConnectPrivateRequest& request) override {
+    ClientResult send_connect_private(
+        const protocol::ConnectPrivateRequest& request) override {
         send_connect_private_call_count++;
         return next_send_result;
     }
@@ -156,18 +170,22 @@ public:
         return next_send_result;
     }
 
-    ClientResult send_proxy_data(const protocol::ProxyDataHeader& header,
-                                  const uint8_t* data, size_t data_size) override {
+    ClientResult send_proxy_data(
+        const protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_size) override {
         send_proxy_data_call_count++;
         return next_send_result;
     }
 
-    ClientResult send_set_accept_policy(const protocol::SetAcceptPolicyRequest& request) override {
+    ClientResult send_set_accept_policy(
+        const protocol::SetAcceptPolicyRequest& request) override {
         send_set_accept_policy_call_count++;
         return next_send_result;
     }
 
-    ClientResult send_set_advertise_data(const uint8_t* data, size_t size) override {
+    ClientResult send_set_advertise_data(
+        const uint8_t* data, size_t size) override {
         send_set_advertise_data_call_count++;
         return next_send_result;
     }
@@ -177,15 +195,18 @@ public:
         return next_send_result;
     }
 
-    ClientResult receive_packet(protocol::PacketId& type,
-                                 void* payload, size_t payload_buffer_size,
-                                 size_t& payload_size,
-                                 int32_t /*timeout_ms*/) override {
+    ClientResult receive_packet(
+        protocol::PacketId& type,
+        void* payload,
+        size_t payload_buffer_size,
+        size_t& payload_size,
+        int32_t /*timeout_ms*/) override {
         recv_call_count++;
         if (recv_queue.empty()) {
-            // When queue is empty, never return Success — that causes infinite loops
-            // in process_packets() which loops until recv returns non-Success.
-            // Return next_recv_result only if it's an error; otherwise return Timeout.
+            // When queue is empty, never return Success — that causes infinite
+            // loops in process_packets() which loops until recv returns
+            // non-Success. Return next_recv_result only if it's an error;
+            // otherwise return Timeout.
             type = static_cast<protocol::PacketId>(0xFF);
             payload_size = 0;
             if (next_recv_result == ClientResult::Success) {
@@ -238,4 +259,4 @@ public:
     }
 };
 
-} // namespace ryu_ldn::network::test
+}  // namespace ryu_ldn::network::test

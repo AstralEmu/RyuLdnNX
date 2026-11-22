@@ -53,9 +53,14 @@ inline Hook g_dispatch_hook = nullptr;
 /// Number of calls forwarded since the last reset.
 inline unsigned g_dispatch_count = 0;
 
-inline ams::Result Dispatch(::Service* service, std::uint32_t command,
-                            const void* in, std::size_t in_size, void* out,
-                            std::size_t out_size, const Options& options) {
+inline ams::Result Dispatch(
+    ::Service* service,
+    std::uint32_t command,
+    const void* in,
+    std::size_t in_size,
+    void* out,
+    std::size_t out_size,
+    const Options& options) {
     ++g_dispatch_count;
     if (g_dispatch_hook == nullptr) {
         return ams::ResultSuccess();
@@ -64,13 +69,41 @@ inline ams::Result Dispatch(::Service* service, std::uint32_t command,
     return g_dispatch_hook(call);
 }
 
-} // namespace host_mitm
+}  // namespace host_mitm
 
 #define serviceMitmDispatchInOut(_srv, _cmd, _in, _out, ...) \
-    ::host_mitm::Dispatch((_srv), (_cmd), &(_in), sizeof(_in), &(_out), sizeof(_out), ::host_mitm::Options{__VA_ARGS__})
+    ::host_mitm::Dispatch(                                   \
+        (_srv),                                              \
+        (_cmd),                                              \
+        &(_in),                                              \
+        sizeof(_in),                                         \
+        &(_out),                                             \
+        sizeof(_out),                                        \
+        ::host_mitm::Options{__VA_ARGS__})
 #define serviceMitmDispatchIn(_srv, _cmd, _in, ...) \
-    ::host_mitm::Dispatch((_srv), (_cmd), &(_in), sizeof(_in), nullptr, 0, ::host_mitm::Options{__VA_ARGS__})
+    ::host_mitm::Dispatch(                          \
+        (_srv),                                     \
+        (_cmd),                                     \
+        &(_in),                                     \
+        sizeof(_in),                                \
+        nullptr,                                    \
+        0,                                          \
+        ::host_mitm::Options{__VA_ARGS__})
 #define serviceMitmDispatchOut(_srv, _cmd, _out, ...) \
-    ::host_mitm::Dispatch((_srv), (_cmd), nullptr, 0, &(_out), sizeof(_out), ::host_mitm::Options{__VA_ARGS__})
+    ::host_mitm::Dispatch(                            \
+        (_srv),                                       \
+        (_cmd),                                       \
+        nullptr,                                      \
+        0,                                            \
+        &(_out),                                      \
+        sizeof(_out),                                 \
+        ::host_mitm::Options{__VA_ARGS__})
 #define serviceMitmDispatch(_srv, _cmd, ...) \
-    ::host_mitm::Dispatch((_srv), (_cmd), nullptr, 0, nullptr, 0, ::host_mitm::Options{__VA_ARGS__})
+    ::host_mitm::Dispatch(                   \
+        (_srv),                              \
+        (_cmd),                              \
+        nullptr,                             \
+        0,                                   \
+        nullptr,                             \
+        0,                                   \
+        ::host_mitm::Options{__VA_ARGS__})

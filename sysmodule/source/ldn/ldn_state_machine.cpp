@@ -11,13 +11,10 @@
 namespace ams::mitm::ldn {
 
 LdnStateMachine::LdnStateMachine()
-    : 
-     m_state(CommState::None)
-    , m_state_event(os::EventClearMode_AutoClear, true)
-    , m_callback(nullptr)
-    , m_callback_user_data(nullptr)
-{
-}
+    : m_state(CommState::None),
+      m_state_event(os::EventClearMode_AutoClear, true),
+      m_callback(nullptr),
+      m_callback_user_data(nullptr) {}
 
 LdnStateMachine::~LdnStateMachine() = default;
 
@@ -116,7 +113,8 @@ StateTransitionResult LdnStateMachine::CloseAccessPoint() {
     if (m_state == CommState::Initialized) {
         return StateTransitionResult::AlreadyInState;
     }
-    if (m_state != CommState::AccessPoint && m_state != CommState::AccessPointCreated) {
+    if (m_state != CommState::AccessPoint &&
+        m_state != CommState::AccessPointCreated) {
         return StateTransitionResult::InvalidTransition;
     }
 
@@ -200,7 +198,8 @@ StateTransitionResult LdnStateMachine::CloseStation() {
     if (m_state == CommState::Initialized) {
         return StateTransitionResult::AlreadyInState;
     }
-    if (m_state != CommState::Station && m_state != CommState::StationConnected) {
+    if (m_state != CommState::Station &&
+        m_state != CommState::StationConnected) {
         return StateTransitionResult::InvalidTransition;
     }
 
@@ -283,7 +282,8 @@ os::NativeHandle LdnStateMachine::GetStateChangeEventHandle() const {
     return m_state_event.GetReadableHandle();
 }
 
-void LdnStateMachine::SetStateCallback(StateCallback callback, void* user_data) {
+void LdnStateMachine::SetStateCallback(
+    StateCallback callback, void* user_data) {
     std::scoped_lock lk(m_mutex);
     m_callback = callback;
     m_callback_user_data = user_data;
@@ -295,23 +295,35 @@ void LdnStateMachine::SetStateCallback(StateCallback callback, void* user_data) 
 
 const char* LdnStateMachine::StateToString(CommState state) {
     switch (state) {
-        case CommState::None:               return "None";
-        case CommState::Initialized:        return "Initialized";
-        case CommState::AccessPoint:        return "AccessPoint";
-        case CommState::AccessPointCreated: return "AccessPointCreated";
-        case CommState::Station:            return "Station";
-        case CommState::StationConnected:   return "StationConnected";
-        case CommState::Error:              return "Error";
-        default:                            return "Unknown";
+        case CommState::None:
+            return "None";
+        case CommState::Initialized:
+            return "Initialized";
+        case CommState::AccessPoint:
+            return "AccessPoint";
+        case CommState::AccessPointCreated:
+            return "AccessPointCreated";
+        case CommState::Station:
+            return "Station";
+        case CommState::StationConnected:
+            return "StationConnected";
+        case CommState::Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }
 
 const char* LdnStateMachine::ResultToString(StateTransitionResult result) {
     switch (result) {
-        case StateTransitionResult::Success:           return "Success";
-        case StateTransitionResult::InvalidTransition: return "InvalidTransition";
-        case StateTransitionResult::AlreadyInState:    return "AlreadyInState";
-        default:                                       return "Unknown";
+        case StateTransitionResult::Success:
+            return "Success";
+        case StateTransitionResult::InvalidTransition:
+            return "InvalidTransition";
+        case StateTransitionResult::AlreadyInState:
+            return "AlreadyInState";
+        default:
+            return "Unknown";
     }
 }
 
@@ -319,4 +331,4 @@ void LdnStateMachine::SignalStateChange() {
     m_state_event.Signal();
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

@@ -110,8 +110,9 @@ bool ConfigManager::Initialize(const char* config_path) {
     ConfigResult result = load_config(m_config_path, m_config);
 
     // Success or FileNotFound are both acceptable
-    m_initialized = (result == ConfigResult::Success ||
-                     result == ConfigResult::FileNotFound);
+    m_initialized =
+        (result == ConfigResult::Success ||
+         result == ConfigResult::FileNotFound);
     m_dirty = false;
 
     return m_initialized;
@@ -145,7 +146,8 @@ ConfigResult ConfigManager::Reload() {
     ConfigResult result = load_config(m_config_path, m_config);
 
     // Clear dirty flag on successful reload
-    if (result == ConfigResult::Success || result == ConfigResult::FileNotFound) {
+    if (result == ConfigResult::Success ||
+        result == ConfigResult::FileNotFound) {
         m_dirty = false;
     }
 
@@ -157,8 +159,9 @@ ConfigResult ConfigManager::Reload() {
 // =============================================================================
 
 void ConfigManager::SetServerHost(const char* host) {
-    if (host == nullptr) { return;
-}
+    if (host == nullptr) {
+        return;
+    }
 
     std::strncpy(m_config.server.host, host, MAX_HOST_LENGTH);
     m_config.server.host[MAX_HOST_LENGTH] = '\0';
@@ -171,7 +174,6 @@ void ConfigManager::SetServerPort(uint16_t port) {
     m_dirty = true;
     NotifyChange("server");
 }
-
 
 // =============================================================================
 // LDN Settings
@@ -192,7 +194,8 @@ bool ConfigManager::SetPassphrase(const char* passphrase) {
     if (passphrase == nullptr || passphrase[0] == '\0') {
         m_config.ldn.passphrase[0] = '\0';
     } else {
-        std::strncpy(m_config.ldn.passphrase, passphrase, MAX_PASSPHRASE_LENGTH);
+        std::strncpy(
+            m_config.ldn.passphrase, passphrase, MAX_PASSPHRASE_LENGTH);
         m_config.ldn.passphrase[MAX_PASSPHRASE_LENGTH] = '\0';
     }
     m_dirty = true;
@@ -209,7 +212,6 @@ void ConfigManager::SetUsePassphrase(bool enabled) {
     m_dirty = true;
     NotifyChange("ldn");
 }
-
 
 // =============================================================================
 // Debug Settings
@@ -242,4 +244,4 @@ void ConfigManager::NotifyChange(const char* section) {
     }
 }
 
-} // namespace ryu_ldn::config
+}  // namespace ryu_ldn::config

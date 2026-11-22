@@ -32,37 +32,41 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 
 #define TEST(name) void test_##name()
-#define RUN_TEST(name) do { \
-    g_tests_run++; \
-    printf("  [%d] %s... ", g_tests_run, #name); \
-    try { \
-        test_##name(); \
-        g_tests_passed++; \
-        printf("PASS\n"); \
-    } catch (const std::exception& e) { \
-        printf("FAIL: %s\n", e.what()); \
-    } catch (...) { \
-        printf("FAIL: unknown exception\n"); \
-    } \
-} while(0)
+#define RUN_TEST(name)                               \
+    do {                                             \
+        g_tests_run++;                               \
+        printf("  [%d] %s... ", g_tests_run, #name); \
+        try {                                        \
+            test_##name();                           \
+            g_tests_passed++;                        \
+            printf("PASS\n");                        \
+        } catch (const std::exception& e) {          \
+            printf("FAIL: %s\n", e.what());          \
+        } catch (...) {                              \
+            printf("FAIL: unknown exception\n");     \
+        }                                            \
+    } while (0)
 
-#define ASSERT(cond) do { \
-    if (!(cond)) { \
-        throw std::runtime_error("Assertion failed: " #cond); \
-    } \
-} while(0)
+#define ASSERT(cond)                                              \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            throw std::runtime_error("Assertion failed: " #cond); \
+        }                                                         \
+    } while (0)
 
-#define ASSERT_EQ(a, b) do { \
-    if ((a) != (b)) { \
-        throw std::runtime_error("Assertion failed: " #a " == " #b); \
-    } \
-} while(0)
+#define ASSERT_EQ(a, b)                                                  \
+    do {                                                                 \
+        if ((a) != (b)) {                                                \
+            throw std::runtime_error("Assertion failed: " #a " == " #b); \
+        }                                                                \
+    } while (0)
 
-#define ASSERT_NE(a, b) do { \
-    if ((a) == (b)) { \
-        throw std::runtime_error("Assertion failed: " #a " != " #b); \
-    } \
-} while(0)
+#define ASSERT_NE(a, b)                                                  \
+    do {                                                                 \
+        if ((a) == (b)) {                                                \
+            throw std::runtime_error("Assertion failed: " #a " != " #b); \
+        }                                                                \
+    } while (0)
 
 //=============================================================================
 // Type Definitions (matching production code)
@@ -139,12 +143,19 @@ enum class MessageType : u8 {
  */
 class IntegrationStateMachine {
 public:
-    IntegrationStateMachine() : m_state(CommState::None), m_event_signaled(false) {}
+    IntegrationStateMachine()
+        : m_state(CommState::None), m_event_signaled(false) {}
 
-    CommState GetState() const { return m_state; }
+    CommState GetState() const {
+        return m_state;
+    }
 
-    bool IsEventSignaled() const { return m_event_signaled; }
-    void ClearEvent() { m_event_signaled = false; }
+    bool IsEventSignaled() const {
+        return m_event_signaled;
+    }
+    void ClearEvent() {
+        m_event_signaled = false;
+    }
 
     /// Initialize: None → Initialized
     ResultCode Initialize(u64 pid) {
@@ -174,7 +185,8 @@ public:
 
     /// CloseAccessPoint: AccessPoint* → Initialized
     ResultCode CloseAccessPoint() {
-        if (m_state != CommState::AccessPoint && m_state != CommState::AccessPointCreated) {
+        if (m_state != CommState::AccessPoint &&
+            m_state != CommState::AccessPointCreated) {
             return ResultCode::InvalidState;
         }
         SetState(CommState::Initialized);
@@ -210,7 +222,8 @@ public:
 
     /// CloseStation: Station* → Initialized
     ResultCode CloseStation() {
-        if (m_state != CommState::Station && m_state != CommState::StationConnected) {
+        if (m_state != CommState::Station &&
+            m_state != CommState::StationConnected) {
             return ResultCode::InvalidState;
         }
         SetState(CommState::Initialized);
@@ -241,7 +254,9 @@ public:
         SetState(CommState::Error);
     }
 
-    DisconnectReason GetDisconnectReason() const { return m_disconnect_reason; }
+    DisconnectReason GetDisconnectReason() const {
+        return m_disconnect_reason;
+    }
 
 private:
     void SetState(CommState new_state) {
@@ -303,30 +318,35 @@ public:
     }
 
     void AddNode(u32 node_id, u32 ipv4) {
-        if (node_id >= MaxNodes) return;
+        if (node_id >= MaxNodes)
+            return;
         m_nodes[node_id].ipv4 = ipv4;
         m_nodes[node_id].connected = true;
     }
 
     void RemoveNode(u32 node_id) {
-        if (node_id >= MaxNodes) return;
+        if (node_id >= MaxNodes)
+            return;
         m_nodes[node_id].connected = false;
     }
 
     bool IsConnected(u32 node_id) const {
-        if (node_id >= MaxNodes) return false;
+        if (node_id >= MaxNodes)
+            return false;
         return m_nodes[node_id].connected;
     }
 
     u32 GetIpv4(u32 node_id) const {
-        if (node_id >= MaxNodes) return 0;
+        if (node_id >= MaxNodes)
+            return 0;
         return m_nodes[node_id].ipv4;
     }
 
     size_t GetConnectedCount() const {
         size_t count = 0;
         for (size_t i = 0; i < MaxNodes; i++) {
-            if (m_nodes[i].connected) count++;
+            if (m_nodes[i].connected)
+                count++;
         }
         return count;
     }
@@ -339,8 +359,12 @@ public:
         m_local_node_id = 0xFF;
     }
 
-    void SetLocalNodeId(u8 id) { m_local_node_id = id; }
-    u8 GetLocalNodeId() const { return m_local_node_id; }
+    void SetLocalNodeId(u8 id) {
+        m_local_node_id = id;
+    }
+    u8 GetLocalNodeId() const {
+        return m_local_node_id;
+    }
 
     /// Update from NetworkInfo (SyncNetwork message)
     void UpdateFromNetworkInfo(const NetworkInfo& info) {
@@ -410,7 +434,8 @@ public:
         return true;
     }
 
-    bool Read(ProxyDataHeader& header, u8* data, size_t& size, size_t max_size) {
+    bool Read(
+        ProxyDataHeader& header, u8* data, size_t& size, size_t max_size) {
         if (m_count == 0) {
             return false;
         }
@@ -427,9 +452,15 @@ public:
         return true;
     }
 
-    size_t GetPendingCount() const { return m_count; }
-    bool IsEmpty() const { return m_count == 0; }
-    void Reset() { m_read_idx = m_write_idx = m_count = 0; }
+    size_t GetPendingCount() const {
+        return m_count;
+    }
+    bool IsEmpty() const {
+        return m_count == 0;
+    }
+    void Reset() {
+        m_read_idx = m_write_idx = m_count = 0;
+    }
 
 private:
     struct Packet {
@@ -487,7 +518,8 @@ public:
 
     /// Simulate a player joining (for host testing)
     void SimulatePlayerJoin(u32 ipv4, const char* username) {
-        if (m_next_node_id >= 8) return;
+        if (m_next_node_id >= 8)
+            return;
 
         NodeInfo node = {};
         node.ipv4_address = ipv4;
@@ -501,7 +533,8 @@ public:
 
     /// Simulate a player leaving
     void SimulatePlayerLeave(u32 node_id) {
-        for (auto it = m_connected_nodes.begin(); it != m_connected_nodes.end(); ++it) {
+        for (auto it = m_connected_nodes.begin(); it != m_connected_nodes.end();
+             ++it) {
             if (it->node_id == node_id) {
                 m_connected_nodes.erase(it);
                 break;
@@ -511,8 +544,10 @@ public:
     }
 
     /// Simulate incoming proxy data from another player
-    void SimulateProxyData(u32 src_node, u32 dest_node, const u8* data, size_t size) {
-        if (!m_response_handler) return;
+    void SimulateProxyData(
+        u32 src_node, u32 dest_node, const u8* data, size_t size) {
+        if (!m_response_handler)
+            return;
 
         std::vector<u8> response(sizeof(ProxyDataHeader) + size);
         ProxyDataHeader header = {dest_node, src_node};
@@ -521,7 +556,8 @@ public:
             memcpy(response.data() + sizeof(header), data, size);
         }
 
-        m_response_handler(MessageType::ProxyDataReceived, response.data(), response.size());
+        m_response_handler(
+            MessageType::ProxyDataReceived, response.data(), response.size());
     }
 
     /// Create a network for scanning tests
@@ -532,7 +568,8 @@ public:
 
 private:
     void HandleCreateAccessPoint(const u8* data, size_t size) {
-        (void)data; (void)size;
+        (void)data;
+        (void)size;
         m_network_created = true;
         m_next_node_id = 0;
 
@@ -547,17 +584,21 @@ private:
         // Send response
         if (m_response_handler) {
             u8 response[4] = {0, 0, 0, 0};  // Success
-            m_response_handler(MessageType::CreateAccessPointResponse, response, sizeof(response));
+            m_response_handler(
+                MessageType::CreateAccessPointResponse,
+                response,
+                sizeof(response));
         }
 
         SendSyncNetwork();
     }
 
     void HandleConnect(const u8* data, size_t size) {
-        (void)data; (void)size;
+        (void)data;
+        (void)size;
 
-        // When client connects, we need to simulate the network with host + client
-        // Clear any existing nodes and start fresh
+        // When client connects, we need to simulate the network with host +
+        // client Clear any existing nodes and start fresh
         m_connected_nodes.clear();
         m_next_node_id = 0;
 
@@ -580,21 +621,25 @@ private:
         // Send response
         if (m_response_handler) {
             u8 response[4] = {0, 0, 0, 0};  // Success
-            m_response_handler(MessageType::ConnectResponse, response, sizeof(response));
+            m_response_handler(
+                MessageType::ConnectResponse, response, sizeof(response));
         }
 
         SendSyncNetwork();
     }
 
     void HandleScan(const u8* data, size_t size) {
-        (void)data; (void)size;
+        (void)data;
+        (void)size;
 
         if (m_response_handler) {
             // Build a scan response with one network
             NetworkInfo info = {};
             memset(info.network_id, 0x42, 16);
-            strncpy(reinterpret_cast<char*>(info.common.ssid),
-                    m_scan_result_ssid.c_str(), 32);
+            strncpy(
+                reinterpret_cast<char*>(info.common.ssid),
+                m_scan_result_ssid.c_str(),
+                32);
             info.common.channel = 6;
             info.ldn.node_count = 1;
             info.ldn.node_count_max = 8;
@@ -609,15 +654,18 @@ private:
             memcpy(response.data(), &count, 4);
             memcpy(response.data() + 4, &info, sizeof(info));
 
-            m_response_handler(MessageType::ScanResponse, response.data(), response.size());
+            m_response_handler(
+                MessageType::ScanResponse, response.data(), response.size());
         }
     }
 
     void HandleDisconnect(const u8* data, size_t size) {
-        (void)data; (void)size;
-        // User-initiated disconnect: just acknowledge, don't send Disconnected message
-        // The Disconnected message is only sent for server-side disconnects
-        // For normal user disconnects, the state machine handles the transition directly
+        (void)data;
+        (void)size;
+        // User-initiated disconnect: just acknowledge, don't send Disconnected
+        // message The Disconnected message is only sent for server-side
+        // disconnects For normal user disconnects, the state machine handles
+        // the transition directly
     }
 
     void HandleProxyData(const u8* data, size_t size) {
@@ -628,7 +676,8 @@ private:
     }
 
     void SendSyncNetwork() {
-        if (!m_response_handler) return;
+        if (!m_response_handler)
+            return;
 
         NetworkInfo info = {};
         memset(info.network_id, 0x42, 16);
@@ -639,8 +688,10 @@ private:
             info.ldn.nodes[i] = m_connected_nodes[i];
         }
 
-        m_response_handler(MessageType::SyncNetwork,
-                          reinterpret_cast<const u8*>(&info), sizeof(info));
+        m_response_handler(
+            MessageType::SyncNetwork,
+            reinterpret_cast<const u8*>(&info),
+            sizeof(info));
     }
 
     ResponseHandler m_response_handler;
@@ -663,12 +714,11 @@ private:
 class IntegratedLdnService {
 public:
     IntegratedLdnService(MockServer& server)
-        : m_server(server)
-        , m_connected(false)
-    {
-        server.SetResponseHandler([this](MessageType type, const u8* data, size_t size) {
-            HandleServerResponse(type, data, size);
-        });
+        : m_server(server), m_connected(false) {
+        server.SetResponseHandler(
+            [this](MessageType type, const u8* data, size_t size) {
+                HandleServerResponse(type, data, size);
+            });
     }
 
     // === Lifecycle Commands ===
@@ -686,7 +736,9 @@ public:
         return m_state_machine.Finalize();
     }
 
-    CommState GetState() const { return m_state_machine.GetState(); }
+    CommState GetState() const {
+        return m_state_machine.GetState();
+    }
 
     // === Access Point (Host) Commands ===
 
@@ -715,7 +767,8 @@ public:
         // Send to server
         std::vector<u8> request(64);
         strncpy(reinterpret_cast<char*>(request.data()), ssid, 32);
-        m_server.ProcessMessage(MessageType::CreateAccessPoint, request.data(), request.size());
+        m_server.ProcessMessage(
+            MessageType::CreateAccessPoint, request.data(), request.size());
 
         return m_state_machine.CreateNetwork();
     }
@@ -766,8 +819,12 @@ public:
 
         // Send connect request
         std::vector<u8> request(sizeof(NetworkInfo));
-        memcpy(request.data(), &m_scan_results[network_index], sizeof(NetworkInfo));
-        m_server.ProcessMessage(MessageType::Connect, request.data(), request.size());
+        memcpy(
+            request.data(),
+            &m_scan_results[network_index],
+            sizeof(NetworkInfo));
+        m_server.ProcessMessage(
+            MessageType::Connect, request.data(), request.size());
 
         return m_state_machine.Connect();
     }
@@ -778,7 +835,8 @@ public:
         }
 
         u8 request[2] = {};
-        m_server.ProcessMessage(MessageType::Disconnect, request, sizeof(request));
+        m_server.ProcessMessage(
+            MessageType::Disconnect, request, sizeof(request));
 
         return m_state_machine.Disconnect();
     }
@@ -798,28 +856,40 @@ public:
             memcpy(request.data() + sizeof(header), data, size);
         }
 
-        m_server.ProcessMessage(MessageType::ProxyData, request.data(), request.size());
+        m_server.ProcessMessage(
+            MessageType::ProxyData, request.data(), request.size());
         return ResultCode::Success;
     }
 
-    bool ReceiveProxyData(ProxyDataHeader& header, u8* data, size_t& size, size_t max_size) {
+    bool ReceiveProxyData(
+        ProxyDataHeader& header, u8* data, size_t& size, size_t max_size) {
         return m_proxy_buffer.Read(header, data, size, max_size);
     }
 
     // === Info Commands ===
 
-    size_t GetScanResultCount() const { return m_scan_results.size(); }
+    size_t GetScanResultCount() const {
+        return m_scan_results.size();
+    }
 
-    const NetworkInfo& GetNetworkInfo() const { return m_network_info; }
+    const NetworkInfo& GetNetworkInfo() const {
+        return m_network_info;
+    }
 
-    size_t GetConnectedNodeCount() const { return m_node_mapper.GetConnectedCount(); }
+    size_t GetConnectedNodeCount() const {
+        return m_node_mapper.GetConnectedCount();
+    }
 
     DisconnectReason GetDisconnectReason() const {
         return m_state_machine.GetDisconnectReason();
     }
 
-    bool IsEventSignaled() const { return m_state_machine.IsEventSignaled(); }
-    void ClearEvent() { m_state_machine.ClearEvent(); }
+    bool IsEventSignaled() const {
+        return m_state_machine.IsEventSignaled();
+    }
+    void ClearEvent() {
+        m_state_machine.ClearEvent();
+    }
 
 private:
     void HandleServerResponse(MessageType type, const u8* data, size_t size) {
@@ -845,14 +915,16 @@ private:
     }
 
     void HandleScanResponse(const u8* data, size_t size) {
-        if (size < 4) return;
+        if (size < 4)
+            return;
 
         u32 count;
         memcpy(&count, data, 4);
 
         m_scan_results.clear();
         size_t offset = 4;
-        for (u32 i = 0; i < count && offset + sizeof(NetworkInfo) <= size; i++) {
+        for (u32 i = 0; i < count && offset + sizeof(NetworkInfo) <= size;
+             i++) {
             NetworkInfo info;
             memcpy(&info, data + offset, sizeof(NetworkInfo));
             m_scan_results.push_back(info);
@@ -861,7 +933,8 @@ private:
     }
 
     void HandleSyncNetwork(const u8* data, size_t size) {
-        if (size < sizeof(NetworkInfo)) return;
+        if (size < sizeof(NetworkInfo))
+            return;
 
         memcpy(&m_network_info, data, sizeof(NetworkInfo));
         m_node_mapper.UpdateFromNetworkInfo(m_network_info);
@@ -877,7 +950,8 @@ private:
     }
 
     void HandleProxyDataReceived(const u8* data, size_t size) {
-        if (size < sizeof(ProxyDataHeader)) return;
+        if (size < sizeof(ProxyDataHeader))
+            return;
 
         ProxyDataHeader header;
         memcpy(&header, data, sizeof(header));
@@ -902,7 +976,8 @@ private:
     }
 
     void HandleError(const u8* data, size_t size) {
-        (void)data; (void)size;
+        (void)data;
+        (void)size;
         m_state_machine.SetError(DisconnectReason::SystemRequest);
     }
 
@@ -1126,7 +1201,9 @@ TEST(proxy_data_send_unicast) {
 
     // Send data to specific node
     u8 game_data[] = {0x01, 0x02, 0x03, 0x04};
-    ASSERT_EQ(service.SendProxyData(1, game_data, sizeof(game_data)), ResultCode::Success);
+    ASSERT_EQ(
+        service.SendProxyData(1, game_data, sizeof(game_data)),
+        ResultCode::Success);
 }
 
 TEST(proxy_data_send_broadcast) {
@@ -1142,7 +1219,9 @@ TEST(proxy_data_send_broadcast) {
 
     // Send broadcast
     u8 game_data[] = {0xFF, 0xFE, 0xFD};
-    ASSERT_EQ(service.SendProxyData(0xFFFFFFFF, game_data, sizeof(game_data)), ResultCode::Success);
+    ASSERT_EQ(
+        service.SendProxyData(0xFFFFFFFF, game_data, sizeof(game_data)),
+        ResultCode::Success);
 }
 
 TEST(proxy_data_receive) {
@@ -1158,8 +1237,11 @@ TEST(proxy_data_receive) {
 
     // Simulate receiving data from host
     u8 incoming[] = {0xAA, 0xBB, 0xCC, 0xDD};
-    server.SimulateProxyData(0, service.GetNetworkInfo().ldn.node_count - 1,
-                             incoming, sizeof(incoming));
+    server.SimulateProxyData(
+        0,
+        service.GetNetworkInfo().ldn.node_count - 1,
+        incoming,
+        sizeof(incoming));
 
     // Receive the data
     ProxyDataHeader header;
@@ -1214,7 +1296,8 @@ TEST(proxy_data_not_for_us) {
     ProxyDataHeader header;
     u8 buffer[256];
     size_t size;
-    bool received = service.ReceiveProxyData(header, buffer, size, sizeof(buffer));
+    bool received =
+        service.ReceiveProxyData(header, buffer, size, sizeof(buffer));
     // Packet was for node 2, we are node 1, so we should not receive it
     ASSERT(!received);
 }
@@ -1257,7 +1340,8 @@ TEST(state_invalid_send_data_not_connected) {
     service.OpenAccessPoint();  // But don't create network
 
     u8 data[] = {0x01};
-    ASSERT_EQ(service.SendProxyData(0, data, sizeof(data)), ResultCode::InvalidState);
+    ASSERT_EQ(
+        service.SendProxyData(0, data, sizeof(data)), ResultCode::InvalidState);
 }
 
 TEST(state_event_signaled_on_change) {
@@ -1385,7 +1469,9 @@ TEST(scenario_8_players_session) {
 
     // Broadcast from host
     u8 game_state[] = {0x42, 0x42, 0x42};
-    ASSERT_EQ(service.SendProxyData(0xFFFFFFFF, game_state, sizeof(game_state)), ResultCode::Success);
+    ASSERT_EQ(
+        service.SendProxyData(0xFFFFFFFF, game_state, sizeof(game_state)),
+        ResultCode::Success);
 }
 
 TEST(scenario_rapid_connect_disconnect) {

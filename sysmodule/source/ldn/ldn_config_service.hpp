@@ -58,11 +58,11 @@ class ICommunicationService;
  * @brief Connection status for overlay
  */
 enum class ConnectionStatus : u32 {
-    Disconnected = 0,   ///< Not connected to server
-    Connecting = 1,     ///< Connection in progress
-    Connected = 2,      ///< Connected, handshake pending
-    Ready = 3,          ///< Fully connected and ready
-    Error = 4,          ///< Connection error
+    Disconnected = 0,  ///< Not connected to server
+    Connecting = 1,    ///< Connection in progress
+    Connected = 2,     ///< Connected, handshake pending
+    Ready = 3,         ///< Fully connected and ready
+    Error = 4,         ///< Connection error
 };
 
 // SessionInfo is defined in ldn_types.hpp
@@ -186,7 +186,7 @@ public:
      * @return ResultSuccess on success
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetServerAddress"}
-    static Result SetServerAddress(const ServerAddress &address);
+    static Result SetServerAddress(const ServerAddress& address);
 
     /**
      * @brief Get debug logging state
@@ -371,4 +371,4 @@ private:
     ICommunicationService* m_communication;
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

@@ -25,7 +25,6 @@
 #include "connection_state.hpp"
 #include "../debug/log.hpp"
 
-
 namespace ryu_ldn::network {
 
 /**
@@ -35,11 +34,9 @@ namespace ryu_ldn::network {
  * registered and zero retry count.
  */
 ConnectionStateMachine::ConnectionStateMachine()
-    : m_state(ConnectionState::Disconnected)
-    , m_callback(nullptr)
-    , m_retry_count(0)
-{
-}
+    : m_state(ConnectionState::Disconnected),
+      m_callback(nullptr),
+      m_retry_count(0) {}
 
 /**
  * @brief Check if currently in a connected state
@@ -93,112 +90,114 @@ bool ConnectionStateMachine::is_transitioning() const {
  * @param[out] to Target state if transition is valid
  * @return true if the transition is valid, false otherwise
  */
-bool ConnectionStateMachine::is_valid_transition(ConnectionState from,
-                                                  ConnectionEvent event,
-                                                  ConnectionState& to) {
+bool ConnectionStateMachine::is_valid_transition(
+    ConnectionState from, ConnectionEvent event, ConnectionState& to) {
     // Transition lookup table: [state][event] -> (target_state, valid)
     // Invalid transitions are represented by (Disconnected, false).
     // This table replaces the 9-case switch to reduce cyclomatic complexity
     // flagged by CodeQL cpp/complex-block.
     using T = ConnectionState;
-    static constexpr struct { T target; bool valid; } table[9][11] = {
+    static constexpr struct {
+        T target;
+        bool valid;
+    } table[9][11] = {
         // State: Disconnected
         {
-            {.target=T::Connecting,  .valid=true },  // Connect
-            {.target=T::Disconnected, .valid=false},  // ConnectSuccess
-            {.target=T::Disconnected, .valid=false},  // ConnectFailed
-            {.target=T::Disconnected, .valid=false},  // HandshakeStarted
-            {.target=T::Disconnected, .valid=false},  // HandshakeSuccess
-            {.target=T::Disconnected, .valid=false},  // HandshakeFailed
-            {.target=T::Disconnected, .valid=false},  // Disconnect
-            {.target=T::Disconnected, .valid=false},  // ConnectionLost
-            {.target=T::Disconnected, .valid=false},  // BackoffExpired
-            {.target=T::Connecting,  .valid=true },  // RetryRequested
-            {.target=T::Disconnected, .valid=false},  // FatalError
+            {.target = T::Connecting, .valid = true},     // Connect
+            {.target = T::Disconnected, .valid = false},  // ConnectSuccess
+            {.target = T::Disconnected, .valid = false},  // ConnectFailed
+            {.target = T::Disconnected, .valid = false},  // HandshakeStarted
+            {.target = T::Disconnected, .valid = false},  // HandshakeSuccess
+            {.target = T::Disconnected, .valid = false},  // HandshakeFailed
+            {.target = T::Disconnected, .valid = false},  // Disconnect
+            {.target = T::Disconnected, .valid = false},  // ConnectionLost
+            {.target = T::Disconnected, .valid = false},  // BackoffExpired
+            {.target = T::Connecting, .valid = true},     // RetryRequested
+            {.target = T::Disconnected, .valid = false},  // FatalError
         },
         // State: Connecting
         {
-            {.target=T::Disconnected, .valid=false},  // Connect
-            {.target=T::Connected,   .valid=true },  // ConnectSuccess
-            {.target=T::Backoff,     .valid=true },  // ConnectFailed
-            {.target=T::Disconnected, .valid=false},  // HandshakeStarted
-            {.target=T::Disconnected, .valid=false},  // HandshakeSuccess
-            {.target=T::Disconnected, .valid=false},  // HandshakeFailed
-            {.target=T::Disconnected, .valid=true },  // Disconnect
-            {.target=T::Disconnected, .valid=false},  // ConnectionLost
-            {.target=T::Disconnected, .valid=false},  // BackoffExpired
-            {.target=T::Disconnected, .valid=false},  // RetryRequested
-            {.target=T::Error,       .valid=true },  // FatalError
+            {.target = T::Disconnected, .valid = false},  // Connect
+            {.target = T::Connected, .valid = true},      // ConnectSuccess
+            {.target = T::Backoff, .valid = true},        // ConnectFailed
+            {.target = T::Disconnected, .valid = false},  // HandshakeStarted
+            {.target = T::Disconnected, .valid = false},  // HandshakeSuccess
+            {.target = T::Disconnected, .valid = false},  // HandshakeFailed
+            {.target = T::Disconnected, .valid = true},   // Disconnect
+            {.target = T::Disconnected, .valid = false},  // ConnectionLost
+            {.target = T::Disconnected, .valid = false},  // BackoffExpired
+            {.target = T::Disconnected, .valid = false},  // RetryRequested
+            {.target = T::Error, .valid = true},          // FatalError
         },
         // State: Connected
         {
-            {.target=T::Disconnected, .valid=false},  // Connect
-            {.target=T::Disconnected, .valid=false},  // ConnectSuccess
-            {.target=T::Disconnected, .valid=false},  // ConnectFailed
-            {.target=T::Handshaking, .valid=true },  // HandshakeStarted
-            {.target=T::Ready,       .valid=true },  // HandshakeSuccess
-            {.target=T::Backoff,      .valid=true },  // HandshakeFailed
-            {.target=T::Disconnecting, .valid=true},  // Disconnect
-            {.target=T::Backoff,      .valid=true },  // ConnectionLost
-            {.target=T::Disconnected, .valid=false},  // BackoffExpired
-            {.target=T::Disconnected, .valid=false},  // RetryRequested
-            {.target=T::Error,        .valid=true },  // FatalError
+            {.target = T::Disconnected, .valid = false},  // Connect
+            {.target = T::Disconnected, .valid = false},  // ConnectSuccess
+            {.target = T::Disconnected, .valid = false},  // ConnectFailed
+            {.target = T::Handshaking, .valid = true},    // HandshakeStarted
+            {.target = T::Ready, .valid = true},          // HandshakeSuccess
+            {.target = T::Backoff, .valid = true},        // HandshakeFailed
+            {.target = T::Disconnecting, .valid = true},  // Disconnect
+            {.target = T::Backoff, .valid = true},        // ConnectionLost
+            {.target = T::Disconnected, .valid = false},  // BackoffExpired
+            {.target = T::Disconnected, .valid = false},  // RetryRequested
+            {.target = T::Error, .valid = true},          // FatalError
         },
         // State: Handshaking
         {
-            {.target=T::Disconnected, .valid=false},  // Connect
-            {.target=T::Disconnected, .valid=false},  // ConnectSuccess
-            {.target=T::Disconnected, .valid=false},  // ConnectFailed
-            {.target=T::Disconnected, .valid=false},  // HandshakeStarted
-            {.target=T::Ready,       .valid=true },  // HandshakeSuccess
-            {.target=T::Backoff,      .valid=true },  // HandshakeFailed
-            {.target=T::Disconnecting, .valid=true},  // Disconnect
-            {.target=T::Backoff,      .valid=true },  // ConnectionLost
-            {.target=T::Disconnected, .valid=false},  // BackoffExpired
-            {.target=T::Disconnected, .valid=false},  // RetryRequested
-            {.target=T::Error,        .valid=true },  // FatalError
+            {.target = T::Disconnected, .valid = false},  // Connect
+            {.target = T::Disconnected, .valid = false},  // ConnectSuccess
+            {.target = T::Disconnected, .valid = false},  // ConnectFailed
+            {.target = T::Disconnected, .valid = false},  // HandshakeStarted
+            {.target = T::Ready, .valid = true},          // HandshakeSuccess
+            {.target = T::Backoff, .valid = true},        // HandshakeFailed
+            {.target = T::Disconnecting, .valid = true},  // Disconnect
+            {.target = T::Backoff, .valid = true},        // ConnectionLost
+            {.target = T::Disconnected, .valid = false},  // BackoffExpired
+            {.target = T::Disconnected, .valid = false},  // RetryRequested
+            {.target = T::Error, .valid = true},          // FatalError
         },
         // State: Ready
         {
-            {.target=T::Disconnected, .valid=false},  // Connect
-            {.target=T::Disconnected, .valid=false},  // ConnectSuccess
-            {.target=T::Disconnected, .valid=false},  // ConnectFailed
-            {.target=T::Disconnected, .valid=false},  // HandshakeStarted
-            {.target=T::Disconnected, .valid=false},  // HandshakeSuccess
-            {.target=T::Disconnected, .valid=false},  // HandshakeFailed
-            {.target=T::Disconnecting, .valid=true },  // Disconnect
-            {.target=T::Backoff,      .valid=true },  // ConnectionLost
-            {.target=T::Disconnected, .valid=false},  // BackoffExpired
-            {.target=T::Disconnected, .valid=false},  // RetryRequested
-            {.target=T::Error,        .valid=true },  // FatalError
+            {.target = T::Disconnected, .valid = false},  // Connect
+            {.target = T::Disconnected, .valid = false},  // ConnectSuccess
+            {.target = T::Disconnected, .valid = false},  // ConnectFailed
+            {.target = T::Disconnected, .valid = false},  // HandshakeStarted
+            {.target = T::Disconnected, .valid = false},  // HandshakeSuccess
+            {.target = T::Disconnected, .valid = false},  // HandshakeFailed
+            {.target = T::Disconnecting, .valid = true},  // Disconnect
+            {.target = T::Backoff, .valid = true},        // ConnectionLost
+            {.target = T::Disconnected, .valid = false},  // BackoffExpired
+            {.target = T::Disconnected, .valid = false},  // RetryRequested
+            {.target = T::Error, .valid = true},          // FatalError
         },
         // State: Backoff
         {
-            {.target=T::Disconnected, .valid=false},  // Connect
-            {.target=T::Disconnected, .valid=false},  // ConnectSuccess
-            {.target=T::Disconnected, .valid=false},  // ConnectFailed
-            {.target=T::Disconnected, .valid=false},  // HandshakeStarted
-            {.target=T::Disconnected, .valid=false},  // HandshakeSuccess
-            {.target=T::Disconnected, .valid=false},  // HandshakeFailed
-            {.target=T::Disconnected, .valid=true },  // Disconnect
-            {.target=T::Disconnected, .valid=false},  // ConnectionLost
-            {.target=T::Retrying,    .valid=true },  // BackoffExpired
-            {.target=T::Retrying,    .valid=true },  // RetryRequested
-            {.target=T::Error,       .valid=true },  // FatalError
+            {.target = T::Disconnected, .valid = false},  // Connect
+            {.target = T::Disconnected, .valid = false},  // ConnectSuccess
+            {.target = T::Disconnected, .valid = false},  // ConnectFailed
+            {.target = T::Disconnected, .valid = false},  // HandshakeStarted
+            {.target = T::Disconnected, .valid = false},  // HandshakeSuccess
+            {.target = T::Disconnected, .valid = false},  // HandshakeFailed
+            {.target = T::Disconnected, .valid = true},   // Disconnect
+            {.target = T::Disconnected, .valid = false},  // ConnectionLost
+            {.target = T::Retrying, .valid = true},       // BackoffExpired
+            {.target = T::Retrying, .valid = true},       // RetryRequested
+            {.target = T::Error, .valid = true},          // FatalError
         },
         // State: Retrying
         {
-            {.target=T::Disconnected, .valid=false},  // Connect
-            {.target=T::Connected,   .valid=true },  // ConnectSuccess
-            {.target=T::Backoff,     .valid=true },  // ConnectFailed
-            {.target=T::Disconnected, .valid=false},  // HandshakeStarted
-            {.target=T::Disconnected, .valid=false},  // HandshakeSuccess
-            {.target=T::Disconnected, .valid=false},  // HandshakeFailed
-            {.target=T::Disconnected, .valid=true },  // Disconnect
-            {.target=T::Disconnected, .valid=false},  // ConnectionLost
-            {.target=T::Disconnected, .valid=false},  // BackoffExpired
-            {.target=T::Disconnected, .valid=false},  // RetryRequested
-            {.target=T::Error,       .valid=true },  // FatalError
+            {.target = T::Disconnected, .valid = false},  // Connect
+            {.target = T::Connected, .valid = true},      // ConnectSuccess
+            {.target = T::Backoff, .valid = true},        // ConnectFailed
+            {.target = T::Disconnected, .valid = false},  // HandshakeStarted
+            {.target = T::Disconnected, .valid = false},  // HandshakeSuccess
+            {.target = T::Disconnected, .valid = false},  // HandshakeFailed
+            {.target = T::Disconnected, .valid = true},   // Disconnect
+            {.target = T::Disconnected, .valid = false},  // ConnectionLost
+            {.target = T::Disconnected, .valid = false},  // BackoffExpired
+            {.target = T::Disconnected, .valid = false},  // RetryRequested
+            {.target = T::Error, .valid = true},          // FatalError
         },
         // State: Disconnecting
         //
@@ -229,36 +228,40 @@ bool ConnectionStateMachine::is_valid_transition(ConnectionState from,
         // ConnectionLost and FatalError are already valid and lead to
         // Disconnected, which is the correct terminal state.
         {
-            {.target=T::Disconnected, .valid=false},  // Connect
-            {.target=T::Disconnected, .valid=true },  // ConnectSuccess
-            {.target=T::Disconnected, .valid=true },  // ConnectFailed
-            {.target=T::Disconnected, .valid=false},  // HandshakeStarted
-            {.target=T::Disconnected, .valid=true },  // HandshakeSuccess  (was invalid — fix)
-            {.target=T::Disconnected, .valid=true },  // HandshakeFailed   (was invalid — fix)
-            {.target=T::Disconnected, .valid=false},  // Disconnect
-            {.target=T::Disconnected, .valid=true },  // ConnectionLost
-            {.target=T::Disconnected, .valid=false},  // BackoffExpired
-            {.target=T::Disconnected, .valid=false},  // RetryRequested
-            {.target=T::Disconnected, .valid=true },  // FatalError
+            {.target = T::Disconnected, .valid = false},  // Connect
+            {.target = T::Disconnected, .valid = true},   // ConnectSuccess
+            {.target = T::Disconnected, .valid = true},   // ConnectFailed
+            {.target = T::Disconnected, .valid = false},  // HandshakeStarted
+            {.target = T::Disconnected,
+             .valid = true},  // HandshakeSuccess  (was invalid — fix)
+            {.target = T::Disconnected,
+             .valid = true},  // HandshakeFailed   (was invalid — fix)
+            {.target = T::Disconnected, .valid = false},  // Disconnect
+            {.target = T::Disconnected, .valid = true},   // ConnectionLost
+            {.target = T::Disconnected, .valid = false},  // BackoffExpired
+            {.target = T::Disconnected, .valid = false},  // RetryRequested
+            {.target = T::Disconnected, .valid = true},   // FatalError
         },
         // State: Error
         {
-            {.target=T::Disconnected, .valid=false},  // Connect
-            {.target=T::Disconnected, .valid=false},  // ConnectSuccess
-            {.target=T::Disconnected, .valid=false},  // ConnectFailed
-            {.target=T::Disconnected, .valid=false},  // HandshakeStarted
-            {.target=T::Disconnected, .valid=false},  // HandshakeSuccess
-            {.target=T::Disconnected, .valid=false},  // HandshakeFailed
-            {.target=T::Disconnected, .valid=true },  // Disconnect
-            {.target=T::Disconnected, .valid=false},  // ConnectionLost
-            {.target=T::Disconnected, .valid=false},  // BackoffExpired
-            {.target=T::Connecting,  .valid=true },  // RetryRequested
-            {.target=T::Disconnected, .valid=false},  // FatalError
+            {.target = T::Disconnected, .valid = false},  // Connect
+            {.target = T::Disconnected, .valid = false},  // ConnectSuccess
+            {.target = T::Disconnected, .valid = false},  // ConnectFailed
+            {.target = T::Disconnected, .valid = false},  // HandshakeStarted
+            {.target = T::Disconnected, .valid = false},  // HandshakeSuccess
+            {.target = T::Disconnected, .valid = false},  // HandshakeFailed
+            {.target = T::Disconnected, .valid = true},   // Disconnect
+            {.target = T::Disconnected, .valid = false},  // ConnectionLost
+            {.target = T::Disconnected, .valid = false},  // BackoffExpired
+            {.target = T::Connecting, .valid = true},     // RetryRequested
+            {.target = T::Disconnected, .valid = false},  // FatalError
         },
     };
 
-    static_assert(sizeof(table) / sizeof(table[0]) == 9, "State count mismatch");
-    static_assert(sizeof(table[0]) / sizeof(table[0][0]) == 11, "Event count mismatch");
+    static_assert(
+        sizeof(table) / sizeof(table[0]) == 9, "State count mismatch");
+    static_assert(
+        sizeof(table[0]) / sizeof(table[0][0]) == 11, "Event count mismatch");
 
     const auto si = static_cast<size_t>(from);
     const auto ei = static_cast<size_t>(event);
@@ -288,8 +291,8 @@ bool ConnectionStateMachine::is_valid_transition(ConnectionState from,
  * @param new_state Target state to transition to
  * @param event Event that triggered this transition
  */
-void ConnectionStateMachine::transition_to(ConnectionState new_state,
-                                            ConnectionEvent event) {
+void ConnectionStateMachine::transition_to(
+    ConnectionState new_state, ConnectionEvent event) {
     ConnectionState old_state = m_state;
     m_state = new_state;
 
@@ -297,20 +300,22 @@ void ConnectionStateMachine::transition_to(ConnectionState new_state,
     // disconnects. Previously the machine would leave Ready on a quiet
     // ConnectionLost and SendProxyDataToServer would start returning
     // NotConnected with no trace of what transitioned.
-    LOG_INFO("TCP state: %s -> %s (event=%s)",
-             state_to_string(old_state),
-             state_to_string(new_state),
-             event_to_string(event));
+    LOG_INFO(
+        "TCP state: %s -> %s (event=%s)",
+        state_to_string(old_state),
+        state_to_string(new_state),
+        event_to_string(event));
 
     // Entering the Error state is unrecoverable and rare (today only triggered
     // by a protocol VersionMismatch rejection from the server — see
     // RyuLdnClient::HandleServerPacket). Surface it at LOG_ERROR so it is not
     // drowned in the steady-state LOG_INFO stream above.
     if (new_state == ConnectionState::Error) {
-        LOG_ERROR("Connection state machine entered unrecoverable Error state: "
-                  "%s -> Error (event=%s). Manual disconnect/reconnect required.",
-                  state_to_string(old_state),
-                  event_to_string(event));
+        LOG_ERROR(
+            "Connection state machine entered unrecoverable Error state: "
+            "%s -> Error (event=%s). Manual disconnect/reconnect required.",
+            state_to_string(old_state),
+            event_to_string(event));
     }
 
     // Update retry count on retry attempts
@@ -374,7 +379,8 @@ TransitionResult ConnectionStateMachine::process_event(ConnectionEvent event) {
  *
  * @param callback Function pointer to callback, or nullptr to disable
  */
-void ConnectionStateMachine::set_state_change_callback(StateChangeCallback callback) {
+void ConnectionStateMachine::set_state_change_callback(
+    StateChangeCallback callback) {
     m_callback = callback;
 }
 
@@ -400,8 +406,12 @@ void ConnectionStateMachine::force_state(ConnectionState state) {
     //     vocabulary cannot express the required transition.
     // Any new production caller must justify here why process_event() cannot
     // reach the same state through a valid transition.
-    LOG_WARN("force_state: bypassing state machine validation, forcing state=%d (%s) from state=%d",
-             static_cast<int>(state), state_to_string(state), static_cast<int>(m_state));
+    LOG_WARN(
+        "force_state: bypassing state machine validation, forcing state=%d "
+        "(%s) from state=%d",
+        static_cast<int>(state),
+        state_to_string(state),
+        static_cast<int>(m_state));
     m_state = state;
 }
 
@@ -413,16 +423,26 @@ void ConnectionStateMachine::force_state(ConnectionState state) {
  */
 const char* ConnectionStateMachine::state_to_string(ConnectionState state) {
     switch (state) {
-        case ConnectionState::Disconnected:  return "Disconnected";
-        case ConnectionState::Connecting:    return "Connecting";
-        case ConnectionState::Connected:     return "Connected";
-        case ConnectionState::Handshaking:   return "Handshaking";
-        case ConnectionState::Ready:         return "Ready";
-        case ConnectionState::Backoff:       return "Backoff";
-        case ConnectionState::Retrying:      return "Retrying";
-        case ConnectionState::Disconnecting: return "Disconnecting";
-        case ConnectionState::Error:         return "Error";
-        default:                             return "Unknown";
+        case ConnectionState::Disconnected:
+            return "Disconnected";
+        case ConnectionState::Connecting:
+            return "Connecting";
+        case ConnectionState::Connected:
+            return "Connected";
+        case ConnectionState::Handshaking:
+            return "Handshaking";
+        case ConnectionState::Ready:
+            return "Ready";
+        case ConnectionState::Backoff:
+            return "Backoff";
+        case ConnectionState::Retrying:
+            return "Retrying";
+        case ConnectionState::Disconnecting:
+            return "Disconnecting";
+        case ConnectionState::Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }
 
@@ -434,20 +454,31 @@ const char* ConnectionStateMachine::state_to_string(ConnectionState state) {
  */
 const char* ConnectionStateMachine::event_to_string(ConnectionEvent event) {
     switch (event) {
-        case ConnectionEvent::Connect:           return "Connect";
-        case ConnectionEvent::ConnectSuccess:    return "ConnectSuccess";
-        case ConnectionEvent::ConnectFailed:     return "ConnectFailed";
-        case ConnectionEvent::HandshakeStarted:  return "HandshakeStarted";
-        case ConnectionEvent::HandshakeSuccess:  return "HandshakeSuccess";
-        case ConnectionEvent::HandshakeFailed:   return "HandshakeFailed";
-        case ConnectionEvent::Disconnect:        return "Disconnect";
-        case ConnectionEvent::ConnectionLost:    return "ConnectionLost";
-        case ConnectionEvent::BackoffExpired:    return "BackoffExpired";
-        case ConnectionEvent::RetryRequested:    return "RetryRequested";
-        case ConnectionEvent::FatalError:        return "FatalError";
-        default:                                 return "Unknown";
+        case ConnectionEvent::Connect:
+            return "Connect";
+        case ConnectionEvent::ConnectSuccess:
+            return "ConnectSuccess";
+        case ConnectionEvent::ConnectFailed:
+            return "ConnectFailed";
+        case ConnectionEvent::HandshakeStarted:
+            return "HandshakeStarted";
+        case ConnectionEvent::HandshakeSuccess:
+            return "HandshakeSuccess";
+        case ConnectionEvent::HandshakeFailed:
+            return "HandshakeFailed";
+        case ConnectionEvent::Disconnect:
+            return "Disconnect";
+        case ConnectionEvent::ConnectionLost:
+            return "ConnectionLost";
+        case ConnectionEvent::BackoffExpired:
+            return "BackoffExpired";
+        case ConnectionEvent::RetryRequested:
+            return "RetryRequested";
+        case ConnectionEvent::FatalError:
+            return "FatalError";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ryu_ldn::network
-
+}  // namespace ryu_ldn::network

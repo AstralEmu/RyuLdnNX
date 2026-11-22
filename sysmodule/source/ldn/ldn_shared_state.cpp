@@ -64,8 +64,11 @@ void SharedState::SetLdnPid(u64 pid) {
     std::scoped_lock lk(m_mutex);
     u64 old_pid = m_ldn_pid;
     m_ldn_pid = pid;
-    LOG_INFO("SharedState::SetLdnPid: %lu -> %lu (BSD sessions opened after this will be intercepted)",
-             old_pid, pid);
+    LOG_INFO(
+        "SharedState::SetLdnPid: %lu -> %lu (BSD sessions opened after this "
+        "will be intercepted)",
+        old_pid,
+        pid);
 }
 
 u64 SharedState::GetLdnPid() const {
@@ -88,7 +91,8 @@ void SharedState::LoadLdnWhitelist(const std::vector<u64>& game_ids) {
     for (u64 id : game_ids) {
         m_ldn_games.insert(id);
     }
-    LOG_INFO("SharedState::LoadLdnWhitelist: Loaded %zu games", m_ldn_games.size());
+    LOG_INFO(
+        "SharedState::LoadLdnWhitelist: Loaded %zu games", m_ldn_games.size());
 }
 
 bool SharedState::IsLdnGame(u64 program_id) const {
@@ -119,7 +123,8 @@ CommState SharedState::GetLdnState() const {
 // Session Info
 // =============================================================================
 
-void SharedState::SetSessionInfo(u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host) {
+void SharedState::SetSessionInfo(
+    u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host) {
     std::scoped_lock lk(m_mutex);
     m_node_count = node_count;
     m_max_nodes = max_nodes;
@@ -127,7 +132,8 @@ void SharedState::SetSessionInfo(u8 node_count, u8 max_nodes, u8 local_node_id, 
     m_is_host = is_host;
 }
 
-void SharedState::GetSessionInfo(u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const {
+void SharedState::GetSessionInfo(
+    u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const {
     std::scoped_lock lk(m_mutex);
     node_count = m_node_count;
     max_nodes = m_max_nodes;
@@ -182,13 +188,17 @@ bool SharedState::ConsumeReconnectRequest() {
 
 void SharedState::IncrementSessionCount() {
     u32 old_count = m_active_sessions.fetch_add(1, std::memory_order_relaxed);
-    LOG_INFO("SharedState::IncrementSessionCount: %u -> %u", old_count, old_count + 1);
+    LOG_INFO(
+        "SharedState::IncrementSessionCount: %u -> %u",
+        old_count,
+        old_count + 1);
 }
 
 u32 SharedState::DecrementSessionCount() {
     u32 old_count = m_active_sessions.fetch_sub(1, std::memory_order_acq_rel);
     u32 new_count = old_count - 1;
-    LOG_INFO("SharedState::DecrementSessionCount: %u -> %u", old_count, new_count);
+    LOG_INFO(
+        "SharedState::DecrementSessionCount: %u -> %u", old_count, new_count);
     return new_count;
 }
 
@@ -196,4 +206,4 @@ u32 SharedState::GetActiveSessionCount() const {
     return m_active_sessions.load(std::memory_order_acquire);
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

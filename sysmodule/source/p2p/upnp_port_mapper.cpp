@@ -71,11 +71,7 @@ UpnpPortMapper& UpnpPortMapper::GetInstance() {
 // =============================================================================
 
 UpnpPortMapper::UpnpPortMapper()
-    : m_urls(nullptr)
-    , m_data(nullptr)
-    , m_lan_addr{}
-    , m_available(false)
-{
+    : m_urls(nullptr), m_data(nullptr), m_lan_addr{}, m_available(false) {
     // Allocate UPnP structures on the heap
     // These are C structs from miniupnpc, we manage their lifetime
     //
@@ -92,15 +88,19 @@ UpnpPortMapper::UpnpPortMapper()
     // raw pointer). new/delete pairs are symmetric with the destructor; a
     // unique_ptr would add .get() noise at every C-API boundary without
     // changing the lifetime (single member, single owner, freed in dtor).
-    m_urls = new (std::nothrow) UPNPUrls();  // NOLINT(cppcoreguidelines-owning-memory)
+    m_urls = new (std::nothrow)
+        UPNPUrls();  // NOLINT(cppcoreguidelines-owning-memory)
     if (m_urls == nullptr) {
-        LOG_ERROR("UpnpPortMapper: failed to allocate UPNPUrls (heap exhausted?)");
+        LOG_ERROR(
+            "UpnpPortMapper: failed to allocate UPNPUrls (heap exhausted?)");
         return;
     }
 
-    m_data = new (std::nothrow) IGDdatas();  // NOLINT(cppcoreguidelines-owning-memory)
+    m_data = new (std::nothrow)
+        IGDdatas();  // NOLINT(cppcoreguidelines-owning-memory)
     if (m_data == nullptr) {
-        LOG_ERROR("UpnpPortMapper: failed to allocate IGDdatas (heap exhausted?)");
+        LOG_ERROR(
+            "UpnpPortMapper: failed to allocate IGDdatas (heap exhausted?)");
         delete m_urls;
         m_urls = nullptr;
         return;
@@ -151,15 +151,18 @@ bool UpnpPortMapper::Discover() {
         return true;
     }
 
-    LOG_INFO("UpnpPortMapper::Discover: m_urls=%p, m_data=%p",
-             static_cast<void*>(m_urls), static_cast<void*>(m_data));
+    LOG_INFO(
+        "UpnpPortMapper::Discover: m_urls=%p, m_data=%p",
+        static_cast<void*>(m_urls),
+        static_cast<void*>(m_data));
     ryu_ldn::debug::g_logger.flush();
 
     // Defensive: we should never have null structs after the constructor,
     // but if our heap somehow returned nullptr the crash would manifest as
     // a DABRT here rather than something diagnosable.
     if (m_urls == nullptr || m_data == nullptr) {
-        LOG_ERROR("UpnpPortMapper::Discover: m_urls or m_data is null, aborting");
+        LOG_ERROR(
+            "UpnpPortMapper::Discover: m_urls or m_data is null, aborting");
         ryu_ldn::debug::g_logger.flush();
         return false;
     }
@@ -168,7 +171,9 @@ bool UpnpPortMapper::Discover() {
     ryu_ldn::debug::g_logger.flush();
 
     char* controlURL_value = m_urls->controlURL;
-    LOG_INFO("UpnpPortMapper::Discover: controlURL=%p", static_cast<void*>(controlURL_value));
+    LOG_INFO(
+        "UpnpPortMapper::Discover: controlURL=%p",
+        static_cast<void*>(controlURL_value));
     ryu_ldn::debug::g_logger.flush();
 
     // Clean up any previous failed discovery attempt
@@ -195,20 +200,23 @@ bool UpnpPortMapper::Discover() {
     // reference (including the ones in libminiupnpc.a) to inet_pton-based
     // wrappers in source/network/dns_wrap.cpp, so this call no longer
     // crashes.
-    LOG_INFO("UpnpPortMapper::Discover: calling upnpDiscover (miniupnpc, %u ms timeout)",
-             UPNP_DISCOVERY_TIMEOUT_MS);
+    LOG_INFO(
+        "UpnpPortMapper::Discover: calling upnpDiscover (miniupnpc, %u ms "
+        "timeout)",
+        UPNP_DISCOVERY_TIMEOUT_MS);
     ryu_ldn::debug::g_logger.flush();
     UPNPDev* devlist = upnpDiscover(
         UPNP_DISCOVERY_TIMEOUT_MS,  // 2500ms timeout
-        nullptr,                     // Auto-select interface
-        nullptr,                     // No MiniSSDPd
-        0,                           // Auto port
-        0,                           // IPv4 only
-        2,                           // TTL = 2
-        &error
-    );
-    LOG_INFO("UpnpPortMapper::Discover: upnpDiscover returned devlist=%p, error=%d",
-             static_cast<void*>(devlist), error);
+        nullptr,                    // Auto-select interface
+        nullptr,                    // No MiniSSDPd
+        0,                          // Auto port
+        0,                          // IPv4 only
+        2,                          // TTL = 2
+        &error);
+    LOG_INFO(
+        "UpnpPortMapper::Discover: upnpDiscover returned devlist=%p, error=%d",
+        static_cast<void*>(devlist),
+        error);
     ryu_ldn::debug::g_logger.flush();
 
     if (devlist == nullptr) {
@@ -231,11 +239,10 @@ bool UpnpPortMapper::Discover() {
     //
     int result = UPNP_GetValidIGD(
         devlist,
-        m_urls,              // Output: URLs for control
-        m_data,              // Output: IGD service data
-        m_lan_addr,          // Output: Our local IP address
-        sizeof(m_lan_addr)
-    );
+        m_urls,      // Output: URLs for control
+        m_data,      // Output: IGD service data
+        m_lan_addr,  // Output: Our local IP address
+        sizeof(m_lan_addr));
 
     // Free the device list (we've extracted what we need)
     freeUPNPDevlist(devlist);
@@ -267,8 +274,11 @@ bool UpnpPortMapper::IsAvailable() const {
 // Port Mapping Operations
 // =============================================================================
 
-bool UpnpPortMapper::AddPortMapping(uint16_t internal_port, uint16_t external_port,
-                                     const char* description, int lease_duration) {
+bool UpnpPortMapper::AddPortMapping(
+    uint16_t internal_port,
+    uint16_t external_port,
+    const char* description,
+    int lease_duration) {
     std::scoped_lock lock(m_mutex);
 
     // Verify we have a valid IGD
@@ -285,8 +295,10 @@ bool UpnpPortMapper::AddPortMapping(uint16_t internal_port, uint16_t external_po
     char external_port_str[8];
     char lease_str[16];
 
-    std::snprintf(internal_port_str, sizeof(internal_port_str), "%u", internal_port);
-    std::snprintf(external_port_str, sizeof(external_port_str), "%u", external_port);
+    std::snprintf(
+        internal_port_str, sizeof(internal_port_str), "%u", internal_port);
+    std::snprintf(
+        external_port_str, sizeof(external_port_str), "%u", external_port);
     std::snprintf(lease_str, sizeof(lease_str), "%d", lease_duration);
 
     // ==========================================================================
@@ -332,7 +344,8 @@ bool UpnpPortMapper::DeletePortMapping(uint16_t external_port) {
     // Removes a previously created port mapping
     //
     char external_port_str[8];
-    std::snprintf(external_port_str, sizeof(external_port_str), "%u", external_port);
+    std::snprintf(
+        external_port_str, sizeof(external_port_str), "%u", external_port);
 
     int result = UPNP_DeletePortMapping(
         m_urls->controlURL,
@@ -347,8 +360,8 @@ bool UpnpPortMapper::DeletePortMapping(uint16_t external_port) {
     return result == UPNPCOMMAND_SUCCESS || result == 714;
 }
 
-bool UpnpPortMapper::RefreshPortMapping(uint16_t internal_port, uint16_t external_port,
-                                         const char* description) {
+bool UpnpPortMapper::RefreshPortMapping(
+    uint16_t internal_port, uint16_t external_port, const char* description) {
     // ==========================================================================
     // Lease Renewal Strategy
     // ==========================================================================
@@ -361,7 +374,8 @@ bool UpnpPortMapper::RefreshPortMapping(uint16_t internal_port, uint16_t externa
     // Ryujinx calls this every 50 seconds (PORT_LEASE_RENEW) to maintain
     // the 60-second lease (PORT_LEASE_DURATION).
     //
-    return AddPortMapping(internal_port, external_port, description, PORT_LEASE_DURATION);
+    return AddPortMapping(
+        internal_port, external_port, description, PORT_LEASE_DURATION);
 }
 
 // =============================================================================
@@ -371,7 +385,8 @@ bool UpnpPortMapper::RefreshPortMapping(uint16_t internal_port, uint16_t externa
 bool UpnpPortMapper::GetExternalIPAddress(char* ip_out, size_t ip_len) {
     std::scoped_lock lock(m_mutex);
 
-    if (!m_available || m_urls->controlURL == nullptr || ip_out == nullptr || ip_len == 0) {
+    if (!m_available || m_urls->controlURL == nullptr || ip_out == nullptr ||
+        ip_len == 0) {
         return false;
     }
 
@@ -384,10 +399,7 @@ bool UpnpPortMapper::GetExternalIPAddress(char* ip_out, size_t ip_len) {
     char external_ip[16] = {0};
 
     int result = UPNP_GetExternalIPAddress(
-        m_urls->controlURL,
-        m_data->first.servicetype,
-        external_ip
-    );
+        m_urls->controlURL, m_data->first.servicetype, external_ip);
 
     if (result != UPNPCOMMAND_SUCCESS) {
         return false;
@@ -441,10 +453,8 @@ uint32_t UpnpPortMapper::GetLocalIPv4() const {
     }
 
     // Return in host byte order (most significant byte first)
-    return (static_cast<uint32_t>(a) << 24) |
-           (static_cast<uint32_t>(b) << 16) |
-           (static_cast<uint32_t>(c) << 8)  |
-            static_cast<uint32_t>(d);
+    return (static_cast<uint32_t>(a) << 24) | (static_cast<uint32_t>(b) << 16) |
+           (static_cast<uint32_t>(c) << 8) | static_cast<uint32_t>(d);
 }
 
 // =============================================================================
@@ -473,4 +483,4 @@ void UpnpPortMapper::Cleanup() {
     m_available = false;
 }
 
-} // namespace ams::mitm::p2p
+}  // namespace ams::mitm::p2p

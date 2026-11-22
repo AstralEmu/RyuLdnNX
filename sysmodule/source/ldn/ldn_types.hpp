@@ -50,13 +50,13 @@ constexpr size_t PassphraseLengthMax = 64;
  * Represents the current state of the LDN service for a client.
  */
 enum class CommState : u32 {
-    None = 0,               ///< Not initialized
-    Initialized = 1,        ///< Initialized, ready to open AP or Station
-    AccessPoint = 2,        ///< Access point mode, ready to create network
-    AccessPointCreated = 3, ///< Network created, accepting connections
-    Station = 4,            ///< Station mode, ready to scan/connect
-    StationConnected = 5,   ///< Connected to a network
-    Error = 6               ///< Error state
+    None = 0,                ///< Not initialized
+    Initialized = 1,         ///< Initialized, ready to open AP or Station
+    AccessPoint = 2,         ///< Access point mode, ready to create network
+    AccessPointCreated = 3,  ///< Network created, accepting connections
+    Station = 4,             ///< Station mode, ready to scan/connect
+    StationConnected = 5,    ///< Connected to a network
+    Error = 6                ///< Error state
 };
 
 /**
@@ -65,10 +65,10 @@ enum class CommState : u32 {
  * Used to notify applications of player join/leave events.
  */
 enum class NodeStateChange : u8 {
-    None = 0,                   ///< No change
-    Connect = 1,                ///< Node connected
-    Disconnect = 2,             ///< Node disconnected
-    DisconnectAndConnect = 3    ///< Node disconnected then reconnected
+    None = 0,                 ///< No change
+    Connect = 1,              ///< Node connected
+    Disconnect = 2,           ///< Node disconnected
+    DisconnectAndConnect = 3  ///< Node disconnected then reconnected
 };
 
 /**
@@ -82,8 +82,10 @@ enum ScanFilterFlag : u32 {
     ScanFilterFlag_NetworkType = 1 << 2,
     ScanFilterFlag_Ssid = 1 << 4,
     ScanFilterFlag_SceneId = 1 << 5,
-    ScanFilterFlag_IntentId = ScanFilterFlag_LocalCommunicationId | ScanFilterFlag_SceneId,
-    ScanFilterFlag_NetworkId = ScanFilterFlag_IntentId | ScanFilterFlag_SessionId
+    ScanFilterFlag_IntentId =
+        ScanFilterFlag_LocalCommunicationId | ScanFilterFlag_SceneId,
+    ScanFilterFlag_NetworkId =
+        ScanFilterFlag_IntentId | ScanFilterFlag_SessionId
 };
 
 /**
@@ -123,13 +125,15 @@ struct Ssid {
     char raw[SsidLengthMax + 1];
 
     bool operator==(const Ssid& b) const {
-        if (length != b.length) return false;
+        if (length != b.length)
+            return false;
         return std::memcmp(raw, b.raw, length) == 0;
     }
 
     Ssid& operator=(const char* s) {
         size_t len = std::strlen(s);
-        if (len > SsidLengthMax) len = SsidLengthMax;
+        if (len > SsidLengthMax)
+            len = SsidLengthMax;
         length = static_cast<u8>(len);
         std::memcpy(raw, s, len);
         raw[len] = '\0';
@@ -159,9 +163,9 @@ static_assert(sizeof(SessionId) == 16);
  * Packed to avoid alignment issues in IPC structures.
  */
 struct __attribute__((packed)) IntentId {
-    u64 localCommunicationId;   ///< Title ID / Game ID
+    u64 localCommunicationId;  ///< Title ID / Game ID
     u8 _unk1[2];
-    u16 sceneId;                ///< Scene ID within game
+    u16 sceneId;  ///< Scene ID within game
     u8 _unk2[4];
 };
 static_assert(sizeof(IntentId) == 16);
@@ -172,8 +176,8 @@ static_assert(sizeof(IntentId) == 16);
  * Packed to ensure correct IPC layout.
  */
 struct __attribute__((packed)) NetworkId {
-    IntentId intentId;      ///< 16 bytes
-    SessionId sessionId;    ///< 16 bytes
+    IntentId intentId;    ///< 16 bytes
+    SessionId sessionId;  ///< 16 bytes
 };
 static_assert(sizeof(NetworkId) == 32);
 
@@ -266,7 +270,7 @@ static_assert(sizeof(UserConfig) == 48);
  * @brief Network configuration for creating a network
  */
 struct NetworkConfig {
-    IntentId intentId;          ///< 16 bytes
+    IntentId intentId;  ///< 16 bytes
     u16 channel;
     u8 nodeCountMax;
     u8 _unk1;
@@ -313,11 +317,11 @@ static_assert(sizeof(NodeLatestUpdate) == 8);
  * Matches RyuLdnSessionInfo in overlay/source/ryu_ldn_ipc.h
  */
 struct SessionInfo {
-    u8 node_count;           ///< Number of players in session
-    u8 node_count_max;       ///< Maximum players allowed
-    u8 local_node_id;        ///< Our node ID in the session
-    u8 is_host;              ///< 1 if we are the host, 0 if client
-    u8 reserved[4];          ///< Reserved for future use
+    u8 node_count;      ///< Number of players in session
+    u8 node_count_max;  ///< Maximum players allowed
+    u8 local_node_id;   ///< Our node ID in the session
+    u8 is_host;         ///< 1 if we are the host, 0 if client
+    u8 reserved[4];     ///< Reserved for future use
 };
 static_assert(sizeof(SessionInfo) == 8);
 
@@ -358,11 +362,11 @@ static_assert(sizeof(AddressList) == 96);
  * Packed to prevent compiler from adding extra padding for u64 alignment.
  */
 struct __attribute__((packed)) CreateNetworkPrivateConfig {
-    SecurityConfig securityConfig;      ///< 0x00: 68 bytes
-    SecurityParameter securityParameter; ///< 0x44: 32 bytes
-    UserConfig userConfig;               ///< 0x64: 48 bytes
-    u8 _unk[4];                          ///< 0x94: 4 bytes padding (align NetworkConfig to 8)
-    NetworkConfig networkConfig;         ///< 0x98: 32 bytes
+    SecurityConfig securityConfig;        ///< 0x00: 68 bytes
+    SecurityParameter securityParameter;  ///< 0x44: 32 bytes
+    UserConfig userConfig;                ///< 0x64: 48 bytes
+    u8 _unk[4];  ///< 0x94: 4 bytes padding (align NetworkConfig to 8)
+    NetworkConfig networkConfig;  ///< 0x98: 32 bytes
 };
 static_assert(sizeof(CreateNetworkPrivateConfig) == 184);
 
@@ -380,8 +384,8 @@ struct __attribute__((packed)) ConnectPrivateData {
     UserConfig userConfig;                ///< 0x64: 48 bytes
     u32 localCommunicationVersion;        ///< 0x94: 4 bytes
     u32 option;                           ///< 0x98: 4 bytes
-    u8 _pad[4];                           ///< 0x9C: 4 bytes padding (align NetworkConfig to 8)
-    NetworkConfig networkConfig;          ///< 0xA0: 32 bytes
+    u8 _pad[4];  ///< 0x9C: 4 bytes padding (align NetworkConfig to 8)
+    NetworkConfig networkConfig;  ///< 0xA0: 32 bytes
 };
 static_assert(sizeof(ConnectPrivateData) == 192);
 
@@ -416,12 +420,14 @@ static_assert(sizeof(ScanFilter) == 96);
  * @param info Source network info
  * @param out Destination network config
  */
-inline void NetworkInfo2NetworkConfig(const NetworkInfo* info, NetworkConfig* out) {
+inline void NetworkInfo2NetworkConfig(
+    const NetworkInfo* info, NetworkConfig* out) {
     out->intentId = info->networkId.intentId;
     out->channel = info->common.channel;
     out->nodeCountMax = info->ldn.nodeCountMax;
     out->_unk1 = 0;
-    out->localCommunicationVersion = info->ldn.nodes[0].localCommunicationVersion;
+    out->localCommunicationVersion =
+        info->ldn.nodes[0].localCommunicationVersion;
     std::memset(out->_unk2, 0, sizeof(out->_unk2));
 }
 
@@ -431,7 +437,8 @@ inline void NetworkInfo2NetworkConfig(const NetworkInfo* info, NetworkConfig* ou
  * @param info Source network info
  * @param out Destination security parameter
  */
-inline void NetworkInfo2SecurityParameter(const NetworkInfo* info, SecurityParameter* out) {
+inline void NetworkInfo2SecurityParameter(
+    const NetworkInfo* info, SecurityParameter* out) {
     std::memcpy(out->unkRandom, info->ldn.unkRandom, sizeof(out->unkRandom));
     out->sessionId = info->networkId.sessionId;
 }
@@ -444,15 +451,23 @@ inline void NetworkInfo2SecurityParameter(const NetworkInfo* info, SecurityParam
  */
 inline const char* CommStateToString(CommState state) {
     switch (state) {
-        case CommState::None:               return "None";
-        case CommState::Initialized:        return "Initialized";
-        case CommState::AccessPoint:        return "AccessPoint";
-        case CommState::AccessPointCreated: return "AccessPointCreated";
-        case CommState::Station:            return "Station";
-        case CommState::StationConnected:   return "StationConnected";
-        case CommState::Error:              return "Error";
-        default:                            return "Unknown";
+        case CommState::None:
+            return "None";
+        case CommState::Initialized:
+            return "Initialized";
+        case CommState::AccessPoint:
+            return "AccessPoint";
+        case CommState::AccessPointCreated:
+            return "AccessPointCreated";
+        case CommState::Station:
+            return "Station";
+        case CommState::StationConnected:
+            return "StationConnected";
+        case CommState::Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

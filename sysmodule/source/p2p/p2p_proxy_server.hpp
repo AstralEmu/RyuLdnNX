@@ -65,7 +65,8 @@ class P2pProxySession;
  * @param size Size of data
  * @param user_data User-provided context pointer
  */
-using MasterSendCallback = void(*)(const void* data, size_t size, void* user_data);
+using MasterSendCallback =
+    void (*)(const void* data, size_t size, void* user_data);
 
 /**
  * @brief P2P Proxy Server
@@ -97,8 +98,8 @@ public:
     static constexpr int PRIVATE_PORT_RANGE = 10;
     static constexpr uint16_t PUBLIC_PORT_BASE = 39990;
     static constexpr int PUBLIC_PORT_RANGE = 10;
-    static constexpr int PORT_LEASE_LENGTH = 60;   // seconds
-    static constexpr int PORT_LEASE_RENEW = 50;    // seconds
+    static constexpr int PORT_LEASE_LENGTH = 60;  // seconds
+    static constexpr int PORT_LEASE_RENEW = 50;   // seconds
     static constexpr int AUTH_WAIT_SECONDS = 1;
     static constexpr int MAX_PLAYERS = 8;
 
@@ -111,8 +112,9 @@ public:
      * @param master_callback Callback to send data to master server
      * @param user_data User data passed to callback
      */
-    explicit P2pProxyServer(MasterSendCallback master_callback = nullptr,
-                            void* user_data = nullptr);
+    explicit P2pProxyServer(
+        MasterSendCallback master_callback = nullptr,
+        void* user_data = nullptr);
 
     /**
      * @brief Destructor - stops server and cleans up
@@ -152,12 +154,16 @@ public:
     /**
      * @brief Get the private (local) port
      */
-    uint16_t GetPrivatePort() const { return m_private_port; }
+    uint16_t GetPrivatePort() const {
+        return m_private_port;
+    }
 
     /**
      * @brief Get the public (UPnP) port
      */
-    uint16_t GetPublicPort() const { return m_public_port; }
+    uint16_t GetPublicPort() const {
+        return m_public_port;
+    }
 
     // =========================================================================
     // UPnP NAT Punch
@@ -204,9 +210,10 @@ public:
      * Validates the token, assigns virtual IP, and adds to player list.
      */
     /// @gdb{tag="P2P:SESSION", msg="User registration attempt"}
-    bool TryRegisterUser(P2pProxySession* session,
-                         const ryu_ldn::protocol::ExternalProxyConfig& config,
-                         uint32_t remote_ip);
+    bool TryRegisterUser(
+        P2pProxySession* session,
+        const ryu_ldn::protocol::ExternalProxyConfig& config,
+        uint32_t remote_ip);
 
     /**
      * @brief Apply a master-originated ExternalProxyState change.
@@ -277,11 +284,15 @@ public:
     /// Callback invoked when an inbound proxy packet is destined to the
     /// host (its virtual IP or broadcast). Same shape as the relay-mode
     /// ProxyData handler in ldn_icommunication.cpp.
-    using HostProxyDataCallback = void (*)(uint32_t source_ip, uint16_t source_port,
-                                           uint32_t dest_ip,   uint16_t dest_port,
-                                           ryu_ldn::protocol::ProtocolType protocol,
-                                           const uint8_t* data, size_t data_len,
-                                           void* user_data);
+    using HostProxyDataCallback = void (*)(
+        uint32_t source_ip,
+        uint16_t source_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        ryu_ldn::protocol::ProtocolType protocol,
+        const uint8_t* data,
+        size_t data_len,
+        void* user_data);
 
     /// The host's own virtual IP — packets whose dest matches this value or
     /// the configured broadcast address are dispatched to m_host_data_callback.
@@ -294,9 +305,10 @@ public:
     /// authenticated P2P session. The header's source_ipv4 is filled in with
     /// the host's virtual IP if the caller left it at 0 (mirrors the
     /// "bound on 0.0.0.0" handling in RouteMessage).
-    bool BroadcastFromHost(ryu_ldn::protocol::ProxyDataHeader& header,
-                           const uint8_t* data, size_t data_len);
-
+    bool BroadcastFromHost(
+        ryu_ldn::protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_len);
 
     // =========================================================================
     // Proxy Message Routing
@@ -306,30 +318,35 @@ public:
      * @brief Handle ProxyData message from a session
      */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy data handled (server)"}
-    void HandleProxyData(P2pProxySession* sender,
-                         ryu_ldn::protocol::ProxyDataHeader& header,
-                         const uint8_t* data, size_t data_len);
+    void HandleProxyData(
+        P2pProxySession* sender,
+        ryu_ldn::protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_len);
 
     /**
      * @brief Handle ProxyConnect message from a session
      */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy connect handled (server)"}
-    void HandleProxyConnect(P2pProxySession* sender,
-                            ryu_ldn::protocol::ProxyConnectRequest& request);
+    void HandleProxyConnect(
+        P2pProxySession* sender,
+        ryu_ldn::protocol::ProxyConnectRequest& request);
 
     /**
      * @brief Handle ProxyConnectReply message from a session
      */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy connect reply handled (server)"}
-    void HandleProxyConnectReply(P2pProxySession* sender,
-                                  ryu_ldn::protocol::ProxyConnectResponse& response);
+    void HandleProxyConnectReply(
+        P2pProxySession* sender,
+        ryu_ldn::protocol::ProxyConnectResponse& response);
 
     /**
      * @brief Handle ProxyDisconnect message from a session
      */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy disconnect handled (server)"}
-    void HandleProxyDisconnect(P2pProxySession* sender,
-                               ryu_ldn::protocol::ProxyDisconnectMessage& message);
+    void HandleProxyDisconnect(
+        P2pProxySession* sender,
+        ryu_ldn::protocol::ProxyDisconnectMessage& message);
 
     /**
      * @brief Called when a session disconnects
@@ -364,11 +381,12 @@ private:
      * @return false if the message was rejected (spoofed source) and nothing
      *         was routed; the caller must then drop it entirely
      */
-    template<typename SendFunc>
+    template <typename SendFunc>
     /// @gdb{tag="P2P:ROUTE", msg="Message routed"}
-    bool RouteMessage(P2pProxySession* sender,
-                      ryu_ldn::protocol::ProxyInfo& info,
-                      SendFunc send_func);
+    bool RouteMessage(
+        P2pProxySession* sender,
+        ryu_ldn::protocol::ProxyInfo& info,
+        SendFunc send_func);
 
     /**
      * @brief Notify master server of connection state change
@@ -445,7 +463,8 @@ private:
 
     // Waiting tokens for auth
     static constexpr int MAX_WAITING_TOKENS = 16;
-    ryu_ldn::protocol::ExternalProxyToken m_waiting_tokens[MAX_WAITING_TOKENS]{};
+    ryu_ldn::protocol::ExternalProxyToken
+        m_waiting_tokens[MAX_WAITING_TOKENS]{};
     int m_waiting_token_count;
     os::ConditionVariable m_token_cv;
 
@@ -494,27 +513,37 @@ public:
     /**
      * @brief Get assigned virtual IP
      */
-    uint32_t GetVirtualIpAddress() const { return m_virtual_ip; }
+    uint32_t GetVirtualIpAddress() const {
+        return m_virtual_ip;
+    }
 
     /**
      * @brief Set virtual IP (called after auth)
      */
-    void SetVirtualIp(uint32_t ip) { m_virtual_ip = ip; }
+    void SetVirtualIp(uint32_t ip) {
+        m_virtual_ip = ip;
+    }
 
     /**
      * @brief Get remote (physical) IP
      */
-    uint32_t GetRemoteIp() const { return m_remote_ip; }
+    uint32_t GetRemoteIp() const {
+        return m_remote_ip;
+    }
 
     /**
      * @brief Check if session is authenticated
      */
-    bool IsAuthenticated() const { return m_authenticated; }
+    bool IsAuthenticated() const {
+        return m_authenticated;
+    }
 
     /**
      * @brief Mark as authenticated
      */
-    void SetAuthenticated(bool auth) { m_authenticated = auth; }
+    void SetAuthenticated(bool auth) {
+        m_authenticated = auth;
+    }
 
     // =========================================================================
     // Network Operations
@@ -543,7 +572,9 @@ public:
     /**
      * @brief Check if session is connected
      */
-    bool IsConnected() const { return m_connected; }
+    bool IsConnected() const {
+        return m_connected;
+    }
 
 private:
     // Friend for thread entry point
@@ -564,16 +595,22 @@ private:
 
     // Protocol handlers
     /// @gdb{tag="P2P:ROUTE", msg="External proxy configured"}
-    void HandleExternalProxy(const ryu_ldn::protocol::ExternalProxyConfig& config);
+    void HandleExternalProxy(
+        const ryu_ldn::protocol::ExternalProxyConfig& config);
     /// @gdb{tag="P2P:ROUTE", msg="Proxy data handled (session)"}
-    void HandleProxyData(const ryu_ldn::protocol::ProxyDataHeader& header,
-                         const uint8_t* data, size_t data_len);
+    void HandleProxyData(
+        const ryu_ldn::protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_len);
     /// @gdb{tag="P2P:ROUTE", msg="Proxy connect handled (session)"}
-    void HandleProxyConnect(const ryu_ldn::protocol::ProxyConnectRequest& request);
+    void HandleProxyConnect(
+        const ryu_ldn::protocol::ProxyConnectRequest& request);
     /// @gdb{tag="P2P:ROUTE", msg="Proxy connect reply handled (session)"}
-    void HandleProxyConnectReply(const ryu_ldn::protocol::ProxyConnectResponse& response);
+    void HandleProxyConnectReply(
+        const ryu_ldn::protocol::ProxyConnectResponse& response);
     /// @gdb{tag="P2P:ROUTE", msg="Proxy disconnect handled (session)"}
-    void HandleProxyDisconnect(const ryu_ldn::protocol::ProxyDisconnectMessage& message);
+    void HandleProxyDisconnect(
+        const ryu_ldn::protocol::ProxyDisconnectMessage& message);
 
     // =========================================================================
     // Member Variables
@@ -594,7 +631,8 @@ private:
     // fixed in P2pProxyServer earlier. Keep it as a slot index so that
     // ~P2pProxySession can return the slot to the pool.
     os::ThreadType m_recv_thread{};
-    int m_stack_slot;            ///< Index in the global session-stack pool, -1 if unallocated
+    int m_stack_slot;  ///< Index in the global session-stack pool, -1 if
+                       ///< unallocated
 
     // Set by SessionRecvThreadEntry just before the thread function returns,
     // so the server's reaper can spot a zombie session and free it without
@@ -609,4 +647,4 @@ private:
     friend class P2pProxyServer;  // for the reaper path
 };
 
-} // namespace ams::mitm::p2p
+}  // namespace ams::mitm::p2p

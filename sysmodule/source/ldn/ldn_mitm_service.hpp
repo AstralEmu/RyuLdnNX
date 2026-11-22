@@ -22,13 +22,13 @@ namespace ams::mitm::ldn {
  * @brief LDN MITM Service implementation
  *
  * This class implements the ldn:u MITM service. When a game opens ldn:u,
- * this service intercepts the calls and creates our custom ICommunicationService
- * instead of the original Nintendo service.
+ * this service intercepts the calls and creates our custom
+ * ICommunicationService instead of the original Nintendo service.
  */
 class LdnMitMService : public sf::MitmServiceImplBase {
 private:
     ncm::ProgramId m_program_id;  ///< Program ID of the client process
-    u64 m_client_pid;             ///< Process ID of the client (for BSD MITM tracking)
+    u64 m_client_pid;  ///< Process ID of the client (for BSD MITM tracking)
 
 public:
     /**
@@ -38,7 +38,8 @@ public:
      * @param c MITM process info for the client
      */
     /// @gdb{tag="LDN:LIFECYCLE", msg="MitMService constructor"}
-    LdnMitMService(std::shared_ptr<::Service>&& s, const sm::MitmProcessInfo& c);
+    LdnMitMService(
+        std::shared_ptr<::Service>&& s, const sm::MitmProcessInfo& c);
 
     /**
      * @brief Destructor
@@ -89,4 +90,4 @@ public:
 // Verify interface compliance
 static_assert(ams::mitm::ldn::IsILdnMitMService<LdnMitMService>);
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

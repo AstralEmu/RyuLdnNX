@@ -1,0 +1,30 @@
+# Formatting rules for every C/C++ file of the project (sysmodule, overlay,
+# tests). Enforced by `make style` / scripts/style.py; applied by
+# `make style-fix`. Same 80-column budget as the other projects of the owner.
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++20
+ColumnLimit: 80
+IndentWidth: 4
+ContinuationIndentWidth: 4
+AccessModifierOffset: -4
+TabWidth: 4
+UseTab: Never
+PointerAlignment: Left
+DerivePointerAlignment: false
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+BinPackArguments: false
+BinPackParameters: false
+AlignAfterOpenBracket: AlwaysBreak
+# Include order is meaningful on the Horizon toolchain (libnx before
+# stratosphere): never reorder.
+SortIncludes: Never
+IncludeBlocks: Preserve
+# Comments are reflowed to the column limit; scripts/gdb_codegen.py folds the
+# resulting multi-line @gdb{} annotations back together when it parses them.
+ReflowComments: true

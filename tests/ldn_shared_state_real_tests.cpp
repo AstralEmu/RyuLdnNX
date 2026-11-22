@@ -49,10 +49,14 @@ TEST(deactivating_the_game_resets_the_runtime_state_but_not_the_ldn_pid) {
     s.SetLastRtt(42);
     s.SetGameActive(false, 0);
 
-    u8 n = 1, m = 1, l = 1; bool h = true;
+    u8 n = 1, m = 1, l = 1;
+    bool h = true;
     s.GetSessionInfo(n, m, l, h);
     ASSERT_TRUE(s.GetLdnState() == CommState::None);
-    ASSERT_EQ(n, 0); ASSERT_EQ(m, 0); ASSERT_EQ(l, 0); ASSERT_FALSE(h);
+    ASSERT_EQ(n, 0);
+    ASSERT_EQ(m, 0);
+    ASSERT_EQ(l, 0);
+    ASSERT_FALSE(h);
     ASSERT_EQ(s.GetLastRtt(), static_cast<u32>(0));
     ASSERT_EQ(s.GetLdnPid(), static_cast<u64>(7));
 }
@@ -107,15 +111,21 @@ TEST(ldn_state_is_stored_as_given) {
 TEST(session_info_round_trips_through_both_accessors) {
     SharedState& s = fresh();
     s.SetSessionInfo(5, 8, 3, true);
-    u8 n = 0, m = 0, l = 0; bool h = false;
+    u8 n = 0, m = 0, l = 0;
+    bool h = false;
     s.GetSessionInfo(n, m, l, h);
-    ASSERT_EQ(n, 5); ASSERT_EQ(m, 8); ASSERT_EQ(l, 3); ASSERT_TRUE(h);
+    ASSERT_EQ(n, 5);
+    ASSERT_EQ(m, 8);
+    ASSERT_EQ(l, 3);
+    ASSERT_TRUE(h);
     auto info = s.GetSessionInfoStruct();
     ASSERT_EQ(info.node_count, 5);
     ASSERT_EQ(info.node_count_max, 8);
     ASSERT_EQ(info.local_node_id, 3);
     ASSERT_EQ(info.is_host, 1);
-    for (u8 b : info.reserved) { ASSERT_EQ(b, 0); }
+    for (u8 b : info.reserved) {
+        ASSERT_EQ(b, 0);
+    }
     s.SetSessionInfo(1, 2, 0, false);
     ASSERT_EQ(s.GetSessionInfoStruct().is_host, 0);
 }

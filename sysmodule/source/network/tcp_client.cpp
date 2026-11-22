@@ -72,7 +72,7 @@ bool TcpClient::initialize() {
  */
 TcpClient::TcpClient(TcpClient&& other) noexcept
     : m_socket(std::move(other.m_socket))
-    
+
 {
     // Copy buffer state manually if needed (for simplicity, just reset)
     other.m_recv_buffer.reset();
@@ -106,7 +106,8 @@ TcpClient& TcpClient::operator=(TcpClient&& other) noexcept {
  * Establishes TCP connection and prepares for protocol communication.
  * The receive buffer is reset to ensure clean state.
  */
-ClientResult TcpClient::connect(const char* host, uint16_t port, uint32_t timeout_ms) {
+ClientResult TcpClient::connect(
+    const char* host, uint16_t port, uint32_t timeout_ms) {
     LOG_VERBOSE("TcpClient::connect(%s, %u, %u)", host, port, timeout_ms);
 
     // Check if already connected
@@ -119,7 +120,8 @@ ClientResult TcpClient::connect(const char* host, uint16_t port, uint32_t timeou
     SocketResult result = m_socket.connect(host, port, timeout_ms);
 
     if (result != SocketResult::Success) {
-        LOG_VERBOSE("Socket connect failed: %s", socket_result_to_string(result));
+        LOG_VERBOSE(
+            "Socket connect failed: %s", socket_result_to_string(result));
         return socket_to_client_result(result);
     }
 
@@ -161,7 +163,8 @@ bool TcpClient::is_connected() const {
  * Encodes the packet with header and sends over the socket.
  * Uses internal send buffer for encoding.
  */
-ClientResult TcpClient::send_packet(protocol::PacketId type, const void* payload, size_t payload_size) {
+ClientResult TcpClient::send_packet(
+    protocol::PacketId type, const void* payload, size_t payload_size) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
@@ -176,15 +179,15 @@ ClientResult TcpClient::send_packet(protocol::PacketId type, const void* payload
         type,
         static_cast<const uint8_t*>(payload),
         payload_size,
-        encoded_size
-    );
+        encoded_size);
 
     if (encode_result != protocol::EncodeResult::Success) {
         return ClientResult::EncodingError;
     }
 
     // Send the encoded packet
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -202,35 +205,42 @@ ClientResult TcpClient::send_raw(const void* data, size_t size) {
     }
 
     // Send the already-encoded data directly
-    return socket_to_client_result(m_socket.send_all(static_cast<const uint8_t*>(data), size));
+    return socket_to_client_result(
+        m_socket.send_all(static_cast<const uint8_t*>(data), size));
 }
 
 /**
  * @brief Send Initialize message
  */
-ClientResult TcpClient::send_initialize(const protocol::InitializeMessage& msg) {
+ClientResult TcpClient::send_initialize(
+    const protocol::InitializeMessage& msg) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    const size_t encoded_size = encode_fixed(protocol::PacketId::Initialize, msg);
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    const size_t encoded_size =
+        encode_fixed(protocol::PacketId::Initialize, msg);
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
  * @brief Send Passphrase message
  */
-ClientResult TcpClient::send_passphrase(const protocol::PassphraseMessage& msg) {
+ClientResult TcpClient::send_passphrase(
+    const protocol::PassphraseMessage& msg) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    const size_t encoded_size = encode_fixed(protocol::PacketId::Passphrase, msg);
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    const size_t encoded_size =
+        encode_fixed(protocol::PacketId::Passphrase, msg);
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -258,29 +268,34 @@ ClientResult TcpClient::send_ping(const protocol::PingMessage& msg) {
     std::scoped_lock send_lock(m_send_mutex);
 
     const size_t encoded_size = encode_fixed(protocol::PacketId::Ping, msg);
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
  * @brief Send Disconnect message
  */
-ClientResult TcpClient::send_disconnect(const protocol::DisconnectMessage& msg) {
+ClientResult TcpClient::send_disconnect(
+    const protocol::DisconnectMessage& msg) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    const size_t encoded_size = encode_fixed(protocol::PacketId::Disconnect, msg);
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    const size_t encoded_size =
+        encode_fixed(protocol::PacketId::Disconnect, msg);
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
  * @brief Send CreateAccessPoint request
  */
-ClientResult TcpClient::send_create_access_point(const protocol::CreateAccessPointRequest& request,
-                                                   const uint8_t* advertise_data,
-                                                   size_t advertise_size) {
+ClientResult TcpClient::send_create_access_point(
+    const protocol::CreateAccessPointRequest& request,
+    const uint8_t* advertise_data,
+    size_t advertise_size) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
@@ -294,7 +309,8 @@ ClientResult TcpClient::send_create_access_point(const protocol::CreateAccessPoi
     // advertise blob made the host's lobby spin forever because
     // NetworkInfo.advertiseDataSize came back as 0.
     const size_t total_payload_size = sizeof(request) + advertise_size;
-    if (total_payload_size > sizeof(m_send_buffer) - sizeof(protocol::LdnHeader)) {
+    if (total_payload_size >
+        sizeof(m_send_buffer) - sizeof(protocol::LdnHeader)) {
         return ClientResult::BufferTooSmall;
     }
 
@@ -315,8 +331,13 @@ ClientResult TcpClient::send_create_access_point(const protocol::CreateAccessPoi
         offset += advertise_size;
     }
 
-    LOG_INFO("send_create_access_point: header=%zu, payload=%zu, advertise=%zu, total=%zu bytes",
-             sizeof(protocol::LdnHeader), sizeof(request), advertise_size, offset);
+    LOG_INFO(
+        "send_create_access_point: header=%zu, payload=%zu, advertise=%zu, "
+        "total=%zu bytes",
+        sizeof(protocol::LdnHeader),
+        sizeof(request),
+        advertise_size,
+        offset);
 
     // Hex-dump the payload in 32-byte rows so we can confirm the bytes
     // the server sees on the wire match what we intend (struct order /
@@ -324,28 +345,37 @@ ClientResult TcpClient::send_create_access_point(const protocol::CreateAccessPoi
     // 32-byte row in "%02X " form is 96 chars, so each row fits cleanly.
     //
     // Offset map of CreateAccessPoint in the buffer:
-    //   [0..11]    : LdnHeader                 (magic RLDN, type=02, version=01, padding, data_size LE)
-    //   [12..79]   : SecurityConfig (0x44)     (SecurityMode u16, PassphraseSize u16, Passphrase[64])
-    //   [80..127]  : UserConfig (0x30)         (UserName[33], Unknown[15])
-    //   [128..159] : NetworkConfig (0x20)      (IntentId[16], channel u16, NodeCountMax u8, reserved, LocalCommVersion u16, reserved[10])
-    //   [160..199] : RyuNetworkConfig (0x28)
+    //   [0..11]    : LdnHeader                 (magic RLDN, type=02,
+    //   version=01, padding, data_size LE) [12..79]   : SecurityConfig (0x44)
+    //   (SecurityMode u16, PassphraseSize u16, Passphrase[64]) [80..127]  :
+    //   UserConfig (0x30)         (UserName[33], Unknown[15]) [128..159] :
+    //   NetworkConfig (0x20)      (IntentId[16], channel u16, NodeCountMax u8,
+    //   reserved, LocalCommVersion u16, reserved[10]) [160..199] :
+    //   RyuNetworkConfig (0x28)
     //                  160..175 GameVersion[16]
     //                  176..191 PrivateIp[16]
-    //                  192..195 AddressFamily       (uint32 LE, expect 02 00 00 00)
-    //                  196..197 ExternalProxyPort   (uint16 LE, 39990 = F6 9C)
-    //                  198..199 InternalProxyPort   (uint16 LE, 39990 = F6 9C)
+    //                  192..195 AddressFamily       (uint32 LE, expect 02 00 00
+    //                  00) 196..197 ExternalProxyPort   (uint16 LE, 39990 = F6
+    //                  9C) 198..199 InternalProxyPort   (uint16 LE, 39990 = F6
+    //                  9C)
     //   [200..]    : advertise_data
     {
         const size_t dump_len = std::min<size_t>(offset, 224);
         constexpr size_t RowBytes = 32;
-        for (size_t row_start = 0; row_start < dump_len; row_start += RowBytes) {
-            const size_t row_len = std::min<size_t>(RowBytes, dump_len - row_start);
+        for (size_t row_start = 0; row_start < dump_len;
+             row_start += RowBytes) {
+            const size_t row_len =
+                std::min<size_t>(RowBytes, dump_len - row_start);
             char hex[(3 * RowBytes) + 1] = {};
             for (size_t i = 0; i < row_len; i++) {
-                std::snprintf(hex + (i * 3), 4, "%02X ", m_send_buffer[row_start + i]);
+                std::snprintf(
+                    hex + (i * 3), 4, "%02X ", m_send_buffer[row_start + i]);
             }
-            LOG_INFO("send_create_access_point wire [%03zu..%03zu]: %s",
-                     row_start, row_start + row_len - 1, hex);
+            LOG_INFO(
+                "send_create_access_point wire [%03zu..%03zu]: %s",
+                row_start,
+                row_start + row_len - 1,
+                hex);
         }
         ryu_ldn::debug::g_logger.flush();
     }
@@ -363,32 +393,64 @@ ClientResult TcpClient::send_connect(const protocol::ConnectRequest& request) {
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    const size_t encoded_size = encode_fixed(protocol::PacketId::Connect, request);
+    const size_t encoded_size =
+        encode_fixed(protocol::PacketId::Connect, request);
 
-    LOG_INFO("send_connect: header=%zu, payload=%zu, total=%zu bytes",
-             sizeof(protocol::LdnHeader), sizeof(request), encoded_size);
+    LOG_INFO(
+        "send_connect: header=%zu, payload=%zu, total=%zu bytes",
+        sizeof(protocol::LdnHeader),
+        sizeof(request),
+        encoded_size);
 
     // Dump first 32 bytes of packet for debugging
-    LOG_INFO("send_connect packet[0-31]: %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X",
-             m_send_buffer[0], m_send_buffer[1], m_send_buffer[2], m_send_buffer[3],
-             m_send_buffer[4], m_send_buffer[5], m_send_buffer[6], m_send_buffer[7],
-             m_send_buffer[8], m_send_buffer[9], m_send_buffer[10], m_send_buffer[11],
-             m_send_buffer[12], m_send_buffer[13], m_send_buffer[14], m_send_buffer[15],
-             m_send_buffer[16], m_send_buffer[17], m_send_buffer[18], m_send_buffer[19],
-             m_send_buffer[20], m_send_buffer[21], m_send_buffer[22], m_send_buffer[23],
-             m_send_buffer[24], m_send_buffer[25], m_send_buffer[26], m_send_buffer[27],
-             m_send_buffer[28], m_send_buffer[29], m_send_buffer[30], m_send_buffer[31]);
+    LOG_INFO(
+        "send_connect packet[0-31]: %02X%02X%02X%02X %02X%02X%02X%02X "
+        "%02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X "
+        "%02X%02X%02X%02X %02X%02X%02X%02X",
+        m_send_buffer[0],
+        m_send_buffer[1],
+        m_send_buffer[2],
+        m_send_buffer[3],
+        m_send_buffer[4],
+        m_send_buffer[5],
+        m_send_buffer[6],
+        m_send_buffer[7],
+        m_send_buffer[8],
+        m_send_buffer[9],
+        m_send_buffer[10],
+        m_send_buffer[11],
+        m_send_buffer[12],
+        m_send_buffer[13],
+        m_send_buffer[14],
+        m_send_buffer[15],
+        m_send_buffer[16],
+        m_send_buffer[17],
+        m_send_buffer[18],
+        m_send_buffer[19],
+        m_send_buffer[20],
+        m_send_buffer[21],
+        m_send_buffer[22],
+        m_send_buffer[23],
+        m_send_buffer[24],
+        m_send_buffer[25],
+        m_send_buffer[26],
+        m_send_buffer[27],
+        m_send_buffer[28],
+        m_send_buffer[29],
+        m_send_buffer[30],
+        m_send_buffer[31]);
 
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
  * @brief Send CreateAccessPointPrivate request
  */
 ClientResult TcpClient::send_create_access_point_private(
-        const protocol::CreateAccessPointPrivateRequest& request,
-        const uint8_t* advertise_data,
-        size_t advertise_size) {
+    const protocol::CreateAccessPointPrivateRequest& request,
+    const uint8_t* advertise_data,
+    size_t advertise_size) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
@@ -397,7 +459,8 @@ ClientResult TcpClient::send_create_access_point_private(
 
     // Encode header + request + advertise data
     size_t total_payload_size = sizeof(request) + advertise_size;
-    if (total_payload_size > sizeof(m_send_buffer) - sizeof(protocol::LdnHeader)) {
+    if (total_payload_size >
+        sizeof(m_send_buffer) - sizeof(protocol::LdnHeader)) {
         return ClientResult::BufferTooSmall;
     }
 
@@ -405,7 +468,8 @@ ClientResult TcpClient::send_create_access_point_private(
     protocol::LdnHeader header{};
     header.magic = protocol::PROTOCOL_MAGIC;
     header.version = protocol::PROTOCOL_VERSION;
-    header.type = static_cast<uint8_t>(protocol::PacketId::CreateAccessPointPrivate);
+    header.type =
+        static_cast<uint8_t>(protocol::PacketId::CreateAccessPointPrivate);
     header.data_size = static_cast<uint32_t>(total_payload_size);
 
     // Copy header
@@ -428,15 +492,18 @@ ClientResult TcpClient::send_create_access_point_private(
 /**
  * @brief Send ConnectPrivate request
  */
-ClientResult TcpClient::send_connect_private(const protocol::ConnectPrivateRequest& request) {
+ClientResult TcpClient::send_connect_private(
+    const protocol::ConnectPrivateRequest& request) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    const size_t encoded_size = encode_fixed(protocol::PacketId::ConnectPrivate, request);
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    const size_t encoded_size =
+        encode_fixed(protocol::PacketId::ConnectPrivate, request);
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -450,7 +517,8 @@ ClientResult TcpClient::send_scan(const protocol::ScanFilterFull& filter) {
     std::scoped_lock send_lock(m_send_mutex);
 
     const size_t encoded_size = encode_fixed(protocol::PacketId::Scan, filter);
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
@@ -459,8 +527,10 @@ ClientResult TcpClient::send_scan(const protocol::ScanFilterFull& filter) {
  * Proxy data packets are special - they combine header + variable data.
  * We need to encode them together in the send buffer.
  */
-ClientResult TcpClient::send_proxy_data(const protocol::ProxyDataHeader& header,
-                                         const uint8_t* data, size_t data_size) {
+ClientResult TcpClient::send_proxy_data(
+    const protocol::ProxyDataHeader& header,
+    const uint8_t* data,
+    size_t data_size) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
@@ -469,34 +539,43 @@ ClientResult TcpClient::send_proxy_data(const protocol::ProxyDataHeader& header,
 
     size_t encoded_size = 0;
     protocol::EncodeResult encode_result = protocol::encode_proxy_data(
-        m_send_buffer, sizeof(m_send_buffer),
-        header.info, data, data_size, encoded_size);
+        m_send_buffer,
+        sizeof(m_send_buffer),
+        header.info,
+        data,
+        data_size,
+        encoded_size);
 
     if (encode_result != protocol::EncodeResult::Success) {
         return ClientResult::EncodingError;
     }
 
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
  * @brief Send SetAcceptPolicy request
  */
-ClientResult TcpClient::send_set_accept_policy(const protocol::SetAcceptPolicyRequest& request) {
+ClientResult TcpClient::send_set_accept_policy(
+    const protocol::SetAcceptPolicyRequest& request) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    const size_t encoded_size = encode_fixed(protocol::PacketId::SetAcceptPolicy, request);
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    const size_t encoded_size =
+        encode_fixed(protocol::PacketId::SetAcceptPolicy, request);
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 /**
  * @brief Send SetAdvertiseData request
  */
-ClientResult TcpClient::send_set_advertise_data(const uint8_t* data, size_t size) {
+ClientResult TcpClient::send_set_advertise_data(
+    const uint8_t* data, size_t size) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
@@ -521,7 +600,8 @@ ClientResult TcpClient::send_set_advertise_data(const uint8_t* data, size_t size
     }
 
     size_t total_size = sizeof(header) + size;
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, total_size));
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, total_size));
 }
 
 /**
@@ -534,8 +614,10 @@ ClientResult TcpClient::send_reject(const protocol::RejectRequest& request) {
 
     std::scoped_lock send_lock(m_send_mutex);
 
-    const size_t encoded_size = encode_fixed(protocol::PacketId::Reject, request);
-    return socket_to_client_result(m_socket.send_all(m_send_buffer, encoded_size));
+    const size_t encoded_size =
+        encode_fixed(protocol::PacketId::Reject, request);
+    return socket_to_client_result(
+        m_socket.send_all(m_send_buffer, encoded_size));
 }
 
 // =============================================================================
@@ -551,10 +633,12 @@ ClientResult TcpClient::send_reject(const protocol::RejectRequest& request) {
  * 3. Repeat until complete packet or timeout
  * 4. Extract and return the packet
  */
-ClientResult TcpClient::receive_packet(protocol::PacketId& type,
-                                        void* payload, size_t payload_buffer_size,
-                                        size_t& payload_size,
-                                        int32_t timeout_ms) {
+ClientResult TcpClient::receive_packet(
+    protocol::PacketId& type,
+    void* payload,
+    size_t payload_buffer_size,
+    size_t& payload_size,
+    int32_t timeout_ms) {
     if (!m_socket.is_connected()) {
         return ClientResult::NotConnected;
     }
@@ -579,7 +663,8 @@ ClientResult TcpClient::receive_packet(protocol::PacketId& type,
     // check_complete_packet), so the header can be read without re-validation.
     protocol::LdnHeader header{};
     std::memcpy(&header, m_recv_buffer.data(), sizeof(header));
-    const size_t packet_size = sizeof(header) + static_cast<size_t>(header.data_size);
+    const size_t packet_size =
+        sizeof(header) + static_cast<size_t>(header.data_size);
 
     // Check if payload fits in user buffer
     auto packet_payload_size = static_cast<size_t>(header.data_size);
@@ -592,7 +677,10 @@ ClientResult TcpClient::receive_packet(protocol::PacketId& type,
 
     // Extract the payload (skip header)
     if (packet_payload_size > 0) {
-        std::memcpy(payload, m_recv_buffer.data() + sizeof(protocol::LdnHeader), packet_payload_size);
+        std::memcpy(
+            payload,
+            m_recv_buffer.data() + sizeof(protocol::LdnHeader),
+            packet_payload_size);
     }
 
     // Consume the packet from buffer
@@ -635,8 +723,9 @@ template <typename T>
 size_t TcpClient::encode_fixed(protocol::PacketId type, const T& payload) {
     // Compile-time proof replaces a runtime "buffer too small" branch that
     // could never be taken: every fixed-size message fits the send buffer.
-    static_assert(sizeof(protocol::LdnHeader) + sizeof(T) <= sizeof(m_send_buffer),
-                  "fixed-size message does not fit the TcpClient send buffer");
+    static_assert(
+        sizeof(protocol::LdnHeader) + sizeof(T) <= sizeof(m_send_buffer),
+        "fixed-size message does not fit the TcpClient send buffer");
     size_t offset = protocol::encode_header(m_send_buffer, type, sizeof(T));
     std::memcpy(m_send_buffer + offset, &payload, sizeof(T));
     return offset + sizeof(T);
@@ -699,7 +788,8 @@ ClientResult TcpClient::receive_into_buffer(int32_t timeout_ms) {
     uint8_t temp_buffer[4096];
     size_t received = 0;
 
-    SocketResult recv_result = m_socket.recv(temp_buffer, sizeof(temp_buffer), received, timeout_ms);
+    SocketResult recv_result =
+        m_socket.recv(temp_buffer, sizeof(temp_buffer), received, timeout_ms);
 
     if (recv_result == SocketResult::WouldBlock) {
         // No data available right now - not an error
@@ -716,18 +806,22 @@ ClientResult TcpClient::receive_into_buffer(int32_t timeout_ms) {
     }
 
     if (recv_result != SocketResult::Success) {
-        LOG_INFO("recv: non-success socket result %d", static_cast<int>(recv_result));
+        LOG_INFO(
+            "recv: non-success socket result %d",
+            static_cast<int>(recv_result));
         return socket_to_client_result(recv_result);
     }
 
     // Append received data to packet buffer
-    protocol::BufferResult append_result = m_recv_buffer.append(temp_buffer, received);
+    protocol::BufferResult append_result =
+        m_recv_buffer.append(temp_buffer, received);
     if (append_result != protocol::BufferResult::Success) {
-        LOG_WARN("recv: recv_buffer.append failed (overflow, %zu bytes)", received);
+        LOG_WARN(
+            "recv: recv_buffer.append failed (overflow, %zu bytes)", received);
         return ClientResult::InvalidPacket;
     }
 
     return ClientResult::Success;
 }
 
-} // namespace ryu_ldn::network
+}  // namespace ryu_ldn::network

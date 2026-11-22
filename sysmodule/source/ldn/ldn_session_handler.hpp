@@ -66,13 +66,13 @@ namespace ryu_ldn::ldn {
  * Maps to Ryujinx NetworkState enum.
  */
 enum class LdnSessionState : uint8_t {
-    None = 0,               ///< Not initialized
-    Initialized = 1,        ///< Server handshake complete, idle
-    Station = 2,            ///< Joined a network as client
-    StationConnected = 3,   ///< Connected as station (for compatibility)
-    AccessPoint = 4,        ///< Created a network as host
-    AccessPointCreated = 5, ///< Access point active (for compatibility)
-    Error = 6               ///< Error state
+    None = 0,                ///< Not initialized
+    Initialized = 1,         ///< Server handshake complete, idle
+    Station = 2,             ///< Joined a network as client
+    StationConnected = 3,    ///< Connected as station (for compatibility)
+    AccessPoint = 4,         ///< Created a network as host
+    AccessPointCreated = 5,  ///< Access point active (for compatibility)
+    Error = 6                ///< Error state
 };
 
 /**
@@ -83,14 +83,22 @@ enum class LdnSessionState : uint8_t {
  */
 inline const char* ldn_session_state_to_string(LdnSessionState state) {
     switch (state) {
-        case LdnSessionState::None:               return "None";
-        case LdnSessionState::Initialized:        return "Initialized";
-        case LdnSessionState::Station:            return "Station";
-        case LdnSessionState::StationConnected:   return "StationConnected";
-        case LdnSessionState::AccessPoint:        return "AccessPoint";
-        case LdnSessionState::AccessPointCreated: return "AccessPointCreated";
-        case LdnSessionState::Error:              return "Error";
-        default:                                  return "Unknown";
+        case LdnSessionState::None:
+            return "None";
+        case LdnSessionState::Initialized:
+            return "Initialized";
+        case LdnSessionState::Station:
+            return "Station";
+        case LdnSessionState::StationConnected:
+            return "StationConnected";
+        case LdnSessionState::AccessPoint:
+            return "AccessPoint";
+        case LdnSessionState::AccessPointCreated:
+            return "AccessPointCreated";
+        case LdnSessionState::Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }
 
@@ -104,7 +112,8 @@ inline const char* ldn_session_state_to_string(LdnSessionState state) {
  * @param old_state Previous state
  * @param new_state New state
  */
-using SessionStateCallback = void (*)(LdnSessionState old_state, LdnSessionState new_state);
+using SessionStateCallback =
+    void (*)(LdnSessionState old_state, LdnSessionState new_state);
 
 /**
  * @brief Callback for network info updates
@@ -218,7 +227,8 @@ public:
      *
      * @param callback Function to call when network info changes
      */
-    /// @gdb{tag="LDN:SESSION_HANDLER", msg="Network updated callback registered"}
+    /// @gdb{tag="LDN:SESSION_HANDLER", msg="Network updated callback
+    /// registered"}
     void set_network_updated_callback(NetworkUpdatedCallback callback);
 
     /**
@@ -234,7 +244,8 @@ public:
      *
      * @param callback Function to call when scan ends
      */
-    /// @gdb{tag="LDN:SESSION_HANDLER", msg="Scan completed callback registered"}
+    /// @gdb{tag="LDN:SESSION_HANDLER", msg="Scan completed callback
+    /// registered"}
     void set_scan_completed_callback(ScanCompletedCallback callback);
 
     /**
@@ -267,7 +278,8 @@ public:
      * @param callback Function to call when accept policy changes
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="Accept policy callback registered"}
-    void set_accept_policy_changed_callback(AcceptPolicyChangedCallback callback);
+    void set_accept_policy_changed_callback(
+        AcceptPolicyChangedCallback callback);
 
     // ========================================================================
     // Packet Handlers
@@ -283,8 +295,9 @@ public:
      * @param msg Initialize message with assigned values
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_initialize"}
-    void handle_initialize(const protocol::LdnHeader& header,
-                           const protocol::InitializeMessage& msg);
+    void handle_initialize(
+        const protocol::LdnHeader& header,
+        const protocol::InitializeMessage& msg);
 
     /**
      * @brief Handle Connected packet (join success)
@@ -296,8 +309,8 @@ public:
      * @param info Network info of joined network
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_connected"}
-    void handle_connected(const protocol::LdnHeader& header,
-                          const protocol::NetworkInfo& info);
+    void handle_connected(
+        const protocol::LdnHeader& header, const protocol::NetworkInfo& info);
 
     /**
      * @brief Handle SyncNetwork packet
@@ -309,8 +322,8 @@ public:
      * @param info Updated network info
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_sync_network"}
-    void handle_sync_network(const protocol::LdnHeader& header,
-                             const protocol::NetworkInfo& info);
+    void handle_sync_network(
+        const protocol::LdnHeader& header, const protocol::NetworkInfo& info);
 
     /**
      * @brief Handle ScanReply packet
@@ -321,8 +334,8 @@ public:
      * @param info Network found
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_scan_reply"}
-    void handle_scan_reply(const protocol::LdnHeader& header,
-                           const protocol::NetworkInfo& info);
+    void handle_scan_reply(
+        const protocol::LdnHeader& header, const protocol::NetworkInfo& info);
 
     /**
      * @brief Handle ScanReplyEnd packet
@@ -344,8 +357,8 @@ public:
      * @return true if echo should be sent (server requested), false otherwise
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_ping"}
-    bool handle_ping(const protocol::LdnHeader& header,
-                     const protocol::PingMessage& msg);
+    bool handle_ping(
+        const protocol::LdnHeader& header, const protocol::PingMessage& msg);
 
     /**
      * @brief Handle Disconnect packet
@@ -356,8 +369,9 @@ public:
      * @param msg Disconnect message
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_disconnect"}
-    void handle_disconnect(const protocol::LdnHeader& header,
-                           const protocol::DisconnectMessage& msg);
+    void handle_disconnect(
+        const protocol::LdnHeader& header,
+        const protocol::DisconnectMessage& msg);
 
     /**
      * @brief Handle NetworkError packet
@@ -368,8 +382,9 @@ public:
      * @param msg Error message
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_network_error"}
-    void handle_network_error(const protocol::LdnHeader& header,
-                              const protocol::NetworkErrorMessage& msg);
+    void handle_network_error(
+        const protocol::LdnHeader& header,
+        const protocol::NetworkErrorMessage& msg);
 
     /**
      * @brief Handle Reject packet
@@ -381,8 +396,8 @@ public:
      * @param req Reject request with node_id and reason
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_reject"}
-    void handle_reject(const protocol::LdnHeader& header,
-                       const protocol::RejectRequest& req);
+    void handle_reject(
+        const protocol::LdnHeader& header, const protocol::RejectRequest& req);
 
     /**
      * @brief Handle RejectReply packet
@@ -404,8 +419,9 @@ public:
      * @param req Accept policy request
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="handle_set_accept_policy"}
-    void handle_set_accept_policy(const protocol::LdnHeader& header,
-                                   const protocol::SetAcceptPolicyRequest& req);
+    void handle_set_accept_policy(
+        const protocol::LdnHeader& header,
+        const protocol::SetAcceptPolicyRequest& req);
 
     // ========================================================================
     // State Queries
@@ -417,7 +433,9 @@ public:
      * @return Current state
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="get_state"}
-    LdnSessionState get_state() const { return m_state; }
+    LdnSessionState get_state() const {
+        return m_state;
+    }
 
     /**
      * @brief Check if in an active session
@@ -433,7 +451,9 @@ public:
      * @return true if we created the access point
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="is_host"}
-    bool is_host() const { return m_is_host; }
+    bool is_host() const {
+        return m_is_host;
+    }
 
     /**
      * @brief Get current node count
@@ -455,7 +475,9 @@ public:
      *
      * @return Our node ID (0-7), or -1 if not in session
      */
-    int8_t get_local_node_id() const { return m_local_node_id; }
+    int8_t get_local_node_id() const {
+        return m_local_node_id;
+    }
 
     /**
      * @brief Set our local node ID
@@ -471,35 +493,45 @@ public:
      *
      * @return Reference to stored network info (may be stale if not in session)
      */
-    const protocol::NetworkInfo& get_network_info() const { return m_network_info; }
+    const protocol::NetworkInfo& get_network_info() const {
+        return m_network_info;
+    }
 
     /**
      * @brief Get last ping ID received from server
      *
      * @return Last ping ID for echo response
      */
-    uint8_t get_last_ping_id() const { return m_last_ping_id; }
+    uint8_t get_last_ping_id() const {
+        return m_last_ping_id;
+    }
 
     /**
      * @brief Get assigned session ID
      *
      * @return Session ID assigned by server
      */
-    const protocol::SessionId& get_session_id() const { return m_session_id; }
+    const protocol::SessionId& get_session_id() const {
+        return m_session_id;
+    }
 
     /**
      * @brief Get assigned MAC address
      *
      * @return MAC address assigned by server
      */
-    const protocol::MacAddress& get_mac_address() const { return m_mac_address; }
+    const protocol::MacAddress& get_mac_address() const {
+        return m_mac_address;
+    }
 
     /**
      * @brief Get current accept policy
      *
      * @return Current accept policy (only valid for host)
      */
-    protocol::AcceptPolicy get_accept_policy() const { return m_accept_policy; }
+    protocol::AcceptPolicy get_accept_policy() const {
+        return m_accept_policy;
+    }
 
     // ========================================================================
     // Actions
@@ -526,16 +558,16 @@ private:
     // Internal State
     // ========================================================================
 
-    LdnSessionState m_state;                    ///< Current session state
-    bool m_is_host;                             ///< Whether we are the host
-    int8_t m_local_node_id;                     ///< Our node ID (-1 if not assigned)
-    uint8_t m_last_ping_id;                     ///< Last ping ID from server
+    LdnSessionState m_state;  ///< Current session state
+    bool m_is_host;           ///< Whether we are the host
+    int8_t m_local_node_id;   ///< Our node ID (-1 if not assigned)
+    uint8_t m_last_ping_id;   ///< Last ping ID from server
 
-    protocol::SessionId m_session_id;           ///< Assigned session ID
-    protocol::MacAddress m_mac_address;         ///< Assigned MAC address
-    protocol::NetworkInfo m_network_info;       ///< Current network info
+    protocol::SessionId m_session_id;      ///< Assigned session ID
+    protocol::MacAddress m_mac_address;    ///< Assigned MAC address
+    protocol::NetworkInfo m_network_info;  ///< Current network info
 
-    protocol::AcceptPolicy m_accept_policy;      ///< Current accept policy
+    protocol::AcceptPolicy m_accept_policy;  ///< Current accept policy
 
     // Callbacks
     SessionStateCallback m_state_callback;
@@ -559,4 +591,4 @@ private:
     void set_state(LdnSessionState new_state);
 };
 
-} // namespace ryu_ldn::ldn
+}  // namespace ryu_ldn::ldn

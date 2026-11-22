@@ -1,6 +1,7 @@
 /**
  * @file client.hpp
- * @brief RyuLdn Network Client - High-level client for ryu_ldn server communication
+ * @brief RyuLdn Network Client - High-level client for ryu_ldn server
+ * communication
  *
  * This module provides the main network client that assembles all lower-level
  * components (Socket, TcpClient, ConnectionStateMachine, ReconnectManager) into
@@ -45,7 +46,8 @@
  *     printf("State: %s\n", ConnectionStateMachine::state_to_string(state));
  * });
  *
- * client.set_packet_callback([](PacketId id, const uint8_t* data, size_t size) {
+ * client.set_packet_callback([](PacketId id, const uint8_t* data, size_t size)
+ * {
  *     // Handle received packet
  * });
  *
@@ -94,16 +96,16 @@ namespace network {
  * @brief Result codes for RyuLdnClient operations
  */
 enum class ClientOpResult : uint8_t {
-    Success,            ///< Operation completed successfully
-    NotConnected,       ///< Not connected to server
-    NotReady,           ///< Connected but handshake not complete
-    AlreadyConnected,   ///< Already connected
-    ConnectionFailed,   ///< Connection attempt failed
-    SendFailed,         ///< Failed to send packet
-    InvalidState,       ///< Invalid state for this operation
-    Timeout,            ///< Operation timed out
-    ProtocolError,      ///< Protocol error occurred
-    InternalError       ///< Internal error
+    Success,           ///< Operation completed successfully
+    NotConnected,      ///< Not connected to server
+    NotReady,          ///< Connected but handshake not complete
+    AlreadyConnected,  ///< Already connected
+    ConnectionFailed,  ///< Connection attempt failed
+    SendFailed,        ///< Failed to send packet
+    InvalidState,      ///< Invalid state for this operation
+    Timeout,           ///< Operation timed out
+    ProtocolError,     ///< Protocol error occurred
+    InternalError      ///< Internal error
 };
 
 /**
@@ -115,7 +117,8 @@ enum class ClientOpResult : uint8_t {
  * @param new_state New state
  * @param user_data User-provided context pointer
  */
-using ClientStateCallback = void (*)(ConnectionState old_state, ConnectionState new_state, void* user_data);
+using ClientStateCallback = void (*)(
+    ConnectionState old_state, ConnectionState new_state, void* user_data);
 
 /**
  * @brief Callback type for received packets
@@ -127,10 +130,11 @@ using ClientStateCallback = void (*)(ConnectionState old_state, ConnectionState 
  * @param size Size of payload in bytes
  * @param user_data User-provided context pointer
  */
-using ClientPacketCallback = void (*)(protocol::PacketId packet_id,
-                                       const uint8_t* data,
-                                       size_t size,
-                                       void* user_data);
+using ClientPacketCallback = void (*)(
+    protocol::PacketId packet_id,
+    const uint8_t* data,
+    size_t size,
+    void* user_data);
 
 /**
  * @brief Configuration for RyuLdnClient
@@ -245,7 +249,9 @@ public:
      * @param config Client configuration
      * @param tcp_client Injected TCP client implementation
      */
-    RyuLdnClient(const RyuLdnClientConfig& config, std::unique_ptr<ITcpClient> tcp_client);
+    RyuLdnClient(
+        const RyuLdnClientConfig& config,
+        std::unique_ptr<ITcpClient> tcp_client);
 
     /**
      * @brief Destructor - ensures clean disconnect
@@ -281,7 +287,9 @@ public:
      * @return Reference to current configuration
      */
     /// @gdb{tag="NETWORK:CONNECTION", msg="get_config"}
-    const RyuLdnClientConfig& get_config() const { return m_config; }
+    const RyuLdnClientConfig& get_config() const {
+        return m_config;
+    }
 
     // ========================================================================
     // Callbacks
@@ -292,8 +300,10 @@ public:
      *
      * @param callback Function to call on state change (nullptr to disable)
      */
-    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="set_state_callback: cb=%p user_data=%p", args="$x1, $x2"}
-    void set_state_callback(ClientStateCallback callback, void* user_data = nullptr);
+    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="set_state_callback: cb=%p
+    /// user_data=%p", args="$x1, $x2"}
+    void set_state_callback(
+        ClientStateCallback callback, void* user_data = nullptr);
 
     /**
      * @brief Set callback for received packets
@@ -301,8 +311,10 @@ public:
      * @param callback Function to call on packet receive (nullptr to disable)
      * @param user_data User-provided context pointer passed to callback
      */
-    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="set_packet_callback: cb=%p user_data=%p", args="$x1, $x2"}
-    void set_packet_callback(ClientPacketCallback callback, void* user_data = nullptr);
+    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="set_packet_callback: cb=%p
+    /// user_data=%p", args="$x1, $x2"}
+    void set_packet_callback(
+        ClientPacketCallback callback, void* user_data = nullptr);
 
     // ========================================================================
     // Connection Management
@@ -354,7 +366,8 @@ public:
      *
      * @param current_time_ms Current time in milliseconds (for timing)
      */
-    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="update: state=%d tick", args="$x1"}
+    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="update: state=%d tick",
+    /// args="$x1"}
     void update(uint64_t current_time_ms);
 
     // ========================================================================
@@ -443,9 +456,10 @@ public:
      * @return ClientOpResult indicating success or failure
      */
     /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="send_create_access_point"}
-    ClientOpResult send_create_access_point(const protocol::CreateAccessPointRequest& request,
-                                            const uint8_t* advertise_data = nullptr,
-                                            size_t advertise_size = 0);
+    ClientOpResult send_create_access_point(
+        const protocol::CreateAccessPointRequest& request,
+        const uint8_t* advertise_data = nullptr,
+        size_t advertise_size = 0);
 
     /**
      * @brief Send request to connect to a network
@@ -462,7 +476,8 @@ public:
      * @param request Access point parameters with security settings
      * @return ClientOpResult indicating success or failure
      */
-    ClientOpResult send_create_access_point_private(const protocol::CreateAccessPointPrivateRequest& request);
+    ClientOpResult send_create_access_point_private(
+        const protocol::CreateAccessPointPrivateRequest& request);
 
     /**
      * @brief Send request to connect to a private network
@@ -470,7 +485,8 @@ public:
      * @param request Connection parameters with security settings
      * @return ClientOpResult indicating success or failure
      */
-    ClientOpResult send_connect_private(const protocol::ConnectPrivateRequest& request);
+    ClientOpResult send_connect_private(
+        const protocol::ConnectPrivateRequest& request);
 
     /**
      * @brief Send proxy data to another client
@@ -481,9 +497,10 @@ public:
      * @return ClientOpResult indicating success or failure
      */
     /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="send_proxy_data"}
-    ClientOpResult send_proxy_data(const protocol::ProxyDataHeader& header,
-                                    const uint8_t* data,
-                                    size_t size);
+    ClientOpResult send_proxy_data(
+        const protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t size);
 
     /**
      * @brief Send a ping to keep connection alive
@@ -502,7 +519,8 @@ public:
      * @param ping_id The ping ID from the server's ping request
      * @return ClientOpResult indicating success or failure
      */
-    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="send_ping_response: ping_id=%u", args="$x1"}
+    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="send_ping_response:
+    /// ping_id=%u", args="$x1"}
     ClientOpResult send_ping_response(uint8_t ping_id);
 
     /**
@@ -545,7 +563,8 @@ public:
      * @param reason Disconnect reason
      * @return ClientOpResult indicating success or failure
      */
-    ClientOpResult send_reject(uint32_t node_id, protocol::DisconnectReason reason);
+    ClientOpResult send_reject(
+        uint32_t node_id, protocol::DisconnectReason reason);
 
     /**
      * @brief Send raw pre-encoded packet
@@ -565,42 +584,43 @@ private:
     // ========================================================================
 
     // --- Configuration & dependencies ---------------------------------------
-    RyuLdnClientConfig m_config;            ///< Client configuration
-    std::unique_ptr<ITcpClient> m_tcp_client; ///< Low-level TCP client (injected)
-    ConnectionStateMachine m_state_machine; ///< Connection state tracking
-    ReconnectManager m_reconnect_manager;   ///< Reconnection backoff logic
+    RyuLdnClientConfig m_config;  ///< Client configuration
+    std::unique_ptr<ITcpClient>
+        m_tcp_client;  ///< Low-level TCP client (injected)
+    ConnectionStateMachine m_state_machine;  ///< Connection state tracking
+    ReconnectManager m_reconnect_manager;    ///< Reconnection backoff logic
 
     // --- Callbacks (set by user, invoked from update() / try_connect) ------
-    ClientStateCallback m_state_callback;   ///< User callback for state changes
+    ClientStateCallback m_state_callback;  ///< User callback for state changes
     void* m_state_callback_user_data{};    ///< User data for state callback
-    ClientPacketCallback m_packet_callback; ///< User callback for packets
-    void* m_packet_callback_user_data;      ///< User data for packet callback
+    ClientPacketCallback m_packet_callback;  ///< User callback for packets
+    void* m_packet_callback_user_data;       ///< User data for packet callback
 
     // --- Timing (all in ms, anchored on the value passed to update()) ------
-    uint64_t m_last_ping_time_ms;           ///< Time of last ping sent
-    uint64_t m_backoff_start_time_ms;       ///< Start of current backoff period
-    uint32_t m_current_backoff_delay_ms;    ///< Current backoff delay
-    uint64_t m_last_update_time_ms;        ///< Time from last update() call
+    uint64_t m_last_ping_time_ms;         ///< Time of last ping sent
+    uint64_t m_backoff_start_time_ms;     ///< Start of current backoff period
+    uint32_t m_current_backoff_delay_ms;  ///< Current backoff delay
+    uint64_t m_last_update_time_ms;       ///< Time from last update() call
 
     // --- Identity (assigned by server during handshake) --------------------
-    protocol::SessionId m_session_id;       ///< Our session ID (from server)
-    protocol::MacAddress m_mac_address;     ///< Our MAC address
+    protocol::SessionId m_session_id;    ///< Our session ID (from server)
+    protocol::MacAddress m_mac_address;  ///< Our MAC address
 
     // --- Handshake state ---------------------------------------------------
-    bool m_handshake_sent;                  ///< Whether Initialize has been sent
-    bool m_initialized;                     ///< Whether socket system is initialized
+    bool m_handshake_sent;  ///< Whether Initialize has been sent
+    bool m_initialized;     ///< Whether socket system is initialized
 
     // --- Handshake timing & timeout ----------------------------------------
-    uint64_t m_handshake_start_time_ms;     ///< Time when handshake was initiated
-    uint32_t m_handshake_timeout_ms;        ///< Handshake timeout (default: 5000ms)
-    protocol::NetworkErrorCode m_last_error_code; ///< Last error from server
+    uint64_t m_handshake_start_time_ms;  ///< Time when handshake was initiated
+    uint32_t m_handshake_timeout_ms;  ///< Handshake timeout (default: 5000ms)
+    protocol::NetworkErrorCode m_last_error_code;  ///< Last error from server
 
     // --- Ping / keepalive tracking -----------------------------------------
-    uint64_t m_last_pong_time_ms;           ///< Time when last pong was received
-    uint32_t m_ping_timeout_ms;             ///< Ping response timeout (default: 10000ms)
-    uint32_t m_pending_ping_count;          ///< Number of pings without response
-    uint64_t m_last_rtt_ms;                 ///< Last measured round-trip time
-    uint8_t m_ping_id;                      ///< Incrementing ping ID for tracking
+    uint64_t m_last_pong_time_ms;  ///< Time when last pong was received
+    uint32_t m_ping_timeout_ms;    ///< Ping response timeout (default: 10000ms)
+    uint32_t m_pending_ping_count;  ///< Number of pings without response
+    uint64_t m_last_rtt_ms;         ///< Last measured round-trip time
+    uint8_t m_ping_id;              ///< Incrementing ping ID for tracking
 
     // ========================================================================
     // Internal Methods
@@ -609,9 +629,10 @@ private:
     /**
      * @brief Handle state machine callback
      */
-    static void state_machine_callback(ConnectionState old_state,
-                                        ConnectionState new_state,
-                                        ConnectionEvent event);
+    static void state_machine_callback(
+        ConnectionState old_state,
+        ConnectionState new_state,
+        ConnectionEvent event);
 
     /**
      * @brief Attempt TCP connection
@@ -642,13 +663,15 @@ private:
     /**
      * @brief Process received packets
      */
-    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="process_packets: draining receive buffer"}
+    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="process_packets: draining
+    /// receive buffer"}
     void process_packets();
 
     /**
      * @brief Handle a single received packet
      */
-    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="handle_packet: id=%u size=%zu", args="$x1, $x2"}
+    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="handle_packet: id=%u size=%zu",
+    /// args="$x1, $x2"}
     void handle_packet(protocol::PacketId id, const uint8_t* data, size_t size);
 
     /**
@@ -667,10 +690,10 @@ private:
      * @param size Packet size
      * @return true if handshake completed (success or failure)
      */
-    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="process_handshake_response: id=%u", args="$x1"}
-    bool process_handshake_response(protocol::PacketId id,
-                                     const uint8_t* data,
-                                     size_t size);
+    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="process_handshake_response:
+    /// id=%u", args="$x1"}
+    bool process_handshake_response(
+        protocol::PacketId id, const uint8_t* data, size_t size);
 
     /**
      * @brief Check if handshake has timed out
@@ -695,7 +718,8 @@ private:
      * the start time will be deferred to the first is_backoff_expired()
      * call which has a valid current_time_ms.
      */
-    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="start_backoff: delay=%u retry=%u", args="$x0, $x1"}
+    /// @gdb{tag="NETWORK:STATE_CALLBACKS", msg="start_backoff: delay=%u
+    /// retry=%u", args="$x0, $x1"}
     void start_backoff();
 
     /**
@@ -759,5 +783,5 @@ private:
 /// @gdb{tag="NETWORK:PACKET", msg="client_op_result_to_string"}
 const char* client_op_result_to_string(ClientOpResult result);
 
-} // namespace network
-} // namespace ryu_ldn
+}  // namespace network
+}  // namespace ryu_ldn

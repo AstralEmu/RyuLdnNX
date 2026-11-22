@@ -87,7 +87,8 @@ public:
      * @param active True if a game is using LDN
      * @param process_id Process ID of the game (0 when inactive)
      */
-    /// @gdb{tag="LDN:STATE", msg="SetGameActive: active=%d pid=%lu", args="$x1, $x2"}
+    /// @gdb{tag="LDN:STATE", msg="SetGameActive: active=%d pid=%lu", args="$x1,
+    /// $x2"}
     void SetGameActive(bool active, u64 process_id);
 
     /**
@@ -205,8 +206,10 @@ public:
      * @param local_node_id This node's ID
      * @param is_host True if this node is the host
      */
-    /// @gdb{tag="LDN:STATE", msg="SetSessionInfo: node_count=%d max=%d local=%d is_host=%d", args="$x1, $x2, $x3, $x4"}
-    void SetSessionInfo(u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host);
+    /// @gdb{tag="LDN:STATE", msg="SetSessionInfo: node_count=%d max=%d local=%d
+    /// is_host=%d", args="$x1, $x2, $x3, $x4"}
+    void SetSessionInfo(
+        u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host);
 
     /**
      * @brief Get session information
@@ -217,7 +220,8 @@ public:
      * @param[out] is_host True if this node is the host
      */
     /// @gdb{tag="LDN:STATE", msg="GetSessionInfo"}
-    void GetSessionInfo(u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const;
+    void GetSessionInfo(
+        u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const;
 
     /**
      * @brief Get session information as struct
@@ -314,15 +318,17 @@ private:
     bool m_game_active = false;
     u64 m_process_id = 0;
     u64 m_ldn_pid = 0;  ///< PID that opened ldn:u (set before Initialize)
-    CommState m_ldn_state = static_cast<CommState>(0); // CommState::None
+    CommState m_ldn_state = static_cast<CommState>(0);  // CommState::None
     u8 m_node_count = 0;
     u8 m_max_nodes = 0;
     u8 m_local_node_id = 0;
     bool m_is_host = false;
     u32 m_last_rtt_ms = 0;
     bool m_reconnect_requested = false;
-    std::atomic<u32> m_active_sessions{0};  ///< Active IPC session count (ldn:u + bsd:u)
-    std::unordered_set<u64> m_ldn_games;  ///< Set of program_ids with LDN support
+    std::atomic<u32> m_active_sessions{
+        0};  ///< Active IPC session count (ldn:u + bsd:u)
+    std::unordered_set<u64>
+        m_ldn_games;  ///< Set of program_ids with LDN support
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

@@ -27,9 +27,7 @@ T get(ams::Result (*fn)(Out<T>)) {
     T value{};
     // ASSERT_* returns from the enclosing function: run it in a void lambda so
     // the value is still handed back after a failure has been recorded.
-    [&] {
-        ASSERT_TRUE(fn(Out<T>(value)).IsSuccess());
-    }();
+    [&] { ASSERT_TRUE(fn(Out<T>(value)).IsSuccess()); }();
     return value;
 }
 
@@ -42,7 +40,12 @@ SharedState& fresh_state() {
 
 std::string temp_config_path() {
     char path[128];
-    std::snprintf(path, sizeof(path), "/tmp/ldn_config_service_%d_%d.ini", static_cast<int>(std::rand()), 0);
+    std::snprintf(
+        path,
+        sizeof(path),
+        "/tmp/ldn_config_service_%d_%d.ini",
+        static_cast<int>(std::rand()),
+        0);
     return path;
 }
 
@@ -50,8 +53,12 @@ std::string temp_config_path() {
 
 // Must stay first: it relies on ConfigManager::Initialize() not having run yet.
 TEST(saving_or_reloading_before_the_config_is_initialized_reports_io_error) {
-    ASSERT_TRUE(get<ConfigResult>(&LdnConfigService::SaveConfig) == ConfigResult::IoError);
-    ASSERT_TRUE(get<ConfigResult>(&LdnConfigService::ReloadConfig) == ConfigResult::IoError);
+    ASSERT_TRUE(
+        get<ConfigResult>(&LdnConfigService::SaveConfig) ==
+        ConfigResult::IoError);
+    ASSERT_TRUE(
+        get<ConfigResult>(&LdnConfigService::ReloadConfig) ==
+        ConfigResult::IoError);
 }
 
 TEST(the_service_can_be_built_with_or_without_a_parent) {
@@ -69,7 +76,10 @@ TEST(the_version_is_a_terminated_string) {
 
 TEST(the_connection_status_follows_the_ldn_state) {
     SharedState& s = fresh_state();
-    struct Case { CommState state; ConnectionStatus expected; };
+    struct Case {
+        CommState state;
+        ConnectionStatus expected;
+    };
     const Case cases[] = {
         {CommState::None, ConnectionStatus::Disconnected},
         {CommState::Error, ConnectionStatus::Disconnected},
@@ -81,7 +91,9 @@ TEST(the_connection_status_follows_the_ldn_state) {
     };
     for (const Case& c : cases) {
         s.SetLdnState(c.state);
-        ASSERT_TRUE(get<ConnectionStatus>(&LdnConfigService::GetConnectionStatus) == c.expected);
+        ASSERT_TRUE(
+            get<ConnectionStatus>(&LdnConfigService::GetConnectionStatus) ==
+            c.expected);
     }
 }
 
@@ -89,7 +101,9 @@ TEST(the_raw_ldn_state_and_rtt_come_from_the_shared_state) {
     SharedState& s = fresh_state();
     s.SetLdnState(CommState::Station);
     s.SetLastRtt(77);
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetLdnState), static_cast<u32>(CommState::Station));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetLdnState),
+        static_cast<u32>(CommState::Station));
     ASSERT_EQ(get<u32>(&LdnConfigService::GetLastRtt), static_cast<u32>(77));
 }
 
@@ -112,7 +126,9 @@ TEST(force_reconnect_requests_a_reconnection) {
 TEST(the_config_is_initialized_on_a_missing_file_and_reloads_as_not_found) {
     const std::string path = temp_config_path();
     ASSERT_TRUE(ConfigManager::Instance().Initialize(path.c_str()));
-    ASSERT_TRUE(get<ConfigResult>(&LdnConfigService::ReloadConfig) == ConfigResult::FileNotFound);
+    ASSERT_TRUE(
+        get<ConfigResult>(&LdnConfigService::ReloadConfig) ==
+        ConfigResult::FileNotFound);
 }
 
 TEST(setting_the_server_address_stores_it_and_reconnects_only_when_in_session) {
@@ -138,13 +154,16 @@ TEST(setting_the_server_address_stores_it_and_reconnects_only_when_in_session) {
 
 TEST(debug_settings_round_trip) {
     ASSERT_TRUE(LdnConfigService::SetDebugEnabled(1).IsSuccess());
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetDebugEnabled), static_cast<u32>(1));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetDebugEnabled), static_cast<u32>(1));
     ASSERT_EQ(get<u32>(&LdnConfigService::GetLogToFile), static_cast<u32>(1));
     ASSERT_TRUE(LdnConfigService::SetDebugEnabled(0).IsSuccess());
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetDebugEnabled), static_cast<u32>(0));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetDebugEnabled), static_cast<u32>(0));
 
     ASSERT_TRUE(LdnConfigService::SetLogToFile(5).IsSuccess());
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetDebugEnabled), static_cast<u32>(1));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetDebugEnabled), static_cast<u32>(1));
     ASSERT_TRUE(LdnConfigService::SetLogToFile(0).IsSuccess());
     ASSERT_EQ(get<u32>(&LdnConfigService::GetLogToFile), static_cast<u32>(0));
 
@@ -168,36 +187,58 @@ TEST(ldn_enabled_and_passphrase_round_trip) {
 }
 
 TEST(the_fixed_network_settings_keep_their_documented_values) {
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetConnectTimeout), static_cast<u32>(5000));
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetPingInterval), static_cast<u32>(0));
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetReconnectDelay), static_cast<u32>(1000));
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetMaxReconnectAttempts), static_cast<u32>(0));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetConnectTimeout), static_cast<u32>(5000));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetPingInterval), static_cast<u32>(0));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetReconnectDelay), static_cast<u32>(1000));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetMaxReconnectAttempts),
+        static_cast<u32>(0));
     // The setters exist for IPC compatibility and change nothing.
     ASSERT_TRUE(LdnConfigService::SetConnectTimeout(1).IsSuccess());
     ASSERT_TRUE(LdnConfigService::SetPingInterval(1).IsSuccess());
     ASSERT_TRUE(LdnConfigService::SetReconnectDelay(1).IsSuccess());
     ASSERT_TRUE(LdnConfigService::SetMaxReconnectAttempts(1).IsSuccess());
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetConnectTimeout), static_cast<u32>(5000));
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetPingInterval), static_cast<u32>(0));
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetReconnectDelay), static_cast<u32>(1000));
-    ASSERT_EQ(get<u32>(&LdnConfigService::GetMaxReconnectAttempts), static_cast<u32>(0));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetConnectTimeout), static_cast<u32>(5000));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetPingInterval), static_cast<u32>(0));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetReconnectDelay), static_cast<u32>(1000));
+    ASSERT_EQ(
+        get<u32>(&LdnConfigService::GetMaxReconnectAttempts),
+        static_cast<u32>(0));
 }
 
 TEST(save_then_reload_report_success_and_keep_the_saved_values) {
     ASSERT_TRUE(LdnConfigService::SetDebugLevel(1).IsSuccess());
-    ASSERT_TRUE(get<ConfigResult>(&LdnConfigService::SaveConfig) == ConfigResult::Success);
+    ASSERT_TRUE(
+        get<ConfigResult>(&LdnConfigService::SaveConfig) ==
+        ConfigResult::Success);
     ASSERT_TRUE(LdnConfigService::SetDebugLevel(3).IsSuccess());
-    ASSERT_TRUE(get<ConfigResult>(&LdnConfigService::ReloadConfig) == ConfigResult::Success);
+    ASSERT_TRUE(
+        get<ConfigResult>(&LdnConfigService::ReloadConfig) ==
+        ConfigResult::Success);
     ASSERT_EQ(get<u32>(&LdnConfigService::GetDebugLevel), static_cast<u32>(1));
 }
 
 TEST(every_config_file_result_maps_to_its_ipc_counterpart) {
     using Src = ryu_ldn::config::ConfigResult;
-    ASSERT_TRUE(LdnConfigService::ToIpcResult(Src::Success) == ConfigResult::Success);
-    ASSERT_TRUE(LdnConfigService::ToIpcResult(Src::FileNotFound) == ConfigResult::FileNotFound);
-    ASSERT_TRUE(LdnConfigService::ToIpcResult(Src::ParseError) == ConfigResult::ParseError);
-    ASSERT_TRUE(LdnConfigService::ToIpcResult(Src::IoError) == ConfigResult::IoError);
-    ASSERT_TRUE(LdnConfigService::ToIpcResult(static_cast<Src>(99)) == ConfigResult::IoError);
+    ASSERT_TRUE(
+        LdnConfigService::ToIpcResult(Src::Success) == ConfigResult::Success);
+    ASSERT_TRUE(
+        LdnConfigService::ToIpcResult(Src::FileNotFound) ==
+        ConfigResult::FileNotFound);
+    ASSERT_TRUE(
+        LdnConfigService::ToIpcResult(Src::ParseError) ==
+        ConfigResult::ParseError);
+    ASSERT_TRUE(
+        LdnConfigService::ToIpcResult(Src::IoError) == ConfigResult::IoError);
+    ASSERT_TRUE(
+        LdnConfigService::ToIpcResult(static_cast<Src>(99)) ==
+        ConfigResult::IoError);
 }
 
 int main() {

@@ -22,7 +22,10 @@ public:
         state.SetStatus(OverlayState::InitStatus::Uninit);
         tsl::hlp::doWithSmSession([&] {
             Result rc = ryuLdnInitialize();
-            if (R_FAILED(rc)) { state.SetStatus(OverlayState::InitStatus::Error); return; }
+            if (R_FAILED(rc)) {
+                state.SetStatus(OverlayState::InitStatus::Error);
+                return;
+            }
             RyuLdnConfigService* svc = ryuLdnGetService();
             if (svc) {
                 char version[32];
@@ -31,10 +34,10 @@ public:
             }
             state.SetStatus(OverlayState::InitStatus::Loaded);
         });
-
     }
     virtual void exitServices() override {
-        if (OverlayState::Instance().GetStatus() == OverlayState::InitStatus::Loaded)
+        if (OverlayState::Instance().GetStatus() ==
+            OverlayState::InitStatus::Loaded)
             ryuLdnExit();
     }
     virtual void onShow() override {}

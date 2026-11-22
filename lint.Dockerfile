@@ -5,7 +5,9 @@
 # GCC 15 libstdc++ headers shipped by current devkitA64 (C++23 constexpr
 # math builtins, <format>, ranges) and segfaults on them — see the header
 # comment in scripts/lint.sh. The binary is symlinked as `clang-tidy` so
-# scripts can invoke it without a version suffix.
+# scripts can invoke it without a version suffix. clang-format-21 is shipped
+# alongside so the formatting gate (scripts/style.py) is deterministic: the
+# host's clang-format version never decides what is "correctly formatted".
 #
 # Usage:
 #   docker compose build lint   (or: docker compose run --rm lint)
@@ -23,7 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg && \
     echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-21 main" \
         > /etc/apt/sources.list.d/llvm21.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends clang-tidy-21 && \
+    apt-get install -y --no-install-recommends clang-tidy-21 clang-format-21 && \
     ln -sf /usr/bin/clang-tidy-21 /usr/local/bin/clang-tidy && \
+    ln -sf /usr/bin/clang-format-21 /usr/local/bin/clang-format && \
     rm -rf /var/lib/apt/lists/* && \
-    clang-tidy --version
+    clang-tidy --version && \
+    clang-format --version

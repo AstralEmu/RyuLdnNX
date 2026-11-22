@@ -56,7 +56,8 @@ TEST(out_of_range_node_ids_are_ignored_everywhere) {
     ASSERT_EQ(m.GetConnectedCount(), static_cast<size_t>(0));
     ASSERT_FALSE(m.IsNodeConnected(LdnNodeMapper::MaxNodes));
     ASSERT_EQ(m.GetNodeIp(LdnNodeMapper::MaxNodes), 0u);
-    ASSERT_FALSE(m.ShouldRouteToNode(LdnNodeMapper::BroadcastNodeId, 0, LdnNodeMapper::MaxNodes));
+    ASSERT_FALSE(m.ShouldRouteToNode(
+        LdnNodeMapper::BroadcastNodeId, 0, LdnNodeMapper::MaxNodes));
 }
 
 TEST(remove_node_disconnects_but_keeps_the_address) {
@@ -100,7 +101,8 @@ TEST(update_from_network_info_replaces_the_previous_content) {
     ASSERT_EQ(m.GetNodeIp(5), 0u);
 }
 
-TEST(update_from_network_info_skips_disconnected_nodes_and_uses_node_id_as_index) {
+TEST(
+    update_from_network_info_skips_disconnected_nodes_and_uses_node_id_as_index) {
     LdnNodeMapper m;
     NetworkInfo info = make_info(2);
     info.ldn.nodes[0].nodeId = 6;
@@ -134,7 +136,8 @@ TEST(update_from_network_info_never_reads_more_than_max_nodes_entries) {
         info.ldn.nodes[i].isConnected = 1;
     }
     m.UpdateFromNetworkInfo(info);
-    ASSERT_EQ(m.GetConnectedCount(), static_cast<size_t>(LdnNodeMapper::MaxNodes));
+    ASSERT_EQ(
+        m.GetConnectedCount(), static_cast<size_t>(LdnNodeMapper::MaxNodes));
 }
 
 TEST(update_from_network_info_rejects_node_ids_outside_the_table) {

@@ -6,8 +6,8 @@
  * integers, and dns_wrap.cpp relies on that: it reports an internal failure as
  * `-EAI_xxx` and a success as a positive address count. glibc defines them as
  * negative numbers, which would turn `-EAI_AGAIN` into a "success". The host
- * tests therefore see the target's values; everything else is the system header.
- * On the include path of tests/Makefile only (-Istubs).
+ * tests therefore see the target's values; everything else is the system
+ * header. On the include path of tests/Makefile only (-Istubs).
  */
 
 #pragma once

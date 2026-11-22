@@ -25,38 +25,47 @@
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct test_##name##_register { \
-        test_##name##_register() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct test_##name##_register {    \
+        test_##name##_register() {            \
             printf("  [TEST] %s... ", #name); \
-            fflush(stdout); \
-            test_##name(); \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } \
-    } test_##name##_instance; \
+            fflush(stdout);                   \
+            test_##name();                    \
+            printf("PASS\n");                 \
+            g_tests_passed++;                 \
+        }                                     \
+    } test_##name##_instance;                 \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL\n    Assertion failed: %s\n    at %s:%d\n", #cond, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_TRUE(cond)                                         \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            printf(                                               \
+                "FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
+                #cond,                                            \
+                __FILE__,                                         \
+                __LINE__);                                        \
+            g_tests_failed++;                                     \
+            return;                                               \
+        }                                                         \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("FAIL\n    Expected: %s == %s\n    at %s:%d\n", #a, #b, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                         \
+    do {                                                        \
+        if ((a) != (b)) {                                       \
+            printf(                                             \
+                "FAIL\n    Expected: %s == %s\n    at %s:%d\n", \
+                #a,                                             \
+                #b,                                             \
+                __FILE__,                                       \
+                __LINE__);                                      \
+            g_tests_failed++;                                   \
+            return;                                             \
+        }                                                       \
+    } while (0)
 
 // ============================================================================
 // Test Helpers
@@ -68,8 +77,10 @@ using namespace ryu_ldn::protocol;
 /**
  * @brief Create a test NetworkInfo with specified parameters
  */
-static NetworkInfo make_test_network_info(uint8_t node_count, uint8_t max_nodes,
-                                           uint64_t game_id = 0x0100000000001234ULL) {
+static NetworkInfo make_test_network_info(
+    uint8_t node_count,
+    uint8_t max_nodes,
+    uint64_t game_id = 0x0100000000001234ULL) {
     NetworkInfo info{};
     info.network_id.intent_id.local_communication_id = game_id;
     info.network_id.intent_id.scene_id = 1;
@@ -81,8 +92,11 @@ static NetworkInfo make_test_network_info(uint8_t node_count, uint8_t max_nodes,
         info.ldn.nodes[i].node_id = i;
         info.ldn.nodes[i].is_connected = 1;
         info.ldn.nodes[i].ipv4_address = 0x0A720000 + i + 1;  // 10.114.0.X
-        snprintf(info.ldn.nodes[i].user_name, sizeof(info.ldn.nodes[i].user_name),
-                 "Player%d", i + 1);
+        snprintf(
+            info.ldn.nodes[i].user_name,
+            sizeof(info.ldn.nodes[i].user_name),
+            "Player%d",
+            i + 1);
     }
 
     return info;
@@ -146,7 +160,8 @@ static struct {
 } g_callback_state;
 
 // Callback functions
-static void on_state_changed(ldn::LdnSessionState old_state, ldn::LdnSessionState new_state) {
+static void on_state_changed(
+    ldn::LdnSessionState old_state, ldn::LdnSessionState new_state) {
     g_callback_state.state_changed = true;
     g_callback_state.last_old_state = old_state;
     g_callback_state.last_new_state = new_state;
@@ -224,7 +239,8 @@ TEST(session_handler_process_initialize) {
     // Initialize response should transition to Initialized state
     ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::Initialized);
     ASSERT_TRUE(g_callback_state.state_changed);
-    ASSERT_EQ(g_callback_state.last_new_state, ldn::LdnSessionState::Initialized);
+    ASSERT_EQ(
+        g_callback_state.last_new_state, ldn::LdnSessionState::Initialized);
 }
 
 // ============================================================================
@@ -240,7 +256,8 @@ TEST(session_handler_process_connected) {
 
     // First initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Then receive Connected
@@ -260,7 +277,8 @@ TEST(session_handler_connected_stores_network_info) {
 
     // Initialize first
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Then receive Connected
@@ -272,7 +290,9 @@ TEST(session_handler_connected_stores_network_info) {
     handler.handle_connected(header, info);
 
     const NetworkInfo& stored = handler.get_network_info();
-    ASSERT_EQ(stored.network_id.intent_id.local_communication_id, 0x0100000000005678ULL);
+    ASSERT_EQ(
+        stored.network_id.intent_id.local_communication_id,
+        0x0100000000005678ULL);
     ASSERT_EQ(stored.ldn.node_count, 3);
     ASSERT_EQ(stored.ldn.node_count_max, 4);
 }
@@ -289,19 +309,22 @@ TEST(session_handler_process_sync_network) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Join session
     NetworkInfo join_info = make_test_network_info(2, 8);
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     g_callback_state.reset();
 
     // Receive SyncNetwork with updated node count
     NetworkInfo sync_info = make_test_network_info(3, 8);  // New player joined
-    LdnHeader sync_header = make_test_header(PacketId::SyncNetwork, sizeof(sync_info));
+    LdnHeader sync_header =
+        make_test_header(PacketId::SyncNetwork, sizeof(sync_info));
     handler.handle_sync_network(sync_header, sync_info);
 
     ASSERT_TRUE(g_callback_state.network_updated);
@@ -313,16 +336,19 @@ TEST(session_handler_sync_network_updates_node_list) {
 
     // Initialize and join
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     NetworkInfo join_info = make_test_network_info(1, 8);
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     // Sync with more players
     NetworkInfo sync_info = make_test_network_info(4, 8);
-    LdnHeader sync_header = make_test_header(PacketId::SyncNetwork, sizeof(sync_info));
+    LdnHeader sync_header =
+        make_test_header(PacketId::SyncNetwork, sizeof(sync_info));
     handler.handle_sync_network(sync_header, sync_info);
 
     ASSERT_EQ(handler.get_node_count(), 4);
@@ -346,7 +372,8 @@ TEST(session_handler_process_scan_reply) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Receive scan result
@@ -366,7 +393,8 @@ TEST(session_handler_process_multiple_scan_replies) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Receive multiple scan results
@@ -387,7 +415,8 @@ TEST(session_handler_process_scan_reply_end) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Receive scan end
@@ -406,7 +435,8 @@ TEST(session_handler_process_ping_from_server) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     PingMessage msg{};
@@ -426,7 +456,8 @@ TEST(session_handler_process_ping_response) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     PingMessage msg{};
@@ -453,11 +484,13 @@ TEST(session_handler_process_disconnect) {
 
     // Initialize and join
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     NetworkInfo join_info = make_test_network_info(2, 8);
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     g_callback_state.reset();
@@ -478,14 +511,16 @@ TEST(session_handler_disconnect_self_leaves_session) {
 
     // Initialize and join
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     NetworkInfo join_info = make_test_network_info(2, 8);
     // Set our local node ID to 1
     handler.set_local_node_id(1);
 
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     // Simulate leaving
@@ -528,7 +563,8 @@ TEST(session_handler_create_access_point_success) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Simulate access point creation success (SyncNetwork with us as host)
@@ -554,13 +590,15 @@ TEST(session_handler_get_local_node_id) {
 
     // Initialize and join
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     handler.set_local_node_id(3);
 
     NetworkInfo join_info = make_test_network_info(4, 8);
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     ASSERT_EQ(handler.get_local_node_id(), 3);
@@ -571,11 +609,13 @@ TEST(session_handler_get_max_nodes) {
 
     // Initialize and join
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     NetworkInfo join_info = make_test_network_info(2, 4);
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     ASSERT_EQ(handler.get_max_nodes(), 4);
@@ -586,11 +626,13 @@ TEST(session_handler_reset) {
 
     // Initialize and join
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     NetworkInfo join_info = make_test_network_info(2, 8);
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     ASSERT_TRUE(handler.is_in_session());
@@ -615,12 +657,14 @@ TEST(session_handler_process_reject_invokes_callback) {
 
     // Initialize and join
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     NetworkInfo join_info = make_test_network_info(3, 8);
     handler.set_local_node_id(2);  // We are node 2
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     g_callback_state.reset();
@@ -636,7 +680,9 @@ TEST(session_handler_process_reject_invokes_callback) {
     // Callback should be invoked
     ASSERT_TRUE(g_callback_state.rejected);
     ASSERT_EQ(g_callback_state.rejected_node_id, 1);
-    ASSERT_EQ(g_callback_state.rejected_reason, static_cast<uint32_t>(DisconnectReason::Rejected));
+    ASSERT_EQ(
+        g_callback_state.rejected_reason,
+        static_cast<uint32_t>(DisconnectReason::Rejected));
 
     // We should still be in session (we weren't rejected)
     ASSERT_TRUE(handler.is_in_session());
@@ -651,12 +697,14 @@ TEST(session_handler_process_reject_self_leaves_session) {
 
     // Initialize and join
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     NetworkInfo join_info = make_test_network_info(3, 8);
     handler.set_local_node_id(2);  // We are node 2
-    LdnHeader join_header = make_test_header(PacketId::Connected, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::Connected, sizeof(join_info));
     handler.handle_connected(join_header, join_info);
 
     ASSERT_TRUE(handler.is_in_session());
@@ -665,7 +713,8 @@ TEST(session_handler_process_reject_self_leaves_session) {
     // We get rejected (node 2)
     RejectRequest req{};
     req.node_id = 2;  // Our node ID
-    req.disconnect_reason = static_cast<uint32_t>(DisconnectReason::SystemRequest);
+    req.disconnect_reason =
+        static_cast<uint32_t>(DisconnectReason::SystemRequest);
 
     LdnHeader header = make_test_header(PacketId::Reject, sizeof(req));
     handler.handle_reject(header, req);
@@ -684,13 +733,15 @@ TEST(session_handler_process_reject_reply_is_noop) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Join session
     NetworkInfo join_info = make_test_network_info(2, 8);
     handler.set_local_node_id(0);  // We are host
-    LdnHeader join_header = make_test_header(PacketId::SyncNetwork, sizeof(join_info));
+    LdnHeader join_header =
+        make_test_header(PacketId::SyncNetwork, sizeof(join_info));
     handler.handle_sync_network(join_header, join_info);
 
     // RejectReply should not affect state
@@ -713,7 +764,8 @@ TEST(session_handler_process_set_accept_policy) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Default policy should be AcceptAll
@@ -739,7 +791,8 @@ TEST(session_handler_set_accept_policy_no_callback) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Receive SetAcceptPolicy without callback registered
@@ -758,7 +811,8 @@ TEST(session_handler_accept_policy_persists_after_reset) {
 
     // Initialize
     InitializeMessage init{};
-    LdnHeader init_header = make_test_header(PacketId::Initialize, sizeof(init));
+    LdnHeader init_header =
+        make_test_header(PacketId::Initialize, sizeof(init));
     handler.handle_initialize(init_header, init);
 
     // Change policy
@@ -782,7 +836,8 @@ TEST(get_max_nodes_is_zero_outside_a_session) {
     ASSERT_EQ(handler.get_max_nodes(), 0);
 
     InitializeMessage init{};
-    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    handler.handle_initialize(
+        make_test_header(PacketId::Initialize, sizeof(init)), init);
     ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::Initialized);
     ASSERT_EQ(handler.get_max_nodes(), 0);
 }
@@ -790,7 +845,8 @@ TEST(get_max_nodes_is_zero_outside_a_session) {
 TEST(set_local_node_id_zero_marks_host_only_inside_a_session) {
     ldn::LdnSessionHandler handler;
     InitializeMessage init{};
-    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    handler.handle_initialize(
+        make_test_header(PacketId::Initialize, sizeof(init)), init);
 
     // Not in a session yet: node id is stored but the host flag is untouched.
     handler.set_local_node_id(0);
@@ -799,7 +855,8 @@ TEST(set_local_node_id_zero_marks_host_only_inside_a_session) {
 
     // Join a session as a station, then become node 0.
     NetworkInfo info = make_test_network_info(2, 8);
-    handler.handle_connected(make_test_header(PacketId::Connected, sizeof(info)), info);
+    handler.handle_connected(
+        make_test_header(PacketId::Connected, sizeof(info)), info);
     ASSERT_TRUE(handler.is_in_session());
     handler.set_local_node_id(1);
     ASSERT_FALSE(handler.is_host());
@@ -818,13 +875,16 @@ TEST(repeated_initialize_does_not_notify_state_change_twice) {
     g_callback_state.reset();
     ldn::LdnSessionHandler handler;
     InitializeMessage init{};
-    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    handler.handle_initialize(
+        make_test_header(PacketId::Initialize, sizeof(init)), init);
 
     int notifications = 0;
     static int* counter;
     counter = &notifications;
-    handler.set_state_callback([](ldn::LdnSessionState, ldn::LdnSessionState) { ++*counter; });
-    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    handler.set_state_callback(
+        [](ldn::LdnSessionState, ldn::LdnSessionState) { ++*counter; });
+    handler.handle_initialize(
+        make_test_header(PacketId::Initialize, sizeof(init)), init);
     ASSERT_EQ(notifications, 0);
 }
 
@@ -834,20 +894,24 @@ TEST(sync_network_after_reinitialize_restores_host_access_point_state) {
     // SyncNetwork must put us back in AccessPoint.
     ldn::LdnSessionHandler handler;
     InitializeMessage init{};
-    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    handler.handle_initialize(
+        make_test_header(PacketId::Initialize, sizeof(init)), init);
 
     handler.set_local_node_id(0);
     NetworkInfo info = make_test_network_info(1, 8);
-    handler.handle_sync_network(make_test_header(PacketId::SyncNetwork, sizeof(info)), info);
+    handler.handle_sync_network(
+        make_test_header(PacketId::SyncNetwork, sizeof(info)), info);
     ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::AccessPoint);
     ASSERT_TRUE(handler.is_host());
 
-    handler.handle_initialize(make_test_header(PacketId::Initialize, sizeof(init)), init);
+    handler.handle_initialize(
+        make_test_header(PacketId::Initialize, sizeof(init)), init);
     ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::Initialized);
     ASSERT_TRUE(handler.is_host());
 
     handler.set_local_node_id(1);
-    handler.handle_sync_network(make_test_header(PacketId::SyncNetwork, sizeof(info)), info);
+    handler.handle_sync_network(
+        make_test_header(PacketId::SyncNetwork, sizeof(info)), info);
     ASSERT_EQ(handler.get_state(), ldn::LdnSessionState::AccessPoint);
 }
 
@@ -863,7 +927,10 @@ int main() {
     // Tests run automatically via static initializers
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

@@ -22,18 +22,18 @@ namespace ryu_ldn::network {
 
 enum class SocketResult {
     Success = 0,
-    WouldBlock,        // Non-blocking operation would block
-    Timeout,           // Operation timed out
-    ConnectionRefused, // Server refused connection
-    ConnectionReset,   // Connection reset by peer
-    HostUnreachable,   // Cannot reach host
-    NetworkDown,       // Network is down
-    NotConnected,      // Socket not connected
-    AlreadyConnected,  // Socket already connected
-    InvalidAddress,    // Invalid address format
-    SocketError,       // Generic socket error
-    NotInitialized,    // Socket subsystem not initialized
-    Closed             // Socket was closed
+    WouldBlock,         // Non-blocking operation would block
+    Timeout,            // Operation timed out
+    ConnectionRefused,  // Server refused connection
+    ConnectionReset,    // Connection reset by peer
+    HostUnreachable,    // Cannot reach host
+    NetworkDown,        // Network is down
+    NotConnected,       // Socket not connected
+    AlreadyConnected,   // Socket already connected
+    InvalidAddress,     // Invalid address format
+    SocketError,        // Generic socket error
+    NotInitialized,     // Socket subsystem not initialized
+    Closed              // Socket was closed
 };
 
 // ============================================================================
@@ -92,7 +92,8 @@ public:
      * @return SocketResult::Success or error
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="Socket connect"}
-    SocketResult connect(const char* host, uint16_t port, uint32_t timeout_ms = 0);
+    SocketResult connect(
+        const char* host, uint16_t port, uint32_t timeout_ms = 0);
 
     /**
      * @brief Send data (blocking)
@@ -119,7 +120,11 @@ public:
      * @param timeout_ms Receive timeout (0 = non-blocking, -1 = blocking)
      * @return SocketResult::Success, WouldBlock, or error
      */
-    SocketResult recv(uint8_t* buffer, size_t buffer_size, size_t& received, int32_t timeout_ms = 0);
+    SocketResult recv(
+        uint8_t* buffer,
+        size_t buffer_size,
+        size_t& received,
+        int32_t timeout_ms = 0);
 
     /**
      * @brief Close the socket
@@ -144,7 +149,9 @@ public:
      * @brief Get the native socket file descriptor
      * @return File descriptor or -1 if invalid
      */
-    int get_fd() const { return m_fd; }
+    int get_fd() const {
+        return m_fd;
+    }
 
     /**
      * @brief Set socket to non-blocking mode
@@ -246,21 +253,35 @@ SocketResult errno_to_result(int err);
  */
 inline const char* socket_result_to_string(SocketResult result) {
     switch (result) {
-        case SocketResult::Success:           return "Success";
-        case SocketResult::WouldBlock:        return "WouldBlock";
-        case SocketResult::Timeout:           return "Timeout";
-        case SocketResult::ConnectionRefused: return "ConnectionRefused";
-        case SocketResult::ConnectionReset:   return "ConnectionReset";
-        case SocketResult::HostUnreachable:   return "HostUnreachable";
-        case SocketResult::NetworkDown:       return "NetworkDown";
-        case SocketResult::NotConnected:      return "NotConnected";
-        case SocketResult::AlreadyConnected:  return "AlreadyConnected";
-        case SocketResult::InvalidAddress:    return "InvalidAddress";
-        case SocketResult::SocketError:       return "SocketError";
-        case SocketResult::NotInitialized:    return "NotInitialized";
-        case SocketResult::Closed:            return "Closed";
-        default:                              return "Unknown";
+        case SocketResult::Success:
+            return "Success";
+        case SocketResult::WouldBlock:
+            return "WouldBlock";
+        case SocketResult::Timeout:
+            return "Timeout";
+        case SocketResult::ConnectionRefused:
+            return "ConnectionRefused";
+        case SocketResult::ConnectionReset:
+            return "ConnectionReset";
+        case SocketResult::HostUnreachable:
+            return "HostUnreachable";
+        case SocketResult::NetworkDown:
+            return "NetworkDown";
+        case SocketResult::NotConnected:
+            return "NotConnected";
+        case SocketResult::AlreadyConnected:
+            return "AlreadyConnected";
+        case SocketResult::InvalidAddress:
+            return "InvalidAddress";
+        case SocketResult::SocketError:
+            return "SocketError";
+        case SocketResult::NotInitialized:
+            return "NotInitialized";
+        case SocketResult::Closed:
+            return "Closed";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ryu_ldn::network
+}  // namespace ryu_ldn::network

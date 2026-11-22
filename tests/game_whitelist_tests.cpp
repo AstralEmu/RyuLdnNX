@@ -19,9 +19,9 @@
 #include "test_harness.hpp"
 #include "config/game_whitelist.hpp"
 
+using ams::fs::g_host_fs;
 using ryu_ldn::config::IsGameInWhitelist;
 using ryu_ldn::config::LoadWhitelist;
-using ams::fs::g_host_fs;
 
 static bool scenario(const char* name) {
     const char* s = std::getenv("WHITELIST_SCENARIO");
@@ -29,7 +29,9 @@ static bool scenario(const char* name) {
 }
 
 TEST(open_failure_leaves_an_empty_whitelist_and_latches) {
-    if (!scenario("open_fail")) { return; }
+    if (!scenario("open_fail")) {
+        return;
+    }
     ASSERT_FALSE(IsGameInWhitelist(0x0100152000022000ULL));  // not loaded yet
     g_host_fs.open_fails = true;
     LoadWhitelist();
@@ -42,7 +44,9 @@ TEST(open_failure_leaves_an_empty_whitelist_and_latches) {
 }
 
 TEST(size_failure_closes_the_file) {
-    if (!scenario("size_fail")) { return; }
+    if (!scenario("size_fail")) {
+        return;
+    }
     g_host_fs.size_fails = true;
     LoadWhitelist();
     ASSERT_EQ(g_host_fs.close_count, 1);
@@ -50,7 +54,9 @@ TEST(size_failure_closes_the_file) {
 }
 
 TEST(an_empty_file_closes_the_file) {
-    if (!scenario("empty")) { return; }
+    if (!scenario("empty")) {
+        return;
+    }
     g_host_fs.content.clear();
     LoadWhitelist();
     ASSERT_EQ(g_host_fs.close_count, 1);
@@ -58,15 +64,20 @@ TEST(an_empty_file_closes_the_file) {
 }
 
 TEST(allocation_failure_closes_the_file_and_stays_empty) {
-    if (!scenario("alloc_fail")) { return; }
-    g_host_fs.size_override = static_cast<s64>(1) << 62;  // far beyond any address space
+    if (!scenario("alloc_fail")) {
+        return;
+    }
+    g_host_fs.size_override = static_cast<s64>(1)
+                              << 62;  // far beyond any address space
     LoadWhitelist();
     ASSERT_EQ(g_host_fs.close_count, 1);
     ASSERT_FALSE(IsGameInWhitelist(1));
 }
 
 TEST(a_read_failure_stops_the_load_with_what_was_parsed) {
-    if (!scenario("read_fail")) { return; }
+    if (!scenario("read_fail")) {
+        return;
+    }
     g_host_fs.content = "0x0100152000022000\n";
     g_host_fs.read_fails = true;
     LoadWhitelist();
@@ -75,22 +86,25 @@ TEST(a_read_failure_stops_the_load_with_what_was_parsed) {
 }
 
 TEST(lines_are_parsed_in_every_accepted_format) {
-    if (!scenario("parse")) { return; }
+    if (!scenario("parse")) {
+        return;
+    }
     std::string c;
-    c += "0x0100152000022000\n";       // prefix, lower-case
-    c += "\r\n";                        // CRLF empty line
-    c += "0X0100ABCDEF000000\r\n";     // upper-case prefix and digits
-    c += "0100abcd12345678\n";         // no prefix, lower-case hex
-    c += "0\n";                         // id 0 is ignored
-    c += "zz\n";                        // invalid first character: id 0, ignored
-    c += "0x0100000000000099zzzz\n";   // stops at the first invalid character
-    c += "11111111111111111111111111111111\n";  // longer than the line buffer: truncated
-    for (int i = 0; i < 100; ++i) {    // spans several 512-byte chunks
+    c += "0x0100152000022000\n";      // prefix, lower-case
+    c += "\r\n";                      // CRLF empty line
+    c += "0X0100ABCDEF000000\r\n";    // upper-case prefix and digits
+    c += "0100abcd12345678\n";        // no prefix, lower-case hex
+    c += "0\n";                       // id 0 is ignored
+    c += "zz\n";                      // invalid first character: id 0, ignored
+    c += "0x0100000000000099zzzz\n";  // stops at the first invalid character
+    c += "11111111111111111111111111111111\n";  // longer than the line buffer:
+                                                // truncated
+    for (int i = 0; i < 100; ++i) {             // spans several 512-byte chunks
         char buf[32];
         std::snprintf(buf, sizeof(buf), "0x01000000000%05X\n", i + 1);
         c += buf;
     }
-    c += "0x0200000000000001";         // last line without a trailing newline
+    c += "0x0200000000000001";  // last line without a trailing newline
     g_host_fs.content = c;
     LoadWhitelist();
     ASSERT_EQ(g_host_fs.close_count, 1);
@@ -114,11 +128,15 @@ TEST(lines_are_parsed_in_every_accepted_format) {
 }
 
 TEST(the_capacity_bounds_the_number_of_entries) {
-    if (!scenario("capacity")) { return; }
+    if (!scenario("capacity")) {
+        return;
+    }
     // 2 bytes per entry against a capacity of size/18 + 100: the array fills
     // before the file ends, so the loader must stop instead of overrunning it.
     std::string c;
-    for (int i = 0; i < 400; ++i) { c += "1\n"; }
+    for (int i = 0; i < 400; ++i) {
+        c += "1\n";
+    }
     c += "2";  // pending last line while the array is already full
     g_host_fs.content = c;
     LoadWhitelist();

@@ -36,54 +36,56 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegister_##name { \
-        TestRegister_##name() { register_test(#name, test_##name); } \
-    } g_test_register_##name; \
+#define TEST(name)                             \
+    static void test_##name();                 \
+    static struct TestRegister_##name {        \
+        TestRegister_##name() {                \
+            register_test(#name, test_##name); \
+        }                                      \
+    } g_test_register_##name;                  \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT_TRUE(cond)                                      \
+    do {                                                       \
+        if (!(cond)) {                                         \
             printf("  FAIL: %s (line %d)\n", #cond, __LINE__); \
             throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+        }                                                      \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        auto _a = (a); \
-        auto _b = (b); \
-        if (_a != _b) { \
-            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
+#define ASSERT_EQ(a, b)                                                      \
+    do {                                                                     \
+        auto _a = (a);                                                       \
+        auto _b = (b);                                                       \
+        if (_a != _b) {                                                      \
+            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
             printf("    got: %lld vs %lld\n", (long long)_a, (long long)_b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            throw std::runtime_error("Test assertion failed");               \
+        }                                                                    \
+    } while (0)
 
-#define ASSERT_STREQ(a, b) \
-    do { \
-        const char* _a = (a); \
-        const char* _b = (b); \
-        if (std::strcmp(_a, _b) != 0) { \
+#define ASSERT_STREQ(a, b)                                            \
+    do {                                                              \
+        const char* _a = (a);                                         \
+        const char* _b = (b);                                         \
+        if (std::strcmp(_a, _b) != 0) {                               \
             printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
-            printf("    got: \"%s\" vs \"%s\"\n", _a, _b); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            printf("    got: \"%s\" vs \"%s\"\n", _a, _b);            \
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        auto _a = (a); \
-        auto _b = (b); \
-        if (_a == _b) { \
+#define ASSERT_NE(a, b)                                               \
+    do {                                                              \
+        auto _a = (a);                                                \
+        auto _b = (b);                                                \
+        if (_a == _b) {                                               \
             printf("  FAIL: %s != %s (line %d)\n", #a, #b, __LINE__); \
-            throw std::runtime_error("Test assertion failed"); \
-        } \
-    } while(0)
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
+    } while (0)
 
 struct TestEntry {
     const char* name;
@@ -105,13 +107,13 @@ static void register_test(const char* name, void (*func)()) {
 // Verify P2P constants match Ryujinx implementation
 
 namespace p2p_constants {
-    // These values must match Ryujinx for interoperability
-    constexpr uint16_t P2P_PORT_BASE = 39990;
-    constexpr int P2P_PORT_RANGE = 10;
-    constexpr int UPNP_DISCOVERY_TIMEOUT_MS = 2500;
-    constexpr int PORT_LEASE_DURATION = 60;
-    constexpr int PORT_LEASE_RENEW = 50;
-}
+// These values must match Ryujinx for interoperability
+constexpr uint16_t P2P_PORT_BASE = 39990;
+constexpr int P2P_PORT_RANGE = 10;
+constexpr int UPNP_DISCOVERY_TIMEOUT_MS = 2500;
+constexpr int PORT_LEASE_DURATION = 60;
+constexpr int PORT_LEASE_RENEW = 50;
+}  // namespace p2p_constants
 
 TEST(constants_port_base_matches_ryujinx) {
     // Ryujinx uses PrivatePortBase = 39990
@@ -140,7 +142,8 @@ TEST(constants_lease_renew_matches_ryujinx) {
 
 TEST(port_range_is_valid) {
     // Verify all ports in range are valid (< 65536)
-    uint16_t max_port = p2p_constants::P2P_PORT_BASE + p2p_constants::P2P_PORT_RANGE - 1;
+    uint16_t max_port =
+        p2p_constants::P2P_PORT_BASE + p2p_constants::P2P_PORT_RANGE - 1;
     ASSERT_TRUE(max_port < 65536);
     ASSERT_EQ(max_port, 39999);
 }
@@ -151,31 +154,31 @@ TEST(port_range_is_valid) {
 // Test the IP address string to uint32_t conversion logic
 
 namespace ipv4_parse {
-    /**
-     * @brief Parse IPv4 string to host-byte-order uint32_t
-     *
-     * This mirrors the logic in UpnpPortMapper::GetLocalIPv4()
-     *
-     * @param ip_str IP address string (e.g., "192.168.1.100")
-     * @return IP as uint32_t in host byte order, or 0 on error
-     */
-    uint32_t parse_ipv4(const char* ip_str) {
-        if (ip_str == nullptr || ip_str[0] == '\0') {
-            return 0;
-        }
-
-        unsigned int a, b, c, d;
-        if (std::sscanf(ip_str, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) {
-            return 0;
-        }
-
-        if (a > 255 || b > 255 || c > 255 || d > 255) {
-            return 0;
-        }
-
-        return (a << 24) | (b << 16) | (c << 8) | d;
+/**
+ * @brief Parse IPv4 string to host-byte-order uint32_t
+ *
+ * This mirrors the logic in UpnpPortMapper::GetLocalIPv4()
+ *
+ * @param ip_str IP address string (e.g., "192.168.1.100")
+ * @return IP as uint32_t in host byte order, or 0 on error
+ */
+uint32_t parse_ipv4(const char* ip_str) {
+    if (ip_str == nullptr || ip_str[0] == '\0') {
+        return 0;
     }
+
+    unsigned int a, b, c, d;
+    if (std::sscanf(ip_str, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) {
+        return 0;
+    }
+
+    if (a > 255 || b > 255 || c > 255 || d > 255) {
+        return 0;
+    }
+
+    return (a << 24) | (b << 16) | (c << 8) | d;
 }
+}  // namespace ipv4_parse
 
 TEST(ipv4_parse_valid_address) {
     // Common private IP address
@@ -237,17 +240,17 @@ TEST(ipv4_parse_garbage_returns_zero) {
 // Test port number to string conversion (used for UPNP_AddPortMapping)
 
 namespace port_format {
-    /**
-     * @brief Format port number as string
-     *
-     * @param port Port number (host byte order)
-     * @param buffer Output buffer
-     * @param buffer_size Buffer size
-     */
-    void format_port(uint16_t port, char* buffer, size_t buffer_size) {
-        std::snprintf(buffer, buffer_size, "%u", port);
-    }
+/**
+ * @brief Format port number as string
+ *
+ * @param port Port number (host byte order)
+ * @param buffer Output buffer
+ * @param buffer_size Buffer size
+ */
+void format_port(uint16_t port, char* buffer, size_t buffer_size) {
+    std::snprintf(buffer, buffer_size, "%u", port);
 }
+}  // namespace port_format
 
 TEST(port_format_base_port) {
     char buffer[8];
@@ -286,15 +289,15 @@ TEST(port_format_common_ports) {
 // Document expected UPnP error codes
 
 namespace upnp_errors {
-    // miniupnpc error codes
-    constexpr int UPNPCOMMAND_SUCCESS = 0;
-    constexpr int UPNPCOMMAND_UNKNOWN_ERROR = -1;
-    constexpr int UPNPCOMMAND_INVALID_ARGS = 402;
-    constexpr int UPNPCOMMAND_ACTION_FAILED = 501;
-    constexpr int UPNPCOMMAND_NO_SUCH_ENTRY = 714;
-    constexpr int UPNPCOMMAND_CONFLICT = 718;
-    constexpr int UPNPCOMMAND_ONLY_PERMANENT = 725;
-}
+// miniupnpc error codes
+constexpr int UPNPCOMMAND_SUCCESS = 0;
+constexpr int UPNPCOMMAND_UNKNOWN_ERROR = -1;
+constexpr int UPNPCOMMAND_INVALID_ARGS = 402;
+constexpr int UPNPCOMMAND_ACTION_FAILED = 501;
+constexpr int UPNPCOMMAND_NO_SUCH_ENTRY = 714;
+constexpr int UPNPCOMMAND_CONFLICT = 718;
+constexpr int UPNPCOMMAND_ONLY_PERMANENT = 725;
+}  // namespace upnp_errors
 
 TEST(upnp_error_success_is_zero) {
     ASSERT_EQ(upnp_errors::UPNPCOMMAND_SUCCESS, 0);
@@ -318,12 +321,14 @@ TEST(upnp_error_conflict_is_718) {
 
 TEST(lease_renew_before_expiry) {
     // Renew should happen before lease expires
-    ASSERT_TRUE(p2p_constants::PORT_LEASE_RENEW < p2p_constants::PORT_LEASE_DURATION);
+    ASSERT_TRUE(
+        p2p_constants::PORT_LEASE_RENEW < p2p_constants::PORT_LEASE_DURATION);
 }
 
 TEST(lease_renew_margin_is_10_seconds) {
     // Ryujinx uses 10 second margin (60 - 50 = 10)
-    int margin = p2p_constants::PORT_LEASE_DURATION - p2p_constants::PORT_LEASE_RENEW;
+    int margin =
+        p2p_constants::PORT_LEASE_DURATION - p2p_constants::PORT_LEASE_RENEW;
     ASSERT_EQ(margin, 10);
 }
 

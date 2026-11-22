@@ -68,65 +68,84 @@ using namespace ryu_ldn::network;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT_TRUE(cond)                                               \
+    do {                                                                \
+        if (!(cond)) {                                                  \
             printf("    FAIL: %s:%d: %s\n", __FILE__, __LINE__, #cond); \
-            return false; \
-        } \
-    } while(0)
+            return false;                                               \
+        }                                                               \
+    } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("    FAIL: %s:%d: %s == %s (%lld != %lld)\n", \
-                   __FILE__, __LINE__, #a, #b, \
-                   static_cast<long long>(a), static_cast<long long>(b)); \
-            return false; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                       \
+    do {                                                      \
+        if ((a) != (b)) {                                     \
+            printf(                                           \
+                "    FAIL: %s:%d: %s == %s (%lld != %lld)\n", \
+                __FILE__,                                     \
+                __LINE__,                                     \
+                #a,                                           \
+                #b,                                           \
+                static_cast<long long>(a),                    \
+                static_cast<long long>(b));                   \
+            return false;                                     \
+        }                                                     \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
-            printf("    FAIL: %s:%d: %s != %s (both %lld)\n", \
-                   __FILE__, __LINE__, #a, #b, \
-                   static_cast<long long>(a)); \
-            return false; \
-        } \
-    } while(0)
+#define ASSERT_NE(a, b)                                    \
+    do {                                                   \
+        if ((a) == (b)) {                                  \
+            printf(                                        \
+                "    FAIL: %s:%d: %s != %s (both %lld)\n", \
+                __FILE__,                                  \
+                __LINE__,                                  \
+                #a,                                        \
+                #b,                                        \
+                static_cast<long long>(a));                \
+            return false;                                  \
+        }                                                  \
+    } while (0)
 
-#define ASSERT_IN_RANGE(val, min_val, max_val) \
-    do { \
-        auto _v = static_cast<long long>(val); \
-        auto _min = static_cast<long long>(min_val); \
-        auto _max = static_cast<long long>(max_val); \
-        if (_v < _min || _v > _max) { \
-            printf("    FAIL: %s:%d: %s in [%lld, %lld] (got %lld)\n", \
-                   __FILE__, __LINE__, #val, _min, _max, _v); \
-            return false; \
-        } \
-    } while(0)
+#define ASSERT_IN_RANGE(val, min_val, max_val)                      \
+    do {                                                            \
+        auto _v = static_cast<long long>(val);                      \
+        auto _min = static_cast<long long>(min_val);                \
+        auto _max = static_cast<long long>(max_val);                \
+        if (_v < _min || _v > _max) {                               \
+            printf(                                                 \
+                "    FAIL: %s:%d: %s in [%lld, %lld] (got %lld)\n", \
+                __FILE__,                                           \
+                __LINE__,                                           \
+                #val,                                               \
+                _min,                                               \
+                _max,                                               \
+                _v);                                                \
+            return false;                                           \
+        }                                                           \
+    } while (0)
 
-#define ASSERT_STREQ(a, b) \
-    do { \
-        if (std::strcmp((a), (b)) != 0) { \
-            printf("    FAIL: %s:%d: \"%s\" != \"%s\"\n", \
-                   __FILE__, __LINE__, (a), (b)); \
-            return false; \
-        } \
-    } while(0)
+#define ASSERT_STREQ(a, b)                             \
+    do {                                               \
+        if (std::strcmp((a), (b)) != 0) {              \
+            printf(                                    \
+                "    FAIL: %s:%d: \"%s\" != \"%s\"\n", \
+                __FILE__,                              \
+                __LINE__,                              \
+                (a),                                   \
+                (b));                                  \
+            return false;                              \
+        }                                              \
+    } while (0)
 
-#define RUN_TEST(test_func) \
-    do { \
+#define RUN_TEST(test_func)                    \
+    do {                                       \
         printf("  [TEST] %s... ", #test_func); \
-        if (test_func()) { \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } else { \
-            g_tests_failed++; \
-        } \
-    } while(0)
+        if (test_func()) {                     \
+            printf("PASS\n");                  \
+            g_tests_passed++;                  \
+        } else {                               \
+            g_tests_failed++;                  \
+        }                                      \
+    } while (0)
 
 // ============================================================================
 // Default Configuration Tests
@@ -205,16 +224,19 @@ bool test_initial_delay_is_fast_delay() {
 bool test_fast_then_exponential() {
     ReconnectManager mgr;
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 200);   // fast retry (retry 0)
+    ASSERT_EQ(mgr.get_next_delay_ms(), 200);  // fast retry (retry 0)
     mgr.record_failure();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // first exponential step (retry 1)
+    ASSERT_EQ(
+        mgr.get_next_delay_ms(), 1000);  // first exponential step (retry 1)
     mgr.record_failure();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 2000);  // second exponential step (retry 2)
+    ASSERT_EQ(
+        mgr.get_next_delay_ms(), 2000);  // second exponential step (retry 2)
     mgr.record_failure();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 4000);  // third exponential step (retry 3)
+    ASSERT_EQ(
+        mgr.get_next_delay_ms(), 4000);  // third exponential step (retry 3)
     return true;
 }
 
@@ -234,10 +256,10 @@ bool test_multiple_fast_retries() {
     cfg.fast_delay_ms = 150;
     ReconnectManager mgr(cfg);
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 150);   // fast retry 0
+    ASSERT_EQ(mgr.get_next_delay_ms(), 150);  // fast retry 0
     mgr.record_failure();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 150);   // fast retry 1
+    ASSERT_EQ(mgr.get_next_delay_ms(), 150);  // fast retry 1
     mgr.record_failure();
 
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // first exponential step
@@ -415,11 +437,11 @@ bool test_backoff_after_reset() {
 
     mgr.reset();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 200);   // fast delay
+    ASSERT_EQ(mgr.get_next_delay_ms(), 200);  // fast delay
     mgr.record_failure();
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // first exponential step
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 2000);   // second exponential step
+    ASSERT_EQ(mgr.get_next_delay_ms(), 2000);  // second exponential step
 
     return true;
 }
@@ -597,7 +619,7 @@ bool test_custom_multiplier() {
     // fast_retries=1 by default
     ReconnectManager mgr(cfg);
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 200);   // fast delay
+    ASSERT_EQ(mgr.get_next_delay_ms(), 200);  // fast delay
     mgr.record_failure();
 
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // first exponential step
@@ -723,7 +745,7 @@ bool test_no_growth_multiplier() {
     ReconnectConfig cfg;
     cfg.initial_delay_ms = 1000;
     cfg.multiplier_percent = 100;  // 1.0x
-    cfg.fast_retries = 0;  // disable fast phase for simpler test
+    cfg.fast_retries = 0;          // disable fast phase for simpler test
     ReconnectManager mgr(cfg);
 
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);
@@ -742,9 +764,13 @@ bool test_no_growth_multiplier() {
 // ============================================================================
 
 bool test_retry_result_to_string() {
-    ASSERT_STREQ(retry_result_to_string(RetryResult::ShouldRetry), "ShouldRetry");
-    ASSERT_STREQ(retry_result_to_string(RetryResult::MaxRetriesReached), "MaxRetriesReached");
-    ASSERT_STREQ(retry_result_to_string(static_cast<RetryResult>(99)), "Unknown");
+    ASSERT_STREQ(
+        retry_result_to_string(RetryResult::ShouldRetry), "ShouldRetry");
+    ASSERT_STREQ(
+        retry_result_to_string(RetryResult::MaxRetriesReached),
+        "MaxRetriesReached");
+    ASSERT_STREQ(
+        retry_result_to_string(static_cast<RetryResult>(99)), "Unknown");
     return true;
 }
 
@@ -798,9 +824,9 @@ bool test_custom_fast_delay() {
     cfg.fast_retries = 2;
     ReconnectManager mgr(cfg);
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast retry 0
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast retry 0
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast retry 1
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast retry 1
     mgr.record_failure();
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // exponential begins
 
@@ -833,13 +859,13 @@ bool test_fast_to_exponential_transition() {
     cfg.multiplier_percent = 200;
     ReconnectManager mgr(cfg);
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast 0
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast 0
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast 1
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast 1
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast 2
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast 2
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 500);   // initial (exponential step 0)
+    ASSERT_EQ(mgr.get_next_delay_ms(), 500);  // initial (exponential step 0)
     mgr.record_failure();
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // 500 * 2
 
@@ -855,16 +881,17 @@ bool test_fast_to_exponential_transition() {
 bool test_large_max_delay_does_not_overflow() {
     ReconnectConfig cfg;
     cfg.fast_retries = 0;
-    cfg.initial_delay_ms = 30000000;     // 30 000 s
-    cfg.max_delay_ms = 100000000;        // 100 000 s
+    cfg.initial_delay_ms = 30000000;  // 30 000 s
+    cfg.max_delay_ms = 100000000;     // 100 000 s
     cfg.multiplier_percent = 200;
     ReconnectManager mgr(cfg);
 
     ASSERT_EQ(mgr.get_next_delay_ms(), 30000000);
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 60000000);   // 30 M * 2, below the cap
+    ASSERT_EQ(mgr.get_next_delay_ms(), 60000000);  // 30 M * 2, below the cap
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100000000);  // 120 M would exceed the cap
+    ASSERT_EQ(
+        mgr.get_next_delay_ms(), 100000000);  // 120 M would exceed the cap
 
     return true;
 }
@@ -949,8 +976,10 @@ int main() {
 
     // Summary
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed,
-           g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n");
 
     return g_tests_failed > 0 ? 1 : 0;

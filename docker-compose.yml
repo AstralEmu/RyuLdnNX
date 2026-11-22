@@ -94,12 +94,27 @@ services:
 
   # Run clang-tidy on project source files (not Atmosphere-libs)
   # Usage: docker compose run --rm lint
+  # The lint image is tagged on its own: inheriting the base `image:` would
+  # make `docker compose build lint` overwrite the published dev image tag.
   lint:
     <<: *service-base
+    image: ryu_ldn_nx-lint:local
     build:
       context: .
       dockerfile: lint.Dockerfile
     entrypoint: ["/bin/bash", "/workspace/scripts/lint.sh"]
+
+  # Formatting + Doxygen-completeness gate (scripts/style.py), run in the lint
+  # image so the clang-format version is pinned. Extra args reach style.py:
+  #   docker compose run --rm style            (check)
+  #   docker compose run --rm style format     (rewrite in place)
+  style:
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
+    build:
+      context: .
+      dockerfile: lint.Dockerfile
+    entrypoint: ["python3", "/workspace/scripts/style.py"]
 
   # Run CodeQL analysis (standalone CLI, no GitHub Actions needed)
   # Usage: docker compose run --rm codeql-analyze

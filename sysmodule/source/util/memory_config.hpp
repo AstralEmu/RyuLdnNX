@@ -1,7 +1,9 @@
 #pragma once
 
-// TODO(MEDIUM): migrate callers (main.cpp, ldn_icommunication.cpp, p2p_*.cpp, tcp_client.cpp, etc.)
-//               to use these constants instead of scattered literals. See LINT-30.
+// TODO(MEDIUM): migrate callers (main.cpp, ldn_icommunication.cpp, p2p_*.cpp,
+// tcp_client.cpp, etc.)
+//               to use these constants instead of scattered literals. See
+//               LINT-30.
 
 /**
  * @file memory_config.hpp
@@ -62,9 +64,11 @@ namespace ryu_ldn::memory {
 // receive queues (up to ~45 KB under lobby traffic), pending-packet
 // buffer, ExpHeap overhead, and transient allocations. 96 KB saturated
 // under real gameplay and caused DABRT 0x101 on allocation failure.
-inline constexpr size_t HEAP_SIZE = 384 * 1024;          ///< 384 KB expanded heap
-inline constexpr size_t HEAP_ALIGNMENT = 0x40;           ///< 64-byte alignment for ExpHeap
-inline constexpr size_t MALLOC_BUFFER_SIZE = 1 * 1024 * 1024; ///< 1 MB TLS heap central
+inline constexpr size_t HEAP_SIZE = 384 * 1024;  ///< 384 KB expanded heap
+inline constexpr size_t HEAP_ALIGNMENT =
+    0x40;  ///< 64-byte alignment for ExpHeap
+inline constexpr size_t MALLOC_BUFFER_SIZE =
+    1 * 1024 * 1024;  ///< 1 MB TLS heap central
 
 // ============================================================================
 // Thread stacks (BSS-resident, page-aligned)
@@ -73,34 +77,43 @@ inline constexpr size_t MALLOC_BUFFER_SIZE = 1 * 1024 * 1024; ///< 1 MB TLS heap
 // minissdpc helpers each allocate ~2 KB of stack frames; cumulative with
 // IPC dispatch + CreateNetwork → NatPunch → Discover, 16 KB overflowed
 // and DABRT'd. Two threads (TotalThreads = 2) share this stack size.
-inline constexpr size_t MITM_THREAD_STACK_SIZE = 0x8000;        ///< 32 KB per MITM thread
-inline constexpr size_t MITM_NUM_THREADS = 2;                   ///< Total MITM request threads
+inline constexpr size_t MITM_THREAD_STACK_SIZE =
+    0x8000;                                    ///< 32 KB per MITM thread
+inline constexpr size_t MITM_NUM_THREADS = 2;  ///< Total MITM request threads
 inline constexpr size_t MITM_NUM_EXTRA_THREADS = MITM_NUM_THREADS - 1;
 
 // Config IPC service thread (ryu:cfg): 8 KB stack, light IPC dispatch.
-inline constexpr size_t CFG_THREAD_STACK_SIZE = 0x2000;         ///< 8 KB config service thread
+inline constexpr size_t CFG_THREAD_STACK_SIZE =
+    0x2000;  ///< 8 KB config service thread
 
 // Log maintenance thread: 4 KB stack, sleeps 2 s between idle checks.
-inline constexpr size_t LOG_THREAD_STACK_SIZE = 0x1000;         ///< 4 KB log maintenance thread
+inline constexpr size_t LOG_THREAD_STACK_SIZE =
+    0x1000;  ///< 4 KB log maintenance thread
 
 // LDN receive thread (dedicated packet dispatch): 16 KB stack.
-inline constexpr size_t LDN_RECV_THREAD_STACK_SIZE = 0x4000;    ///< 16 KB LDN receive thread
+inline constexpr size_t LDN_RECV_THREAD_STACK_SIZE =
+    0x4000;  ///< 16 KB LDN receive thread
 
 // LDN P2P connect worker (async ExternalProxy connect): 16 KB stack.
-inline constexpr size_t LDN_P2P_CONNECT_THREAD_STACK_SIZE = 0x4000; ///< 16 KB P2P connect worker
+inline constexpr size_t LDN_P2P_CONNECT_THREAD_STACK_SIZE =
+    0x4000;  ///< 16 KB P2P connect worker
 
 // P2P accept thread (host side, listens for incoming peers): 16 KB stack.
-inline constexpr size_t P2P_ACCEPT_THREAD_STACK_SIZE = 0x4000;  ///< 16 KB P2P accept thread
+inline constexpr size_t P2P_ACCEPT_THREAD_STACK_SIZE =
+    0x4000;  ///< 16 KB P2P accept thread
 
 // P2P lease renewal thread (UPnP lease keepalive): 8 KB stack.
-inline constexpr size_t P2P_LEASE_THREAD_STACK_SIZE = 0x2000;   ///< 8 KB P2P lease thread
+inline constexpr size_t P2P_LEASE_THREAD_STACK_SIZE =
+    0x2000;  ///< 8 KB P2P lease thread
 
 // P2P client receive thread (joiner side, single client): 16 KB stack.
-inline constexpr size_t P2P_CLIENT_RECV_THREAD_STACK_SIZE = 0x4000; ///< 16 KB P2P client recv
+inline constexpr size_t P2P_CLIENT_RECV_THREAD_STACK_SIZE =
+    0x4000;  ///< 16 KB P2P client recv
 
 // P2P per-session receive thread pool (one per peer, max 8 players).
-inline constexpr int    P2P_SESSION_STACK_COUNT = 8;            ///< One slot per max player
-inline constexpr size_t P2P_SESSION_STACK_SIZE = 0x4000;        ///< 16 KB per session recv thread
+inline constexpr int P2P_SESSION_STACK_COUNT = 8;  ///< One slot per max player
+inline constexpr size_t P2P_SESSION_STACK_SIZE =
+    0x4000;  ///< 16 KB per session recv thread
 
 // ============================================================================
 // Socket / network buffers (libnx BSD config)
@@ -108,56 +121,71 @@ inline constexpr size_t P2P_SESSION_STACK_SIZE = 0x4000;        ///< 16 KB per s
 // These are passed into LibnxSocketInitConfig. Sizes are in bytes.
 // ConcurrencyLimitMax = 14 is the highest bsd:s session count the kernel
 // accepts; default of 3 saturated with P2P loopback sessions.
-inline constexpr uint32_t TCP_TX_BUF_SIZE         = 0x800;   ///< 2 KB TCP tx initial
-inline constexpr uint32_t TCP_RX_BUF_SIZE         = 0x1000;  ///< 4 KB TCP rx initial
-inline constexpr uint32_t TCP_TX_BUF_MAX_SIZE     = 0x2000;  ///< 8 KB TCP tx max
-inline constexpr uint32_t TCP_RX_BUF_MAX_SIZE     = 0x2000;  ///< 8 KB TCP rx max
-inline constexpr uint32_t UDP_TX_BUF_SIZE         = 0x2000;  ///< 8 KB UDP tx
-inline constexpr uint32_t UDP_RX_BUF_SIZE         = 0x2000;  ///< 8 KB UDP rx
-inline constexpr uint32_t SOCKET_BUFFER_EFFICIENCY = 4;      ///< sb_efficiency (libnx)
-inline constexpr uint32_t BSD_MAX_SESSIONS        = 14;      ///< ConcurrencyLimitMax
-inline constexpr uint32_t BSD_INIT_VERSION        = 1;       ///< BSD init protocol version
+inline constexpr uint32_t TCP_TX_BUF_SIZE = 0x800;   ///< 2 KB TCP tx initial
+inline constexpr uint32_t TCP_RX_BUF_SIZE = 0x1000;  ///< 4 KB TCP rx initial
+inline constexpr uint32_t TCP_TX_BUF_MAX_SIZE = 0x2000;  ///< 8 KB TCP tx max
+inline constexpr uint32_t TCP_RX_BUF_MAX_SIZE = 0x2000;  ///< 8 KB TCP rx max
+inline constexpr uint32_t UDP_TX_BUF_SIZE = 0x2000;      ///< 8 KB UDP tx
+inline constexpr uint32_t UDP_RX_BUF_SIZE = 0x2000;      ///< 8 KB UDP rx
+inline constexpr uint32_t SOCKET_BUFFER_EFFICIENCY =
+    4;                                            ///< sb_efficiency (libnx)
+inline constexpr uint32_t BSD_MAX_SESSIONS = 14;  ///< ConcurrencyLimitMax
+inline constexpr uint32_t BSD_INIT_VERSION = 1;   ///< BSD init protocol version
 
 // Per-call TCP recv staging buffer. 4 KB matches a typical MSS-sized TCP
 // segment so one recv() usually returns a single packet.
-inline constexpr size_t TCP_TEMP_RECV_BUFFER_SIZE = 4096;     ///< 4 KB per-call recv staging
+inline constexpr size_t TCP_TEMP_RECV_BUFFER_SIZE =
+    4096;  ///< 4 KB per-call recv staging
 
 // ============================================================================
 // IPC server manager limits
 // ============================================================================
-inline constexpr size_t MITM_PORT_COUNT  = 2;    ///< ldn:u + bsd:u
-inline constexpr size_t CFG_PORT_COUNT   = 1;    ///< ryu:cfg
-inline constexpr size_t MITM_MAX_SESSIONS = 16;  ///< Max concurrent MITM sessions
-inline constexpr size_t CFG_MAX_SESSIONS  = 2;   ///< Max concurrent ryu:cfg sessions
-inline constexpr size_t MITM_POINTER_BUFFER_SIZE = 0x1000; ///< 4 KB MITM IPC pointer buffer
-inline constexpr size_t MITM_MAX_DOMAINS          = 0x10;   ///< 16 MITM domains
-inline constexpr size_t MITM_MAX_DOMAIN_OBJECTS   = 0x100;  ///< 256 MITM domain objects
-inline constexpr size_t CFG_POINTER_BUFFER_SIZE   = 0x100;  ///< 256 B cfg IPC pointer buffer
-inline constexpr size_t CFG_MAX_DOMAINS           = 0;      ///< cfg no domains
-inline constexpr size_t CFG_MAX_DOMAIN_OBJECTS    = 0;      ///< cfg no domain objects
+inline constexpr size_t MITM_PORT_COUNT = 2;  ///< ldn:u + bsd:u
+inline constexpr size_t CFG_PORT_COUNT = 1;   ///< ryu:cfg
+inline constexpr size_t MITM_MAX_SESSIONS =
+    16;  ///< Max concurrent MITM sessions
+inline constexpr size_t CFG_MAX_SESSIONS =
+    2;  ///< Max concurrent ryu:cfg sessions
+inline constexpr size_t MITM_POINTER_BUFFER_SIZE =
+    0x1000;  ///< 4 KB MITM IPC pointer buffer
+inline constexpr size_t MITM_MAX_DOMAINS = 0x10;  ///< 16 MITM domains
+inline constexpr size_t MITM_MAX_DOMAIN_OBJECTS =
+    0x100;  ///< 256 MITM domain objects
+inline constexpr size_t CFG_POINTER_BUFFER_SIZE =
+    0x100;                                    ///< 256 B cfg IPC pointer buffer
+inline constexpr size_t CFG_MAX_DOMAINS = 0;  ///< cfg no domains
+inline constexpr size_t CFG_MAX_DOMAIN_OBJECTS = 0;  ///< cfg no domain objects
 
 // ============================================================================
 // Log subsystem buffers
 // ============================================================================
-inline constexpr size_t LOG_MESSAGE_MAX_LENGTH  = 256;  ///< Max single log message
-inline constexpr size_t LOG_BUFFER_MAX_ENTRIES  = 64;   ///< Circular buffer entries for overlay
-inline constexpr uint64_t LOG_MAINTENANCE_INTERVAL_SEC = 2;      ///< Log idle-check sleep (s)
-inline constexpr int32_t  LOG_THREAD_PRIORITY_OFFSET   = 5;      ///< Priority offset vs cfg thread
+inline constexpr size_t LOG_MESSAGE_MAX_LENGTH =
+    256;  ///< Max single log message
+inline constexpr size_t LOG_BUFFER_MAX_ENTRIES =
+    64;  ///< Circular buffer entries for overlay
+inline constexpr uint64_t LOG_MAINTENANCE_INTERVAL_SEC =
+    2;  ///< Log idle-check sleep (s)
+inline constexpr int32_t LOG_THREAD_PRIORITY_OFFSET =
+    5;  ///< Priority offset vs cfg thread
 
 // ============================================================================
 // LDN / P2P subsystem buffers
 // ============================================================================
-inline constexpr size_t LDN_PROXY_MAX_PACKET_DATA = 0x800;     ///< 2 KB max packet data
+inline constexpr size_t LDN_PROXY_MAX_PACKET_DATA =
+    0x800;  ///< 2 KB max packet data
 inline constexpr size_t LDN_PROXY_BUFFER_SIZE =
-    LDN_PROXY_MAX_PACKET_DATA * 4 + 256;                       ///< ~8.5 KB proxy buffer
-inline constexpr size_t LDN_PROXY_MAX_QUEUED_PACKETS = 16;     ///< Pending packets per proxy
-inline constexpr size_t MAX_PROXY_SOCKETS = 64;                ///< Max tracked proxy sockets
-inline constexpr size_t MAX_PROXY_CONNECTIONS = 64;            ///< Max P2P proxy connections
-inline constexpr size_t LDN_MAX_SCAN_RESULTS = 8;              ///< Max networks from scan
-inline constexpr size_t MAX_NODES = 8;                         ///< Max LDN nodes (players)
+    LDN_PROXY_MAX_PACKET_DATA * 4 + 256;  ///< ~8.5 KB proxy buffer
+inline constexpr size_t LDN_PROXY_MAX_QUEUED_PACKETS =
+    16;                                          ///< Pending packets per proxy
+inline constexpr size_t MAX_PROXY_SOCKETS = 64;  ///< Max tracked proxy sockets
+inline constexpr size_t MAX_PROXY_CONNECTIONS =
+    64;  ///< Max P2P proxy connections
+inline constexpr size_t LDN_MAX_SCAN_RESULTS = 8;  ///< Max networks from scan
+inline constexpr size_t MAX_NODES = 8;             ///< Max LDN nodes (players)
 
 // Protocol-level limits (kept here for memory budgeting; semantic
 // definitions remain in protocol/types.hpp).
-inline constexpr size_t MAX_PACKET_SIZE = 131072;              ///< 128 KB max protocol packet
+inline constexpr size_t MAX_PACKET_SIZE =
+    131072;  ///< 128 KB max protocol packet
 
-} // namespace ryu_ldn::memory
+}  // namespace ryu_ldn::memory

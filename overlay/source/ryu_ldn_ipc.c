@@ -36,35 +36,35 @@
  */
 enum {
     // Sysmodule Status (0-8)
-    RyuCfgCmd_GetVersion          = 0,
+    RyuCfgCmd_GetVersion = 0,
     RyuCfgCmd_GetConnectionStatus = 1,
-    RyuCfgCmd_IsServiceActive     = 2,
-    RyuCfgCmd_IsGameActive        = 3,
-    RyuCfgCmd_GetLdnState         = 4,
-    RyuCfgCmd_GetSessionInfo      = 5,
-    RyuCfgCmd_GetLastRtt          = 6,
-    RyuCfgCmd_ForceReconnect      = 7,
-    RyuCfgCmd_GetActiveProcessId  = 8,
+    RyuCfgCmd_IsServiceActive = 2,
+    RyuCfgCmd_IsGameActive = 3,
+    RyuCfgCmd_GetLdnState = 4,
+    RyuCfgCmd_GetSessionInfo = 5,
+    RyuCfgCmd_GetLastRtt = 6,
+    RyuCfgCmd_ForceReconnect = 7,
+    RyuCfgCmd_GetActiveProcessId = 8,
 
     // Sysmodule General Settings (9-14)
-    RyuCfgCmd_GetDebugEnabled     = 9,
-    RyuCfgCmd_SetDebugEnabled     = 10,
-    RyuCfgCmd_GetDebugLevel       = 11,
-    RyuCfgCmd_SetDebugLevel       = 12,
-    RyuCfgCmd_SaveConfig          = 13,
-    RyuCfgCmd_ReloadConfig        = 14,
+    RyuCfgCmd_GetDebugEnabled = 9,
+    RyuCfgCmd_SetDebugEnabled = 10,
+    RyuCfgCmd_GetDebugLevel = 11,
+    RyuCfgCmd_SetDebugLevel = 12,
+    RyuCfgCmd_SaveConfig = 13,
+    RyuCfgCmd_ReloadConfig = 14,
 
     // Sysmodule Configuration Manager (15-24)
-    RyuCfgCmd_GetServerAddress    = 15,
-    RyuCfgCmd_SetServerAddress    = 16,
-    RyuCfgCmd_GetLdnEnabled       = 17,
-    RyuCfgCmd_SetLdnEnabled       = 18,
-    RyuCfgCmd_GetDisableP2p       = 19,
-    RyuCfgCmd_SetDisableP2p       = 20,
-    RyuCfgCmd_GetUsePassphrase    = 21,
-    RyuCfgCmd_SetUsePassphrase    = 22,
-    RyuCfgCmd_GetPassphrase       = 23,
-    RyuCfgCmd_SetPassphrase       = 24,
+    RyuCfgCmd_GetServerAddress = 15,
+    RyuCfgCmd_SetServerAddress = 16,
+    RyuCfgCmd_GetLdnEnabled = 17,
+    RyuCfgCmd_SetLdnEnabled = 18,
+    RyuCfgCmd_GetDisableP2p = 19,
+    RyuCfgCmd_SetDisableP2p = 20,
+    RyuCfgCmd_GetUsePassphrase = 21,
+    RyuCfgCmd_SetUsePassphrase = 22,
+    RyuCfgCmd_GetPassphrase = 23,
+    RyuCfgCmd_SetPassphrase = 24,
 };
 
 /// Global service handle
@@ -123,13 +123,15 @@ Result ryuLdnGetVersion(RyuLdnConfigService* s, char* version) {
     return rc;
 }
 
-Result ryuLdnGetConnectionStatus(RyuLdnConfigService* s, RyuLdnConnectionStatus* status) {
+Result ryuLdnGetConnectionStatus(
+    RyuLdnConfigService* s, RyuLdnConnectionStatus* status) {
     if (!s) {
         return RyuLdn_ResultInvalidArg;
     }
 
     u32 out_status = 0;
-    Result rc = serviceDispatchOut(&s->s, RyuCfgCmd_GetConnectionStatus, out_status);
+    Result rc =
+        serviceDispatchOut(&s->s, RyuCfgCmd_GetConnectionStatus, out_status);
     if (R_SUCCEEDED(rc)) {
         *status = (RyuLdnConnectionStatus)out_status;
     }
@@ -291,7 +293,8 @@ Result ryuLdnGetServerAddress(RyuLdnConfigService* s, char* host, u16* port) {
     return rc;
 }
 
-Result ryuLdnSetServerAddress(RyuLdnConfigService* s, const char* host, u16 port) {
+Result ryuLdnSetServerAddress(
+    RyuLdnConfigService* s, const char* host, u16 port) {
     if (!s) {
         return RyuLdn_ResultInvalidArg;
     }
@@ -370,7 +373,8 @@ Result ryuLdnGetPassphrase(RyuLdnConfigService* s, char* passphrase) {
 
     char passphrase_buf[64];
     memset(passphrase_buf, 0, sizeof(passphrase_buf));
-    Result rc = serviceDispatchOut(&s->s, RyuCfgCmd_GetPassphrase, passphrase_buf);
+    Result rc =
+        serviceDispatchOut(&s->s, RyuCfgCmd_GetPassphrase, passphrase_buf);
     if (R_SUCCEEDED(rc)) {
         memcpy(passphrase, passphrase_buf, 64);
         passphrase[63] = '\0';
@@ -394,13 +398,21 @@ Result ryuLdnSetPassphrase(RyuLdnConfigService* s, const char* passphrase) {
 
 const char* ryuLdnStateToString(RyuLdnState state) {
     switch (state) {
-        case RyuLdnState_None:               return "None";
-        case RyuLdnState_Initialized:        return "Initialized";
-        case RyuLdnState_AccessPoint:        return "Access Point";
-        case RyuLdnState_AccessPointCreated: return "AP Created";
-        case RyuLdnState_Station:            return "Station";
-        case RyuLdnState_StationConnected:   return "Connected";
-        case RyuLdnState_Error:              return "Error";
-        default:                             return "Unknown";
+        case RyuLdnState_None:
+            return "None";
+        case RyuLdnState_Initialized:
+            return "Initialized";
+        case RyuLdnState_AccessPoint:
+            return "Access Point";
+        case RyuLdnState_AccessPointCreated:
+            return "AP Created";
+        case RyuLdnState_Station:
+            return "Station";
+        case RyuLdnState_StationConnected:
+            return "Connected";
+        case RyuLdnState_Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }

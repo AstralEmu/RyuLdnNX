@@ -19,9 +19,9 @@
  *
  * ## Switch-Specific Notes
  *
- * On Switch, socket_init() is called during sysmodule startup (main.cpp) and only
- * sets a global flag — socketInitializeDefault() is called separately by the host.
- * On POSIX (test builds), socket_init() is a no-op.
+ * On Switch, socket_init() is called during sysmodule startup (main.cpp) and
+ * only sets a global flag — socketInitializeDefault() is called separately by
+ * the host. On POSIX (test builds), socket_init() is a no-op.
  *
  * - DNS resolution via getaddrinfo() requires an active network connection
  * - Transfer memory is allocated automatically by libnx
@@ -125,10 +125,10 @@ SocketResult socket_init() {
         return SocketResult::Success;
     }
 
-    // Note: On Switch, sockets are initialized in main.cpp via socketInitialize()
-    // before any MITM services are created. We don't call socketInitializeDefault()
-    // here because it would fail (sockets already initialized) or conflict with
-    // the existing initialization.
+    // Note: On Switch, sockets are initialized in main.cpp via
+    // socketInitialize() before any MITM services are created. We don't call
+    // socketInitializeDefault() here because it would fail (sockets already
+    // initialized) or conflict with the existing initialization.
 
     s_initialized = true;
     return SocketResult::Success;
@@ -145,8 +145,8 @@ SocketResult socket_init() {
  * @note Safe to call even if not initialized (no-op)
  */
 void socket_exit() {
-    // Note: On Switch, socketExit() is called in main.cpp's FinalizeSystemModule()
-    // We only reset our internal state flag here.
+    // Note: On Switch, socketExit() is called in main.cpp's
+    // FinalizeSystemModule() We only reset our internal state flag here.
     s_initialized = false;
 }
 
@@ -255,15 +255,16 @@ bool resolve_host(const char* host, struct sockaddr_in& addr) {
     // Not a numeric IP, try DNS resolution
     // Set up hints for IPv4 TCP socket
     struct addrinfo hints{};
-    hints.ai_family = AF_INET;       // IPv4 only
-    hints.ai_socktype = SOCK_STREAM; // TCP
+    hints.ai_family = AF_INET;        // IPv4 only
+    hints.ai_socktype = SOCK_STREAM;  // TCP
 
     struct addrinfo* result = nullptr;
     int ret = getaddrinfo(host, nullptr, &hints, &result);
 
     if (ret != 0 || (result == nullptr)) {
         // DNS resolution failed
-        // Common causes: network offline, DNS server unreachable, invalid hostname
+        // Common causes: network offline, DNS server unreachable, invalid
+        // hostname
         return false;
     }
 
@@ -276,7 +277,7 @@ bool resolve_host(const char* host, struct sockaddr_in& addr) {
     return true;
 }
 
-} // anonymous namespace
+}  // anonymous namespace
 
 // =============================================================================
 // Socket Class Implementation
@@ -289,11 +290,7 @@ bool resolve_host(const char* host, struct sockaddr_in& addr) {
  * Call connect() to establish a connection, which will create the
  * underlying socket automatically.
  */
-Socket::Socket()
-    : m_fd(-1)
-    , m_connected(false)
-{
-}
+Socket::Socket() : m_fd(-1), m_connected(false) {}
 
 /**
  * @brief Destructor - ensures socket is properly closed
@@ -314,9 +311,7 @@ Socket::~Socket() {
  * @param other Socket to move from
  */
 Socket::Socket(Socket&& other) noexcept
-    : m_fd(other.m_fd)
-    , m_connected(other.m_connected)
-{
+    : m_fd(other.m_fd), m_connected(other.m_connected) {
     // Invalidate the source socket
     other.m_fd = -1;
     other.m_connected = false;
@@ -388,7 +383,8 @@ SocketResult Socket::create() {
  *
  * @param host IP address (e.g., "ryuldnnx.ddns.net")
  * @param port TCP port number (e.g., 30456)
- * @param timeout_ms Connection timeout in milliseconds (0 = blocking/no timeout)
+ * @param timeout_ms Connection timeout in milliseconds (0 = blocking/no
+ * timeout)
  *
  * @return SocketResult::Success on successful connection
  * @return SocketResult::NotInitialized if socket_init() wasn't called
@@ -401,7 +397,8 @@ SocketResult Socket::create() {
  * @note If connection fails, the socket is automatically closed
  * @note Recommended timeout: 5000ms (5 seconds) for typical use
  */
-SocketResult Socket::connect(const char* host, uint16_t port, uint32_t timeout_ms) {
+SocketResult Socket::connect(
+    const char* host, uint16_t port, uint32_t timeout_ms) {
     // Ensure socket subsystem is initialized
     if (!s_initialized) {
         return SocketResult::NotInitialized;
@@ -430,8 +427,11 @@ SocketResult Socket::connect(const char* host, uint16_t port, uint32_t timeout_m
         close();  // Clean up the created socket on resolution failure
         return SocketResult::InvalidAddress;
     }
-    LOG_INFO("Socket::connect: resolved '%s' -> %s:%u", host,
-             inet_ntoa(addr.sin_addr), port);
+    LOG_INFO(
+        "Socket::connect: resolved '%s' -> %s:%u",
+        host,
+        inet_ntoa(addr.sin_addr),
+        port);
     addr.sin_port = htons(port);  // Convert port to network byte order
 
     // Determine if we should use timeout
@@ -447,15 +447,21 @@ SocketResult Socket::connect(const char* host, uint16_t port, uint32_t timeout_m
     }
 
     // Initiate TCP connection
-    int ret = ::connect(m_fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr));
+    int ret = ::connect(
+        m_fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr));
 
     if (ret < 0) {
         if (use_timeout && (errno == EINPROGRESS || errno == EWOULDBLOCK)) {
             // Connection in progress - wait for it to complete
-            LOG_VERBOSE("Socket::connect: EINPROGRESS, waiting up to %u ms", timeout_ms);
-            result = wait_ready(timeout_ms, true);  // Wait for socket to be writable
+            LOG_VERBOSE(
+                "Socket::connect: EINPROGRESS, waiting up to %u ms",
+                timeout_ms);
+            result =
+                wait_ready(timeout_ms, true);  // Wait for socket to be writable
             if (result != SocketResult::Success) {
-                LOG_WARN("Socket::connect: wait_ready failed: %s", socket_result_to_string(result));
+                LOG_WARN(
+                    "Socket::connect: wait_ready failed: %s",
+                    socket_result_to_string(result));
                 close();
                 return result;
             }
@@ -471,13 +477,19 @@ SocketResult Socket::connect(const char* host, uint16_t port, uint32_t timeout_m
 
             if (error != 0) {
                 // Connection failed
-                LOG_WARN("Socket::connect: SO_ERROR=%d (%s) after poll", error, strerror(error));
+                LOG_WARN(
+                    "Socket::connect: SO_ERROR=%d (%s) after poll",
+                    error,
+                    strerror(error));
                 close();
                 return errno_to_result(error);
             }
         } else {
             // Immediate failure (or blocking mode error)
-            LOG_WARN("Socket::connect: immediate failure: %d (%s)", errno, strerror(errno));
+            LOG_WARN(
+                "Socket::connect: immediate failure: %d (%s)",
+                errno,
+                strerror(errno));
             close();
             return errno_to_result(errno);
         }
@@ -492,8 +504,13 @@ SocketResult Socket::connect(const char* host, uint16_t port, uint32_t timeout_m
     // This is purely a transport-level mechanism — no RyuLDN protocol changes.
     // After 30s idle, send a probe every 10s; after 5 failed probes, close.
     int keepalive = 1;
-    if (setsockopt(m_fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) < 0) {
-        LOG_WARN("Socket::connect: SO_KEEPALIVE failed: %d (%s)", errno, strerror(errno));
+    if (setsockopt(
+            m_fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) <
+        0) {
+        LOG_WARN(
+            "Socket::connect: SO_KEEPALIVE failed: %d (%s)",
+            errno,
+            strerror(errno));
         // Non-fatal — continue without keepalive
     } else {
 #ifdef __SWITCH__
@@ -587,7 +604,8 @@ SocketResult Socket::send_all(const uint8_t* data, size_t size) {
 
         if (result == SocketResult::WouldBlock) {
             // Wait for socket to become writable
-            result = wait_ready(SOCKET_WRITE_TIMEOUT_MS, true);  // 5 second timeout per chunk
+            result = wait_ready(
+                SOCKET_WRITE_TIMEOUT_MS, true);  // 5 second timeout per chunk
             if (result != SocketResult::Success) {
                 return result;
             }
@@ -625,7 +643,8 @@ SocketResult Socket::send_all(const uint8_t* data, size_t size) {
  *
  * @note received may be less than buffer_size (TCP is a stream, not messages)
  */
-SocketResult Socket::recv(uint8_t* buffer, size_t buffer_size, size_t& received, int32_t timeout_ms) {
+SocketResult Socket::recv(
+    uint8_t* buffer, size_t buffer_size, size_t& received, int32_t timeout_ms) {
     received = 0;
 
     if (!m_connected) {
@@ -634,7 +653,8 @@ SocketResult Socket::recv(uint8_t* buffer, size_t buffer_size, size_t& received,
 
     // Handle positive timeout: wait for data with poll()
     if (timeout_ms > 0) {
-        SocketResult result = wait_ready(static_cast<uint32_t>(timeout_ms), false);
+        SocketResult result =
+            wait_ready(static_cast<uint32_t>(timeout_ms), false);
         if (result != SocketResult::Success) {
             return result;
         }
@@ -896,11 +916,14 @@ SocketResult Socket::wait_ready(uint32_t timeout_ms, bool for_write) {
         // Flush — this log is the key diagnostic event for "master TCP dies
         // while game IPC is still running". Without flushing we lose it if
         // a KP follows (the logger's 2s idle-flush hasn't triggered yet).
-        LOG_INFO("Socket::wait_ready: peer-side close on fd=%d (revents=0x%X: %s%s%s) — marking disconnected",
-                 m_fd, static_cast<unsigned>(pfd.revents),
-                 (pfd.revents & POLLERR)  ? "POLLERR " : "",
-                 (pfd.revents & POLLHUP)  ? "POLLHUP " : "",
-                 (pfd.revents & POLLNVAL) ? "POLLNVAL" : "");
+        LOG_INFO(
+            "Socket::wait_ready: peer-side close on fd=%d (revents=0x%X: "
+            "%s%s%s) — marking disconnected",
+            m_fd,
+            static_cast<unsigned>(pfd.revents),
+            (pfd.revents & POLLERR) ? "POLLERR " : "",
+            (pfd.revents & POLLHUP) ? "POLLHUP " : "",
+            (pfd.revents & POLLNVAL) ? "POLLNVAL" : "");
         ryu_ldn::debug::g_logger.flush();
         m_connected = false;
         return SocketResult::ConnectionReset;
@@ -910,7 +933,7 @@ SocketResult Socket::wait_ready(uint32_t timeout_ms, bool for_write) {
     return SocketResult::Success;
 }
 
-} // namespace ryu_ldn::network
+}  // namespace ryu_ldn::network
 
 #ifdef TEST_BUILD
 // Expose errno_to_result for unit testing
@@ -951,5 +974,5 @@ SocketResult errno_to_result(int err) {
     return SocketResult::SocketError;
 }
 
-} // namespace ryu_ldn::network
+}  // namespace ryu_ldn::network
 #endif

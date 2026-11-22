@@ -23,7 +23,7 @@ typedef uint64_t u64;
 typedef int32_t Result;
 
 #define R_SUCCEEDED(res) ((res) == 0)
-#define R_FAILED(res)    ((res) != 0)
+#define R_FAILED(res) ((res) != 0)
 
 // Mock Service structure
 typedef struct {
@@ -58,11 +58,11 @@ typedef enum {
  * 8 bytes total, same as SessionInfoIpc in sysmodule.
  */
 typedef struct {
-    u8 node_count;      ///< Current number of nodes in session
-    u8 max_nodes;       ///< Maximum nodes allowed in session
-    u8 local_node_id;   ///< This node's ID in the session
-    u8 is_host;         ///< 1 if this node is the host, 0 otherwise
-    u8 reserved[4];     ///< Reserved for future use
+    u8 node_count;     ///< Current number of nodes in session
+    u8 max_nodes;      ///< Maximum nodes allowed in session
+    u8 local_node_id;  ///< This node's ID in the session
+    u8 is_host;        ///< 1 if this node is the host, 0 otherwise
+    u8 reserved[4];    ///< Reserved for future use
 } RyuLdnSessionInfo;
 
 typedef struct {
@@ -75,41 +75,61 @@ typedef struct {
 
 const char* ConnectionStatusToString(RyuLdnConnectionStatus status) {
     switch (status) {
-        case RyuLdnStatus_Disconnected: return "Disconnected";
-        case RyuLdnStatus_Connecting:   return "Connecting...";
-        case RyuLdnStatus_Connected:    return "Connected";
-        case RyuLdnStatus_Ready:        return "Ready";
-        case RyuLdnStatus_Error:        return "Error";
-        default:                        return "Unknown";
+        case RyuLdnStatus_Disconnected:
+            return "Disconnected";
+        case RyuLdnStatus_Connecting:
+            return "Connecting...";
+        case RyuLdnStatus_Connected:
+            return "Connected";
+        case RyuLdnStatus_Ready:
+            return "Ready";
+        case RyuLdnStatus_Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }
 
 const char* LdnStateToString(RyuLdnState state) {
     switch (state) {
-        case RyuLdnState_None:              return "None";
-        case RyuLdnState_Initialized:       return "Initialized";
-        case RyuLdnState_AccessPoint:       return "Access Point";
-        case RyuLdnState_AccessPointCreated:return "Hosting";
-        case RyuLdnState_Station:           return "Station";
-        case RyuLdnState_StationConnected:  return "Connected";
-        case RyuLdnState_Error:             return "Error";
-        default:                            return "Unknown";
+        case RyuLdnState_None:
+            return "None";
+        case RyuLdnState_Initialized:
+            return "Initialized";
+        case RyuLdnState_AccessPoint:
+            return "Access Point";
+        case RyuLdnState_AccessPointCreated:
+            return "Hosting";
+        case RyuLdnState_Station:
+            return "Station";
+        case RyuLdnState_StationConnected:
+            return "Connected";
+        case RyuLdnState_Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }
 
 // Format session info string
-void FormatSessionInfo(const RyuLdnSessionInfo* info, char* buf, size_t bufSize) {
+void FormatSessionInfo(
+    const RyuLdnSessionInfo* info, char* buf, size_t bufSize) {
     if (info->node_count == 0) {
         snprintf(buf, bufSize, "Not in session");
     } else {
-        snprintf(buf, bufSize, "%d/%d players (%s)",
-                 info->node_count, info->max_nodes,
-                 info->is_host ? "Host" : "Client");
+        snprintf(
+            buf,
+            bufSize,
+            "%d/%d players (%s)",
+            info->node_count,
+            info->max_nodes,
+            info->is_host ? "Host" : "Client");
     }
 }
 
 // Format server address string
-void FormatServerAddress(const char* host, u16 port, char* buf, size_t bufSize) {
+void FormatServerAddress(
+    const char* host, u16 port, char* buf, size_t bufSize) {
     snprintf(buf, bufSize, "%s:%u", host, port);
 }
 
@@ -130,21 +150,26 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 
 #define TEST(name) void name()
-#define RUN_TEST(name) do { \
-    g_tests_run++; \
-    printf("  [TEST] %s...", #name); \
-    name(); \
-    g_tests_passed++; \
-    printf(" PASS\n"); \
-} while(0)
+#define RUN_TEST(name)                   \
+    do {                                 \
+        g_tests_run++;                   \
+        printf("  [TEST] %s...", #name); \
+        name();                          \
+        g_tests_passed++;                \
+        printf(" PASS\n");               \
+    } while (0)
 
-#define ASSERT(cond) do { \
-    if (!(cond)) { \
-        printf(" FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
-               #cond, __FILE__, __LINE__); \
-        exit(1); \
-    } \
-} while(0)
+#define ASSERT(cond)                                               \
+    do {                                                           \
+        if (!(cond)) {                                             \
+            printf(                                                \
+                " FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
+                #cond,                                             \
+                __FILE__,                                          \
+                __LINE__);                                         \
+            exit(1);                                               \
+        }                                                          \
+    } while (0)
 
 #define ASSERT_EQ(a, b) ASSERT((a) == (b))
 #define ASSERT_NE(a, b) ASSERT((a) != (b))
@@ -155,11 +180,13 @@ static int g_tests_passed = 0;
 //=============================================================================
 
 TEST(status_disconnected_to_string) {
-    ASSERT_STREQ(ConnectionStatusToString(RyuLdnStatus_Disconnected), "Disconnected");
+    ASSERT_STREQ(
+        ConnectionStatusToString(RyuLdnStatus_Disconnected), "Disconnected");
 }
 
 TEST(status_connecting_to_string) {
-    ASSERT_STREQ(ConnectionStatusToString(RyuLdnStatus_Connecting), "Connecting...");
+    ASSERT_STREQ(
+        ConnectionStatusToString(RyuLdnStatus_Connecting), "Connecting...");
 }
 
 TEST(status_connected_to_string) {
@@ -175,7 +202,8 @@ TEST(status_error_to_string) {
 }
 
 TEST(status_unknown_to_string) {
-    ASSERT_STREQ(ConnectionStatusToString((RyuLdnConnectionStatus)99), "Unknown");
+    ASSERT_STREQ(
+        ConnectionStatusToString((RyuLdnConnectionStatus)99), "Unknown");
 }
 
 //=============================================================================
@@ -373,7 +401,7 @@ TEST(format_session_buffer_small) {
     info.node_count = 8;
     info.max_nodes = 8;
     info.is_host = 1;
-    char buf[10]; // Too small, but should not crash
+    char buf[10];  // Too small, but should not crash
     FormatSessionInfo(&info, buf, sizeof(buf));
     // Just verify it doesn't crash and produces something
     ASSERT(strlen(buf) < 10);

@@ -2,8 +2,9 @@
  * @file log.hpp
  * @brief Debug Logging System for ryu_ldn_nx
  *
- * Provides configurable logging functionality for debugging and troubleshooting.
- * Supports multiple log levels, console output, and optional file logging.
+ * Provides configurable logging functionality for debugging and
+ * troubleshooting. Supports multiple log levels, console output, and optional
+ * file logging.
  *
  * ## Design Principles
  *
@@ -61,7 +62,7 @@
 
 // Forward declaration to avoid circular include
 namespace ryu_ldn::config {
-    struct DebugConfig;
+struct DebugConfig;
 }
 
 namespace ryu_ldn::debug {
@@ -77,7 +78,8 @@ constexpr size_t MAX_LOG_MESSAGE_LENGTH = 256;
 constexpr size_t MAX_LOG_BUFFER_ENTRIES = 64;
 
 /** @brief Default log file path on SD card */
-constexpr const char* DEFAULT_LOG_PATH = "sdmc:/config/ryu_ldn_nx/ryu_ldn_nx.log";
+constexpr const char* DEFAULT_LOG_PATH =
+    "sdmc:/config/ryu_ldn_nx/ryu_ldn_nx.log";
 
 // =============================================================================
 // Log Levels
@@ -91,10 +93,10 @@ constexpr const char* DEFAULT_LOG_PATH = "sdmc:/config/ryu_ldn_nx/ryu_ldn_nx.log
  * level will be logged.
  */
 enum class LogLevel : uint32_t {
-    Error = 0,      ///< Critical errors (always logged when enabled)
-    Warning = 1,    ///< Warnings (potential issues)
-    Info = 2,       ///< Informational messages
-    Verbose = 3     ///< Detailed debug output
+    Error = 0,    ///< Critical errors (always logged when enabled)
+    Warning = 1,  ///< Warnings (potential issues)
+    Info = 2,     ///< Informational messages
+    Verbose = 3   ///< Detailed debug output
 };
 
 /**
@@ -105,11 +107,16 @@ enum class LogLevel : uint32_t {
  */
 inline const char* log_level_to_string(LogLevel level) {
     switch (level) {
-        case LogLevel::Error:   return "ERROR";
-        case LogLevel::Warning: return "WARN";
-        case LogLevel::Info:    return "INFO";
-        case LogLevel::Verbose: return "VERBOSE";
-        default:                return "UNKNOWN";
+        case LogLevel::Error:
+            return "ERROR";
+        case LogLevel::Warning:
+            return "WARN";
+        case LogLevel::Info:
+            return "INFO";
+        case LogLevel::Verbose:
+            return "VERBOSE";
+        default:
+            return "UNKNOWN";
     }
 }
 
@@ -127,8 +134,8 @@ inline const char* log_level_to_string(LogLevel level) {
  * @param ... Format arguments
  */
 /// @gdb{tag="DEBUG:LOG", msg="format_log_message"}
-void format_log_message(char* buffer, size_t buffer_size, LogLevel level,
-                        const char* format, ...);
+void format_log_message(
+    char* buffer, size_t buffer_size, LogLevel level, const char* format, ...);
 
 /**
  * @brief Format a log message with va_list
@@ -140,8 +147,12 @@ void format_log_message(char* buffer, size_t buffer_size, LogLevel level,
  * @param args Format arguments as va_list
  */
 /// @gdb{tag="DEBUG:LOG", msg="format_log_message_v"}
-void format_log_message_v(char* buffer, size_t buffer_size, LogLevel level,
-                          const char* format, va_list args);
+void format_log_message_v(
+    char* buffer,
+    size_t buffer_size,
+    LogLevel level,
+    const char* format,
+    va_list args);
 
 // =============================================================================
 // Circular Log Buffer
@@ -158,7 +169,8 @@ public:
     /**
      * @brief Initialize the log buffer
      *
-     * @param capacity Maximum number of messages to store (up to MAX_LOG_BUFFER_ENTRIES)
+     * @param capacity Maximum number of messages to store (up to
+     * MAX_LOG_BUFFER_ENTRIES)
      */
     /// @gdb{tag="DEBUG:LOG", msg="LogBuffer init"}
     void init(size_t capacity = MAX_LOG_BUFFER_ENTRIES);
@@ -193,7 +205,9 @@ public:
     /**
      * @brief Get number of messages in buffer
      */
-    size_t count() const { return m_count; }
+    size_t count() const {
+        return m_count;
+    }
 
     /**
      * @brief Clear all messages
@@ -235,18 +249,23 @@ public:
      * @param log_path Optional custom log file path (default: DEFAULT_LOG_PATH)
      */
     /// @gdb{tag="DEBUG:LOGGER", msg="Logger initialized"}
-    void init(const config::DebugConfig& config,
-              const char* log_path = DEFAULT_LOG_PATH);
+    void init(
+        const config::DebugConfig& config,
+        const char* log_path = DEFAULT_LOG_PATH);
 
     /**
      * @brief Check if logging is enabled
      */
-    bool is_enabled() const { return m_enabled; }
+    bool is_enabled() const {
+        return m_enabled;
+    }
 
     /**
      * @brief Get current log level
      */
-    LogLevel get_level() const { return m_level; }
+    LogLevel get_level() const {
+        return m_level;
+    }
 
     /**
      * @brief Enable or disable logging at runtime
@@ -257,7 +276,9 @@ public:
      * @param enabled True to enable logging, false to disable
      */
     /// @gdb{tag="DEBUG:LOGGER", msg="SetEnabled"}
-    void SetEnabled(bool enabled) { m_enabled = enabled; }
+    void SetEnabled(bool enabled) {
+        m_enabled = enabled;
+    }
 
     /**
      * @brief Set the log level at runtime
@@ -267,7 +288,10 @@ public:
      * @param level New log level (0=Error, 1=Warning, 2=Info, 3=Verbose)
      */
     /// @gdb{tag="DEBUG:LOGGER", msg="SetLevel"}
-    void SetLevel(uint32_t level) { m_level = (level > 3) ? LogLevel::Verbose : static_cast<LogLevel>(level); }
+    void SetLevel(uint32_t level) {
+        m_level =
+            (level > 3) ? LogLevel::Verbose : static_cast<LogLevel>(level);
+    }
 
     /**
      * @brief Check if a message at given level should be logged
@@ -309,14 +333,18 @@ public:
      *
      * @return Reference to internal log buffer
      */
-    const LogBuffer& get_buffer() const { return m_buffer; }
+    const LogBuffer& get_buffer() const {
+        return m_buffer;
+    }
 
     /**
      * @brief Get mutable access to log buffer
      *
      * @return Reference to internal log buffer
      */
-    LogBuffer& get_buffer() { return m_buffer; }
+    LogBuffer& get_buffer() {
+        return m_buffer;
+    }
 
     /**
      * @brief Check and close file if idle timeout expired
@@ -343,7 +371,8 @@ private:
     uint64_t m_last_write_tick = 0;  // Last write timestamp (ticks)
     bool m_header_written = false;   // Track if header was written this session
 
-    static constexpr uint64_t FILE_IDLE_TIMEOUT_NS = 5000000000ULL;  // 5 seconds in nanoseconds
+    static constexpr uint64_t FILE_IDLE_TIMEOUT_NS =
+        5000000000ULL;  // 5 seconds in nanoseconds
 
 #ifdef __SWITCH__
     mutable ams::os::Mutex m_mutex{false};  // Mutex for thread-safe logging
@@ -376,47 +405,55 @@ extern Logger g_logger;
  * @note Uses GNU extension ##__VA_ARGS__ to handle zero variadic arguments.
  *       This is well-supported by GCC, Clang, and devkitPro toolchains.
  */
-#define LOG_ERROR(fmt, ...) \
-    do { \
-        if (::ryu_ldn::debug::g_logger.should_log(::ryu_ldn::debug::LogLevel::Error)) { \
-            ::ryu_ldn::debug::g_logger.log(::ryu_ldn::debug::LogLevel::Error, fmt, ##__VA_ARGS__); \
-        } \
-    } while(0)
+#define LOG_ERROR(fmt, ...)                                             \
+    do {                                                                \
+        if (::ryu_ldn::debug::g_logger.should_log(                      \
+                ::ryu_ldn::debug::LogLevel::Error)) {                   \
+            ::ryu_ldn::debug::g_logger.log(                             \
+                ::ryu_ldn::debug::LogLevel::Error, fmt, ##__VA_ARGS__); \
+        }                                                               \
+    } while (0)
 
 /**
  * @brief Log a warning message
  *
  * Logged when debug level >= 1.
  */
-#define LOG_WARN(fmt, ...) \
-    do { \
-        if (::ryu_ldn::debug::g_logger.should_log(::ryu_ldn::debug::LogLevel::Warning)) { \
-            ::ryu_ldn::debug::g_logger.log(::ryu_ldn::debug::LogLevel::Warning, fmt, ##__VA_ARGS__); \
-        } \
-    } while(0)
+#define LOG_WARN(fmt, ...)                                                \
+    do {                                                                  \
+        if (::ryu_ldn::debug::g_logger.should_log(                        \
+                ::ryu_ldn::debug::LogLevel::Warning)) {                   \
+            ::ryu_ldn::debug::g_logger.log(                               \
+                ::ryu_ldn::debug::LogLevel::Warning, fmt, ##__VA_ARGS__); \
+        }                                                                 \
+    } while (0)
 
 /**
  * @brief Log an info message
  *
  * Logged when debug level >= 2.
  */
-#define LOG_INFO(fmt, ...) \
-    do { \
-        if (::ryu_ldn::debug::g_logger.should_log(::ryu_ldn::debug::LogLevel::Info)) { \
-            ::ryu_ldn::debug::g_logger.log(::ryu_ldn::debug::LogLevel::Info, fmt, ##__VA_ARGS__); \
-        } \
-    } while(0)
+#define LOG_INFO(fmt, ...)                                             \
+    do {                                                               \
+        if (::ryu_ldn::debug::g_logger.should_log(                     \
+                ::ryu_ldn::debug::LogLevel::Info)) {                   \
+            ::ryu_ldn::debug::g_logger.log(                            \
+                ::ryu_ldn::debug::LogLevel::Info, fmt, ##__VA_ARGS__); \
+        }                                                              \
+    } while (0)
 
 /**
  * @brief Log a verbose debug message
  *
  * Logged when debug level >= 3.
  */
-#define LOG_VERBOSE(fmt, ...) \
-    do { \
-        if (::ryu_ldn::debug::g_logger.should_log(::ryu_ldn::debug::LogLevel::Verbose)) { \
-            ::ryu_ldn::debug::g_logger.log(::ryu_ldn::debug::LogLevel::Verbose, fmt, ##__VA_ARGS__); \
-        } \
-    } while(0)
+#define LOG_VERBOSE(fmt, ...)                                             \
+    do {                                                                  \
+        if (::ryu_ldn::debug::g_logger.should_log(                        \
+                ::ryu_ldn::debug::LogLevel::Verbose)) {                   \
+            ::ryu_ldn::debug::g_logger.log(                               \
+                ::ryu_ldn::debug::LogLevel::Verbose, fmt, ##__VA_ARGS__); \
+        }                                                                 \
+    } while (0)
 
-} // namespace ryu_ldn::debug
+}  // namespace ryu_ldn::debug

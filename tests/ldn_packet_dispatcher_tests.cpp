@@ -26,38 +26,47 @@
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct test_##name##_register { \
-        test_##name##_register() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct test_##name##_register {    \
+        test_##name##_register() {            \
             printf("  [TEST] %s... ", #name); \
-            fflush(stdout); \
-            test_##name(); \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } \
-    } test_##name##_instance; \
+            fflush(stdout);                   \
+            test_##name();                    \
+            printf("PASS\n");                 \
+            g_tests_passed++;                 \
+        }                                     \
+    } test_##name##_instance;                 \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL\n    Assertion failed: %s\n    at %s:%d\n", #cond, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_TRUE(cond)                                         \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            printf(                                               \
+                "FAIL\n    Assertion failed: %s\n    at %s:%d\n", \
+                #cond,                                            \
+                __FILE__,                                         \
+                __LINE__);                                        \
+            g_tests_failed++;                                     \
+            return;                                               \
+        }                                                         \
+    } while (0)
 
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("FAIL\n    Expected: %s == %s\n    at %s:%d\n", #a, #b, __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                         \
+    do {                                                        \
+        if ((a) != (b)) {                                       \
+            printf(                                             \
+                "FAIL\n    Expected: %s == %s\n    at %s:%d\n", \
+                #a,                                             \
+                #b,                                             \
+                __FILE__,                                       \
+                __LINE__);                                      \
+            g_tests_failed++;                                   \
+            return;                                             \
+        }                                                       \
+    } while (0)
 
 // ============================================================================
 // Test Helpers
@@ -119,7 +128,8 @@ static struct {
 // Callback Functions
 // ============================================================================
 
-static void on_initialize(const LdnHeader& /*header*/, const InitializeMessage& msg) {
+static void on_initialize(
+    const LdnHeader& /*header*/, const InitializeMessage& msg) {
     g_callback_state.initialize_called = true;
     g_callback_state.last_initialize = msg;
 }
@@ -129,12 +139,14 @@ static void on_connected(const LdnHeader& /*header*/, const NetworkInfo& info) {
     g_callback_state.last_network_info = info;
 }
 
-static void on_sync_network(const LdnHeader& /*header*/, const NetworkInfo& info) {
+static void on_sync_network(
+    const LdnHeader& /*header*/, const NetworkInfo& info) {
     g_callback_state.sync_network_called = true;
     g_callback_state.last_network_info = info;
 }
 
-static void on_scan_reply(const LdnHeader& /*header*/, const NetworkInfo& info) {
+static void on_scan_reply(
+    const LdnHeader& /*header*/, const NetworkInfo& info) {
     g_callback_state.scan_reply_called = true;
     g_callback_state.last_network_info = info;
 }
@@ -143,7 +155,8 @@ static void on_scan_reply_end(const LdnHeader& /*header*/) {
     g_callback_state.scan_reply_end_called = true;
 }
 
-static void on_disconnect(const LdnHeader& /*header*/, const DisconnectMessage& /*msg*/) {
+static void on_disconnect(
+    const LdnHeader& /*header*/, const DisconnectMessage& /*msg*/) {
     g_callback_state.disconnect_called = true;
 }
 
@@ -152,35 +165,45 @@ static void on_ping(const LdnHeader& /*header*/, const PingMessage& msg) {
     g_callback_state.last_ping = msg;
 }
 
-static void on_network_error(const LdnHeader& /*header*/, const NetworkErrorMessage& msg) {
+static void on_network_error(
+    const LdnHeader& /*header*/, const NetworkErrorMessage& msg) {
     g_callback_state.network_error_called = true;
     g_callback_state.last_error = msg;
 }
 
-static void on_proxy_config(const LdnHeader& /*header*/, const ProxyConfig& cfg) {
+static void on_proxy_config(
+    const LdnHeader& /*header*/, const ProxyConfig& cfg) {
     g_callback_state.proxy_config_called = true;
     g_callback_state.last_proxy_config = cfg;
 }
 
-static void on_proxy_connect(const LdnHeader& /*header*/, const ProxyConnectRequest& /*req*/) {
+static void on_proxy_connect(
+    const LdnHeader& /*header*/, const ProxyConnectRequest& /*req*/) {
     g_callback_state.proxy_connect_called = true;
 }
 
-static void on_proxy_connect_reply(const LdnHeader& /*header*/, const ProxyConnectResponse& /*resp*/) {
+static void on_proxy_connect_reply(
+    const LdnHeader& /*header*/, const ProxyConnectResponse& /*resp*/) {
     g_callback_state.proxy_connect_reply_called = true;
 }
 
-static void on_proxy_data(const LdnHeader& /*header*/, const ProxyDataHeader& hdr, const uint8_t* data, size_t size) {
+static void on_proxy_data(
+    const LdnHeader& /*header*/,
+    const ProxyDataHeader& hdr,
+    const uint8_t* data,
+    size_t size) {
     g_callback_state.proxy_data_called = true;
     g_callback_state.last_proxy_header = hdr;
     g_callback_state.last_proxy_data.assign(data, data + size);
 }
 
-static void on_proxy_disconnect(const LdnHeader& /*header*/, const ProxyDisconnectMessage& /*msg*/) {
+static void on_proxy_disconnect(
+    const LdnHeader& /*header*/, const ProxyDisconnectMessage& /*msg*/) {
     g_callback_state.proxy_disconnect_called = true;
 }
 
-static void on_reject(const LdnHeader& /*header*/, const RejectRequest& /*req*/) {
+static void on_reject(
+    const LdnHeader& /*header*/, const RejectRequest& /*req*/) {
     g_callback_state.reject_called = true;
 }
 
@@ -188,7 +211,8 @@ static void on_reject_reply(const LdnHeader& /*header*/) {
     g_callback_state.reject_reply_called = true;
 }
 
-static void on_set_accept_policy(const LdnHeader& /*header*/, const SetAcceptPolicyRequest& /*req*/) {
+static void on_set_accept_policy(
+    const LdnHeader& /*header*/, const SetAcceptPolicyRequest& /*req*/) {
     g_callback_state.set_accept_policy_called = true;
 }
 
@@ -228,7 +252,8 @@ TEST(dispatcher_dispatch_initialize) {
     header.type = static_cast<uint8_t>(PacketId::Initialize);
     header.data_size = sizeof(InitializeMessage);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
 
     ASSERT_TRUE(g_callback_state.initialize_called);
     ASSERT_EQ(g_callback_state.last_initialize.id.data[0], 0x12);
@@ -251,7 +276,8 @@ TEST(dispatcher_dispatch_ping) {
     header.type = static_cast<uint8_t>(PacketId::Ping);
     header.data_size = sizeof(PingMessage);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
 
     ASSERT_TRUE(g_callback_state.ping_called);
     ASSERT_EQ(g_callback_state.last_ping.requester, 0);
@@ -273,10 +299,13 @@ TEST(dispatcher_dispatch_network_error) {
     header.type = static_cast<uint8_t>(PacketId::NetworkError);
     header.data_size = sizeof(NetworkErrorMessage);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
 
     ASSERT_TRUE(g_callback_state.network_error_called);
-    ASSERT_EQ(g_callback_state.last_error.error_code, static_cast<uint32_t>(NetworkErrorCode::SessionFull));
+    ASSERT_EQ(
+        g_callback_state.last_error.error_code,
+        static_cast<uint32_t>(NetworkErrorCode::SessionFull));
 }
 
 TEST(dispatcher_dispatch_connected) {
@@ -295,10 +324,14 @@ TEST(dispatcher_dispatch_connected) {
     header.type = static_cast<uint8_t>(PacketId::Connected);
     header.data_size = sizeof(NetworkInfo);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&info), sizeof(info));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&info), sizeof(info));
 
     ASSERT_TRUE(g_callback_state.connected_called);
-    ASSERT_EQ(g_callback_state.last_network_info.network_id.intent_id.local_communication_id, 0x0100000000001234ULL);
+    ASSERT_EQ(
+        g_callback_state.last_network_info.network_id.intent_id
+            .local_communication_id,
+        0x0100000000001234ULL);
     ASSERT_EQ(g_callback_state.last_network_info.ldn.node_count, 2);
 }
 
@@ -317,7 +350,8 @@ TEST(dispatcher_dispatch_sync_network) {
     header.type = static_cast<uint8_t>(PacketId::SyncNetwork);
     header.data_size = sizeof(NetworkInfo);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&info), sizeof(info));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&info), sizeof(info));
 
     ASSERT_TRUE(g_callback_state.sync_network_called);
     ASSERT_EQ(g_callback_state.last_network_info.ldn.node_count, 4);
@@ -338,7 +372,8 @@ TEST(dispatcher_dispatch_scan_reply) {
     header.type = static_cast<uint8_t>(PacketId::ScanReply);
     header.data_size = sizeof(NetworkInfo);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&info), sizeof(info));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&info), sizeof(info));
 
     ASSERT_TRUE(g_callback_state.scan_reply_called);
     ASSERT_EQ(g_callback_state.last_network_info.ldn.node_count_max, 8);
@@ -376,7 +411,8 @@ TEST(dispatcher_dispatch_disconnect) {
     header.type = static_cast<uint8_t>(PacketId::Disconnect);
     header.data_size = sizeof(DisconnectMessage);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
 
     ASSERT_TRUE(g_callback_state.disconnect_called);
 }
@@ -401,11 +437,13 @@ TEST(dispatcher_dispatch_proxy_config) {
     header.type = static_cast<uint8_t>(PacketId::ProxyConfig);
     header.data_size = sizeof(ProxyConfig);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&cfg), sizeof(cfg));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&cfg), sizeof(cfg));
 
     ASSERT_TRUE(g_callback_state.proxy_config_called);
     ASSERT_EQ(g_callback_state.last_proxy_config.proxy_ip, 0x0A720001u);
-    ASSERT_EQ(g_callback_state.last_proxy_config.proxy_subnet_mask, 0xFFFF0000u);
+    ASSERT_EQ(
+        g_callback_state.last_proxy_config.proxy_subnet_mask, 0xFFFF0000u);
 }
 
 TEST(dispatcher_dispatch_proxy_connect) {
@@ -424,7 +462,8 @@ TEST(dispatcher_dispatch_proxy_connect) {
     header.type = static_cast<uint8_t>(PacketId::ProxyConnect);
     header.data_size = sizeof(ProxyConnectRequest);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&req), sizeof(req));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&req), sizeof(req));
 
     ASSERT_TRUE(g_callback_state.proxy_connect_called);
 }
@@ -444,7 +483,8 @@ TEST(dispatcher_dispatch_proxy_connect_reply) {
     header.type = static_cast<uint8_t>(PacketId::ProxyConnectReply);
     header.data_size = sizeof(ProxyConnectResponse);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&resp), sizeof(resp));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&resp), sizeof(resp));
 
     ASSERT_TRUE(g_callback_state.proxy_connect_reply_called);
 }
@@ -483,7 +523,8 @@ TEST(dispatcher_dispatch_proxy_data) {
     ASSERT_TRUE(g_callback_state.proxy_data_called);
     ASSERT_EQ(g_callback_state.last_proxy_header.info.source_ipv4, 0xC0A80101u);
     ASSERT_EQ(g_callback_state.last_proxy_header.info.dest_port, 54321);
-    ASSERT_EQ(g_callback_state.last_proxy_header.data_length, sizeof(game_data));
+    ASSERT_EQ(
+        g_callback_state.last_proxy_header.data_length, sizeof(game_data));
     ASSERT_EQ(g_callback_state.last_proxy_data.size(), sizeof(game_data));
     ASSERT_EQ(g_callback_state.last_proxy_data[0], 0xDE);
     ASSERT_EQ(g_callback_state.last_proxy_data[3], 0xEF);
@@ -505,7 +546,8 @@ TEST(dispatcher_dispatch_proxy_disconnect) {
     header.type = static_cast<uint8_t>(PacketId::ProxyDisconnect);
     header.data_size = sizeof(ProxyDisconnectMessage);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
 
     ASSERT_TRUE(g_callback_state.proxy_disconnect_called);
 }
@@ -530,7 +572,8 @@ TEST(dispatcher_dispatch_reject) {
     header.type = static_cast<uint8_t>(PacketId::Reject);
     header.data_size = sizeof(RejectRequest);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&req), sizeof(req));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&req), sizeof(req));
 
     ASSERT_TRUE(g_callback_state.reject_called);
 }
@@ -567,7 +610,8 @@ TEST(dispatcher_dispatch_set_accept_policy) {
     header.type = static_cast<uint8_t>(PacketId::SetAcceptPolicy);
     header.data_size = sizeof(SetAcceptPolicyRequest);
 
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&req), sizeof(req));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&req), sizeof(req));
 
     ASSERT_TRUE(g_callback_state.set_accept_policy_called);
 }
@@ -592,7 +636,8 @@ TEST(dispatcher_no_handler_registered) {
     header.data_size = sizeof(PingMessage);
 
     // Should not crash, just silently ignore
-    dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+    dispatcher.dispatch(
+        header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
 
     ASSERT_FALSE(g_callback_state.ping_called);
 }
@@ -658,7 +703,8 @@ TEST(dispatcher_multiple_packet_types) {
         header.version = PROTOCOL_VERSION;
         header.type = static_cast<uint8_t>(PacketId::Ping);
         header.data_size = sizeof(PingMessage);
-        dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+        dispatcher.dispatch(
+            header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
     }
 
     // Dispatch NetworkError
@@ -670,7 +716,8 @@ TEST(dispatcher_multiple_packet_types) {
         header.version = PROTOCOL_VERSION;
         header.type = static_cast<uint8_t>(PacketId::NetworkError);
         header.data_size = sizeof(NetworkErrorMessage);
-        dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+        dispatcher.dispatch(
+            header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
     }
 
     ASSERT_TRUE(g_callback_state.ping_called);
@@ -693,7 +740,8 @@ TEST(dispatcher_clear_handler) {
         header.version = PROTOCOL_VERSION;
         header.type = static_cast<uint8_t>(PacketId::Ping);
         header.data_size = sizeof(PingMessage);
-        dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+        dispatcher.dispatch(
+            header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
     }
     ASSERT_TRUE(g_callback_state.ping_called);
 
@@ -710,7 +758,8 @@ TEST(dispatcher_clear_handler) {
         header.version = PROTOCOL_VERSION;
         header.type = static_cast<uint8_t>(PacketId::Ping);
         header.data_size = sizeof(PingMessage);
-        dispatcher.dispatch(header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+        dispatcher.dispatch(
+            header, reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
     }
     ASSERT_FALSE(g_callback_state.ping_called);
 }
@@ -723,8 +772,10 @@ namespace {
 
 int g_typed_hits = 0;
 
-template<typename T>
-void count_typed(const LdnHeader&, const T&) { ++g_typed_hits; }
+template <typename T>
+void count_typed(const LdnHeader&, const T&) {
+    ++g_typed_hits;
+}
 
 LdnHeader make_header(PacketId id, size_t size) {
     LdnHeader header{};
@@ -739,43 +790,89 @@ LdnHeader make_header(PacketId id, size_t size) {
 //  - dispatching with no handler registered is a no-op,
 //  - an undersized payload never reaches the handler,
 //  - an exactly-sized payload reaches the handler exactly once.
-template<typename T>
-bool check_typed_guards(PacketId id, void (ldn::PacketDispatcher::*setter)(ldn::PacketHandler<T>)) {
+template <typename T>
+bool check_typed_guards(
+    PacketId id, void (ldn::PacketDispatcher::*setter)(ldn::PacketHandler<T>)) {
     std::vector<uint8_t> payload(sizeof(T), 0);
     ldn::PacketDispatcher dispatcher;
 
     g_typed_hits = 0;
-    dispatcher.dispatch(make_header(id, payload.size()), payload.data(), payload.size());
-    if (g_typed_hits != 0) return false;
+    dispatcher.dispatch(
+        make_header(id, payload.size()), payload.data(), payload.size());
+    if (g_typed_hits != 0)
+        return false;
 
     (dispatcher.*setter)(&count_typed<T>);
 
-    dispatcher.dispatch(make_header(id, payload.size() - 1), payload.data(), payload.size() - 1);
-    if (g_typed_hits != 0) return false;
+    dispatcher.dispatch(
+        make_header(id, payload.size() - 1),
+        payload.data(),
+        payload.size() - 1);
+    if (g_typed_hits != 0)
+        return false;
 
     dispatcher.dispatch(make_header(id, 0), payload.data(), 0);
-    if (g_typed_hits != 0) return false;
+    if (g_typed_hits != 0)
+        return false;
 
-    dispatcher.dispatch(make_header(id, payload.size()), payload.data(), payload.size());
+    dispatcher.dispatch(
+        make_header(id, payload.size()), payload.data(), payload.size());
     return g_typed_hits == 1;
 }
 
 }  // namespace
 
 TEST(typed_packets_ignore_missing_handler_and_undersized_payload) {
-    ASSERT_TRUE(check_typed_guards<InitializeMessage>(PacketId::Initialize, &ldn::PacketDispatcher::set_initialize_handler));
-    ASSERT_TRUE(check_typed_guards<NetworkInfo>(PacketId::Connected, &ldn::PacketDispatcher::set_connected_handler));
-    ASSERT_TRUE(check_typed_guards<NetworkInfo>(PacketId::SyncNetwork, &ldn::PacketDispatcher::set_sync_network_handler));
-    ASSERT_TRUE(check_typed_guards<NetworkInfo>(PacketId::ScanReply, &ldn::PacketDispatcher::set_scan_reply_handler));
-    ASSERT_TRUE(check_typed_guards<DisconnectMessage>(PacketId::Disconnect, &ldn::PacketDispatcher::set_disconnect_handler));
-    ASSERT_TRUE(check_typed_guards<PingMessage>(PacketId::Ping, &ldn::PacketDispatcher::set_ping_handler));
-    ASSERT_TRUE(check_typed_guards<NetworkErrorMessage>(PacketId::NetworkError, &ldn::PacketDispatcher::set_network_error_handler));
-    ASSERT_TRUE(check_typed_guards<ProxyConfig>(PacketId::ProxyConfig, &ldn::PacketDispatcher::set_proxy_config_handler));
-    ASSERT_TRUE(check_typed_guards<ProxyConnectRequest>(PacketId::ProxyConnect, &ldn::PacketDispatcher::set_proxy_connect_handler));
-    ASSERT_TRUE(check_typed_guards<ProxyConnectResponse>(PacketId::ProxyConnectReply, &ldn::PacketDispatcher::set_proxy_connect_reply_handler));
-    ASSERT_TRUE(check_typed_guards<ProxyDisconnectMessage>(PacketId::ProxyDisconnect, &ldn::PacketDispatcher::set_proxy_disconnect_handler));
-    ASSERT_TRUE(check_typed_guards<RejectRequest>(PacketId::Reject, &ldn::PacketDispatcher::set_reject_handler));
-    ASSERT_TRUE(check_typed_guards<SetAcceptPolicyRequest>(PacketId::SetAcceptPolicy, &ldn::PacketDispatcher::set_accept_policy_handler));
+    ASSERT_TRUE(
+        check_typed_guards<InitializeMessage>(
+            PacketId::Initialize,
+            &ldn::PacketDispatcher::set_initialize_handler));
+    ASSERT_TRUE(
+        check_typed_guards<NetworkInfo>(
+            PacketId::Connected,
+            &ldn::PacketDispatcher::set_connected_handler));
+    ASSERT_TRUE(
+        check_typed_guards<NetworkInfo>(
+            PacketId::SyncNetwork,
+            &ldn::PacketDispatcher::set_sync_network_handler));
+    ASSERT_TRUE(
+        check_typed_guards<NetworkInfo>(
+            PacketId::ScanReply,
+            &ldn::PacketDispatcher::set_scan_reply_handler));
+    ASSERT_TRUE(
+        check_typed_guards<DisconnectMessage>(
+            PacketId::Disconnect,
+            &ldn::PacketDispatcher::set_disconnect_handler));
+    ASSERT_TRUE(
+        check_typed_guards<PingMessage>(
+            PacketId::Ping, &ldn::PacketDispatcher::set_ping_handler));
+    ASSERT_TRUE(
+        check_typed_guards<NetworkErrorMessage>(
+            PacketId::NetworkError,
+            &ldn::PacketDispatcher::set_network_error_handler));
+    ASSERT_TRUE(
+        check_typed_guards<ProxyConfig>(
+            PacketId::ProxyConfig,
+            &ldn::PacketDispatcher::set_proxy_config_handler));
+    ASSERT_TRUE(
+        check_typed_guards<ProxyConnectRequest>(
+            PacketId::ProxyConnect,
+            &ldn::PacketDispatcher::set_proxy_connect_handler));
+    ASSERT_TRUE(
+        check_typed_guards<ProxyConnectResponse>(
+            PacketId::ProxyConnectReply,
+            &ldn::PacketDispatcher::set_proxy_connect_reply_handler));
+    ASSERT_TRUE(
+        check_typed_guards<ProxyDisconnectMessage>(
+            PacketId::ProxyDisconnect,
+            &ldn::PacketDispatcher::set_proxy_disconnect_handler));
+    ASSERT_TRUE(
+        check_typed_guards<RejectRequest>(
+            PacketId::Reject, &ldn::PacketDispatcher::set_reject_handler));
+    ASSERT_TRUE(
+        check_typed_guards<SetAcceptPolicyRequest>(
+            PacketId::SetAcceptPolicy,
+            &ldn::PacketDispatcher::set_accept_policy_handler));
 }
 
 TEST(empty_packets_ignore_missing_handler_and_reach_registered_one) {
@@ -801,27 +898,38 @@ TEST(proxy_data_rejects_truncated_header_and_overlong_declared_length) {
 
     // No handler: nothing happens.
     std::vector<uint8_t> packet(sizeof(ProxyDataHeader) + 4, 0);
-    dispatcher.dispatch(make_header(PacketId::ProxyData, packet.size()), packet.data(), packet.size());
+    dispatcher.dispatch(
+        make_header(PacketId::ProxyData, packet.size()),
+        packet.data(),
+        packet.size());
     ASSERT_FALSE(g_callback_state.proxy_data_called);
 
     dispatcher.set_proxy_data_handler(on_proxy_data);
 
     // Payload shorter than the ProxyDataHeader itself.
-    dispatcher.dispatch(make_header(PacketId::ProxyData, sizeof(ProxyDataHeader) - 1),
-                        packet.data(), sizeof(ProxyDataHeader) - 1);
+    dispatcher.dispatch(
+        make_header(PacketId::ProxyData, sizeof(ProxyDataHeader) - 1),
+        packet.data(),
+        sizeof(ProxyDataHeader) - 1);
     ASSERT_FALSE(g_callback_state.proxy_data_called);
 
     // Declared data_length larger than the bytes actually present.
     ProxyDataHeader hdr{};
     hdr.data_length = 5;
     memcpy(packet.data(), &hdr, sizeof(hdr));
-    dispatcher.dispatch(make_header(PacketId::ProxyData, packet.size()), packet.data(), packet.size());
+    dispatcher.dispatch(
+        make_header(PacketId::ProxyData, packet.size()),
+        packet.data(),
+        packet.size());
     ASSERT_FALSE(g_callback_state.proxy_data_called);
 
     // Declared data_length exactly equal to the bytes present is accepted.
     hdr.data_length = 4;
     memcpy(packet.data(), &hdr, sizeof(hdr));
-    dispatcher.dispatch(make_header(PacketId::ProxyData, packet.size()), packet.data(), packet.size());
+    dispatcher.dispatch(
+        make_header(PacketId::ProxyData, packet.size()),
+        packet.data(),
+        packet.size());
     ASSERT_TRUE(g_callback_state.proxy_data_called);
     ASSERT_EQ(g_callback_state.last_proxy_data.size(), 4u);
 }
@@ -838,7 +946,10 @@ int main() {
     // Tests run automatically via static initializers
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

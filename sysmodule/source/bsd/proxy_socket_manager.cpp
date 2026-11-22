@@ -27,8 +27,10 @@ ProxySocketManager& ProxySocketManager::GetInstance() {
 // Socket Management
 // =============================================================================
 
-ProxySocket* ProxySocketManager::CreateProxySocket(s32 fd, ryu_ldn::bsd::SocketType type,
-                                                    ryu_ldn::bsd::ProtocolType protocol) {
+ProxySocket* ProxySocketManager::CreateProxySocket(
+    s32 fd,
+    ryu_ldn::bsd::SocketType type,
+    ryu_ldn::bsd::ProtocolType protocol) {
     std::scoped_lock lock(m_mutex);
 
     // Check if fd already has a proxy socket
@@ -73,7 +75,8 @@ ProxySocket* ProxySocketManager::GetProxySocket(s32 fd) {
     return nullptr;
 }
 
-ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(s32 fd) {
+ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(
+    s32 fd) {
     // Caller must hold m_mutex
     for (auto& entry : m_sockets) {
         if (entry.fd != INVALID_FD && entry.fd == fd) {
@@ -83,7 +86,8 @@ ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(s32 fd
     return nullptr;
 }
 
-const ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(s32 fd) const {
+const ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(
+    s32 fd) const {
     // Caller must hold m_mutex
     for (const auto& entry : m_sockets) {
         if (entry.fd != INVALID_FD && entry.fd == fd) {
@@ -112,7 +116,8 @@ bool ProxySocketManager::CloseProxySocket(s32 fd) {
         // Release the port
         const auto& local_addr = socket->GetLocalAddr();
         if (local_addr.GetPort() != 0) {
-            m_port_pool.ReleasePort(local_addr.GetPort(), socket->GetProtocol());
+            m_port_pool.ReleasePort(
+                local_addr.GetPort(), socket->GetProtocol());
         }
 
         // Close the socket
@@ -188,11 +193,13 @@ uint16_t ProxySocketManager::AllocatePort(ryu_ldn::bsd::ProtocolType protocol) {
     return m_port_pool.AllocatePort(protocol);
 }
 
-bool ProxySocketManager::ReservePort(uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
+bool ProxySocketManager::ReservePort(
+    uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
     return m_port_pool.AllocateSpecificPort(port, protocol);
 }
 
-void ProxySocketManager::ReleasePort(uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
+void ProxySocketManager::ReleasePort(
+    uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
     m_port_pool.ReleasePort(port, protocol);
 }
 
@@ -205,10 +212,14 @@ void ProxySocketManager::SetSendCallback(SendProxyDataCallback callback) {
     m_send_callback = callback;
 }
 
-bool ProxySocketManager::SendProxyData(uint32_t source_ip, uint16_t source_port,
-                                        uint32_t dest_ip, uint16_t dest_port,
-                                        ryu_ldn::bsd::ProtocolType protocol,
-                                        const void* data, size_t data_len) {
+bool ProxySocketManager::SendProxyData(
+    uint32_t source_ip,
+    uint16_t source_port,
+    uint32_t dest_ip,
+    uint16_t dest_port,
+    ryu_ldn::bsd::ProtocolType protocol,
+    const void* data,
+    size_t data_len) {
     SendProxyDataCallback callback;
     {
         std::scoped_lock lock(m_mutex);
@@ -216,27 +227,43 @@ bool ProxySocketManager::SendProxyData(uint32_t source_ip, uint16_t source_port,
     }
 
     if (callback == nullptr) {
-        LOG_WARN("ProxySocketManager::SendProxyData: m_send_callback=nullptr (src=0x%08X:%u dst=0x%08X:%u)",
-                 source_ip, source_port, dest_ip, dest_port);
+        LOG_WARN(
+            "ProxySocketManager::SendProxyData: m_send_callback=nullptr "
+            "(src=0x%08X:%u dst=0x%08X:%u)",
+            source_ip,
+            source_port,
+            dest_ip,
+            dest_port);
         return false;
     }
 
-    bool ok = callback(source_ip, source_port, dest_ip, dest_port, protocol, data, data_len);
+    bool ok = callback(
+        source_ip, source_port, dest_ip, dest_port, protocol, data, data_len);
     if (!ok) {
-        LOG_WARN("ProxySocketManager::SendProxyData: callback returned false (src=0x%08X:%u dst=0x%08X:%u len=%zu)",
-                 source_ip, source_port, dest_ip, dest_port, data_len);
+        LOG_WARN(
+            "ProxySocketManager::SendProxyData: callback returned false "
+            "(src=0x%08X:%u dst=0x%08X:%u len=%zu)",
+            source_ip,
+            source_port,
+            dest_ip,
+            dest_port,
+            data_len);
     }
     return ok;
 }
 
-void ProxySocketManager::SetProxyConnectCallback(SendProxyConnectCallback callback) {
+void ProxySocketManager::SetProxyConnectCallback(
+    SendProxyConnectCallback callback) {
     std::scoped_lock lock(m_mutex);
     m_proxy_connect_callback = callback;
 }
 
-bool ProxySocketManager::SendProxyConnect(uint32_t source_ip, uint16_t source_port,
-                                           uint32_t dest_ip, uint16_t dest_port,
-                                           ryu_ldn::bsd::ProtocolType protocol) {
+bool ProxySocketManager::SendProxyConnect(
+    uint32_t source_ip,
+    uint16_t source_port,
+    uint32_t dest_ip,
+    uint16_t dest_port,
+    ryu_ldn::bsd::ProtocolType protocol) {
     SendProxyConnectCallback callback;
     {
         std::scoped_lock lock(m_mutex);
@@ -250,14 +277,18 @@ bool ProxySocketManager::SendProxyConnect(uint32_t source_ip, uint16_t source_po
     return callback(source_ip, source_port, dest_ip, dest_port, protocol);
 }
 
-void ProxySocketManager::SetProxyConnectReplyCallback(SendProxyConnectReplyCallback callback) {
+void ProxySocketManager::SetProxyConnectReplyCallback(
+    SendProxyConnectReplyCallback callback) {
     std::scoped_lock lock(m_mutex);
     m_proxy_connect_reply_callback = callback;
 }
 
-bool ProxySocketManager::SendProxyConnectReply(uint32_t source_ip, uint16_t source_port,
-                                                uint32_t dest_ip, uint16_t dest_port,
-                                                ryu_ldn::bsd::ProtocolType protocol) {
+bool ProxySocketManager::SendProxyConnectReply(
+    uint32_t source_ip,
+    uint16_t source_port,
+    uint32_t dest_ip,
+    uint16_t dest_port,
+    ryu_ldn::bsd::ProtocolType protocol) {
     SendProxyConnectReplyCallback callback;
     {
         std::scoped_lock lock(m_mutex);
@@ -271,14 +302,18 @@ bool ProxySocketManager::SendProxyConnectReply(uint32_t source_ip, uint16_t sour
     return callback(source_ip, source_port, dest_ip, dest_port, protocol);
 }
 
-void ProxySocketManager::SetProxyDisconnectCallback(SendProxyDisconnectCallback callback) {
+void ProxySocketManager::SetProxyDisconnectCallback(
+    SendProxyDisconnectCallback callback) {
     std::scoped_lock lock(m_mutex);
     m_proxy_disconnect_callback = callback;
 }
 
-bool ProxySocketManager::SendProxyDisconnect(uint32_t source_ip, uint16_t source_port,
-                                              uint32_t dest_ip, uint16_t dest_port,
-                                              ryu_ldn::bsd::ProtocolType protocol) {
+bool ProxySocketManager::SendProxyDisconnect(
+    uint32_t source_ip,
+    uint16_t source_port,
+    uint32_t dest_ip,
+    uint16_t dest_port,
+    ryu_ldn::bsd::ProtocolType protocol) {
     SendProxyDisconnectCallback callback;
     {
         std::scoped_lock lock(m_mutex);
@@ -292,11 +327,13 @@ bool ProxySocketManager::SendProxyDisconnect(uint32_t source_ip, uint16_t source
     return callback(source_ip, source_port, dest_ip, dest_port, protocol);
 }
 
-bool ProxySocketManager::RouteConnectResponse(const ryu_ldn::protocol::ProxyConnectResponse& response) {
+bool ProxySocketManager::RouteConnectResponse(
+    const ryu_ldn::protocol::ProxyConnectResponse& response) {
     std::scoped_lock lock(m_mutex);
 
     // Find socket in Connecting state that matches the destination
-    uint32_t dest_ip = response.info.source_ipv4;  // Response comes back to our source
+    uint32_t dest_ip =
+        response.info.source_ipv4;  // Response comes back to our source
     uint16_t dest_port = response.info.source_port;
 
     for (auto& entry : m_sockets) {
@@ -312,7 +349,8 @@ bool ProxySocketManager::RouteConnectResponse(const ryu_ldn::protocol::ProxyConn
 
         // Check local address matches
         const auto& local_addr = socket->GetLocalAddr();
-        if (local_addr.GetAddr() != dest_ip || local_addr.GetPort() != dest_port) {
+        if (local_addr.GetAddr() != dest_ip ||
+            local_addr.GetPort() != dest_port) {
             continue;
         }
 
@@ -324,7 +362,8 @@ bool ProxySocketManager::RouteConnectResponse(const ryu_ldn::protocol::ProxyConn
     return false;
 }
 
-bool ProxySocketManager::RouteConnectRequest(const ryu_ldn::protocol::ProxyConnectRequest& request) {
+bool ProxySocketManager::RouteConnectRequest(
+    const ryu_ldn::protocol::ProxyConnectRequest& request) {
     std::scoped_lock lock(m_mutex);
 
     // Find listening socket that matches the destination
@@ -371,10 +410,14 @@ bool ProxySocketManager::RouteConnectRequest(const ryu_ldn::protocol::ProxyConne
 // Data Routing
 // =============================================================================
 
-bool ProxySocketManager::RouteIncomingData(uint32_t source_ip, uint16_t source_port,
-                                            uint32_t dest_ip, uint16_t dest_port,
-                                            ryu_ldn::bsd::ProtocolType protocol,
-                                            const void* data, size_t data_len) {
+bool ProxySocketManager::RouteIncomingData(
+    uint32_t source_ip,
+    uint16_t source_port,
+    uint32_t dest_ip,
+    uint16_t dest_port,
+    ryu_ldn::bsd::ProtocolType protocol,
+    const void* data,
+    size_t data_len) {
     std::scoped_lock lock(m_mutex);
 
     // For broadcast/multicast packets, deliver to ALL matching sockets.
@@ -382,11 +425,12 @@ bool ProxySocketManager::RouteIncomingData(uint32_t source_ip, uint16_t source_p
     // on the same port. For unicast, only one socket matches.
     constexpr size_t kMaxSockets = 8;
     ProxySocket* targets[kMaxSockets];
-    size_t match_count = FindAllSocketsByDestination(dest_ip, dest_port, protocol,
-                                                      targets, kMaxSockets);
+    size_t match_count = FindAllSocketsByDestination(
+        dest_ip, dest_port, protocol, targets, kMaxSockets);
 
     if (match_count == 0) {
-        // No matching socket — buffer into fixed-size ring for post-bind delivery.
+        // No matching socket — buffer into fixed-size ring for post-bind
+        // delivery.
         if (m_pending_count >= MaxPendingPackets) {
             // Drop oldest
             m_pending_head = (m_pending_head + 1) % MaxPendingPackets;
@@ -398,7 +442,8 @@ bool ProxySocketManager::RouteIncomingData(uint32_t source_ip, uint16_t source_p
         slot.dest_ip = dest_ip;
         slot.dest_port = dest_port;
         slot.protocol = protocol;
-        size_t copy_len = std::min(data_len, static_cast<size_t>(PendingPayloadMax));
+        size_t copy_len =
+            std::min(data_len, static_cast<size_t>(PendingPayloadMax));
         slot.len = static_cast<uint16_t>(copy_len);
         if (copy_len > 0 && data != nullptr) {
             std::memcpy(slot.data, data, copy_len);
@@ -410,20 +455,24 @@ bool ProxySocketManager::RouteIncomingData(uint32_t source_ip, uint16_t source_p
 
     // Build source address for RecvFrom
     // Note: Nintendo Switch uses BSD-style sockaddr with sin_len field
-    // sin_len must be sizeof(SockAddrIn) = 16 for the game to accept the address
+    // sin_len must be sizeof(SockAddrIn) = 16 for the game to accept the
+    // address
     //
     // CRITICAL: Ryujinx stores IPs as uint in "big-endian read" format:
     // For 10.114.0.1, Ryujinx stores 0x0A720001.
-    // BUT in BsdSockAddr, sin_addr must be in NETWORK BYTE ORDER (standard BSD).
-    // Ryujinx does Array.Reverse() when converting ProxyInfo.SourceIpV4 to IPEndPoint,
-    // then copies bytes directly to sin_addr, resulting in network byte order.
-    // So we must bswap32 to convert Ryujinx format -> network byte order.
-    // For 10.114.0.1: 0x0A720001 -> bswap32 -> 0x0100720A (network order)
+    // BUT in BsdSockAddr, sin_addr must be in NETWORK BYTE ORDER (standard
+    // BSD). Ryujinx does Array.Reverse() when converting ProxyInfo.SourceIpV4
+    // to IPEndPoint, then copies bytes directly to sin_addr, resulting in
+    // network byte order. So we must bswap32 to convert Ryujinx format ->
+    // network byte order. For 10.114.0.1: 0x0A720001 -> bswap32 -> 0x0100720A
+    // (network order)
     ryu_ldn::bsd::SockAddrIn from_addr{};
     from_addr.sin_len = sizeof(ryu_ldn::bsd::SockAddrIn);
-    from_addr.sin_family = static_cast<uint8_t>(ryu_ldn::bsd::AddressFamily::Inet);
+    from_addr.sin_family =
+        static_cast<uint8_t>(ryu_ldn::bsd::AddressFamily::Inet);
     from_addr.sin_port = __builtin_bswap16(source_port);
-    from_addr.sin_addr = __builtin_bswap32(source_ip);  // Convert Ryujinx format to network byte order
+    from_addr.sin_addr = __builtin_bswap32(
+        source_ip);  // Convert Ryujinx format to network byte order
 
     // Deliver to all matching sockets (critical for broadcast UDP)
     for (size_t i = 0; i < match_count; i++) {
@@ -433,9 +482,12 @@ bool ProxySocketManager::RouteIncomingData(uint32_t source_ip, uint16_t source_p
     return true;
 }
 
-size_t ProxySocketManager::FindAllSocketsByDestination(uint32_t dest_ip, uint16_t dest_port,
-                                                          ryu_ldn::bsd::ProtocolType protocol,
-                                                          ProxySocket* out_sockets[], size_t max_sockets) {
+size_t ProxySocketManager::FindAllSocketsByDestination(
+    uint32_t dest_ip,
+    uint16_t dest_port,
+    ryu_ldn::bsd::ProtocolType protocol,
+    ProxySocket* out_sockets[],
+    size_t max_sockets) {
     // Caller must hold m_mutex
 
     bool is_broadcast = ((dest_ip & 0x000000FF) == 0x000000FF) ||
@@ -506,7 +558,8 @@ size_t ProxySocketManager::GetActiveSocketCount() const {
     return m_socket_count;
 }
 
-size_t ProxySocketManager::GetAvailablePortCount(ryu_ldn::bsd::ProtocolType protocol) const {
+size_t ProxySocketManager::GetAvailablePortCount(
+    ryu_ldn::bsd::ProtocolType protocol) const {
     return m_port_pool.GetAvailableCount(protocol);
 }
 
@@ -514,8 +567,8 @@ size_t ProxySocketManager::GetAvailablePortCount(ryu_ldn::bsd::ProtocolType prot
 // Pending Packet Delivery
 // =============================================================================
 
-void ProxySocketManager::DeliverPendingPackets(ProxySocket* socket, uint16_t port,
-                                                ryu_ldn::bsd::ProtocolType protocol) {
+void ProxySocketManager::DeliverPendingPackets(
+    ProxySocket* socket, uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
     // Called after bind - deliver any buffered packets matching this socket
     // Caller must NOT hold m_mutex (we take it here)
     std::scoped_lock lock(m_mutex);
@@ -524,7 +577,8 @@ void ProxySocketManager::DeliverPendingPackets(ProxySocket* socket, uint16_t por
         return;
     }
 
-    // Walk the ring in arrival order, delivering matches and compacting in place.
+    // Walk the ring in arrival order, delivering matches and compacting in
+    // place.
     size_t read_idx = m_pending_head;
     size_t write_idx = m_pending_head;
     size_t remaining = m_pending_count;
@@ -536,9 +590,11 @@ void ProxySocketManager::DeliverPendingPackets(ProxySocket* socket, uint16_t por
         if (pkt.protocol == protocol && pkt.dest_port == port) {
             ryu_ldn::bsd::SockAddrIn from_addr{};
             from_addr.sin_len = sizeof(ryu_ldn::bsd::SockAddrIn);
-            from_addr.sin_family = static_cast<uint8_t>(ryu_ldn::bsd::AddressFamily::Inet);
+            from_addr.sin_family =
+                static_cast<uint8_t>(ryu_ldn::bsd::AddressFamily::Inet);
             from_addr.sin_port = __builtin_bswap16(pkt.source_port);
-            from_addr.sin_addr = __builtin_bswap32(pkt.source_ip);  // Ryujinx -> network byte order
+            from_addr.sin_addr = __builtin_bswap32(
+                pkt.source_ip);  // Ryujinx -> network byte order
 
             socket->IncomingData(pkt.data, pkt.len, from_addr);
             // Drop this slot by not copying it forward
@@ -558,4 +614,4 @@ void ProxySocketManager::DeliverPendingPackets(ProxySocket* socket, uint16_t por
     m_pending_count = kept;
 }
 
-} // namespace ams::mitm::bsd
+}  // namespace ams::mitm::bsd

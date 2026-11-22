@@ -49,44 +49,44 @@ static int g_tests_run = 0;
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegister_##name { \
-        TestRegister_##name() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct TestRegister_##name {       \
+        TestRegister_##name() {               \
             printf("  [TEST] " #name "... "); \
-            fflush(stdout); \
-            g_tests_run++; \
-            try { \
-                test_##name(); \
-                printf("PASS\n"); \
-                g_tests_passed++; \
-            } catch (const char* msg) { \
-                printf("FAIL: %s\n", msg); \
-                g_tests_failed++; \
-            } \
-        } \
-    } g_test_register_##name; \
+            fflush(stdout);                   \
+            g_tests_run++;                    \
+            try {                             \
+                test_##name();                \
+                printf("PASS\n");             \
+                g_tests_passed++;             \
+            } catch (const char* msg) {       \
+                printf("FAIL: %s\n", msg);    \
+                g_tests_failed++;             \
+            }                                 \
+        }                                     \
+    } g_test_register_##name;                 \
     static void test_##name()
 
-#define ASSERT(cond) \
-    do { \
-        if (!(cond)) { \
+#define ASSERT(cond)                          \
+    do {                                      \
+        if (!(cond)) {                        \
             throw "Assertion failed: " #cond; \
-        } \
+        }                                     \
     } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
+#define ASSERT_EQ(a, b)                              \
+    do {                                             \
+        if ((a) != (b)) {                            \
             throw "Assertion failed: " #a " != " #b; \
-        } \
+        }                                            \
     } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
+#define ASSERT_NE(a, b)                              \
+    do {                                             \
+        if ((a) == (b)) {                            \
             throw "Assertion failed: " #a " == " #b; \
-        } \
+        }                                            \
     } while (0)
 
 #define ASSERT_TRUE(cond) ASSERT(cond)
@@ -151,8 +151,8 @@ TEST(socket_exit_clears_state) {
 TEST(socket_exit_idempotent) {
     socket_init();
     socket_exit();
-    socket_exit(); // Should not crash
-    socket_exit(); // Should not crash
+    socket_exit();  // Should not crash
+    socket_exit();  // Should not crash
     ASSERT_FALSE(socket_is_initialized());
 
     // Re-init for subsequent tests
@@ -250,7 +250,8 @@ TEST(connect_invalid_host) {
     socket_init();
 
     Socket sock;
-    SocketResult result = sock.connect("invalid.host.that.does.not.exist.local", 12345, 100);
+    SocketResult result =
+        sock.connect("invalid.host.that.does.not.exist.local", 12345, 100);
 
     // Should fail with some error (InvalidAddress or HostUnreachable)
     ASSERT_NE(result, SocketResult::Success);
@@ -320,8 +321,8 @@ TEST(close_on_invalid_safe) {
     Socket sock;
     ASSERT_FALSE(sock.is_valid());
 
-    sock.close(); // Should not crash
-    sock.close(); // Multiple closes should be safe
+    sock.close();  // Should not crash
+    sock.close();  // Multiple closes should be safe
     sock.close();
 
     ASSERT_FALSE(sock.is_valid());
@@ -409,7 +410,7 @@ TEST(send_zero_size_not_connected) {
 
     Socket sock;
     uint8_t data[] = {0x01};
-    size_t sent = 999; // Should be set to 0
+    size_t sent = 999;  // Should be set to 0
     SocketResult result = sock.send(data, 0, sent);
 
     ASSERT_EQ(result, SocketResult::NotConnected);
@@ -537,55 +538,88 @@ TEST(set_send_buffer_invalid) {
  * All SocketResult values should have meaningful string representations.
  */
 TEST(result_to_string_success) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::Success), "Success") == 0);
+    ASSERT(
+        strcmp(socket_result_to_string(SocketResult::Success), "Success") == 0);
 }
 
 TEST(result_to_string_would_block) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::WouldBlock), "WouldBlock") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::WouldBlock), "WouldBlock") ==
+        0);
 }
 
 TEST(result_to_string_timeout) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::Timeout), "Timeout") == 0);
+    ASSERT(
+        strcmp(socket_result_to_string(SocketResult::Timeout), "Timeout") == 0);
 }
 
 TEST(result_to_string_connection_refused) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::ConnectionRefused), "ConnectionRefused") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::ConnectionRefused),
+            "ConnectionRefused") == 0);
 }
 
 TEST(result_to_string_connection_reset) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::ConnectionReset), "ConnectionReset") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::ConnectionReset),
+            "ConnectionReset") == 0);
 }
 
 TEST(result_to_string_host_unreachable) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::HostUnreachable), "HostUnreachable") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::HostUnreachable),
+            "HostUnreachable") == 0);
 }
 
 TEST(result_to_string_network_down) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::NetworkDown), "NetworkDown") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::NetworkDown),
+            "NetworkDown") == 0);
 }
 
 TEST(result_to_string_not_connected) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::NotConnected), "NotConnected") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::NotConnected),
+            "NotConnected") == 0);
 }
 
 TEST(result_to_string_already_connected) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::AlreadyConnected), "AlreadyConnected") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::AlreadyConnected),
+            "AlreadyConnected") == 0);
 }
 
 TEST(result_to_string_invalid_address) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::InvalidAddress), "InvalidAddress") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::InvalidAddress),
+            "InvalidAddress") == 0);
 }
 
 TEST(result_to_string_socket_error) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::SocketError), "SocketError") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::SocketError),
+            "SocketError") == 0);
 }
 
 TEST(result_to_string_not_initialized) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::NotInitialized), "NotInitialized") == 0);
+    ASSERT(
+        strcmp(
+            socket_result_to_string(SocketResult::NotInitialized),
+            "NotInitialized") == 0);
 }
 
 TEST(result_to_string_closed) {
-    ASSERT(strcmp(socket_result_to_string(SocketResult::Closed), "Closed") == 0);
+    ASSERT(
+        strcmp(socket_result_to_string(SocketResult::Closed), "Closed") == 0);
 }
 
 /**
@@ -675,11 +709,12 @@ TEST(port_max) {
     // Should fail with refused/timeout, not invalid
     ASSERT_NE(result, SocketResult::Success);
     // The result should be a connection error, not a validation error
-    ASSERT(result == SocketResult::ConnectionRefused ||
-           result == SocketResult::ConnectionReset ||
-           result == SocketResult::Timeout ||
-           result == SocketResult::HostUnreachable ||
-           result == SocketResult::SocketError);
+    ASSERT(
+        result == SocketResult::ConnectionRefused ||
+        result == SocketResult::ConnectionReset ||
+        result == SocketResult::Timeout ||
+        result == SocketResult::HostUnreachable ||
+        result == SocketResult::SocketError);
 }
 
 /**
@@ -730,7 +765,7 @@ TEST(destructor_uninitialized) {
     }
     // Should not crash
 
-    ASSERT_TRUE(true); // If we get here, test passed
+    ASSERT_TRUE(true);  // If we get here, test passed
 }
 
 /**
@@ -822,11 +857,22 @@ TEST(is_valid_after_create) {
  */
 TEST(result_to_string_all_values) {
     // Already partially tested, ensure full coverage
-    ASSERT_TRUE(std::strcmp(socket_result_to_string(SocketResult::WouldBlock), "WouldBlock") == 0);
-    ASSERT_TRUE(std::strcmp(socket_result_to_string(SocketResult::NetworkDown), "NetworkDown") == 0);
-    ASSERT_TRUE(std::strcmp(socket_result_to_string(SocketResult::Closed), "Closed") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            socket_result_to_string(SocketResult::WouldBlock), "WouldBlock") ==
+        0);
+    ASSERT_TRUE(
+        std::strcmp(
+            socket_result_to_string(SocketResult::NetworkDown),
+            "NetworkDown") == 0);
+    ASSERT_TRUE(
+        std::strcmp(socket_result_to_string(SocketResult::Closed), "Closed") ==
+        0);
     // Unknown value
-    ASSERT_TRUE(std::strcmp(socket_result_to_string(static_cast<SocketResult>(99)), "Unknown") == 0);
+    ASSERT_TRUE(
+        std::strcmp(
+            socket_result_to_string(static_cast<SocketResult>(99)),
+            "Unknown") == 0);
 }
 
 TEST(errno_to_result_all_mappings) {
@@ -856,7 +902,8 @@ TEST(errno_to_result_all_mappings) {
  */
 static uint16_t create_local_listener(int& server_fd) {
     server_fd = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) return 0;
+    if (server_fd < 0)
+        return 0;
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -864,7 +911,10 @@ static uint16_t create_local_listener(int& server_fd) {
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons(0);  // Let OS pick a port
 
-    if (bind(server_fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
+    if (bind(
+            server_fd,
+            reinterpret_cast<struct sockaddr*>(&addr),
+            sizeof(addr)) < 0) {
         ::close(server_fd);
         server_fd = -1;
         return 0;
@@ -878,7 +928,9 @@ static uint16_t create_local_listener(int& server_fd) {
 
     // Retrieve assigned port
     socklen_t addrlen = sizeof(addr);
-    if (getsockname(server_fd, reinterpret_cast<struct sockaddr*>(&addr), &addrlen) < 0) {
+    if (getsockname(
+            server_fd, reinterpret_cast<struct sockaddr*>(&addr), &addrlen) <
+        0) {
         ::close(server_fd);
         server_fd = -1;
         return 0;
@@ -913,7 +965,10 @@ TEST(set_nodelay_valid) {
     // Accept the connection (regardless of connect result, drain the listener)
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
-    int accepted = ::accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
+    int accepted = ::accept(
+        server_fd,
+        reinterpret_cast<struct sockaddr*>(&client_addr),
+        &client_len);
 
     if (cr == SocketResult::Success) {
         SocketResult result = sock.set_nodelay(true);
@@ -923,7 +978,8 @@ TEST(set_nodelay_valid) {
         ASSERT_EQ(result, SocketResult::Success);
     }
 
-    if (accepted >= 0) ::close(accepted);
+    if (accepted >= 0)
+        ::close(accepted);
     ::close(server_fd);
     sock.close();
 }
@@ -942,14 +998,18 @@ TEST(set_recv_buffer_size_valid) {
 
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
-    int accepted = ::accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
+    int accepted = ::accept(
+        server_fd,
+        reinterpret_cast<struct sockaddr*>(&client_addr),
+        &client_len);
 
     if (cr == SocketResult::Success) {
         SocketResult result = sock.set_recv_buffer_size(65536);
         ASSERT_EQ(result, SocketResult::Success);
     }
 
-    if (accepted >= 0) ::close(accepted);
+    if (accepted >= 0)
+        ::close(accepted);
     ::close(server_fd);
     sock.close();
 }
@@ -968,14 +1028,18 @@ TEST(set_send_buffer_size_valid) {
 
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
-    int accepted = ::accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
+    int accepted = ::accept(
+        server_fd,
+        reinterpret_cast<struct sockaddr*>(&client_addr),
+        &client_len);
 
     if (cr == SocketResult::Success) {
         SocketResult result = sock.set_send_buffer_size(65536);
         ASSERT_EQ(result, SocketResult::Success);
     }
 
-    if (accepted >= 0) ::close(accepted);
+    if (accepted >= 0)
+        ::close(accepted);
     ::close(server_fd);
     sock.close();
 }
@@ -994,7 +1058,10 @@ TEST(set_non_blocking_valid) {
 
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
-    int accepted = ::accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
+    int accepted = ::accept(
+        server_fd,
+        reinterpret_cast<struct sockaddr*>(&client_addr),
+        &client_len);
 
     if (cr == SocketResult::Success) {
         SocketResult result = sock.set_non_blocking(true);
@@ -1004,7 +1071,8 @@ TEST(set_non_blocking_valid) {
         ASSERT_EQ(result, SocketResult::Success);
     }
 
-    if (accepted >= 0) ::close(accepted);
+    if (accepted >= 0)
+        ::close(accepted);
     ::close(server_fd);
     sock.close();
 }
@@ -1023,7 +1091,10 @@ TEST(send_recv_connected) {
 
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
-    int accepted = ::accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
+    int accepted = ::accept(
+        server_fd,
+        reinterpret_cast<struct sockaddr*>(&client_addr),
+        &client_len);
 
     if (cr == SocketResult::Success) {
         uint8_t data[] = {0x01, 0x02, 0x03};
@@ -1054,7 +1125,8 @@ TEST(send_recv_connected) {
         ASSERT_TRUE(received > 0);
     }
 
-    if (accepted >= 0) ::close(accepted);
+    if (accepted >= 0)
+        ::close(accepted);
     ::close(server_fd);
     sock.close();
 }
@@ -1075,15 +1147,24 @@ TEST(send_recv_connected) {
 
 namespace {
 
-enum Fn { FN_SOCKET, FN_FCNTL, FN_SETSOCKOPT, FN_GETSOCKOPT, FN_POLL, FN_SEND, FN_RECV, FN_COUNT };
+enum Fn {
+    FN_SOCKET,
+    FN_FCNTL,
+    FN_SETSOCKOPT,
+    FN_GETSOCKOPT,
+    FN_POLL,
+    FN_SEND,
+    FN_RECV,
+    FN_COUNT
+};
 
 struct Fault {
-    bool armed;     // fault pending
-    int  skip;      // number of calls to let through before failing
-    int  err;       // errno to set (when ret < 0)
-    long ret;       // value returned instead of calling libc
-    bool set_out;   // getsockopt only: succeed and write out_int to *optval
-    int  out_int;
+    bool armed;    // fault pending
+    int skip;      // number of calls to let through before failing
+    int err;       // errno to set (when ret < 0)
+    long ret;      // value returned instead of calling libc
+    bool set_out;  // getsockopt only: succeed and write out_int to *optval
+    int out_int;
 };
 
 Fault g_fault[FN_COUNT];
@@ -1098,15 +1179,22 @@ void arm_so_error(int value) {
 
 bool take(Fn fn) {
     Fault& f = g_fault[fn];
-    if (!f.armed) return false;
-    if (f.skip > 0) { --f.skip; return false; }
+    if (!f.armed)
+        return false;
+    if (f.skip > 0) {
+        --f.skip;
+        return false;
+    }
     f.armed = false;
-    if (f.ret < 0) errno = f.err;
+    if (f.ret < 0)
+        errno = f.err;
     return true;
 }
 
 struct FaultGuard {
-    ~FaultGuard() { std::memset(g_fault, 0, sizeof(g_fault)); }
+    ~FaultGuard() {
+        std::memset(g_fault, 0, sizeof(g_fault));
+    }
 };
 
 template <typename F>
@@ -1114,12 +1202,13 @@ F real(const char* name) {
     return reinterpret_cast<F>(dlsym(RTLD_NEXT, name));
 }
 
-} // namespace
+}  // namespace
 
 extern "C" {
 
 int socket(int d, int t, int p) noexcept {
-    if (take(FN_SOCKET)) return static_cast<int>(g_fault[FN_SOCKET].ret);
+    if (take(FN_SOCKET))
+        return static_cast<int>(g_fault[FN_SOCKET].ret);
     static auto fn = real<int (*)(int, int, int)>("socket");
     return fn(d, t, p);
 }
@@ -1129,14 +1218,17 @@ int fcntl(int fd, int cmd, ...) {
     va_start(ap, cmd);
     void* arg = va_arg(ap, void*);
     va_end(ap);
-    if (take(FN_FCNTL)) return static_cast<int>(g_fault[FN_FCNTL].ret);
+    if (take(FN_FCNTL))
+        return static_cast<int>(g_fault[FN_FCNTL].ret);
     static auto fn = real<int (*)(int, int, void*)>("fcntl");
     return fn(fd, cmd, arg);
 }
 
 int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
-    if (take(FN_SETSOCKOPT)) return static_cast<int>(g_fault[FN_SETSOCKOPT].ret);
-    static auto fn = real<int (*)(int, int, int, const void*, socklen_t)>("setsockopt");
+    if (take(FN_SETSOCKOPT))
+        return static_cast<int>(g_fault[FN_SETSOCKOPT].ret);
+    static auto fn =
+        real<int (*)(int, int, int, const void*, socklen_t)>("setsockopt");
     return fn(fd, l, n, v, len);
 }
 
@@ -1145,7 +1237,8 @@ int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
     if (inject && !g_fault[FN_GETSOCKOPT].set_out) {
         return static_cast<int>(g_fault[FN_GETSOCKOPT].ret);
     }
-    static auto fn = real<int (*)(int, int, int, void*, socklen_t*)>("getsockopt");
+    static auto fn =
+        real<int (*)(int, int, int, void*, socklen_t*)>("getsockopt");
     int r = fn(fd, l, n, v, len);
     if (inject) {
         *static_cast<int*>(v) = g_fault[FN_GETSOCKOPT].out_int;
@@ -1154,24 +1247,27 @@ int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
 }
 
 int poll(struct pollfd* fds, nfds_t n, int t) {
-    if (take(FN_POLL)) return static_cast<int>(g_fault[FN_POLL].ret);
+    if (take(FN_POLL))
+        return static_cast<int>(g_fault[FN_POLL].ret);
     static auto fn = real<int (*)(struct pollfd*, nfds_t, int)>("poll");
     return fn(fds, n, t);
 }
 
 ssize_t send(int fd, const void* b, size_t n, int f) {
-    if (take(FN_SEND)) return static_cast<ssize_t>(g_fault[FN_SEND].ret);
+    if (take(FN_SEND))
+        return static_cast<ssize_t>(g_fault[FN_SEND].ret);
     static auto fn = real<ssize_t (*)(int, const void*, size_t, int)>("send");
     return fn(fd, b, n, f);
 }
 
 ssize_t recv(int fd, void* b, size_t n, int f) {
-    if (take(FN_RECV)) return static_cast<ssize_t>(g_fault[FN_RECV].ret);
+    if (take(FN_RECV))
+        return static_cast<ssize_t>(g_fault[FN_RECV].ret);
     static auto fn = real<ssize_t (*)(int, void*, size_t, int)>("recv");
     return fn(fd, b, n, f);
 }
 
-} // extern "C"
+}  // extern "C"
 
 // =============================================================================
 // Loopback peer used by the tests below
@@ -1189,31 +1285,39 @@ struct LoopPeer {
         sockaddr_in a{};
         a.sin_family = AF_INET;
         a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        if (bind(listen_fd, reinterpret_cast<sockaddr*>(&a), sizeof(a)) < 0) throw "bind failed";
-        if (listen(listen_fd, 4) < 0) throw "listen failed";
+        if (bind(listen_fd, reinterpret_cast<sockaddr*>(&a), sizeof(a)) < 0)
+            throw "bind failed";
+        if (listen(listen_fd, 4) < 0)
+            throw "listen failed";
         socklen_t l = sizeof(a);
         getsockname(listen_fd, reinterpret_cast<sockaddr*>(&a), &l);
         port = ntohs(a.sin_port);
     }
 
     ~LoopPeer() {
-        if (accepted >= 0) ::close(accepted);
-        if (listen_fd >= 0) ::close(listen_fd);
+        if (accepted >= 0)
+            ::close(accepted);
+        if (listen_fd >= 0)
+            ::close(listen_fd);
     }
 
     void accept_one() {
         pollfd p{listen_fd, POLLIN, 0};
-        if (::poll(&p, 1, 2000) != 1) throw "no pending connection";
+        if (::poll(&p, 1, 2000) != 1)
+            throw "no pending connection";
         accepted = ::accept(listen_fd, nullptr, nullptr);
-        if (accepted < 0) throw "accept failed";
+        if (accepted < 0)
+            throw "accept failed";
     }
 };
 
 // Connect `sock` to the peer and accept it.
-#define CONNECT_LOCAL(sock, peer, timeout) \
-    do { \
-        ASSERT_EQ((sock).connect("127.0.0.1", (peer).port, (timeout)), SocketResult::Success); \
-        (peer).accept_one(); \
+#define CONNECT_LOCAL(sock, peer, timeout)                       \
+    do {                                                         \
+        ASSERT_EQ(                                               \
+            (sock).connect("127.0.0.1", (peer).port, (timeout)), \
+            SocketResult::Success);                              \
+        (peer).accept_one();                                     \
     } while (0)
 
 // Zero-timeout reads race the loopback delivery: retry until the kernel has it.
@@ -1221,12 +1325,13 @@ SocketResult recv_nowait(Socket& sock, uint8_t* buf, size_t size, size_t& got) {
     SocketResult r = SocketResult::WouldBlock;
     for (int i = 0; i < 400 && r == SocketResult::WouldBlock; ++i) {
         r = sock.recv(buf, size, got, 0);
-        if (r == SocketResult::WouldBlock) usleep(5000);
+        if (r == SocketResult::WouldBlock)
+            usleep(5000);
     }
     return r;
 }
 
-} // namespace
+}  // namespace
 
 // =============================================================================
 // Tests: connect() failure paths
@@ -1237,7 +1342,9 @@ TEST(connect_twice_reports_already_connected) {
     LoopPeer peer;
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
-    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 2000), SocketResult::AlreadyConnected);
+    ASSERT_EQ(
+        sock.connect("127.0.0.1", peer.port, 2000),
+        SocketResult::AlreadyConnected);
     ASSERT_TRUE(sock.is_connected());
 }
 
@@ -1270,7 +1377,9 @@ TEST(connect_reuses_a_descriptor_left_by_a_failed_send) {
     ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 0), SocketResult::Success);
     ASSERT_TRUE(sock.is_connected());
     ASSERT_TRUE(sock.is_valid());
-    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 0), SocketResult::AlreadyConnected);
+    ASSERT_EQ(
+        sock.connect("127.0.0.1", peer.port, 0),
+        SocketResult::AlreadyConnected);
 }
 
 TEST(connect_fails_when_nonblocking_mode_cannot_be_set) {
@@ -1279,7 +1388,8 @@ TEST(connect_fails_when_nonblocking_mode_cannot_be_set) {
     LoopPeer peer;
     Socket sock;
     arm(FN_FCNTL, EBADF);
-    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 1000), SocketResult::SocketError);
+    ASSERT_EQ(
+        sock.connect("127.0.0.1", peer.port, 1000), SocketResult::SocketError);
     ASSERT_FALSE(sock.is_valid());
 }
 
@@ -1289,7 +1399,8 @@ TEST(connect_fails_when_so_error_cannot_be_read) {
     LoopPeer peer;
     Socket sock;
     arm(FN_GETSOCKOPT, EBADF);
-    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 1000), SocketResult::SocketError);
+    ASSERT_EQ(
+        sock.connect("127.0.0.1", peer.port, 1000), SocketResult::SocketError);
     ASSERT_FALSE(sock.is_valid());
 }
 
@@ -1299,7 +1410,9 @@ TEST(connect_reports_the_pending_socket_error) {
     LoopPeer peer;
     Socket sock;
     arm_so_error(ECONNREFUSED);
-    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 1000), SocketResult::ConnectionRefused);
+    ASSERT_EQ(
+        sock.connect("127.0.0.1", peer.port, 1000),
+        SocketResult::ConnectionRefused);
     ASSERT_FALSE(sock.is_valid());
 }
 
@@ -1307,11 +1420,13 @@ TEST(connect_to_a_closed_port_fails_immediately_in_blocking_mode) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     uint16_t dead_port = 0;
     {
-        LoopPeer peer;      // closed at scope exit: nothing listens on that port
+        LoopPeer peer;  // closed at scope exit: nothing listens on that port
         dead_port = peer.port;
     }
     Socket sock;
-    ASSERT_EQ(sock.connect("127.0.0.1", dead_port, 0), SocketResult::ConnectionRefused);
+    ASSERT_EQ(
+        sock.connect("127.0.0.1", dead_port, 0),
+        SocketResult::ConnectionRefused);
     ASSERT_FALSE(sock.is_valid());
 }
 
@@ -1321,7 +1436,8 @@ TEST(connect_succeeds_without_keepalive_when_it_cannot_be_enabled) {
     LoopPeer peer;
     Socket sock;
     arm(FN_SETSOCKOPT, ENOPROTOOPT);
-    ASSERT_EQ(sock.connect("127.0.0.1", peer.port, 1000), SocketResult::Success);
+    ASSERT_EQ(
+        sock.connect("127.0.0.1", peer.port, 1000), SocketResult::Success);
     ASSERT_TRUE(sock.is_connected());
     peer.accept_one();
 }
@@ -1369,10 +1485,12 @@ TEST(send_all_waits_for_writability_after_would_block) {
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
     uint8_t payload[] = {1, 2, 3, 4};
-    arm(FN_SEND, EAGAIN);                      // first send blocks, the retry goes through
+    arm(FN_SEND, EAGAIN);  // first send blocks, the retry goes through
     ASSERT_EQ(sock.send_all(payload, sizeof(payload)), SocketResult::Success);
     uint8_t got[4] = {};
-    ASSERT_EQ(::recv(peer.accepted, got, sizeof(got), MSG_WAITALL), static_cast<ssize_t>(4));
+    ASSERT_EQ(
+        ::recv(peer.accepted, got, sizeof(got), MSG_WAITALL),
+        static_cast<ssize_t>(4));
     ASSERT_EQ(std::memcmp(got, payload, 4), 0);
 }
 
@@ -1385,7 +1503,8 @@ TEST(send_all_returns_the_wait_error_when_writability_cannot_be_awaited) {
     uint8_t payload[] = {1};
     arm(FN_SEND, EAGAIN);
     arm(FN_POLL, EINTR);
-    ASSERT_EQ(sock.send_all(payload, sizeof(payload)), SocketResult::SocketError);
+    ASSERT_EQ(
+        sock.send_all(payload, sizeof(payload)), SocketResult::SocketError);
 }
 
 // =============================================================================
@@ -1410,7 +1529,9 @@ TEST(recv_non_blocking_reads_data_that_is_already_buffered) {
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
     const uint8_t msg[] = {9, 8, 7};
-    ASSERT_EQ(::send(peer.accepted, msg, sizeof(msg), MSG_NOSIGNAL), static_cast<ssize_t>(3));
+    ASSERT_EQ(
+        ::send(peer.accepted, msg, sizeof(msg), MSG_NOSIGNAL),
+        static_cast<ssize_t>(3));
     uint8_t buf[16];
     size_t got = 0;
     ASSERT_EQ(recv_nowait(sock, buf, sizeof(buf), got), SocketResult::Success);
@@ -1440,7 +1561,8 @@ TEST(recv_non_blocking_reports_a_connection_error) {
     uint8_t buf[16];
     size_t got = 0;
     arm(FN_RECV, ECONNRESET);
-    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, 0), SocketResult::ConnectionReset);
+    ASSERT_EQ(
+        sock.recv(buf, sizeof(buf), got, 0), SocketResult::ConnectionReset);
     ASSERT_FALSE(sock.is_connected());
 }
 
@@ -1450,7 +1572,9 @@ TEST(recv_blocking_returns_data) {
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
     const uint8_t msg[] = {4, 5};
-    ASSERT_EQ(::send(peer.accepted, msg, sizeof(msg), MSG_NOSIGNAL), static_cast<ssize_t>(2));
+    ASSERT_EQ(
+        ::send(peer.accepted, msg, sizeof(msg), MSG_NOSIGNAL),
+        static_cast<ssize_t>(2));
     uint8_t buf[16];
     size_t got = 0;
     ASSERT_EQ(sock.recv(buf, sizeof(buf), got, -1), SocketResult::Success);
@@ -1482,7 +1606,8 @@ TEST(recv_blocking_reports_would_block_and_connection_errors) {
     ASSERT_EQ(sock.recv(buf, sizeof(buf), got, -1), SocketResult::WouldBlock);
     ASSERT_TRUE(sock.is_connected());
     arm(FN_RECV, ECONNRESET);
-    ASSERT_EQ(sock.recv(buf, sizeof(buf), got, -1), SocketResult::ConnectionReset);
+    ASSERT_EQ(
+        sock.recv(buf, sizeof(buf), got, -1), SocketResult::ConnectionReset);
     ASSERT_FALSE(sock.is_connected());
 }
 
@@ -1496,9 +1621,9 @@ TEST(set_non_blocking_reports_fcntl_failures) {
     LoopPeer peer;
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
-    arm(FN_FCNTL, EBADF);                     // F_GETFL fails
+    arm(FN_FCNTL, EBADF);  // F_GETFL fails
     ASSERT_EQ(sock.set_non_blocking(true), SocketResult::SocketError);
-    arm(FN_FCNTL, EBADF, 1);                  // F_GETFL passes, F_SETFL fails
+    arm(FN_FCNTL, EBADF, 1);  // F_GETFL passes, F_SETFL fails
     ASSERT_EQ(sock.set_non_blocking(true), SocketResult::SocketError);
 }
 

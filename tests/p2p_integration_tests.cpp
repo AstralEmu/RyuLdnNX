@@ -19,30 +19,50 @@
 static int g_tests_run = 0;
 static int g_tests_passed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegistrar_##name { \
-        TestRegistrar_##name() { \
+#define TEST(name)                              \
+    static void test_##name();                  \
+    static struct TestRegistrar_##name {        \
+        TestRegistrar_##name() {                \
             printf("  Running: %s... ", #name); \
-            g_tests_run++; \
-            test_##name(); \
-            g_tests_passed++; \
-            printf("PASSED\n"); \
-        } \
-    } g_registrar_##name; \
+            g_tests_run++;                      \
+            test_##name();                      \
+            g_tests_passed++;                   \
+            printf("PASSED\n");                 \
+        }                                       \
+    } g_registrar_##name;                       \
     static void test_##name()
 
-#define ASSERT_TRUE(expr) \
-    do { if (!(expr)) { printf("FAILED\n    Assertion failed: %s\n", #expr); exit(1); } } while(0)
+#define ASSERT_TRUE(expr)                                        \
+    do {                                                         \
+        if (!(expr)) {                                           \
+            printf("FAILED\n    Assertion failed: %s\n", #expr); \
+            exit(1);                                             \
+        }                                                        \
+    } while (0)
 
-#define ASSERT_FALSE(expr) \
-    do { if (expr) { printf("FAILED\n    Assertion failed: !(%s)\n", #expr); exit(1); } } while(0)
+#define ASSERT_FALSE(expr)                                          \
+    do {                                                            \
+        if (expr) {                                                 \
+            printf("FAILED\n    Assertion failed: !(%s)\n", #expr); \
+            exit(1);                                                \
+        }                                                           \
+    } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { if ((a) != (b)) { printf("FAILED\n    Expected: %s == %s\n", #a, #b); exit(1); } } while(0)
+#define ASSERT_EQ(a, b)                                         \
+    do {                                                        \
+        if ((a) != (b)) {                                       \
+            printf("FAILED\n    Expected: %s == %s\n", #a, #b); \
+            exit(1);                                            \
+        }                                                       \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { if ((a) == (b)) { printf("FAILED\n    Expected: %s != %s\n", #a, #b); exit(1); } } while(0)
+#define ASSERT_NE(a, b)                                         \
+    do {                                                        \
+        if ((a) == (b)) {                                       \
+            printf("FAILED\n    Expected: %s != %s\n", #a, #b); \
+            exit(1);                                            \
+        }                                                       \
+    } while (0)
 
 // =============================================================================
 // Protocol Types (matching implementation)
@@ -50,9 +70,10 @@ static int g_tests_passed = 0;
 
 namespace protocol {
 
-// Address family constants (use different names to avoid conflict with system macros)
-constexpr uint32_t ADDR_FAMILY_IPV4 = 2;    // AF_INET value
-constexpr uint32_t ADDR_FAMILY_IPV6 = 10;   // AF_INET6 value
+// Address family constants (use different names to avoid conflict with system
+// macros)
+constexpr uint32_t ADDR_FAMILY_IPV4 = 2;   // AF_INET value
+constexpr uint32_t ADDR_FAMILY_IPV6 = 10;  // AF_INET6 value
 
 // Packet IDs
 enum class PacketId : uint8_t {
@@ -63,27 +84,27 @@ enum class PacketId : uint8_t {
 
 // ExternalProxyConfig (0x26 bytes - Ryujinx compatible)
 struct ExternalProxyConfig {
-    uint8_t proxy_ip[16];       // IPv4 in first 4 bytes or full IPv6
+    uint8_t proxy_ip[16];  // IPv4 in first 4 bytes or full IPv6
     uint16_t proxy_port;
-    uint32_t address_family;    // 2=IPv4, 10=IPv6
+    uint32_t address_family;  // 2=IPv4, 10=IPv6
     uint8_t token[16];
 } __attribute__((packed));
 
 // ProxyDataHeader (12 bytes)
 struct ProxyDataHeader {
-    uint32_t dest_node_id;      // Destination node ID
-    uint32_t src_node_id;       // Source node ID
-    uint16_t protocol_type;     // UDP=17, TCP=6
-    uint16_t data_length;       // Length of data following header
+    uint32_t dest_node_id;   // Destination node ID
+    uint32_t src_node_id;    // Source node ID
+    uint16_t protocol_type;  // UDP=17, TCP=6
+    uint16_t data_length;    // Length of data following header
 } __attribute__((packed));
 
 // ProxyConfig (from host)
 struct ProxyConfig {
-    uint32_t proxy_ip;          // Virtual IP assigned
+    uint32_t proxy_ip;  // Virtual IP assigned
     // ... other fields
 } __attribute__((packed));
 
-} // namespace protocol
+}  // namespace protocol
 
 // =============================================================================
 // ExternalProxyConfig Tests - Structure Validation
@@ -204,18 +225,20 @@ TEST(proxy_data_header_data_length_offset) {
 namespace routing_test {
 
 // Simulates SendProxyDataToServer routing logic
-enum class RouteTarget {
-    MasterServer,
-    P2pProxy
-};
+enum class RouteTarget { MasterServer, P2pProxy };
 
 struct MockP2pClient {
     bool connected = false;
     bool ready = false;
     int send_count = 0;
 
-    bool IsReady() const { return connected && ready; }
-    bool Send() { send_count++; return true; }
+    bool IsReady() const {
+        return connected && ready;
+    }
+    bool Send() {
+        send_count++;
+        return true;
+    }
 };
 
 RouteTarget determine_route(MockP2pClient* client) {
@@ -225,11 +248,13 @@ RouteTarget determine_route(MockP2pClient* client) {
     return RouteTarget::MasterServer;
 }
 
-} // namespace routing_test
+}  // namespace routing_test
 
 TEST(routing_null_client_uses_master) {
     auto route = routing_test::determine_route(nullptr);
-    ASSERT_EQ(static_cast<int>(route), static_cast<int>(routing_test::RouteTarget::MasterServer));
+    ASSERT_EQ(
+        static_cast<int>(route),
+        static_cast<int>(routing_test::RouteTarget::MasterServer));
 }
 
 TEST(routing_disconnected_client_uses_master) {
@@ -238,7 +263,9 @@ TEST(routing_disconnected_client_uses_master) {
     client.ready = false;
 
     auto route = routing_test::determine_route(&client);
-    ASSERT_EQ(static_cast<int>(route), static_cast<int>(routing_test::RouteTarget::MasterServer));
+    ASSERT_EQ(
+        static_cast<int>(route),
+        static_cast<int>(routing_test::RouteTarget::MasterServer));
 }
 
 TEST(routing_connected_not_ready_uses_master) {
@@ -247,7 +274,9 @@ TEST(routing_connected_not_ready_uses_master) {
     client.ready = false;
 
     auto route = routing_test::determine_route(&client);
-    ASSERT_EQ(static_cast<int>(route), static_cast<int>(routing_test::RouteTarget::MasterServer));
+    ASSERT_EQ(
+        static_cast<int>(route),
+        static_cast<int>(routing_test::RouteTarget::MasterServer));
 }
 
 TEST(routing_ready_client_uses_p2p) {
@@ -256,7 +285,9 @@ TEST(routing_ready_client_uses_p2p) {
     client.ready = true;
 
     auto route = routing_test::determine_route(&client);
-    ASSERT_EQ(static_cast<int>(route), static_cast<int>(routing_test::RouteTarget::P2pProxy));
+    ASSERT_EQ(
+        static_cast<int>(route),
+        static_cast<int>(routing_test::RouteTarget::P2pProxy));
 }
 
 TEST(routing_ready_check_is_and_of_connected_and_ready) {
@@ -312,7 +343,8 @@ TEST(token_zero_check) {
 }
 
 TEST(token_copy) {
-    uint8_t source_token[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    uint8_t source_token[16] = {
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
     protocol::ExternalProxyConfig config{};
 
     memcpy(config.token, source_token, sizeof(config.token));
@@ -334,11 +366,11 @@ struct MockState {
 };
 
 enum class HandleResult {
-    Ignored,          // P2P disabled
-    ConnectFailed,    // TCP connect failed
-    AuthFailed,       // PerformAuth failed
-    ReadyFailed,      // EnsureProxyReady failed
-    Success           // All steps passed
+    Ignored,        // P2P disabled
+    ConnectFailed,  // TCP connect failed
+    AuthFailed,     // PerformAuth failed
+    ReadyFailed,    // EnsureProxyReady failed
+    Success         // All steps passed
 };
 
 // Simulates HandleExternalProxyConnect logic
@@ -346,8 +378,7 @@ HandleResult simulate_handle_external_proxy(
     MockState& state,
     bool connect_succeeds,
     bool auth_succeeds,
-    bool ready_succeeds)
-{
+    bool ready_succeeds) {
     // Step 1: Check if P2P is enabled
     if (!state.use_p2p_proxy) {
         return HandleResult::Ignored;
@@ -382,7 +413,7 @@ HandleResult simulate_handle_external_proxy(
     return HandleResult::Success;
 }
 
-} // namespace handle_external_proxy
+}  // namespace handle_external_proxy
 
 TEST(handle_external_p2p_disabled_ignored) {
     handle_external_proxy::MockState state;
@@ -391,8 +422,9 @@ TEST(handle_external_p2p_disabled_ignored) {
     auto result = handle_external_proxy::simulate_handle_external_proxy(
         state, true, true, true);
 
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(handle_external_proxy::HandleResult::Ignored));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(handle_external_proxy::HandleResult::Ignored));
     ASSERT_FALSE(state.p2p_connected);
 }
 
@@ -403,8 +435,9 @@ TEST(handle_external_connect_failure) {
     auto result = handle_external_proxy::simulate_handle_external_proxy(
         state, false, true, true);
 
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(handle_external_proxy::HandleResult::ConnectFailed));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(handle_external_proxy::HandleResult::ConnectFailed));
     ASSERT_FALSE(state.p2p_connected);
 }
 
@@ -415,8 +448,9 @@ TEST(handle_external_auth_failure) {
     auto result = handle_external_proxy::simulate_handle_external_proxy(
         state, true, false, true);
 
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(handle_external_proxy::HandleResult::AuthFailed));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(handle_external_proxy::HandleResult::AuthFailed));
     ASSERT_FALSE(state.p2p_connected);
 }
 
@@ -427,8 +461,9 @@ TEST(handle_external_ready_failure) {
     auto result = handle_external_proxy::simulate_handle_external_proxy(
         state, true, true, false);
 
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(handle_external_proxy::HandleResult::ReadyFailed));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(handle_external_proxy::HandleResult::ReadyFailed));
     ASSERT_FALSE(state.p2p_connected);
 }
 
@@ -439,8 +474,9 @@ TEST(handle_external_success) {
     auto result = handle_external_proxy::simulate_handle_external_proxy(
         state, true, true, true);
 
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(handle_external_proxy::HandleResult::Success));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(handle_external_proxy::HandleResult::Success));
     ASSERT_TRUE(state.p2p_connected);
     ASSERT_TRUE(state.p2p_auth_done);
     ASSERT_TRUE(state.p2p_ready);
@@ -457,8 +493,9 @@ TEST(handle_external_cleanup_on_failure) {
     auto result = handle_external_proxy::simulate_handle_external_proxy(
         state, true, false, true);
 
-    ASSERT_EQ(static_cast<int>(result),
-              static_cast<int>(handle_external_proxy::HandleResult::AuthFailed));
+    ASSERT_EQ(
+        static_cast<int>(result),
+        static_cast<int>(handle_external_proxy::HandleResult::AuthFailed));
 
     // Should have cleaned up
     ASSERT_FALSE(state.p2p_connected);
@@ -513,17 +550,19 @@ void mock_callback(protocol::PacketId type, const void* /*data*/, size_t size) {
     g_last_packet.processed = true;
 }
 
-} // namespace callback_test
+}  // namespace callback_test
 
 TEST(callback_receives_proxy_data) {
     callback_test::g_last_packet = {};
 
     uint8_t dummy_data[64] = {0};
-    callback_test::mock_callback(protocol::PacketId::ProxyData, dummy_data, sizeof(dummy_data));
+    callback_test::mock_callback(
+        protocol::PacketId::ProxyData, dummy_data, sizeof(dummy_data));
 
     ASSERT_TRUE(callback_test::g_last_packet.processed);
-    ASSERT_EQ(static_cast<int>(callback_test::g_last_packet.type),
-              static_cast<int>(protocol::PacketId::ProxyData));
+    ASSERT_EQ(
+        static_cast<int>(callback_test::g_last_packet.type),
+        static_cast<int>(protocol::PacketId::ProxyData));
     ASSERT_EQ(callback_test::g_last_packet.data_size, 64U);
 }
 
@@ -531,11 +570,13 @@ TEST(callback_receives_proxy_config) {
     callback_test::g_last_packet = {};
 
     protocol::ProxyConfig config{};
-    callback_test::mock_callback(protocol::PacketId::ProxyConfig, &config, sizeof(config));
+    callback_test::mock_callback(
+        protocol::PacketId::ProxyConfig, &config, sizeof(config));
 
     ASSERT_TRUE(callback_test::g_last_packet.processed);
-    ASSERT_EQ(static_cast<int>(callback_test::g_last_packet.type),
-              static_cast<int>(protocol::PacketId::ProxyConfig));
+    ASSERT_EQ(
+        static_cast<int>(callback_test::g_last_packet.type),
+        static_cast<int>(protocol::PacketId::ProxyConfig));
 }
 
 // =============================================================================
@@ -558,8 +599,14 @@ TEST(ip_extract_from_external_proxy_config_ipv4) {
 
     // Convert to string for verification
     char ip_str[INET_ADDRSTRLEN];
-    snprintf(ip_str, sizeof(ip_str), "%u.%u.%u.%u",
-             ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
+    snprintf(
+        ip_str,
+        sizeof(ip_str),
+        "%u.%u.%u.%u",
+        ip_bytes[0],
+        ip_bytes[1],
+        ip_bytes[2],
+        ip_bytes[3]);
 
     ASSERT_EQ(strcmp(ip_str, "192.168.1.100"), 0);
 }

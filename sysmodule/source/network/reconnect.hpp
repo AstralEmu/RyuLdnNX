@@ -173,22 +173,21 @@ struct ReconnectConfig {
      * - 1 fast retry at 200ms
      */
     ReconnectConfig()
-        : initial_delay_ms(RECONNECT_INITIAL_DELAY_MS)
-        , max_delay_ms(RECONNECT_MAX_DELAY_MS)
-        , multiplier_percent(RECONNECT_MULTIPLIER_PERCENT)
-        , jitter_percent(RECONNECT_JITTER_PERCENT)
-        , max_retries(RECONNECT_MAX_RETRIES_DEFAULT)
-        , fast_retries(RECONNECT_FAST_RETRIES)
-        , fast_delay_ms(RECONNECT_FAST_DELAY_MS)
-    {}
+        : initial_delay_ms(RECONNECT_INITIAL_DELAY_MS),
+          max_delay_ms(RECONNECT_MAX_DELAY_MS),
+          multiplier_percent(RECONNECT_MULTIPLIER_PERCENT),
+          jitter_percent(RECONNECT_JITTER_PERCENT),
+          max_retries(RECONNECT_MAX_RETRIES_DEFAULT),
+          fast_retries(RECONNECT_FAST_RETRIES),
+          fast_delay_ms(RECONNECT_FAST_DELAY_MS) {}
 };
 
 /**
  * @brief Result of a retry check
  */
 enum class RetryResult : uint8_t {
-    ShouldRetry,      ///< OK to retry, delay calculated
-    MaxRetriesReached ///< Maximum retry count exceeded
+    ShouldRetry,       ///< OK to retry, delay calculated
+    MaxRetriesReached  ///< Maximum retry count exceeded
 };
 
 /**
@@ -295,14 +294,18 @@ public:
      *
      * @return Number of retries since last reset
      */
-    uint32_t get_retry_count() const { return m_retry_count; }
+    uint32_t get_retry_count() const {
+        return m_retry_count;
+    }
 
     /**
      * @brief Get current calculated delay (without jitter)
      *
      * @return Current delay in milliseconds
      */
-    uint32_t get_current_delay_ms() const { return m_current_delay_ms; }
+    uint32_t get_current_delay_ms() const {
+        return m_current_delay_ms;
+    }
 
     /**
      * @brief Get the configuration
@@ -310,7 +313,9 @@ public:
      * @return Reference to current configuration
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="ReconnectManager get_config"}
-    const ReconnectConfig& get_config() const { return m_config; }
+    const ReconnectConfig& get_config() const {
+        return m_config;
+    }
 
     /**
      * @brief Update configuration
@@ -324,9 +329,9 @@ public:
     void set_config(const ReconnectConfig& config);
 
 private:
-    ReconnectConfig m_config;       ///< Configuration parameters
-    uint32_t m_retry_count;         ///< Number of retries since reset
-    uint32_t m_current_delay_ms;    ///< Current calculated delay
+    ReconnectConfig m_config;     ///< Configuration parameters
+    uint32_t m_retry_count;       ///< Number of retries since reset
+    uint32_t m_current_delay_ms;  ///< Current calculated delay
 
     /**
      * @brief Calculate delay for current retry count
@@ -345,11 +350,14 @@ private:
  */
 inline const char* retry_result_to_string(RetryResult result) {
     switch (result) {
-        case RetryResult::ShouldRetry:      return "ShouldRetry";
-        case RetryResult::MaxRetriesReached: return "MaxRetriesReached";
-        default:                             return "Unknown";
+        case RetryResult::ShouldRetry:
+            return "ShouldRetry";
+        case RetryResult::MaxRetriesReached:
+            return "MaxRetriesReached";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace network
-} // namespace ryu_ldn
+}  // namespace network
+}  // namespace ryu_ldn

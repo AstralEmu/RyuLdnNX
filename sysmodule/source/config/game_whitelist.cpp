@@ -23,7 +23,8 @@ namespace {
 
 constexpr const char* WHITELIST_PATH = "sdmc:/config/ryu_ldn_nx/gamelist.txt";
 
-// Average bytes per line in gamelist.txt (e.g., "0x0100152000022000\n" = ~19 bytes)
+// Average bytes per line in gamelist.txt (e.g., "0x0100152000022000\n" = ~19
+// bytes)
 constexpr size_t BYTES_PER_ENTRY = 18;
 
 // Dynamically allocated whitelist (sized based on file).
@@ -37,10 +38,11 @@ constexpr size_t BYTES_PER_ENTRY = 18;
  *       the MITM ShouldMitm path can decide whether to intercept a game
  *       without touching the SD card on every IPC.
  * @modified_by `LoadWhitelist` (this file) — allocated via `new (std::nothrow)`
- *              once at startup, populated from `sdmc:/config/ryu_ldn_nx/gamelist.txt`,
- *              and owned by this unique_ptr for the sysmodule lifetime.
- * @thread_safety Not protected by a mutex. `LoadWhitelist` is invoked once during
- *                `InitializeSystemModule` before any MITM session can call
+ *              once at startup, populated from
+ * `sdmc:/config/ryu_ldn_nx/gamelist.txt`, and owned by this unique_ptr for the
+ * sysmodule lifetime.
+ * @thread_safety Not protected by a mutex. `LoadWhitelist` is invoked once
+ * during `InitializeSystemModule` before any MITM session can call
  *                `IsGameWhitelisted`; the load-then-freeze pattern means later
  *                read-only access from MITM threads is safe by happens-before.
  */
@@ -120,7 +122,8 @@ u64 ParseHexId(const char* str, size_t len) {
 
 void LoadWhitelist() {
     if (g_whitelist_loaded) {
-        LOG_INFO("GameWhitelist: already loaded (%zu games)", g_whitelist_count);
+        LOG_INFO(
+            "GameWhitelist: already loaded (%zu games)", g_whitelist_count);
         return;
     }
 
@@ -128,10 +131,14 @@ void LoadWhitelist() {
 
     // Open the file
     ams::fs::FileHandle file{};
-    ams::Result rc = ams::fs::OpenFile(std::addressof(file), WHITELIST_PATH, ams::fs::OpenMode_Read);
+    ams::Result rc = ams::fs::OpenFile(
+        std::addressof(file), WHITELIST_PATH, ams::fs::OpenMode_Read);
 
     if (R_FAILED(rc)) {
-        LOG_WARN("GameWhitelist: Cannot open %s (rc=0x%x)", WHITELIST_PATH, rc.GetValue());
+        LOG_WARN(
+            "GameWhitelist: Cannot open %s (rc=0x%x)",
+            WHITELIST_PATH,
+            rc.GetValue());
         g_whitelist_loaded = true;  // Mark as loaded (empty)
         return;
     }
@@ -149,11 +156,15 @@ void LoadWhitelist() {
     LOG_INFO("GameWhitelist: file_size=%lld bytes", file_size);
 
     // Calculate capacity based on file size and allocate
-    g_whitelist_capacity = static_cast<size_t>(file_size / BYTES_PER_ENTRY) + 100;  // +100 margin
-    g_whitelist = std::unique_ptr<u64[]>(new (std::nothrow) u64[g_whitelist_capacity]);
+    g_whitelist_capacity =
+        static_cast<size_t>(file_size / BYTES_PER_ENTRY) + 100;  // +100 margin
+    g_whitelist =
+        std::unique_ptr<u64[]>(new (std::nothrow) u64[g_whitelist_capacity]);
     if (g_whitelist == nullptr) {
         ams::fs::CloseFile(file);
-        LOG_ERROR("GameWhitelist: failed to allocate %zu entries", g_whitelist_capacity);
+        LOG_ERROR(
+            "GameWhitelist: failed to allocate %zu entries",
+            g_whitelist_capacity);
         g_whitelist_loaded = true;
         return;
     }
@@ -170,19 +181,21 @@ void LoadWhitelist() {
     while (offset < file_size && g_whitelist_count < g_whitelist_capacity) {
         auto to_read = static_cast<size_t>(
             (file_size - offset) < static_cast<s64>(CHUNK_SIZE)
-            ? (file_size - offset)
-            : static_cast<s64>(CHUNK_SIZE)
-        );
+                ? (file_size - offset)
+                : static_cast<s64>(CHUNK_SIZE));
 
         size_t bytes_read = 0;
-        rc = ams::fs::ReadFile(std::addressof(bytes_read), file, offset, chunk, to_read);
+        rc = ams::fs::ReadFile(
+            std::addressof(bytes_read), file, offset, chunk, to_read);
         if (R_FAILED(rc)) {
             LOG_WARN("GameWhitelist: ReadFile failed rc=0x%x", rc.GetValue());
             break;
         }
 
         // Process chunk byte by byte
-        for (size_t i = 0; i < bytes_read && g_whitelist_count < g_whitelist_capacity; i++) {
+        for (size_t i = 0;
+             i < bytes_read && g_whitelist_count < g_whitelist_capacity;
+             i++) {
             char c = chunk[i];
 
             if (c == '\n' || c == '\r') {

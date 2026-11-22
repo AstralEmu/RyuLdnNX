@@ -63,7 +63,8 @@ enum class StateTransitionResult {
  */
 class LdnStateMachine {
 public:
-    using StateCallback = void (*)(CommState old_state, CommState new_state, void* user_data);
+    using StateCallback =
+        void (*)(CommState old_state, CommState new_state, void* user_data);
 
     /**
      * @brief Constructor
@@ -108,7 +109,8 @@ public:
     bool IsInitialized() const;
 
     /**
-     * @brief Check if in a connected state (AccessPointCreated or StationConnected)
+     * @brief Check if in a connected state (AccessPointCreated or
+     * StationConnected)
      * @return true if connected to a network
      */
     /// @gdb{tag="LDN:STATE", msg="IsNetworkActive"}
@@ -140,7 +142,8 @@ public:
     StateTransitionResult OpenAccessPoint();
 
     /**
-     * @brief Close access point mode (AccessPoint/AccessPointCreated -> Initialized)
+     * @brief Close access point mode (AccessPoint/AccessPointCreated ->
+     * Initialized)
      * @return Transition result
      */
     /// @gdb{tag="LDN:STATE", msg="CloseAccessPoint → Initialized"}
@@ -244,12 +247,12 @@ public:
     void SignalStateChange();
 
 private:
-    mutable os::SdkMutex m_mutex;           ///< Mutex for thread safety
-    CommState m_state;                       ///< Current state
-    os::SystemEvent m_state_event;           ///< State change event
+    mutable os::SdkMutex m_mutex;   ///< Mutex for thread safety
+    CommState m_state;              ///< Current state
+    os::SystemEvent m_state_event;  ///< State change event
 
-    StateCallback m_callback;                ///< Optional state change callback
-    void* m_callback_user_data;              ///< User data for callback
+    StateCallback m_callback;    ///< Optional state change callback
+    void* m_callback_user_data;  ///< User data for callback
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

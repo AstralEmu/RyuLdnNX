@@ -25,54 +25,66 @@
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
 
-#define TEST(name) \
-    static void test_##name(); \
-    static struct TestRegistrar_##name { \
-        TestRegistrar_##name() { \
+#define TEST(name)                            \
+    static void test_##name();                \
+    static struct TestRegistrar_##name {      \
+        TestRegistrar_##name() {              \
             printf("  [TEST] " #name "... "); \
-            fflush(stdout); \
-            test_##name(); \
-            g_tests_passed++; \
-            printf("PASS\n"); \
-        } \
-    } g_registrar_##name; \
+            fflush(stdout);                   \
+            test_##name();                    \
+            g_tests_passed++;                 \
+            printf("PASS\n");                 \
+        }                                     \
+    } g_registrar_##name;                     \
     static void test_##name()
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            printf("FAIL\n    Expected: " #cond " to be true\n    at %s:%d\n", __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_TRUE(cond)                                                   \
+    do {                                                                    \
+        if (!(cond)) {                                                      \
+            printf(                                                         \
+                "FAIL\n    Expected: " #cond " to be true\n    at %s:%d\n", \
+                __FILE__,                                                   \
+                __LINE__);                                                  \
+            g_tests_failed++;                                               \
+            return;                                                         \
+        }                                                                   \
+    } while (0)
 
-#define ASSERT_FALSE(cond) \
-    do { \
-        if (cond) { \
-            printf("FAIL\n    Expected: " #cond " to be false\n    at %s:%d\n", __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_FALSE(cond)                                                   \
+    do {                                                                     \
+        if (cond) {                                                          \
+            printf(                                                          \
+                "FAIL\n    Expected: " #cond " to be false\n    at %s:%d\n", \
+                __FILE__,                                                    \
+                __LINE__);                                                   \
+            g_tests_failed++;                                                \
+            return;                                                          \
+        }                                                                    \
+    } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("FAIL\n    Expected: " #a " == " #b "\n    at %s:%d\n", __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_EQ(a, b)                                                 \
+    do {                                                                \
+        if ((a) != (b)) {                                               \
+            printf(                                                     \
+                "FAIL\n    Expected: " #a " == " #b "\n    at %s:%d\n", \
+                __FILE__,                                               \
+                __LINE__);                                              \
+            g_tests_failed++;                                           \
+            return;                                                     \
+        }                                                               \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
-            printf("FAIL\n    Expected: " #a " != " #b "\n    at %s:%d\n", __FILE__, __LINE__); \
-            g_tests_failed++; \
-            return; \
-        } \
-    } while(0)
+#define ASSERT_NE(a, b)                                                 \
+    do {                                                                \
+        if ((a) == (b)) {                                               \
+            printf(                                                     \
+                "FAIL\n    Expected: " #a " != " #b "\n    at %s:%d\n", \
+                __FILE__,                                               \
+                __LINE__);                                              \
+            g_tests_failed++;                                           \
+            return;                                                     \
+        }                                                               \
+    } while (0)
 
 // ============================================================================
 // Error Types (mirrors ldn_types.hpp)
@@ -82,14 +94,14 @@ static int g_tests_failed = 0;
  * @brief Disconnect reasons
  */
 enum class DisconnectReason : uint32_t {
-    None = 0,              ///< No disconnect
-    User = 1,              ///< User initiated disconnect
-    SystemRequest = 2,     ///< System requested disconnect
-    DestroyedByUser = 3,   ///< Network destroyed by host
-    DestroyedBySystem = 4, ///< Network destroyed by system
-    Rejected = 5,          ///< Connection rejected
-    ConnectionFailed = 6,  ///< Failed to establish connection
-    SignalLost = 7,        ///< Lost signal/connection
+    None = 0,               ///< No disconnect
+    User = 1,               ///< User initiated disconnect
+    SystemRequest = 2,      ///< System requested disconnect
+    DestroyedByUser = 3,    ///< Network destroyed by host
+    DestroyedBySystem = 4,  ///< Network destroyed by system
+    Rejected = 5,           ///< Connection rejected
+    ConnectionFailed = 6,   ///< Failed to establish connection
+    SignalLost = 7,         ///< Lost signal/connection
 };
 
 /**
@@ -132,33 +144,48 @@ public:
     using StateCallback = std::function<void(CommState)>;
 
     TestErrorHandler()
-        : m_current_state(CommState::None)
-        , m_disconnect_reason(DisconnectReason::None)
-        , m_last_error(LdnErrorCode::Success)
-        , m_retry_count(0)
-        , m_max_retries(3)
-        , m_connection_lost(false)
-        , m_error_callback(nullptr)
-        , m_state_callback(nullptr)
-    {}
+        : m_current_state(CommState::None),
+          m_disconnect_reason(DisconnectReason::None),
+          m_last_error(LdnErrorCode::Success),
+          m_retry_count(0),
+          m_max_retries(3),
+          m_connection_lost(false),
+          m_error_callback(nullptr),
+          m_state_callback(nullptr) {}
 
     // ========================================================================
     // Configuration
     // ========================================================================
 
-    void SetMaxRetries(uint32_t max) { m_max_retries = max; }
-    void SetErrorCallback(ErrorCallback cb) { m_error_callback = cb; }
-    void SetStateCallback(StateCallback cb) { m_state_callback = cb; }
+    void SetMaxRetries(uint32_t max) {
+        m_max_retries = max;
+    }
+    void SetErrorCallback(ErrorCallback cb) {
+        m_error_callback = cb;
+    }
+    void SetStateCallback(StateCallback cb) {
+        m_state_callback = cb;
+    }
 
     // ========================================================================
     // State Management
     // ========================================================================
 
-    CommState GetState() const { return m_current_state; }
-    DisconnectReason GetDisconnectReason() const { return m_disconnect_reason; }
-    LdnErrorCode GetLastError() const { return m_last_error; }
-    uint32_t GetRetryCount() const { return m_retry_count; }
-    bool IsConnectionLost() const { return m_connection_lost; }
+    CommState GetState() const {
+        return m_current_state;
+    }
+    DisconnectReason GetDisconnectReason() const {
+        return m_disconnect_reason;
+    }
+    LdnErrorCode GetLastError() const {
+        return m_last_error;
+    }
+    uint32_t GetRetryCount() const {
+        return m_retry_count;
+    }
+    bool IsConnectionLost() const {
+        return m_connection_lost;
+    }
 
     void SetState(CommState state) {
         m_current_state = state;
@@ -229,7 +256,7 @@ public:
      * @return LdnErrorCode to return to caller
      */
     LdnErrorCode HandleTimeout(const char* operation) {
-        (void)operation; // For logging in real implementation
+        (void)operation;  // For logging in real implementation
 
         m_last_error = LdnErrorCode::Timeout;
 
@@ -255,10 +282,10 @@ public:
 
         // Map server errors to disconnect reasons
         switch (server_error_code) {
-            case 1: // Rejected
+            case 1:  // Rejected
                 m_disconnect_reason = DisconnectReason::Rejected;
                 break;
-            case 2: // Network destroyed
+            case 2:  // Network destroyed
                 m_disconnect_reason = DisconnectReason::DestroyedBySystem;
                 break;
             default:
@@ -362,7 +389,7 @@ TEST(connection_loss_from_access_point_retry) {
     bool should_retry = handler.HandleConnectionLoss();
     ASSERT_TRUE(should_retry);
     ASSERT_EQ(handler.GetRetryCount(), 1u);
-    ASSERT_EQ(handler.GetState(), CommState::AccessPoint); // State unchanged
+    ASSERT_EQ(handler.GetState(), CommState::AccessPoint);  // State unchanged
 }
 
 TEST(connection_loss_max_retries_exceeded) {
@@ -370,13 +397,15 @@ TEST(connection_loss_max_retries_exceeded) {
     handler.SetState(CommState::AccessPoint);
     handler.SetMaxRetries(2);
 
-    handler.HandleConnectionLoss(); // Retry 1
-    handler.HandleConnectionLoss(); // Retry 2
-    bool should_retry = handler.HandleConnectionLoss(); // Retry 3 - exceeds max
+    handler.HandleConnectionLoss();  // Retry 1
+    handler.HandleConnectionLoss();  // Retry 2
+    bool should_retry =
+        handler.HandleConnectionLoss();  // Retry 3 - exceeds max
 
     ASSERT_FALSE(should_retry);
     ASSERT_EQ(handler.GetState(), CommState::Error);
-    ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::ConnectionFailed);
+    ASSERT_EQ(
+        handler.GetDisconnectReason(), DisconnectReason::ConnectionFailed);
 }
 
 TEST(connection_loss_during_active_session) {
@@ -465,7 +494,7 @@ TEST(server_error_rejected) {
     TestErrorHandler handler;
     handler.SetState(CommState::Station);
 
-    LdnErrorCode result = handler.HandleServerError(1); // Rejected
+    LdnErrorCode result = handler.HandleServerError(1);  // Rejected
 
     ASSERT_EQ(result, LdnErrorCode::ServerError);
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::Rejected);
@@ -475,17 +504,18 @@ TEST(server_error_network_destroyed) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
 
-    handler.HandleServerError(2); // Network destroyed
+    handler.HandleServerError(2);  // Network destroyed
 
     ASSERT_EQ(handler.GetState(), CommState::Error);
-    ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::DestroyedBySystem);
+    ASSERT_EQ(
+        handler.GetDisconnectReason(), DisconnectReason::DestroyedBySystem);
 }
 
 TEST(server_error_unknown_maps_to_system_request) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
 
-    handler.HandleServerError(99); // Unknown error
+    handler.HandleServerError(99);  // Unknown error
 
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::SystemRequest);
 }
@@ -497,7 +527,7 @@ TEST(server_error_unknown_maps_to_system_request) {
 TEST(reset_error_clears_state) {
     TestErrorHandler handler;
     handler.SetState(CommState::AccessPoint);
-    handler.SetMaxRetries(2);  // Set max to 2 for faster test
+    handler.SetMaxRetries(2);        // Set max to 2 for faster test
     handler.HandleConnectionLoss();  // Retry 1
     handler.HandleConnectionLoss();  // Retry 2
     handler.HandleConnectionLoss();  // Exceeds max (2), triggers error
@@ -515,12 +545,13 @@ TEST(reset_error_clears_state) {
 TEST(can_recover_from_connection_failed) {
     TestErrorHandler handler;
     handler.SetState(CommState::Station);
-    handler.SetMaxRetries(0); // No retries
+    handler.SetMaxRetries(0);  // No retries
 
     handler.HandleConnectionLoss();
 
     ASSERT_EQ(handler.GetState(), CommState::Error);
-    ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::ConnectionFailed);
+    ASSERT_EQ(
+        handler.GetDisconnectReason(), DisconnectReason::ConnectionFailed);
     ASSERT_TRUE(handler.CanRecover());
 }
 
@@ -538,7 +569,7 @@ TEST(cannot_recover_from_rejected) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
 
-    handler.HandleServerError(1); // Rejected
+    handler.HandleServerError(1);  // Rejected
 
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::Rejected);
     ASSERT_FALSE(handler.CanRecover());
@@ -560,9 +591,7 @@ TEST(state_callback_on_error_transition) {
     handler.SetState(CommState::StationConnected);
 
     CommState last_state = CommState::None;
-    handler.SetStateCallback([&](CommState state) {
-        last_state = state;
-    });
+    handler.SetStateCallback([&](CommState state) { last_state = state; });
 
     handler.HandleConnectionLoss();
 
@@ -583,7 +612,7 @@ TEST(multiple_connection_losses_accumulate_retries) {
     }
 
     ASSERT_EQ(handler.GetRetryCount(), 3u);
-    ASSERT_EQ(handler.GetState(), CommState::Station); // Still trying
+    ASSERT_EQ(handler.GetState(), CommState::Station);  // Still trying
 }
 
 TEST(error_from_error_state_no_change) {
@@ -592,7 +621,7 @@ TEST(error_from_error_state_no_change) {
     handler.HandleConnectionLoss();
 
     CommState state_before = handler.GetState();
-    handler.HandleConnectionLoss(); // Second loss
+    handler.HandleConnectionLoss();  // Second loss
 
     ASSERT_EQ(handler.GetState(), state_before);
     ASSERT_EQ(handler.GetState(), CommState::Error);
@@ -638,7 +667,10 @@ int main() {
     // Tests run automatically via static initializers
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

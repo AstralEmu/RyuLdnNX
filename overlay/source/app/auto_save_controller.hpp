@@ -22,9 +22,12 @@
 
 /** @brief Persist config via IPC. Returns true on success. */
 inline bool DoSaveConfig() {
-    if (OverlayState::Instance().GetStatus() != OverlayState::InitStatus::Loaded) return false;
+    if (OverlayState::Instance().GetStatus() !=
+        OverlayState::InitStatus::Loaded)
+        return false;
     RyuLdnConfigService* svc = ryuLdnGetService();
-    if (!svc) return false;
+    if (!svc)
+        return false;
     RyuLdnConfigResult result;
     Result rc = ryuLdnSaveConfig(svc, &result);
     if (R_SUCCEEDED(rc) && result == RyuLdnConfigResult_Success) {
@@ -36,9 +39,12 @@ inline bool DoSaveConfig() {
 
 /** @brief Reload config from disk via IPC. Returns true on success. */
 inline bool DoReloadConfig() {
-    if (OverlayState::Instance().GetStatus() != OverlayState::InitStatus::Loaded) return false;
+    if (OverlayState::Instance().GetStatus() !=
+        OverlayState::InitStatus::Loaded)
+        return false;
     RyuLdnConfigService* svc = ryuLdnGetService();
-    if (!svc) return false;
+    if (!svc)
+        return false;
     RyuLdnConfigResult result;
     Result rc = ryuLdnReloadConfig(svc, &result);
     return R_SUCCEEDED(rc) && result == RyuLdnConfigResult_Success;
@@ -46,7 +52,8 @@ inline bool DoReloadConfig() {
 
 class AutoSaveController {
 public:
-    /** @brief Call once per frame. Marks OverlayState as saved if auto-save fires. */
+    /** @brief Call once per frame. Marks OverlayState as saved if auto-save
+     * fires. */
     void Update(bool isDirty) {
         if (isDirty) {
             // Skip auto-save if LDN session is active (prevents memory bugs)
@@ -100,13 +107,15 @@ private:
     /** @brief Check if an LDN session is currently active. */
     bool IsLdnSessionActive() const {
         RyuLdnConfigService* svc = ryuLdnGetService();
-        if (!svc) return false;
+        if (!svc)
+            return false;
         u32 gameActive;
-        if (R_FAILED(ryuLdnIsGameActive(svc, &gameActive))) return false;
+        if (R_FAILED(ryuLdnIsGameActive(svc, &gameActive)))
+            return false;
         return gameActive != 0;
     }
     u32 m_autoSaveCounter = 0;
     u32 m_saveConfirmCounter = 0;
-    static constexpr u32 AutoSaveDelayFrames = 60; // 1 s at 60 fps
+    static constexpr u32 AutoSaveDelayFrames = 60;  // 1 s at 60 fps
     static constexpr u32 ConfirmDurationFrames = 120;
 };

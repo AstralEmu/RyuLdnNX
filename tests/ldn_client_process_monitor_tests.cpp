@@ -1,6 +1,7 @@
 /**
  * @file ldn_client_process_monitor_tests.cpp
- * @brief Unit tests for the real IClientProcessMonitor (ldn/ldn_client_process_monitor.cpp)
+ * @brief Unit tests for the real IClientProcessMonitor
+ * (ldn/ldn_client_process_monitor.cpp)
  *
  * Built against the host Stratosphere stand-in in tests/stubs.
  */

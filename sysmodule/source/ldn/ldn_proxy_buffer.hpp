@@ -58,10 +58,12 @@ namespace ams::mitm::ldn {
 class LdnProxyBuffer {
 public:
     /// Maximum size of a single proxy data packet (data only, not header)
-    static constexpr size_t MaxPacketDataSize = 0x800;  // 2KB (reduced from 4KB)
+    static constexpr size_t MaxPacketDataSize =
+        0x800;  // 2KB (reduced from 4KB)
 
     /// Total buffer size (fits ~4 max-size packets)
-    static constexpr size_t BufferSize = MaxPacketDataSize * 4 + 256;  // ~8.5KB (reduced from 16.5KB)
+    static constexpr size_t BufferSize =
+        MaxPacketDataSize * 4 + 256;  // ~8.5KB (reduced from 16.5KB)
 
     /// Maximum number of packets that can be queued
     static constexpr size_t MaxQueuedPackets = 16;  // Reduced from 32
@@ -82,8 +84,10 @@ public:
      * @param size Size of payload in bytes
      * @return true if packet was written, false if buffer overflow
      */
-    bool Write(const ryu_ldn::protocol::ProxyDataHeader& header,
-               const u8* data, size_t size);
+    bool Write(
+        const ryu_ldn::protocol::ProxyDataHeader& header,
+        const u8* data,
+        size_t size);
 
     /**
      * @brief Read a packet from the buffer
@@ -96,8 +100,11 @@ public:
      * @param max_size Maximum bytes to write to data buffer
      * @return true if packet was read, false if buffer empty
      */
-    bool Read(ryu_ldn::protocol::ProxyDataHeader& header,
-              u8* data, size_t& size, size_t max_size);
+    bool Read(
+        ryu_ldn::protocol::ProxyDataHeader& header,
+        u8* data,
+        size_t& size,
+        size_t max_size);
 
     /**
      * @brief Peek at next packet without removing it
@@ -142,20 +149,20 @@ private:
      */
     struct PacketEntry {
         ryu_ldn::protocol::ProxyDataHeader header;  ///< Packet header
-        size_t data_size;                            ///< Payload size
-        size_t data_offset;                          ///< Offset in m_data_buffer
+        size_t data_size;                           ///< Payload size
+        size_t data_offset;                         ///< Offset in m_data_buffer
     };
 
-    mutable os::SdkMutex m_mutex;                    ///< Thread safety
+    mutable os::SdkMutex m_mutex;  ///< Thread safety
 
-    PacketEntry m_packets[MaxQueuedPackets];         ///< Packet metadata queue
-    size_t m_packet_read_idx;                        ///< Read position
-    size_t m_packet_write_idx;                       ///< Write position
-    size_t m_packet_count;                           ///< Number of packets
+    PacketEntry m_packets[MaxQueuedPackets];  ///< Packet metadata queue
+    size_t m_packet_read_idx;                 ///< Read position
+    size_t m_packet_write_idx;                ///< Write position
+    size_t m_packet_count;                    ///< Number of packets
 
-    u8 m_data_buffer[BufferSize];                    ///< Payload data storage
-    size_t m_data_read_pos;                          ///< Data read position
-    size_t m_data_write_pos;                         ///< Data write position
+    u8 m_data_buffer[BufferSize];  ///< Payload data storage
+    size_t m_data_read_pos;        ///< Data read position
+    size_t m_data_write_pos;       ///< Data write position
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

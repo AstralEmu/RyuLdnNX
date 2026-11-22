@@ -29,9 +29,9 @@
 // where the types are instantiated (new P2pProxyClient / new P2pProxyServer)
 // and their public methods are invoked.
 namespace ams::mitm::p2p {
-    class P2pProxyClient;
-    class P2pProxyServer;
-}
+class P2pProxyClient;
+class P2pProxyServer;
+}  // namespace ams::mitm::p2p
 
 namespace ams::mitm::ldn {
 
@@ -58,7 +58,8 @@ public:
     /**
      * @brief Constructor
      *
-     * @param program_id Program ID of the client process (used to replace LocalCommunicationId=-1)
+     * @param program_id Program ID of the client process (used to replace
+     * LocalCommunicationId=-1)
      */
     /// @gdb{tag="LDN:LIFECYCLE", msg="Communication service created"}
     explicit ICommunicationService(ncm::ProgramId program_id);
@@ -99,7 +100,8 @@ public:
      * @return Result code
      */
     /// @gdb{tag="LDN:OPS", msg="GetIpv4Address"}
-    Result GetIpv4Address(ams::sf::Out<u32> address, ams::sf::Out<u32> mask) const;
+    Result GetIpv4Address(
+        ams::sf::Out<u32> address, ams::sf::Out<u32> mask) const;
 
     /**
      * @brief Get last disconnect reason
@@ -163,7 +165,7 @@ public:
         ams::sf::Out<u32> count,
         ams::sf::OutAutoSelectArray<NetworkInfo> buffer,
         u16 channel,
-        const ScanFilter &filter);
+        const ScanFilter& filter);
 
     // ========================================================================
     // Access Point Operations
@@ -192,7 +194,7 @@ public:
      * @return Result code
      */
     /// @gdb{tag="LDN:OPS", msg="CreateNetwork"}
-    Result CreateNetwork(const CreateNetworkConfig &data);
+    Result CreateNetwork(const CreateNetworkConfig& data);
 
     /**
      * @brief Destroy the network
@@ -243,12 +245,13 @@ public:
     /**
      * @brief Connect to a network
      *
-     * @param dat Connection parameters (security config, user config, version, option)
+     * @param dat Connection parameters (security config, user config, version,
+     * option)
      * @param data Network to connect to
      * @return Result code
      */
     /// @gdb{tag="LDN:OPS", msg="Connect"}
-    Result Connect(const ConnectNetworkData &dat, const NetworkInfo& data);
+    Result Connect(const ConnectNetworkData& dat, const NetworkInfo& data);
 
     /**
      * @brief Disconnect from network
@@ -287,7 +290,8 @@ public:
      * @return Result code
      */
     /// @gdb{tag="LDN:OPS", msg="InitializeSystem2"}
-    Result InitializeSystem2(u64 unk, const ams::sf::ClientProcessId& client_process_id);
+    Result InitializeSystem2(
+        u64 unk, const ams::sf::ClientProcessId& client_process_id);
 
     // ========================================================================
     // Private Network Operations
@@ -309,7 +313,7 @@ public:
         ams::sf::Out<u32> count,
         ams::sf::OutAutoSelectArray<NetworkInfo> buffer,
         u16 channel,
-        const ScanFilter &filter);
+        const ScanFilter& filter);
 
     /**
      * @brief Create a private (password-protected) network
@@ -320,7 +324,7 @@ public:
      */
     /// @gdb{tag="LDN:OPS", msg="CreateNetworkPrivate"}
     Result CreateNetworkPrivate(
-        const CreateNetworkPrivateConfig &data,
+        const CreateNetworkPrivateConfig& data,
         ams::sf::InPointerBuffer addressList);
 
     /**
@@ -330,7 +334,7 @@ public:
      * @return Result code
      */
     /// @gdb{tag="LDN:OPS", msg="ConnectPrivate"}
-    Result ConnectPrivate(const ConnectPrivateData &data);
+    Result ConnectPrivate(const ConnectPrivateData& data);
 
     // ========================================================================
     // Other Operations
@@ -394,8 +398,10 @@ private:
      * @param data Packet payload
      * @param size Payload size
      */
-    /// @gdb{tag="LDN:ASYNC", msg="HandleServerPacket: id=%u size=%zu", args="$x2, $x3"}
-    void HandleServerPacket(ryu_ldn::protocol::PacketId id, const uint8_t* data, size_t size);
+    /// @gdb{tag="LDN:ASYNC", msg="HandleServerPacket: id=%u size=%zu",
+    /// args="$x2, $x3"}
+    void HandleServerPacket(
+        ryu_ldn::protocol::PacketId id, const uint8_t* data, size_t size);
     /**
      * @brief Handle Connected packet from server
      *
@@ -470,33 +476,38 @@ private:
      * @param timeout_ms Timeout in milliseconds
      * @return true if packet received, false on timeout
      */
-    /// @gdb{tag="LDN:ASYNC", msg="WaitForResponse: expected_id=%u timeout_ms=%lu", args="$x1, $x2"}
-    bool WaitForResponse(ryu_ldn::protocol::PacketId expected_id, uint64_t timeout_ms);
+    /// @gdb{tag="LDN:ASYNC", msg="WaitForResponse: expected_id=%u
+    /// timeout_ms=%lu", args="$x1, $x2"}
+    bool WaitForResponse(
+        ryu_ldn::protocol::PacketId expected_id, uint64_t timeout_ms);
 
 private:
-    LdnStateMachine m_state_machine;        ///< Thread-safe state machine
-    u64 m_error_state;                      ///< Error state flag
-    u64 m_client_process_id;                ///< Client game process ID
+    LdnStateMachine m_state_machine;  ///< Thread-safe state machine
+    u64 m_error_state;                ///< Error state flag
+    u64 m_client_process_id;          ///< Client game process ID
 
-    NetworkInfo m_network_info;             ///< Current network info
-    DisconnectReason m_disconnect_reason;   ///< Last disconnect reason
-    u32 m_ipv4_address;                     ///< Assigned IPv4 address
-    u32 m_subnet_mask;                      ///< Subnet mask
+    NetworkInfo m_network_info;            ///< Current network info
+    DisconnectReason m_disconnect_reason;  ///< Last disconnect reason
+    u32 m_ipv4_address;                    ///< Assigned IPv4 address
+    u32 m_subnet_mask;                     ///< Subnet mask
 
-    ryu_ldn::network::RyuLdnClient m_server_client; ///< Server communication client
-    bool m_server_connected;                ///< Server connection status
+    ryu_ldn::network::RyuLdnClient
+        m_server_client;      ///< Server communication client
+    bool m_server_connected;  ///< Server connection status
 
-    LdnNodeMapper m_node_mapper;            ///< Node ID to IP mapping
-    LdnProxyBuffer m_proxy_buffer;          ///< Incoming proxy data buffer
+    LdnNodeMapper m_node_mapper;    ///< Node ID to IP mapping
+    LdnProxyBuffer m_proxy_buffer;  ///< Incoming proxy data buffer
 
-    // Response handling with events (like Ryujinx ManualResetEvent/AutoResetEvent)
-    // Using AutoClear for response/scan/reject so TimedWaitAny consumes the signal
-    // automatically — mirrors C# WaitHandle.WaitAny semantics exactly.
+    // Response handling with events (like Ryujinx
+    // ManualResetEvent/AutoResetEvent) Using AutoClear for response/scan/reject
+    // so TimedWaitAny consumes the signal automatically — mirrors C#
+    // WaitHandle.WaitAny semantics exactly.
     //
     // Each os::Event serves a distinct, non-overlapping purpose:
     //   m_response_event  — Connect/CreateNetwork/ConnectPrivate handshake
-    //                       reply (Connected / RejectReply / ProxyConnectReply).
-    //                       Single-use per IPC call; re-armed on each request.
+    //                       reply (Connected / RejectReply /
+    //                       ProxyConnectReply). Single-use per IPC call;
+    //                       re-armed on each request.
     //   m_scan_event      — Scan / ScanPrivate batch end (ScanReplyEnd).
     //                       Routed through TimedWaitAny separately from the
     //                       single-packet response event because a scan
@@ -518,47 +529,57 @@ private:
     // receive-thread code path and waited on by a different IPC handler.
     // Merging them would force every waiter to re-dispatch on packet id,
     // reintroducing the spurious-wake-up bug fixed by the per-event split.
-    os::Event m_response_event;             ///< Signaled when expected response received
-    os::Event m_scan_event;                 ///< Signaled when scan completes (ScanReplyEnd)
-    os::Event m_error_event;                 ///< Signaled on network error
-    os::Event m_reject_event;               ///< Signaled when reject reply received
-    os::Event m_handshake_event;             ///< Signaled when RyuLdnClient reaches Ready state
-    ryu_ldn::protocol::PacketId m_last_response_id; ///< Last received packet ID
+    os::Event m_response_event;  ///< Signaled when expected response received
+    os::Event m_scan_event;    ///< Signaled when scan completes (ScanReplyEnd)
+    os::Event m_error_event;   ///< Signaled on network error
+    os::Event m_reject_event;  ///< Signaled when reject reply received
+    os::Event
+        m_handshake_event;  ///< Signaled when RyuLdnClient reaches Ready state
+    ryu_ldn::protocol::PacketId
+        m_last_response_id;  ///< Last received packet ID
 
     // Scan results buffer (reduced to save ~18KB of memory)
-    static constexpr size_t MAX_SCAN_RESULTS = 8;   ///< Max networks from scan (reduced from 24)
-    NetworkInfo m_scan_results[MAX_SCAN_RESULTS];   ///< Scan results buffer
-    size_t m_scan_result_count;                     ///< Number of scan results
+    static constexpr size_t MAX_SCAN_RESULTS =
+        8;  ///< Max networks from scan (reduced from 24)
+    NetworkInfo m_scan_results[MAX_SCAN_RESULTS];  ///< Scan results buffer
+    size_t m_scan_result_count;                    ///< Number of scan results
 
     // Advertise data buffer
-    uint8_t m_advertise_data[384];          ///< Stored advertise data
-    size_t m_advertise_data_size;           ///< Size of advertise data
+    uint8_t m_advertise_data[384];  ///< Stored advertise data
+    size_t m_advertise_data_size;   ///< Size of advertise data
 
     // Game version (like Ryujinx _gameVersion)
-    uint8_t m_game_version[16];             ///< Game version string for CreateAccessPoint
+    uint8_t m_game_version[16];  ///< Game version string for CreateAccessPoint
 
     // Network connected flag (like Ryujinx _networkConnected)
-    bool m_network_connected;               ///< True when in active network session
+    bool m_network_connected;  ///< True when in active network session
 
     // Node state tracking for GetNetworkInfoLatestUpdate
-    bool m_prev_node_connected[NodeCountMax]; ///< Previous connected state of each node
+    bool m_prev_node_connected[NodeCountMax];  ///< Previous connected state of
+                                               ///< each node
 
     // Last network error (like Ryujinx _lastError)
-    ryu_ldn::protocol::NetworkErrorCode m_last_network_error; ///< Last error from server
+    ryu_ldn::protocol::NetworkErrorCode
+        m_last_network_error;  ///< Last error from server
 
-    // P2P Proxy support (like Ryujinx _useP2pProxy, _connectedProxy, _hostedProxy, Config)
-    bool m_use_p2p_proxy;                                   ///< True if P2P proxy enabled
-    ryu_ldn::protocol::ProxyConfig m_proxy_config;          ///< Current proxy configuration
-    ryu_ldn::protocol::ExternalProxyConfig m_external_proxy_config; ///< External proxy config
+    // P2P Proxy support (like Ryujinx _useP2pProxy, _connectedProxy,
+    // _hostedProxy, Config)
+    bool m_use_p2p_proxy;  ///< True if P2P proxy enabled
+    ryu_ldn::protocol::ProxyConfig
+        m_proxy_config;  ///< Current proxy configuration
+    ryu_ldn::protocol::ExternalProxyConfig
+        m_external_proxy_config;  ///< External proxy config
     // Owning pointers (cppcoreguidelines-owning-memory): released
     // automatically on service destruction — no manual delete path
     // can be forgotten.
-    std::unique_ptr<p2p::P2pProxyClient> m_p2p_client;      ///< Connected P2P proxy client (joiner side)
+    std::unique_ptr<p2p::P2pProxyClient>
+        m_p2p_client;  ///< Connected P2P proxy client (joiner side)
     // Guards the m_p2p_client pointer and its use by the IPC send path. The
     // async connect worker, the IPC threads (Finalize, CloseAccessPoint,
     // SendTo) and the inactivity timer all reach the client.
     os::SdkMutex m_p2p_client_mutex;
-    std::unique_ptr<p2p::P2pProxyServer> m_p2p_server;     ///< Hosted P2P proxy server (host side)
+    std::unique_ptr<p2p::P2pProxyServer>
+        m_p2p_server;  ///< Hosted P2P proxy server (host side)
 
     // Async ExternalProxy connect thread — mirrors Ryujinx's architecture
     // where HandleExternalProxy runs on the receive thread (NetCoreServer
@@ -572,15 +593,16 @@ private:
     ryu_ldn::protocol::ExternalProxyConfig m_pending_p2p_config{};
 
     // Inactivity timeout (like Ryujinx _timeout)
-    NetworkTimeout m_inactivity_timeout;                    ///< Auto-disconnect after idle period
+    NetworkTimeout m_inactivity_timeout;  ///< Auto-disconnect after idle period
 
     // Dedicated receive thread — reads packets from master TCP and dispatches
     // them via HandleServerPacket immediately, like NetCoreServer's OnReceived
     // callback in Ryujinx. IPC handlers no longer call update(); they wait on
     // os::Event (via TimedWaitAny) which the receive thread signals.
-    os::ThreadType m_recv_thread;                           ///< Receive thread (replaces old bg thread)
-    std::atomic<bool> m_recv_thread_running;                 ///< Receive thread running flag
-    bool m_recv_thread_stopped;                              ///< True if Finalize() already stopped+destroyed the receive thread
+    os::ThreadType m_recv_thread;  ///< Receive thread (replaces old bg thread)
+    std::atomic<bool> m_recv_thread_running;  ///< Receive thread running flag
+    bool m_recv_thread_stopped;               ///< True if Finalize() already
+                                 ///< stopped+destroyed the receive thread
 
     // Mutex protecting shared state written by the receive thread and read
     // by IPC handlers: m_network_info, m_network_connected, m_scan_results,
@@ -588,13 +610,14 @@ private:
     // m_prev_node_connected, m_last_network_error, m_last_response_id.
     // Send operations on m_server_client are already serialized by TcpClient's
     // internal m_send_mutex.
-    mutable os::SdkMutex m_shared_mutex;                     ///< Protects shared state
+    mutable os::SdkMutex m_shared_mutex;  ///< Protects shared state
 
     /**
      * @brief Receive thread entry point
      * @param arg Pointer to ICommunicationService instance
      */
-    /// @gdb{tag="LDN:ASYNC", msg="ReceiveThreadEntry: thread started arg=%p", args="$x0"}
+    /// @gdb{tag="LDN:ASYNC", msg="ReceiveThreadEntry: thread started arg=%p",
+    /// args="$x0"}
     static void ReceiveThreadEntry(void* arg);
 
     /**
@@ -607,33 +630,43 @@ private:
      * @brief Async P2P connect thread entry — see m_p2p_connect_thread
      * @param arg Pointer to ICommunicationService instance
      */
-    /// @gdb{tag="LDN:ASYNC", msg="P2pConnectThreadEntry: thread started arg=%p", args="$x0"}
+    /// @gdb{tag="LDN:ASYNC", msg="P2pConnectThreadEntry: thread started
+    /// arg=%p", args="$x0"}
     static void P2pConnectThreadEntry(void* arg);
 
     /**
-     * @brief Packet callback registered on the server client (C function pointer)
+     * @brief Packet callback registered on the server client (C function
+     * pointer)
      * @param id Packet type
      * @param data Packet payload
      * @param size Payload size in bytes
      * @param user_data Pointer to the ICommunicationService instance
      */
-    static void OnServerPacket(ryu_ldn::protocol::PacketId id, const uint8_t* data,
-                               size_t size, void* user_data);
+    static void OnServerPacket(
+        ryu_ldn::protocol::PacketId id,
+        const uint8_t* data,
+        size_t size,
+        void* user_data);
 
     /**
-     * @brief State callback registered on the server client (C function pointer)
+     * @brief State callback registered on the server client (C function
+     * pointer)
      * @param old_state Previous connection state (unused)
      * @param new_state New connection state; Ready signals the handshake event
      * @param user_data Pointer to the ICommunicationService instance
      */
-    static void OnServerStateChange(ryu_ldn::network::ConnectionState old_state,
-                                    ryu_ldn::network::ConnectionState new_state,
-                                    void* user_data);
+    static void OnServerStateChange(
+        ryu_ldn::network::ConnectionState old_state,
+        ryu_ldn::network::ConnectionState new_state,
+        void* user_data);
 
-    // Program ID for LocalCommunicationId replacement (like Ryujinx NeedsRealId handling)
-    ncm::ProgramId m_program_id;                            ///< Client program ID (title ID)
-    u64 m_local_communication_id;                           ///< LocalCommunicationId from NACP (for LDN filtering)
-    u16 m_expected_scene_id;                                ///< Expected sceneId from game's Scan filter (Ryujinx may use 0)
+    // Program ID for LocalCommunicationId replacement (like Ryujinx NeedsRealId
+    // handling)
+    ncm::ProgramId m_program_id;   ///< Client program ID (title ID)
+    u64 m_local_communication_id;  ///< LocalCommunicationId from NACP (for LDN
+                                   ///< filtering)
+    u16 m_expected_scene_id;       ///< Expected sceneId from game's Scan filter
+                                   ///< (Ryujinx may use 0)
 
     /**
      * @brief Static callback for inactivity timeout
@@ -669,7 +702,8 @@ private:
      *
      * @param config ExternalProxyConfig from master server
      */
-    void HandleExternalProxyConnect(const ryu_ldn::protocol::ExternalProxyConfig& config);
+    void HandleExternalProxyConnect(
+        const ryu_ldn::protocol::ExternalProxyConfig& config);
 
     /**
      * @brief Disconnect from P2P proxy if connected
@@ -714,7 +748,8 @@ private:
      *
      * @param token Token for the expected joiner
      */
-    void HandleExternalProxyToken(const ryu_ldn::protocol::ExternalProxyToken& token);
+    void HandleExternalProxyToken(
+        const ryu_ldn::protocol::ExternalProxyToken& token);
 
 public:
     /**
@@ -738,4 +773,4 @@ public:
 // Verify interface compliance
 static_assert(ams::mitm::ldn::IsICommunicationInterface<ICommunicationService>);
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

@@ -3,8 +3,8 @@
  * @brief LDN Proxy Handler - Manages P2P connections tunneled through RyuLDN
  *
  * This module provides a handler for P2P proxy connections. The Nintendo Switch
- * LDN protocol normally uses direct local communication, but when playing online
- * through RyuLDN, connections are tunneled through the server.
+ * LDN protocol normally uses direct local communication, but when playing
+ * online through RyuLDN, connections are tunneled through the server.
  *
  * ## Architecture
  *
@@ -18,7 +18,8 @@
  * ## Connection Model
  *
  * The proxy handler maintains a table of virtual P2P connections:
- * - Each connection is identified by (src_ip, src_port, dest_ip, dest_port, protocol)
+ * - Each connection is identified by (src_ip, src_port, dest_ip, dest_port,
+ * protocol)
  * - ProxyConnect establishes a new virtual connection
  * - ProxyData sends/receives game data through the tunnel
  * - ProxyDisconnect tears down the virtual connection
@@ -87,8 +88,8 @@ using ProxyConnectReplyCallback = void (*)(const protocol::ProxyInfo& info);
  * @param data Pointer to payload data
  * @param length Length of payload in bytes
  */
-using ProxyDataCallback = void (*)(const protocol::ProxyInfo& info,
-                                    const uint8_t* data, size_t length);
+using ProxyDataCallback = void (*)(
+    const protocol::ProxyInfo& info, const uint8_t* data, size_t length);
 
 /**
  * @brief Callback for proxy disconnect
@@ -98,7 +99,8 @@ using ProxyDataCallback = void (*)(const protocol::ProxyInfo& info,
  * @param info Connection that was closed
  * @param reason Disconnect reason code
  */
-using ProxyDisconnectCallback = void (*)(const protocol::ProxyInfo& info, int32_t reason);
+using ProxyDisconnectCallback =
+    void (*)(const protocol::ProxyInfo& info, int32_t reason);
 
 // ============================================================================
 // Connection Entry
@@ -110,18 +112,21 @@ using ProxyDisconnectCallback = void (*)(const protocol::ProxyInfo& info, int32_
  * Represents a single virtual P2P connection being tunneled.
  */
 struct ProxyConnection {
-    uint32_t source_ipv4;           ///< Source IPv4 address
-    uint16_t source_port;           ///< Source port
-    uint32_t dest_ipv4;             ///< Destination IPv4 address
-    uint16_t dest_port;             ///< Destination port
-    protocol::ProtocolType protocol; ///< TCP or UDP
+    uint32_t source_ipv4;             ///< Source IPv4 address
+    uint16_t source_port;             ///< Source port
+    uint32_t dest_ipv4;               ///< Destination IPv4 address
+    uint16_t dest_port;               ///< Destination port
+    protocol::ProtocolType protocol;  ///< TCP or UDP
 
     /**
      * @brief Check if this connection matches the given parameters
      */
-    bool matches(uint32_t src_ip, uint16_t src_port,
-                 uint32_t dst_ip, uint16_t dst_port,
-                 protocol::ProtocolType proto = protocol::ProtocolType::Udp) const {
+    bool matches(
+        uint32_t src_ip,
+        uint16_t src_port,
+        uint32_t dst_ip,
+        uint16_t dst_port,
+        protocol::ProtocolType proto = protocol::ProtocolType::Udp) const {
         return source_ipv4 == src_ip && source_port == src_port &&
                dest_ipv4 == dst_ip && dest_port == dst_port &&
                protocol == proto;
@@ -131,8 +136,12 @@ struct ProxyConnection {
      * @brief Check if this connection matches a ProxyInfo
      */
     bool matches(const protocol::ProxyInfo& info) const {
-        return matches(info.source_ipv4, info.source_port,
-                       info.dest_ipv4, info.dest_port, info.protocol);
+        return matches(
+            info.source_ipv4,
+            info.source_port,
+            info.dest_ipv4,
+            info.dest_port,
+            info.protocol);
     }
 };
 
@@ -167,7 +176,8 @@ struct ProxyConnection {
  *     printf("Proxy IP: %08X\n", cfg.proxy_ip);
  * });
  *
- * proxy.set_data_callback([](const ProxyInfo& info, const uint8_t* data, size_t len) {
+ * proxy.set_data_callback([](const ProxyInfo& info, const uint8_t* data, size_t
+ * len) {
  *     // Forward to game
  * });
  *
@@ -206,7 +216,8 @@ public:
     /**
      * @brief Set callback for proxy configuration
      *
-     * @param callback Function to call when config received (nullptr to disable)
+     * @param callback Function to call when config received (nullptr to
+     * disable)
      */
     /// @gdb{tag="LDN:PROXY_HANDLER", msg="Config callback registered"}
     void set_config_callback(ProxyConfigCallback callback);
@@ -257,8 +268,8 @@ public:
      * @param config Proxy configuration
      */
     /// @gdb{tag="LDN:PROXY_HANDLER", msg="Handling proxy config"}
-    void handle_proxy_config(const protocol::LdnHeader& header,
-                              const protocol::ProxyConfig& config);
+    void handle_proxy_config(
+        const protocol::LdnHeader& header, const protocol::ProxyConfig& config);
 
     /**
      * @brief Handle ProxyConnect packet
@@ -270,8 +281,9 @@ public:
      * @param req Connect request
      */
     /// @gdb{tag="LDN:PROXY_HANDLER", msg="Handling proxy connect"}
-    void handle_proxy_connect(const protocol::LdnHeader& header,
-                               const protocol::ProxyConnectRequest& req);
+    void handle_proxy_connect(
+        const protocol::LdnHeader& header,
+        const protocol::ProxyConnectRequest& req);
 
     /**
      * @brief Handle ProxyConnectReply packet
@@ -282,8 +294,9 @@ public:
      * @param resp Connect response
      */
     /// @gdb{tag="LDN:PROXY_HANDLER", msg="Handling proxy connect reply"}
-    void handle_proxy_connect_reply(const protocol::LdnHeader& header,
-                                     const protocol::ProxyConnectResponse& resp);
+    void handle_proxy_connect_reply(
+        const protocol::LdnHeader& header,
+        const protocol::ProxyConnectResponse& resp);
 
     /**
      * @brief Handle ProxyData packet
@@ -296,9 +309,11 @@ public:
      * @param payload_length Length of payload in bytes
      */
     /// @gdb{tag="LDN:PROXY_HANDLER", msg="Handling proxy data"}
-    void handle_proxy_data(const protocol::LdnHeader& header,
-                            const protocol::ProxyDataHeader& data_header,
-                            const uint8_t* payload, size_t payload_length);
+    void handle_proxy_data(
+        const protocol::LdnHeader& header,
+        const protocol::ProxyDataHeader& data_header,
+        const uint8_t* payload,
+        size_t payload_length);
 
     /**
      * @brief Handle ProxyDisconnect packet
@@ -310,8 +325,9 @@ public:
      * @param msg Disconnect message
      */
     /// @gdb{tag="LDN:PROXY_HANDLER", msg="Handling proxy disconnect"}
-    void handle_proxy_disconnect(const protocol::LdnHeader& header,
-                                  const protocol::ProxyDisconnectMessage& msg);
+    void handle_proxy_disconnect(
+        const protocol::LdnHeader& header,
+        const protocol::ProxyDisconnectMessage& msg);
 
     // ========================================================================
     // State Queries
@@ -322,28 +338,36 @@ public:
      *
      * @return true if ProxyConfig has been received
      */
-    bool is_configured() const { return m_configured; }
+    bool is_configured() const {
+        return m_configured;
+    }
 
     /**
      * @brief Get configured proxy IP
      *
      * @return Proxy server IP address (0 if not configured)
      */
-    uint32_t get_proxy_ip() const { return m_proxy_ip; }
+    uint32_t get_proxy_ip() const {
+        return m_proxy_ip;
+    }
 
     /**
      * @brief Get configured subnet mask
      *
      * @return Proxy subnet mask (0 if not configured)
      */
-    uint32_t get_proxy_subnet_mask() const { return m_proxy_subnet_mask; }
+    uint32_t get_proxy_subnet_mask() const {
+        return m_proxy_subnet_mask;
+    }
 
     /**
      * @brief Get number of active connections
      *
      * @return Count of entries in connection table
      */
-    size_t get_connection_count() const { return m_connection_count; }
+    size_t get_connection_count() const {
+        return m_connection_count;
+    }
 
     /**
      * @brief Check if a connection exists
@@ -355,9 +379,12 @@ public:
      * @param proto Protocol type (default UDP)
      * @return true if connection exists in table
      */
-    bool has_connection(uint32_t src_ip, uint16_t src_port,
-                        uint32_t dest_ip, uint16_t dest_port,
-                        protocol::ProtocolType proto = protocol::ProtocolType::Udp) const;
+    bool has_connection(
+        uint32_t src_ip,
+        uint16_t src_port,
+        uint32_t dest_ip,
+        uint16_t dest_port,
+        protocol::ProtocolType proto = protocol::ProtocolType::Udp) const;
 
     // ========================================================================
     // Actions
@@ -377,13 +404,13 @@ private:
     // Internal State
     // ========================================================================
 
-    bool m_configured;                ///< Whether ProxyConfig received
-    uint32_t m_proxy_ip;              ///< Configured proxy IP
-    uint32_t m_proxy_subnet_mask;     ///< Configured subnet mask
+    bool m_configured;             ///< Whether ProxyConfig received
+    uint32_t m_proxy_ip;           ///< Configured proxy IP
+    uint32_t m_proxy_subnet_mask;  ///< Configured subnet mask
 
     /// Fixed-size connection table (no dynamic allocation).
     std::array<ProxyConnection, MAX_PROXY_CONNECTIONS> m_connections;
-    size_t m_connection_count;        ///< Number of active entries in m_connections
+    size_t m_connection_count;  ///< Number of active entries in m_connections
 
     // Callbacks
     ProxyConfigCallback m_config_callback;
@@ -413,4 +440,4 @@ private:
     void remove_connection(const protocol::ProxyInfo& info);
 };
 
-} // namespace ryu_ldn::ldn
+}  // namespace ryu_ldn::ldn

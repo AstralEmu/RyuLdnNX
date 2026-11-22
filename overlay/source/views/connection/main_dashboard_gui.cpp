@@ -23,24 +23,31 @@
 
 // Initialize random seed for passphrase generation
 namespace {
-    struct RandomSeeder { RandomSeeder() { srand(time(nullptr)); } };
-    RandomSeeder g_seeder;
-}
+struct RandomSeeder {
+    RandomSeeder() {
+        srand(time(nullptr));
+    }
+};
+RandomSeeder g_seeder;
+}  // namespace
 
 MainDashboardGui::MainDashboardGui() = default;
 
 tsl::elm::Element* MainDashboardGui::createUI() {
-    auto frame = new tsl::elm::OverlayFrame("ryu_ldn_nx", OverlayState::Instance().GetVersion());
+    auto frame = new tsl::elm::OverlayFrame(
+        "ryu_ldn_nx", OverlayState::Instance().GetVersion());
     m_frame = frame;
     auto list = new tsl::elm::List();
 
-    if (OverlayState::Instance().GetStatus() == OverlayState::InitStatus::Error) {
+    if (OverlayState::Instance().GetStatus() ==
+        OverlayState::InitStatus::Error) {
         list->addItem(new tsl::elm::ListItem("ryu_ldn_nx not loaded"));
         list->addItem(new tsl::elm::ListItem("Check sysmodule installation"));
         frame->setContent(list);
         return frame;
     }
-    if (OverlayState::Instance().GetStatus() == OverlayState::InitStatus::Uninit) {
+    if (OverlayState::Instance().GetStatus() ==
+        OverlayState::InitStatus::Uninit) {
         list->addItem(new tsl::elm::ListItem("Initializing..."));
         frame->setContent(list);
         return frame;
@@ -50,7 +57,6 @@ tsl::elm::Element* MainDashboardGui::createUI() {
     BuildLdnSection(list);
     BuildPassphraseSection(list);
     BuildNavSection(list);
-
 
     frame->setContent(list);
     return frame;
@@ -65,7 +71,8 @@ void MainDashboardGui::BuildConnectionSection(tsl::elm::List* list) {
 }
 
 void MainDashboardGui::BuildPassphraseSection(tsl::elm::List* list) {
-    list->addItem(new tsl::elm::CategoryHeader("Passphrase (X=Random Y=Clear)"));
+    list->addItem(
+        new tsl::elm::CategoryHeader("Passphrase (X=Random Y=Clear)"));
     // Use Passphrase toggle (copied from AdvancedSettingsGui::BuildLdnSection)
     bool passphraseEnabled = false;
     bool hasPassphrase = false;
@@ -81,7 +88,8 @@ void MainDashboardGui::BuildPassphraseSection(tsl::elm::List* list) {
     if (!hasPassphrase) {
         passphraseEnabled = false;
     }
-    m_passphraseEnabledToggle = new tsl::elm::ToggleListItem("Use Passphrase", passphraseEnabled);
+    m_passphraseEnabledToggle =
+        new tsl::elm::ToggleListItem("Use Passphrase", passphraseEnabled);
     if (!hasPassphrase) {
         m_passphraseEnabledToggle->isLocked = true;
     }
@@ -96,7 +104,8 @@ void MainDashboardGui::BuildPassphraseSection(tsl::elm::List* list) {
             // ON value, causing the toggle to flip on automatically.
             if (enabled) {
                 char passphrase[64] = {0};
-                if (R_SUCCEEDED(ryuLdnGetPassphrase(svc, passphrase)) && strlen(passphrase) == 0) {
+                if (R_SUCCEEDED(ryuLdnGetPassphrase(svc, passphrase)) &&
+                    strlen(passphrase) == 0) {
                     m_passphraseEnabledToggle->setState(false);
                     return;
                 }
@@ -113,7 +122,10 @@ void MainDashboardGui::BuildPassphraseSection(tsl::elm::List* list) {
     auto editItem = new tsl::elm::MiniListItem("Edit Passphrase");
     editItem->setValue(">");
     editItem->setClickListener([](u64 keys) {
-        if (keys & HidNpadButton_A) { tsl::changeTo<PassphraseEditorGui>(); return true; }
+        if (keys & HidNpadButton_A) {
+            tsl::changeTo<PassphraseEditorGui>();
+            return true;
+        }
         return false;
     });
     list->addItem(editItem);
@@ -124,7 +136,10 @@ void MainDashboardGui::BuildNavSection(tsl::elm::List* list) {
     auto advancedItem = new tsl::elm::MiniListItem("Open Advanced Settings");
     advancedItem->setValue(">");
     advancedItem->setClickListener([](u64 keys) {
-        if (keys & HidNpadButton_A) { tsl::changeTo<AdvancedSettingsGui>(); return true; }
+        if (keys & HidNpadButton_A) {
+            tsl::changeTo<AdvancedSettingsGui>();
+            return true;
+        }
         return false;
     });
     list->addItem(advancedItem);
@@ -138,7 +153,8 @@ void MainDashboardGui::BuildLdnSection(tsl::elm::List* list) {
     RyuLdnConfigService* svc = ryuLdnGetService();
     if (svc) {
         u32 ldnEnabled;
-        if (R_SUCCEEDED(ryuLdnGetLdnEnabled(svc, &ldnEnabled))) m_ldnToggle->setState(ldnEnabled != 0);
+        if (R_SUCCEEDED(ryuLdnGetLdnEnabled(svc, &ldnEnabled)))
+            m_ldnToggle->setState(ldnEnabled != 0);
     }
     m_ldnToggle->setStateChangedListener([this](bool enabled) {
         RyuLdnConfigService* svc = ryuLdnGetService();
@@ -155,12 +171,16 @@ void MainDashboardGui::BuildLdnSection(tsl::elm::List* list) {
 }
 
 void MainDashboardGui::RefreshConnectionValues() {
-    if (OverlayState::Instance().GetStatus() != OverlayState::InitStatus::Loaded) return;
+    if (OverlayState::Instance().GetStatus() !=
+        OverlayState::InitStatus::Loaded)
+        return;
     RyuLdnConfigService* svc = ryuLdnGetService();
-    if (!svc) return;
+    if (!svc)
+        return;
 
     if (m_statusItem) {
-        // Connection Status is derived from LDN State (ryu:cfg GetConnectionStatus is hardcoded)
+        // Connection Status is derived from LDN State (ryu:cfg
+        // GetConnectionStatus is hardcoded)
         RyuLdnState ldnState;
         RyuLdnConnectionStatus derivedStatus = RyuLdnStatus_Disconnected;
         if (R_SUCCEEDED(ryuLdnGetLdnState(svc, &ldnState))) {
@@ -181,8 +201,10 @@ void MainDashboardGui::RefreshConnectionValues() {
                     break;
             }
         }
-        m_statusItem->setValue(ryu_ldn::overlay::ConnectionStatusToString(derivedStatus));
-        m_statusItem->setValueColor(ryu_ldn::overlay::StatusColor(derivedStatus));
+        m_statusItem->setValue(
+            ryu_ldn::overlay::ConnectionStatusToString(derivedStatus));
+        m_statusItem->setValueColor(
+            ryu_ldn::overlay::StatusColor(derivedStatus));
     }
     // Build compact session info for subtitle: "2/8" or "2/8 (Host)"
     {
@@ -192,9 +214,13 @@ void MainDashboardGui::RefreshConnectionValues() {
         RyuLdnSessionInfo sessionInfo;
         if (R_SUCCEEDED(ryuLdnGetSessionInfo(svc, &sessionInfo))) {
             if (sessionInfo.node_count > 0) {
-                snprintf(buf, sizeof(buf), "%d/%d%s",
-                         sessionInfo.node_count, sessionInfo.max_nodes,
-                         sessionInfo.is_host ? " (Host)" : "");
+                snprintf(
+                    buf,
+                    sizeof(buf),
+                    "%d/%d%s",
+                    sessionInfo.node_count,
+                    sessionInfo.max_nodes,
+                    sessionInfo.is_host ? " (Host)" : "");
             } else {
                 snprintf(buf, sizeof(buf), "--");
             }
@@ -206,16 +232,22 @@ void MainDashboardGui::RefreshConnectionValues() {
 }
 
 void MainDashboardGui::RefreshPassphrase() {
-    if (OverlayState::Instance().GetStatus() != OverlayState::InitStatus::Loaded) return;
+    if (OverlayState::Instance().GetStatus() !=
+        OverlayState::InitStatus::Loaded)
+        return;
     RyuLdnConfigService* svc = ryuLdnGetService();
-    if (!svc || !m_passphraseItem) return;
+    if (!svc || !m_passphraseItem)
+        return;
     char passphrase[64];
     if (R_SUCCEEDED(ryuLdnGetPassphrase(svc, passphrase))) {
         char display[32];
-        ryu_ldn::overlay::FormatPassphraseDisplay(passphrase, display, sizeof(display));
+        ryu_ldn::overlay::FormatPassphraseDisplay(
+            passphrase, display, sizeof(display));
         m_passphraseItem->setValue(display);
-        if (strlen(passphrase) > 0) m_passphraseItem->setValueColor(tsl::RGB888("00FF00"));
-        else                        m_passphraseItem->setValueColor(tsl::RGB888("888888"));
+        if (strlen(passphrase) > 0)
+            m_passphraseItem->setValueColor(tsl::RGB888("00FF00"));
+        else
+            m_passphraseItem->setValueColor(tsl::RGB888("888888"));
     }
 }
 
@@ -286,7 +318,8 @@ void MainDashboardGui::update() {
         m_frame->setSubtitle(subtitle);
     }
 
-    // Refresh passphrase toggle: lock/unlock and sync state when passphrase changes
+    // Refresh passphrase toggle: lock/unlock and sync state when passphrase
+    // changes
     if (m_passphraseEnabledToggle) {
         RyuLdnConfigService* svc = ryuLdnGetService();
         if (svc) {
@@ -307,26 +340,39 @@ void MainDashboardGui::update() {
     }
 }
 
-bool MainDashboardGui::handleInput(u64 keysDown, u64 keysHeld,
-                                    const HidTouchState& touchPos,
-                                    HidAnalogStickState joyStickPosLeft,
-                                    HidAnalogStickState joyStickPosRight) {
-    if (keysDown & HidNpadButton_R) { RefreshConnectionValues(); RefreshPassphrase(); return true; }
+bool MainDashboardGui::handleInput(
+    u64 keysDown,
+    u64 keysHeld,
+    const HidTouchState& touchPos,
+    HidAnalogStickState joyStickPosLeft,
+    HidAnalogStickState joyStickPosRight) {
+    if (keysDown & HidNpadButton_R) {
+        RefreshConnectionValues();
+        RefreshPassphrase();
+        return true;
+    }
     // X = Generate random passphrase
     if (keysDown & HidNpadButton_X) {
         RyuLdnConfigService* svc = ryuLdnGetService();
         if (svc) {
             char newPass[32];
             // Generate Ryujinx-XXXXXXXX with random hex
-            newPass[0] = 'R'; newPass[1] = 'y'; newPass[2] = 'u'; newPass[3] = 'j';
-            newPass[4] = 'i'; newPass[5] = 'n'; newPass[6] = 'x'; newPass[7] = '-';
+            newPass[0] = 'R';
+            newPass[1] = 'y';
+            newPass[2] = 'u';
+            newPass[3] = 'j';
+            newPass[4] = 'i';
+            newPass[5] = 'n';
+            newPass[6] = 'x';
+            newPass[7] = '-';
             static const char* hex = "0123456789abcdef";
             for (int i = 0; i < 8; i++) {
                 newPass[8 + i] = hex[rand() % 16];
             }
             newPass[16] = '\0';
             Result rc = ryuLdnSetPassphrase(svc, newPass);
-            if (R_SUCCEEDED(rc)) OverlayState::Instance().MarkDirty();
+            if (R_SUCCEEDED(rc))
+                OverlayState::Instance().MarkDirty();
             RefreshPassphrase();
         }
         return true;
@@ -337,7 +383,8 @@ bool MainDashboardGui::handleInput(u64 keysDown, u64 keysHeld,
         if (svc) {
             Result rc = ryuLdnSetPassphrase(svc, "");
             ryuLdnSetUsePassphrase(svc, 0);
-            if (R_SUCCEEDED(rc)) OverlayState::Instance().MarkDirty();
+            if (R_SUCCEEDED(rc))
+                OverlayState::Instance().MarkDirty();
             RefreshPassphrase();
         }
         return true;

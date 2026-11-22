@@ -30,9 +30,11 @@ static std::vector<u8> payload(size_t size, u8 fill) {
     return std::vector<u8>(size, fill);
 }
 
-static bool write_packet(LdnProxyBuffer& b, uint32_t tag, size_t size, u8 fill) {
+static bool write_packet(
+    LdnProxyBuffer& b, uint32_t tag, size_t size, u8 fill) {
     const auto data = payload(size, fill);
-    return b.Write(header_with_tag(tag, static_cast<uint32_t>(size)), data.data(), size);
+    return b.Write(
+        header_with_tag(tag, static_cast<uint32_t>(size)), data.data(), size);
 }
 
 TEST(a_new_buffer_is_empty) {
@@ -120,7 +122,8 @@ TEST(a_null_output_buffer_still_consumes_the_packet) {
 
 TEST(a_payload_above_the_maximum_is_rejected) {
     LdnProxyBuffer b;
-    ASSERT_FALSE(write_packet(b, 1, LdnProxyBuffer::MaxPacketDataSize + 1, 0x01));
+    ASSERT_FALSE(
+        write_packet(b, 1, LdnProxyBuffer::MaxPacketDataSize + 1, 0x01));
     ASSERT_TRUE(b.IsEmpty());
     ASSERT_TRUE(write_packet(b, 1, LdnProxyBuffer::MaxPacketDataSize, 0x01));
 }
@@ -169,8 +172,7 @@ TEST(used_bytes_follow_the_unread_data_when_the_writer_has_wrapped) {
     // Wrap: only 256 bytes remain at the end, so the writer restarts at
     // offset 0 while the oldest unread data starts at 2 * big.
     ASSERT_TRUE(write_packet(b, 10, big, 0x0A));
-    ASSERT_EQ(b.GetUsedBytes(),
-              LdnProxyBuffer::BufferSize - 2 * big + big);
+    ASSERT_EQ(b.GetUsedBytes(), LdnProxyBuffer::BufferSize - 2 * big + big);
 }
 
 TEST(unread_packets_are_never_overwritten_after_the_writer_wraps) {
@@ -183,8 +185,8 @@ TEST(unread_packets_are_never_overwritten_after_the_writer_wraps) {
     for (uint32_t i = 1; i <= 4; ++i) {
         ASSERT_TRUE(write_packet(b, i, big, static_cast<u8>(i)));
     }
-    ASSERT_TRUE(b.Read(h, out, size, sizeof(out)));   // packet 1
-    ASSERT_TRUE(b.Read(h, out, size, sizeof(out)));   // packet 2
+    ASSERT_TRUE(b.Read(h, out, size, sizeof(out)));  // packet 1
+    ASSERT_TRUE(b.Read(h, out, size, sizeof(out)));  // packet 2
 
     // Packets 3 and 4 are still unread. Keep writing: every packet that is
     // accepted must come back intact, in order.
