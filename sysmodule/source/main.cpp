@@ -465,7 +465,7 @@ namespace ams {
             // (g++ with -DTEST_BUILD) has no `constinit` zero-init guarantee
             // for the mutex internals, so we re-seed there.
 #ifndef __SWITCH__
-            os::InitializeSdkMutex(std::addressof(g_heap_init_mutex));
+            os::InitializeSdkMutex(std::addressof(mitm::g_heap_init_mutex));
 #endif
 
             // Initialize filesystem

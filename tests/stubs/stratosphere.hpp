@@ -357,9 +357,14 @@ inline Result CreateThread(ThreadType* out, void (*entry)(void*), void* arg,
 /// Test hook: runs on the starting thread right before the new thread starts,
 /// with the name given to SetThreadNamePointer ("" when none).
 inline void (*g_host_before_start_thread)(const char*) = nullptr;
+/// Thrown by a test hook to end a thread whose entry point loops forever (the
+/// kernel thread would be killed with the process); StartThread swallows it.
+struct HostThreadExit {};
 inline void StartThread(ThreadType* thread) {
     if (g_host_before_start_thread) { g_host_before_start_thread(thread->name != nullptr ? thread->name : ""); }
-    thread->thread = std::thread(thread->entry, thread->arg);
+    thread->thread = std::thread([entry = thread->entry, arg = thread->arg] {
+        try { entry(arg); } catch (const HostThreadExit&) {}
+    });
 }
 inline void WaitThread(ThreadType* thread) { if (thread->thread.joinable()) { thread->thread.join(); } }
 inline void DestroyThread(ThreadType*) {}
@@ -374,7 +379,9 @@ namespace svc {
 
 /// Sleep of the calling thread, in nanoseconds; shortened by the same host
 /// divisor as the timed waits so a test of a long period stays fast.
+inline void (*g_host_before_sleep_thread)(std::int64_t ns) = nullptr;
 inline void SleepThread(std::int64_t ns) {
+    if (g_host_before_sleep_thread) { g_host_before_sleep_thread(ns); }
     std::this_thread::sleep_for(std::chrono::nanoseconds(ns / static_cast<std::int64_t>(os::g_host_wait_divisor)));
 }
 
@@ -550,6 +557,8 @@ public:
     explicit SharedPointer(std::shared_ptr<Impl> object) : m_object(object), m_raw(object.get()) {}
     explicit operator bool() const { return m_raw != nullptr; }
     template<class Impl> Impl* GetImpl() const { return static_cast<Impl*>(m_raw); }
+    /// Keeps the object alive after the pointer itself is gone.
+    std::shared_ptr<void> Owner() const { return m_object; }
 
 private:
     std::shared_ptr<void> m_object;
@@ -643,3 +652,189 @@ inline std::uint32_t nifmGetCurrentIpConfigInfo(std::uint32_t* address, std::uin
 inline void svcSleepThread(std::int64_t ns) {
     std::this_thread::sleep_for(std::chrono::nanoseconds(ns / static_cast<std::int64_t>(ams::os::g_host_wait_divisor)));
 }
+
+// ---------------------------------------------------------------------------
+// Boot, heap and server-manager stand-ins (used by sysmodule/source/main.cpp)
+// ---------------------------------------------------------------------------
+
+/// Order of the boot/teardown calls the code under test made, one label each.
+inline std::vector<std::string> g_host_boot_calls;
+
+/// Raised by AMS_ABORT instead of killing the process, so a test can observe
+/// that an unreachable-in-production branch aborts.
+namespace ams { struct HostAbort {}; }
+#define AMS_ABORT(...) throw ::ams::HostAbort{}
+#define AMS_LIKELY(expr) (expr)
+#define AMS_UNLIKELY(expr) (expr)
+#define NORETURN __attribute__((noreturn))
+
+namespace ams {
+
+constexpr unsigned long long operator""_KB(unsigned long long v) { return v * 1024ULL; }
+constexpr unsigned long long operator""_MB(unsigned long long v) { return v * 1024ULL * 1024ULL; }
+
+namespace util {
+template<class T>
+constexpr T AlignUp(T value, std::size_t align) {
+    return static_cast<T>((static_cast<std::size_t>(value) + align - 1) / align * align);
+}
+}
+
+namespace os {
+
+constexpr std::size_t MemoryPageSize = 0x1000;
+inline void InitializeSdkMutex(SdkMutex*) {}
+inline ThreadType* GetCurrentThread() { static ThreadType t; return &t; }
+inline int GetThreadCurrentPriority(ThreadType*) { return 16; }
+
+}  // namespace os
+
+namespace lmem {
+
+/// Expanded heap: the host serves the allocations from malloc, and counts the
+/// heaps created so a test can check the lazy, once-only creation.
+using HeapHandle = void*;
+constexpr int CreateOption_ThreadSafe = 1;
+inline int g_host_heaps_created = 0;
+inline void* g_host_heap_base = nullptr;
+inline std::size_t g_host_heap_size = 0;
+inline int g_host_heap_option = 0;
+inline HeapHandle CreateExpHeap(void* base, std::size_t size, int option) {
+    ++g_host_heaps_created;
+    g_host_heap_base = base;
+    g_host_heap_size = size;
+    g_host_heap_option = option;
+    return base;
+}
+inline std::atomic<int> g_host_heap_allocs{0};
+inline std::atomic<int> g_host_heap_frees{0};
+inline void* AllocateFromExpHeap(HeapHandle, std::size_t size) { ++g_host_heap_allocs; return std::malloc(size); }
+inline void FreeToExpHeap(HeapHandle, void* p) { ++g_host_heap_frees; std::free(p); }
+
+}  // namespace lmem
+
+namespace init {
+
+inline void* g_host_allocator_buffer = nullptr;
+inline std::size_t g_host_allocator_size = 0;
+inline void InitializeAllocator(void* buffer, std::size_t size) {
+    g_host_boot_calls.emplace_back("InitializeAllocator");
+    g_host_allocator_buffer = buffer;
+    g_host_allocator_size = size;
+}
+
+}  // namespace init
+
+namespace sm {
+
+inline Result Initialize() { g_host_boot_calls.emplace_back("sm::Initialize"); return ResultSuccess(); }
+
+/// Eight-character service name, like the real one.
+struct ServiceName {
+    char name[9];
+    static constexpr ServiceName Encode(const char* text) {
+        ServiceName n{};
+        for (std::size_t i = 0; i < 8 && text[i] != '\0'; ++i) { n.name[i] = text[i]; }
+        return n;
+    }
+};
+
+}  // namespace sm
+
+namespace fs {
+
+inline void* (*g_host_fs_alloc)(std::size_t) = nullptr;
+inline void (*g_host_fs_free)(void*, std::size_t) = nullptr;
+inline bool g_host_fs_auto_abort = true;
+inline void InitializeForSystem() { g_host_boot_calls.emplace_back("fs::InitializeForSystem"); }
+inline void SetAllocator(void* (*alloc)(std::size_t), void (*dealloc)(void*, std::size_t)) {
+    g_host_boot_calls.emplace_back("fs::SetAllocator");
+    g_host_fs_alloc = alloc;
+    g_host_fs_free = dealloc;
+}
+inline void SetEnabledAutoAbort(bool enabled) {
+    g_host_boot_calls.emplace_back("fs::SetEnabledAutoAbort");
+    g_host_fs_auto_abort = enabled;
+}
+inline Result MountSdCard(const char* name) {
+    g_host_boot_calls.emplace_back(std::string("fs::MountSdCard:") + name);
+    return ResultSuccess();
+}
+inline void Unmount(const char* name) { g_host_boot_calls.emplace_back(std::string("fs::Unmount:") + name); }
+
+}  // namespace fs
+
+namespace sf::hipc {
+
+/// A session waiting to be accepted: hands out what a test configured.
+class Server {
+public:
+    inline static std::uint32_t s_session = 0x77;
+    inline static sm::MitmProcessInfo s_client{};
+    void AcknowledgeMitmSession(std::shared_ptr<::Service>* out_service, sm::MitmProcessInfo* out_info) {
+        auto service = std::make_shared<::Service>();
+        service->session = s_session;
+        *out_service = std::move(service);
+        *out_info = s_client;
+    }
+};
+
+/// Server manager: records what is registered and what is accepted; a
+/// session loop returns at once (or runs the test's hook) instead of serving.
+template<std::size_t Ports, class Options, std::size_t MaxSessions>
+class ServerManager {
+public:
+    using Server = ::ams::sf::hipc::Server;
+
+    struct Registration {
+        std::string name;
+        int port_index;
+        std::size_t max_sessions;
+    };
+    std::vector<Registration> registrations;
+    std::vector<std::shared_ptr<void>> accepted;
+    std::atomic<int> loops{0};
+    void (*loop_hook)() = nullptr;
+    Result accept_result{};
+    Result register_result{};
+
+    virtual ~ServerManager() = default;
+
+    void LoopProcess() {
+        ++loops;
+        if (loop_hook != nullptr) { loop_hook(); }
+    }
+
+    template<class Interface>
+    Result RegisterObjectForServer(SharedPointer<Interface>&&, sm::ServiceName name, std::size_t max_sessions) {
+        registrations.push_back({name.name, -1, max_sessions});
+        return register_result;
+    }
+
+    template<class Impl>
+    Result RegisterMitmServer(int port_index, sm::ServiceName name) {
+        registrations.push_back({name.name, port_index, 0});
+        return register_result;
+    }
+
+    template<class Interface>
+    Result AcceptMitmImpl(Server*, SharedPointer<Interface> object, std::shared_ptr<::Service>) {
+        accepted.push_back(object.Owner());
+        return accept_result;
+    }
+
+    /// Entry point for a test: the real manager calls OnNeedsToAccept itself.
+    Result HostAccept(int port_index, Server* server) { return OnNeedsToAccept(port_index, server); }
+
+protected:
+    virtual Result OnNeedsToAccept(int, Server*) { return ResultSuccess(); }
+};
+
+}  // namespace sf::hipc
+
+}  // namespace ams
+
+/// libnx nifm service lifecycle
+enum NifmServiceType { NifmServiceType_User = 0, NifmServiceType_Admin = 1 };
+inline std::uint32_t nifmInitialize(NifmServiceType) { g_host_boot_calls.emplace_back("nifmInitialize"); return 0; }
+inline void nifmExit() { g_host_boot_calls.emplace_back("nifmExit"); }
