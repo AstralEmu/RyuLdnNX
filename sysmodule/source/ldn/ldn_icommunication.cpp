@@ -54,9 +54,11 @@ static std::atomic<ICommunicationService*> g_active_ldn_service{nullptr};
  * @thread_safety This mutex is the lock for compound access to
  *                g_active_ldn_service. Plain atomic reads (e.g. a one-shot
  *                `g_active_ldn_service.load()` for a null check) do not need
- *                it; anything that dereferences the pointer does.
+ *                it; anything that dereferences the pointer does. It is
+ *                recursive: `OnInactivityTimeout` holds it while calling
+ *                `DisconnectFromServer`, which takes it again.
  */
-static os::Mutex g_active_service_mutex{false};
+static os::Mutex g_active_service_mutex{true};
 
 /**
  * @brief Stack backing the LDN background (receive/poll) thread.

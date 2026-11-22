@@ -450,6 +450,16 @@ static void expect_bool(const char* value, bool expected) {
     ASSERT_EQ(config.ldn.enabled, expected);
 }
 
+TEST(every_config_result_has_its_own_name) {
+    using ryu_ldn::config::ConfigResult;
+    using ryu_ldn::config::config_result_to_string;
+    ASSERT_STREQ(config_result_to_string(ConfigResult::Success), "Success");
+    ASSERT_STREQ(config_result_to_string(ConfigResult::FileNotFound), "FileNotFound");
+    ASSERT_STREQ(config_result_to_string(ConfigResult::ParseError), "ParseError");
+    ASSERT_STREQ(config_result_to_string(ConfigResult::IoError), "IoError");
+    ASSERT_STREQ(config_result_to_string(static_cast<ConfigResult>(99)), "Unknown");
+}
+
 TEST(parse_bool_accepts_only_the_four_documented_spellings) {
     expect_bool("1", true);
     expect_bool("true", true);
