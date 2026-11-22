@@ -31,9 +31,20 @@
 // Test Framework (minimal)
 // ============================================================================
 
+/// Number of tests that ran to completion (incremented by TEST()).
 static int g_tests_passed = 0;
+/// Number of failed assertions (each one aborts its test and is counted here).
 static int g_tests_failed = 0;
 
+/**
+ * @brief Define and auto-run a test case.
+ *
+ * Declares test_<name>(), and a static object whose constructor runs it during
+ * static initialisation, printing PASS and counting it; a failed assertion
+ * prints FAIL first. main() therefore only prints the totals.
+ *
+ * @param name Identifier of the test (becomes test_<name>).
+ */
 #define TEST(name)                            \
     static void test_##name();                \
     static struct test_##name##_register {    \
@@ -47,6 +58,10 @@ static int g_tests_failed = 0;
     } test_##name##_instance;                 \
     static void test_##name()
 
+/**
+ * @brief Fail the current test and return from it when cond is false.
+ * @param cond Expression expected to be true.
+ */
 #define ASSERT_TRUE(cond)                                         \
     do {                                                          \
         if (!(cond)) {                                            \
@@ -60,8 +75,17 @@ static int g_tests_failed = 0;
         }                                                         \
     } while (0)
 
+/**
+ * @brief Fail the current test and return from it when cond is true.
+ * @param cond Expression expected to be false.
+ */
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
+/**
+ * @brief Fail the current test and return from it when a != b.
+ * @param a Actual value.
+ * @param b Expected value.
+ */
 #define ASSERT_EQ(a, b)                                         \
     do {                                                        \
         if ((a) != (b)) {                                       \
@@ -85,6 +109,11 @@ using namespace ryu_ldn::protocol;
 
 /**
  * @brief Create a test NetworkInfo with specified parameters
+ *
+ * @param node_count number of nodes in the session
+ * @param max_nodes maximum number of nodes of the session
+ * @param game_id local communication id of the game
+ * @return the filled NetworkInfo
  */
 static NetworkInfo make_test_network_info(
     uint8_t node_count,
@@ -112,6 +141,10 @@ static NetworkInfo make_test_network_info(
 
 /**
  * @brief Create a test LdnHeader
+ *
+ * @param type packet id stored in the header
+ * @param data_size payload size stored in the header
+ * @return header with the protocol magic and version set
  */
 static LdnHeader make_test_header(PacketId type, int32_t data_size) {
     LdnHeader header{};
@@ -126,6 +159,10 @@ static LdnHeader make_test_header(PacketId type, int32_t data_size) {
 // Tests - Client Flow (Initialize -> Scan -> Connect -> Data)
 // ============================================================================
 
+/**
+ * @brief An Initialize response moves a fresh session from None to Initialized
+ *        and leaves the proxy unconfigured.
+ */
 TEST(integration_client_initialize_flow) {
     ldn::LdnSessionHandler session;
     ldn::LdnProxyHandler proxy;
@@ -145,6 +182,11 @@ TEST(integration_client_initialize_flow) {
     ASSERT_EQ(session.get_state(), ldn::LdnSessionState::Initialized);
 }
 
+/**
+ * @brief Scan replies and ScanReplyEnd do not change the Initialized state; a
+ *        Connected packet then puts the client in Station mode (not host,
+ *        node count taken from the network info).
+ */
 TEST(integration_client_scan_and_connect) {
     ldn::LdnSessionHandler session;
 
@@ -183,6 +225,10 @@ TEST(integration_client_scan_and_connect) {
     ASSERT_EQ(session.get_node_count(), 3);
 }
 
+/**
+ * @brief A ProxyConfig packet configures the proxy handler with the virtual
+ *        IP assigned by the server.
+ */
 TEST(integration_client_receives_proxy_config) {
     ldn::LdnSessionHandler session;
     ldn::LdnProxyHandler proxy;
@@ -213,6 +259,10 @@ TEST(integration_client_receives_proxy_config) {
     ASSERT_EQ(proxy.get_proxy_ip(), 0x0A720001);
 }
 
+/**
+ * @brief A peer ProxyConnect creates one proxy connection and ProxyData on it
+ *        is accepted without dropping the connection.
+ */
 TEST(integration_client_p2p_data_exchange) {
     ldn::LdnSessionHandler session;
     ldn::LdnProxyHandler proxy;
@@ -267,6 +317,10 @@ TEST(integration_client_p2p_data_exchange) {
 // Tests - Host Flow (Initialize -> CreateAP -> Accept -> Data)
 // ============================================================================
 
+/**
+ * @brief A SyncNetwork for node 0 turns an initialized session into an
+ *        AccessPoint (host, in session, one node).
+ */
 TEST(integration_host_create_access_point) {
     ldn::LdnSessionHandler session;
 
@@ -291,6 +345,10 @@ TEST(integration_host_create_access_point) {
     ASSERT_EQ(session.get_node_count(), 1);
 }
 
+/**
+ * @brief A second SyncNetwork with two nodes raises the node count while the
+ *        session stays host.
+ */
 TEST(integration_host_player_joins) {
     ldn::LdnSessionHandler session;
 
@@ -316,6 +374,10 @@ TEST(integration_host_player_joins) {
     ASSERT_TRUE(session.is_host());  // Still host
 }
 
+/**
+ * @brief SetAcceptPolicy changes the host policy from the default AcceptAll to
+ *        RejectAll.
+ */
 TEST(integration_host_set_accept_policy) {
     ldn::LdnSessionHandler session;
 
@@ -343,6 +405,10 @@ TEST(integration_host_set_accept_policy) {
     ASSERT_EQ(session.get_accept_policy(), AcceptPolicy::RejectAll);
 }
 
+/**
+ * @brief Rejecting a joined node keeps the host in session; the following
+ *        SyncNetwork reduces the node count.
+ */
 TEST(integration_host_reject_player) {
     ldn::LdnSessionHandler session;
 
@@ -383,6 +449,9 @@ TEST(integration_host_reject_player) {
 // Tests - Error Handling
 // ============================================================================
 
+/**
+ * @brief A NetworkError packet does not change the session state by itself.
+ */
 TEST(integration_network_error_handling) {
     ldn::LdnSessionHandler session;
 
@@ -403,6 +472,10 @@ TEST(integration_network_error_handling) {
     ASSERT_EQ(session.get_state(), ldn::LdnSessionState::Initialized);
 }
 
+/**
+ * @brief A Reject targeting the local node id makes a connected client leave
+ *        the session and fall back to Initialized.
+ */
 TEST(integration_client_gets_rejected) {
     ldn::LdnSessionHandler session;
 
@@ -434,6 +507,10 @@ TEST(integration_client_gets_rejected) {
     ASSERT_EQ(session.get_state(), ldn::LdnSessionState::Initialized);
 }
 
+/**
+ * @brief A Disconnect about another player keeps the client in session; the
+ *        next SyncNetwork updates the node count.
+ */
 TEST(integration_disconnect_notification) {
     ldn::LdnSessionHandler session;
 
@@ -472,6 +549,10 @@ TEST(integration_disconnect_notification) {
 // Tests - Proxy Connection Lifecycle
 // ============================================================================
 
+/**
+ * @brief ProxyConnect adds a proxy connection and the matching
+ *        ProxyDisconnect removes it again.
+ */
 TEST(integration_proxy_full_lifecycle) {
     ldn::LdnSessionHandler session;
     ldn::LdnProxyHandler proxy;
@@ -519,6 +600,10 @@ TEST(integration_proxy_full_lifecycle) {
     ASSERT_EQ(proxy.get_connection_count(), 0);
 }
 
+/**
+ * @brief Three clients connect to the host through the proxy, then one
+ *        disconnects: the connection count goes 3 -> 2.
+ */
 TEST(integration_multiple_proxy_connections) {
     ldn::LdnSessionHandler session;
     ldn::LdnProxyHandler proxy;
@@ -576,6 +661,10 @@ TEST(integration_multiple_proxy_connections) {
 // Tests - Reset and Reconnect
 // ============================================================================
 
+/**
+ * @brief reset() on the session and proxy handlers drops the session state,
+ *        the proxy configuration and every proxy connection.
+ */
 TEST(integration_session_reset_clears_state) {
     ldn::LdnSessionHandler session;
     ldn::LdnProxyHandler proxy;
@@ -625,6 +714,10 @@ TEST(integration_session_reset_clears_state) {
     ASSERT_EQ(proxy.get_connection_count(), 0);
 }
 
+/**
+ * @brief After leave_session() a session can be re-established as host with a
+ *        new SyncNetwork.
+ */
 TEST(integration_reconnect_after_disconnect) {
     ldn::LdnSessionHandler session;
 
@@ -664,6 +757,9 @@ TEST(integration_reconnect_after_disconnect) {
 // Tests - Ping Handling
 // ============================================================================
 
+/**
+ * @brief A server Ping (requester 0) requires an echo and its id is stored.
+ */
 TEST(integration_ping_echo_required) {
     ldn::LdnSessionHandler session;
 
@@ -689,34 +785,66 @@ TEST(integration_ping_echo_required) {
 
 // Global handlers for dispatcher tests (since we can't use lambdas with
 // capture)
+/// Session handler the on_* trampolines forward to (set by the dispatcher
+/// test).
 static ldn::LdnSessionHandler* g_session = nullptr;
+/// Proxy handler the on_* trampolines forward to (set by the dispatcher test).
 static ldn::LdnProxyHandler* g_proxy = nullptr;
 
+/**
+ * @brief Dispatcher callback forwarding Initialize to g_session (if set).
+ * @param h Packet header.
+ * @param m Decoded Initialize message.
+ */
 static void on_initialize(const LdnHeader& h, const InitializeMessage& m) {
     if (g_session)
         g_session->handle_initialize(h, m);
 }
 
+/**
+ * @brief Dispatcher callback forwarding Connected to g_session (if set).
+ * @param h Packet header.
+ * @param i Network information of the joined session.
+ */
 static void on_connected(const LdnHeader& h, const NetworkInfo& i) {
     if (g_session)
         g_session->handle_connected(h, i);
 }
 
+/**
+ * @brief Dispatcher callback forwarding SyncNetwork to g_session (if set).
+ * @param h Packet header.
+ * @param i Updated network information.
+ */
 static void on_sync_network(const LdnHeader& h, const NetworkInfo& i) {
     if (g_session)
         g_session->handle_sync_network(h, i);
 }
 
+/**
+ * @brief Dispatcher callback forwarding ProxyConfig to g_proxy (if set).
+ * @param h Packet header.
+ * @param c Proxy configuration (virtual IP and subnet mask).
+ */
 static void on_proxy_config(const LdnHeader& h, const ProxyConfig& c) {
     if (g_proxy)
         g_proxy->handle_proxy_config(h, c);
 }
 
+/**
+ * @brief Dispatcher callback forwarding ProxyConnect to g_proxy (if set).
+ * @param h Packet header.
+ * @param r Connect request of the peer.
+ */
 static void on_proxy_connect(const LdnHeader& h, const ProxyConnectRequest& r) {
     if (g_proxy)
         g_proxy->handle_proxy_connect(h, r);
 }
 
+/**
+ * @brief PacketDispatcher routes Initialize and SyncNetwork to the session
+ *        handler and ProxyConfig to the proxy handler.
+ */
 TEST(integration_dispatcher_routes_to_handlers) {
     ldn::PacketDispatcher dispatcher;
     ldn::LdnSessionHandler session;
@@ -772,6 +900,11 @@ TEST(integration_dispatcher_routes_to_handlers) {
 // Main
 // ============================================================================
 
+/**
+ * @brief Test entry point: the tests already ran during static initialisation,
+ *        so this only prints the totals.
+ * @return 1 when any assertion failed, otherwise 0.
+ */
 int main() {
     printf("\n========================================\n");
     printf("  LDN Handler Integration Tests\n");

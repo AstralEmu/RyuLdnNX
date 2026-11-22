@@ -48,8 +48,8 @@ LdnNodeMapper::LdnNodeMapper()
  * Called when a new player joins the network or when network info
  * is synchronized. If the node already exists, its IP is updated.
  *
- * @param node_id Node ID (0-7), ignored if >= MaxNodes
- * @param ipv4 IPv4 address in network byte order
+ * A node_id >= MaxNodes is ignored. The IPv4 address is stored verbatim,
+ * in the same (Ryujinx) format as NetworkInfo.ldn.nodes[].ipv4Address.
  */
 void LdnNodeMapper::AddNode(u32 node_id, u32 ipv4) {
     // Validate node_id range
@@ -67,9 +67,7 @@ void LdnNodeMapper::AddNode(u32 node_id, u32 ipv4) {
  *
  * Called when a player disconnects from the network.
  * The entry is marked as disconnected but IP is preserved
- * for potential reconnection scenarios.
- *
- * @param node_id Node ID to remove, ignored if >= MaxNodes
+ * for potential reconnection scenarios. A node_id >= MaxNodes is ignored.
  */
 void LdnNodeMapper::RemoveNode(u32 node_id) {
     // Validate node_id range
@@ -84,10 +82,8 @@ void LdnNodeMapper::RemoveNode(u32 node_id) {
 /**
  * @brief Check if a node is connected
  *
- * Used before attempting to route data to a node.
- *
- * @param node_id Node ID to check
- * @return true if node exists and is connected, false otherwise
+ * Used before attempting to route data to a node. Returns false for a
+ * node_id >= MaxNodes.
  */
 bool LdnNodeMapper::IsNodeConnected(u32 node_id) const {
     // Invalid node IDs are never connected
@@ -102,10 +98,8 @@ bool LdnNodeMapper::IsNodeConnected(u32 node_id) const {
 /**
  * @brief Get node's IPv4 address
  *
- * Returns the IPv4 address for routing packets to this node.
- *
- * @param node_id Node ID
- * @return IPv4 address in network byte order, 0 if node not found
+ * Returns the IPv4 address (as stored by AddNode) for routing packets to
+ * this node, or 0 if node_id >= MaxNodes.
  */
 u32 LdnNodeMapper::GetNodeIp(u32 node_id) const {
     // Invalid node IDs return 0
@@ -165,8 +159,6 @@ void LdnNodeMapper::Clear() {
  * - NetworkInfo.ldn.nodes[i].nodeId → m_nodes index
  * - NetworkInfo.ldn.nodes[i].ipv4Address → m_nodes[].ipv4_address
  * - NetworkInfo.ldn.nodes[i].isConnected → m_nodes[].is_connected
- *
- * @param info Network info containing node list
  */
 void LdnNodeMapper::UpdateFromNetworkInfo(const NetworkInfo& info) {
     std::scoped_lock lk(m_mutex);
@@ -209,11 +201,7 @@ void LdnNodeMapper::UpdateFromNetworkInfo(const NetworkInfo& info) {
  * - Route ONLY to the destination node
  * - Destination must be connected
  *
- * @param dest_node_id Destination from packet header (or BroadcastNodeId for
- * broadcast)
- * @param source_node_id Source from packet header (used to avoid echo)
- * @param target_node_id The node we're considering routing to
- * @return true if packet should be sent to target_node_id
+ * A target_node_id >= MaxNodes is never routed to.
  */
 bool LdnNodeMapper::ShouldRouteToNode(
     u32 dest_node_id, u32 source_node_id, u32 target_node_id) const {

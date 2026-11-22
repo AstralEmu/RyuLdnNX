@@ -12,6 +12,15 @@
 
 #include <stratosphere.hpp>
 
+/**
+ * @brief Method table of IClientProcessMonitorInterface.
+ *
+ * Declares the single command 0, RegisterClient, taking the caller's
+ * ClientProcessId. Instantiated by AMS_SF_DEFINE_INTERFACE below.
+ *
+ * @param C Interface class name supplied by the SF macro.
+ * @param H Handler macro supplied by the SF macro.
+ */
 #define AMS_ICLIENT_PROCESS_MONITOR_INTERFACE(C, H)          \
     AMS_SF_METHOD_INFO(                                      \
         C,                                                   \

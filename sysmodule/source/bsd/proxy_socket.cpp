@@ -20,6 +20,7 @@ namespace ams::mitm::bsd {
 // BSD Error Codes (from bsd_types.hpp)
 // =============================================================================
 
+/// Short alias for the BSD errno enum used throughout this file
 using Errno = ryu_ldn::bsd::BsdErrno;
 
 // =============================================================================

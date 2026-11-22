@@ -189,9 +189,9 @@ bool UpnpPortMapper::Discover() {
 
     int error = 0;
 
-    // ==========================================================================
+    // =========================================================================
     // Step 1: SSDP Discovery
-    // ==========================================================================
+    // =========================================================================
     // Send M-SEARCH to 239.255.255.250:1900 to find UPnP devices.
     //
     // Note: miniupnpc internally calls getaddrinfo(); on this sysmodule the
@@ -225,9 +225,9 @@ bool UpnpPortMapper::Discover() {
         return false;
     }
 
-    // ==========================================================================
+    // =========================================================================
     // Step 2: Find Valid IGD (Internet Gateway Device)
-    // ==========================================================================
+    // =========================================================================
     // Iterate through discovered devices and find one that:
     //   - Is an IGD (has WANIPConnection or WANPPPConnection service)
     //   - Is connected to the internet
@@ -247,9 +247,9 @@ bool UpnpPortMapper::Discover() {
     // Free the device list (we've extracted what we need)
     freeUPNPDevlist(devlist);
 
-    // ==========================================================================
+    // =========================================================================
     // Interpret Result
-    // ==========================================================================
+    // =========================================================================
     // Return values from UPNP_GetValidIGD:
     //   0 = No IGD found
     //   1 = Valid connected IGD found (ideal)
@@ -286,9 +286,9 @@ bool UpnpPortMapper::AddPortMapping(
         return false;
     }
 
-    // ==========================================================================
+    // =========================================================================
     // Prepare Parameters
-    // ==========================================================================
+    // =========================================================================
     // miniupnpc uses string parameters for all values
     //
     char internal_port_str[8];
@@ -301,9 +301,9 @@ bool UpnpPortMapper::AddPortMapping(
         external_port_str, sizeof(external_port_str), "%u", external_port);
     std::snprintf(lease_str, sizeof(lease_str), "%d", lease_duration);
 
-    // ==========================================================================
+    // =========================================================================
     // Send SOAP Request: AddPortMapping
-    // ==========================================================================
+    // =========================================================================
     // This sends an HTTP POST to the router's control URL with a SOAP envelope:
     //
     // <NewRemoteHost></NewRemoteHost>           - Empty = any remote host
@@ -338,9 +338,9 @@ bool UpnpPortMapper::DeletePortMapping(uint16_t external_port) {
         return false;
     }
 
-    // ==========================================================================
+    // =========================================================================
     // Send SOAP Request: DeletePortMapping
-    // ==========================================================================
+    // =========================================================================
     // Removes a previously created port mapping
     //
     char external_port_str[8];
@@ -362,9 +362,9 @@ bool UpnpPortMapper::DeletePortMapping(uint16_t external_port) {
 
 bool UpnpPortMapper::RefreshPortMapping(
     uint16_t internal_port, uint16_t external_port, const char* description) {
-    // ==========================================================================
+    // =========================================================================
     // Lease Renewal Strategy
-    // ==========================================================================
+    // =========================================================================
     // UPnP doesn't have a dedicated "refresh" action.
     // The standard approach is to re-add the mapping with the same parameters.
     // Most routers will:
@@ -390,9 +390,9 @@ bool UpnpPortMapper::GetExternalIPAddress(char* ip_out, size_t ip_len) {
         return false;
     }
 
-    // ==========================================================================
+    // =========================================================================
     // Send SOAP Request: GetExternalIPAddress
-    // ==========================================================================
+    // =========================================================================
     // Returns the router's public IP address
     // This is the IP that remote peers will use to connect to us
     //
@@ -434,9 +434,9 @@ uint32_t UpnpPortMapper::GetLocalIPv4() const {
         return 0;
     }
 
-    // ==========================================================================
+    // =========================================================================
     // Parse IPv4 String to uint32_t
-    // ==========================================================================
+    // =========================================================================
     // Convert "192.168.1.100" to 0xC0A80164 (host byte order)
     //
     unsigned int a;
@@ -464,9 +464,9 @@ uint32_t UpnpPortMapper::GetLocalIPv4() const {
 void UpnpPortMapper::Cleanup() {
     std::scoped_lock lock(m_mutex);
 
-    // ==========================================================================
+    // =========================================================================
     // Release miniupnpc Resources
-    // ==========================================================================
+    // =========================================================================
     // FreeUPNPUrls frees all strings allocated in the UPNPUrls structure
     // (controlURL, rootdescURL, etc.)
     //

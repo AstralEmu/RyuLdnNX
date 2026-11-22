@@ -16,9 +16,19 @@
 // Minimal Test Framework
 // =============================================================================
 
+/// Number of tests started.
 static int g_tests_run = 0;
+/// Number of tests that completed (a failed assertion exits the process).
 static int g_tests_passed = 0;
 
+/**
+ * @brief Define and auto-run a test case.
+ *
+ * Declares test_<name>() and a static object whose constructor runs it
+ * during static initialisation, printing PASSED and counting it.
+ *
+ * @param name Identifier of the test (becomes test_<name>).
+ */
 #define TEST(name)                              \
     static void test_##name();                  \
     static struct TestRegistrar_##name {        \
@@ -32,6 +42,10 @@ static int g_tests_passed = 0;
     } g_registrar_##name;                       \
     static void test_##name()
 
+/**
+ * @brief Print the failure and exit(1) when expr is false.
+ * @param expr Expression expected to be true.
+ */
 #define ASSERT_TRUE(expr)                                        \
     do {                                                         \
         if (!(expr)) {                                           \
@@ -40,6 +54,10 @@ static int g_tests_passed = 0;
         }                                                        \
     } while (0)
 
+/**
+ * @brief Print the failure and exit(1) when expr is true.
+ * @param expr Expression expected to be false.
+ */
 #define ASSERT_FALSE(expr)                                          \
     do {                                                            \
         if (expr) {                                                 \
@@ -48,6 +66,11 @@ static int g_tests_passed = 0;
         }                                                           \
     } while (0)
 
+/**
+ * @brief Print the failure and exit(1) when a != b.
+ * @param a Actual value.
+ * @param b Expected value.
+ */
 #define ASSERT_EQ(a, b)                                         \
     do {                                                        \
         if ((a) != (b)) {                                       \
@@ -56,6 +79,11 @@ static int g_tests_passed = 0;
         }                                                       \
     } while (0)
 
+/**
+ * @brief Print the failure and exit(1) when a == b.
+ * @param a Actual value.
+ * @param b Value a must differ from.
+ */
 #define ASSERT_NE(a, b)                                         \
     do {                                                        \
         if ((a) == (b)) {                                       \
@@ -72,36 +100,55 @@ namespace protocol {
 
 // Address family constants (use different names to avoid conflict with system
 // macros)
-constexpr uint32_t ADDR_FAMILY_IPV4 = 2;   // AF_INET value
+/// Address family value of IPv4 (AF_INET).
+constexpr uint32_t ADDR_FAMILY_IPV4 = 2;  // AF_INET value
+/// Address family value of IPv6 (AF_INET6).
 constexpr uint32_t ADDR_FAMILY_IPV6 = 10;  // AF_INET6 value
 
 // Packet IDs
+/// Wire packet IDs used by the P2P tests.
 enum class PacketId : uint8_t {
+    /// Proxied game data.
     ProxyData = 9,
+    /// External proxy configuration sent by the server.
     ExternalProxy = 14,
+    /// Virtual IP configuration sent by the host.
     ProxyConfig = 11,
 };
 
-// ExternalProxyConfig (0x26 bytes - Ryujinx compatible)
+/**
+ * @brief Mirror of the 0x26-byte ExternalProxyConfig packet (Ryujinx
+ *        compatible); packed: no padding, as on the wire.
+ */
 struct ExternalProxyConfig {
+    /// Proxy IP: IPv4 in the first 4 bytes, or a full IPv6 address.
     uint8_t proxy_ip[16];  // IPv4 in first 4 bytes or full IPv6
+    /// Proxy port.
     uint16_t proxy_port;
+    /// Address family: 2 for IPv4, 10 for IPv6.
     uint32_t address_family;  // 2=IPv4, 10=IPv6
+    /// Authentication token.
     uint8_t token[16];
 } __attribute__((packed));
 
-// ProxyDataHeader (12 bytes)
+/**
+ * @brief Mirror of the 12-byte proxy data header; packed, as on the wire.
+ */
 struct ProxyDataHeader {
-    uint32_t dest_node_id;   // Destination node ID
-    uint32_t src_node_id;    // Source node ID
+    /// Destination node ID.
+    uint32_t dest_node_id;  // Destination node ID
+    /// Source node ID.
+    uint32_t src_node_id;  // Source node ID
+    /// Transport protocol: UDP 17, TCP 6.
     uint16_t protocol_type;  // UDP=17, TCP=6
-    uint16_t data_length;    // Length of data following header
+    /// Length of the data following the header.
+    uint16_t data_length;  // Length of data following header
 } __attribute__((packed));
 
-// ProxyConfig (from host)
+/** Reduced ProxyConfig packet from the host; packed, as on the wire. */
 struct ProxyConfig {
+    /// Virtual IP assigned to the node.
     uint32_t proxy_ip;  // Virtual IP assigned
-    // ... other fields
 } __attribute__((packed));
 
 }  // namespace protocol
@@ -110,29 +157,44 @@ struct ProxyConfig {
 // ExternalProxyConfig Tests - Structure Validation
 // =============================================================================
 
+/**
+ * @brief ExternalProxyConfig is exactly 0x26 (38) bytes.
+ */
 TEST(external_proxy_config_size_0x26) {
     // ExternalProxyConfig must be exactly 0x26 (38) bytes
     ASSERT_EQ(sizeof(protocol::ExternalProxyConfig), 0x26U);
 }
 
+/**
+ * @brief proxy_ip sits at offset 0.
+ */
 TEST(external_proxy_config_proxy_ip_offset) {
     // proxy_ip should be at offset 0
     protocol::ExternalProxyConfig config{};
     ASSERT_EQ((uintptr_t)&config.proxy_ip - (uintptr_t)&config, 0U);
 }
 
+/**
+ * @brief proxy_port sits at offset 16.
+ */
 TEST(external_proxy_config_proxy_port_offset) {
     // proxy_port should be at offset 16
     protocol::ExternalProxyConfig config{};
     ASSERT_EQ((uintptr_t)&config.proxy_port - (uintptr_t)&config, 16U);
 }
 
+/**
+ * @brief address_family sits at offset 18.
+ */
 TEST(external_proxy_config_address_family_offset) {
     // address_family should be at offset 18
     protocol::ExternalProxyConfig config{};
     ASSERT_EQ((uintptr_t)&config.address_family - (uintptr_t)&config, 18U);
 }
 
+/**
+ * @brief token sits at offset 22.
+ */
 TEST(external_proxy_config_token_offset) {
     // token should be at offset 22
     protocol::ExternalProxyConfig config{};
@@ -143,16 +205,26 @@ TEST(external_proxy_config_token_offset) {
 // Address Family Tests
 // =============================================================================
 
+/**
+ * @brief The IPv4 family constant is 2.
+ */
 TEST(address_family_ipv4_is_2) {
     // AF_INET should be 2
     ASSERT_EQ(protocol::ADDR_FAMILY_IPV4, 2U);
 }
 
+/**
+ * @brief The IPv6 family constant is 10.
+ */
 TEST(address_family_ipv6_is_10) {
     // AF_INET6 should be 10
     ASSERT_EQ(protocol::ADDR_FAMILY_IPV6, 10U);
 }
 
+/**
+ * @brief An IPv4 ExternalProxyConfig is recognised and its first four bytes
+ *        give the address 10.114.0.1.
+ */
 TEST(external_proxy_config_ipv4_parsing) {
     // Simulate parsing IPv4 from ExternalProxyConfig
     protocol::ExternalProxyConfig config{};
@@ -178,6 +250,9 @@ TEST(external_proxy_config_ipv4_parsing) {
     ASSERT_EQ(ip[3], 1);
 }
 
+/**
+ * @brief An IPv6 family is detected as IPv6 and not as IPv4.
+ */
 TEST(external_proxy_config_ipv6_detection) {
     protocol::ExternalProxyConfig config{};
     config.address_family = protocol::ADDR_FAMILY_IPV6;
@@ -193,26 +268,41 @@ TEST(external_proxy_config_ipv6_detection) {
 // ProxyDataHeader Tests
 // =============================================================================
 
+/**
+ * @brief The mirrored ProxyDataHeader is 12 bytes.
+ */
 TEST(proxy_data_header_size) {
     // ProxyDataHeader should be 12 bytes
     ASSERT_EQ(sizeof(protocol::ProxyDataHeader), 12U);
 }
 
+/**
+ * @brief dest_node_id sits at offset 0.
+ */
 TEST(proxy_data_header_dest_node_offset) {
     protocol::ProxyDataHeader header{};
     ASSERT_EQ((uintptr_t)&header.dest_node_id - (uintptr_t)&header, 0U);
 }
 
+/**
+ * @brief src_node_id sits at offset 4.
+ */
 TEST(proxy_data_header_src_node_offset) {
     protocol::ProxyDataHeader header{};
     ASSERT_EQ((uintptr_t)&header.src_node_id - (uintptr_t)&header, 4U);
 }
 
+/**
+ * @brief protocol_type sits at offset 8.
+ */
 TEST(proxy_data_header_protocol_type_offset) {
     protocol::ProxyDataHeader header{};
     ASSERT_EQ((uintptr_t)&header.protocol_type - (uintptr_t)&header, 8U);
 }
 
+/**
+ * @brief data_length sits at offset 10.
+ */
 TEST(proxy_data_header_data_length_offset) {
     protocol::ProxyDataHeader header{};
     ASSERT_EQ((uintptr_t)&header.data_length - (uintptr_t)&header, 10U);
@@ -222,25 +312,49 @@ TEST(proxy_data_header_data_length_offset) {
 // P2P Routing Logic Tests
 // =============================================================================
 
+/// Test doubles reproducing the SendProxyDataToServer routing decision.
 namespace routing_test {
 
 // Simulates SendProxyDataToServer routing logic
-enum class RouteTarget { MasterServer, P2pProxy };
+/// Where a proxy packet is sent.
+enum class RouteTarget {
+    /// Through the master server.
+    MasterServer,
+    /// Through the direct P2P proxy connection.
+    P2pProxy
+};  ///< Routing decision of determine_route().
 
+/// Mock P2P client exposing only the state the routing logic reads.
 struct MockP2pClient {
+    /// True once the TCP connection to the proxy is up.
     bool connected = false;
+    /// True once authentication and proxy setup are done.
     bool ready = false;
+    /// Number of Send() calls.
     int send_count = 0;
 
+    /**
+     * @brief Tell whether the P2P path can carry data.
+     * @return True only when both connected and ready are set.
+     */
     bool IsReady() const {
         return connected && ready;
     }
+    /**
+     * @brief Record one send.
+     * @return Always true.
+     */
     bool Send() {
         send_count++;
         return true;
     }
 };
 
+/**
+ * @brief Choose the path of a proxy packet.
+ * @param client P2P client, or null when none exists.
+ * @return P2pProxy for a ready client, MasterServer otherwise.
+ */
 RouteTarget determine_route(MockP2pClient* client) {
     if (client != nullptr && client->IsReady()) {
         return RouteTarget::P2pProxy;
@@ -250,6 +364,9 @@ RouteTarget determine_route(MockP2pClient* client) {
 
 }  // namespace routing_test
 
+/**
+ * @brief Without a P2P client the packet goes through the master server.
+ */
 TEST(routing_null_client_uses_master) {
     auto route = routing_test::determine_route(nullptr);
     ASSERT_EQ(
@@ -257,6 +374,9 @@ TEST(routing_null_client_uses_master) {
         static_cast<int>(routing_test::RouteTarget::MasterServer));
 }
 
+/**
+ * @brief A disconnected client routes through the master server.
+ */
 TEST(routing_disconnected_client_uses_master) {
     routing_test::MockP2pClient client;
     client.connected = false;
@@ -268,6 +388,9 @@ TEST(routing_disconnected_client_uses_master) {
         static_cast<int>(routing_test::RouteTarget::MasterServer));
 }
 
+/**
+ * @brief A connected but not ready client routes through the master server.
+ */
 TEST(routing_connected_not_ready_uses_master) {
     routing_test::MockP2pClient client;
     client.connected = true;
@@ -279,6 +402,9 @@ TEST(routing_connected_not_ready_uses_master) {
         static_cast<int>(routing_test::RouteTarget::MasterServer));
 }
 
+/**
+ * @brief A connected and ready client routes through the P2P proxy.
+ */
 TEST(routing_ready_client_uses_p2p) {
     routing_test::MockP2pClient client;
     client.connected = true;
@@ -290,6 +416,9 @@ TEST(routing_ready_client_uses_p2p) {
         static_cast<int>(routing_test::RouteTarget::P2pProxy));
 }
 
+/**
+ * @brief IsReady() is true only when connected and ready are both set.
+ */
 TEST(routing_ready_check_is_and_of_connected_and_ready) {
     routing_test::MockP2pClient client;
 
@@ -318,6 +447,9 @@ TEST(routing_ready_check_is_and_of_connected_and_ready) {
 // Token Validation Tests
 // =============================================================================
 
+/**
+ * @brief The ExternalProxyConfig token is 16 bytes.
+ */
 TEST(token_size_16_bytes) {
     // ExternalProxyToken is 16 bytes
     constexpr size_t TOKEN_SIZE = 16;
@@ -327,6 +459,9 @@ TEST(token_size_16_bytes) {
     ASSERT_EQ(sizeof(config.token), 16U);
 }
 
+/**
+ * @brief A zeroed ExternalProxyConfig has an all-zero token.
+ */
 TEST(token_zero_check) {
     protocol::ExternalProxyConfig config{};
     memset(&config, 0, sizeof(config));
@@ -342,6 +477,9 @@ TEST(token_zero_check) {
     ASSERT_TRUE(all_zero);
 }
 
+/**
+ * @brief A 16-byte token copied into the config compares equal.
+ */
 TEST(token_copy) {
     uint8_t source_token[16] = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
@@ -356,24 +494,48 @@ TEST(token_copy) {
 // HandleExternalProxy Logic Tests
 // =============================================================================
 
+/// Test doubles reproducing the HandleExternalProxy connection sequence.
 namespace handle_external_proxy {
 
+/// Mock of the P2P state HandleExternalProxy updates.
 struct MockState {
+    /// P2P proxy enabled in the configuration.
     bool use_p2p_proxy = false;
+    /// TCP connection to the proxy established.
     bool p2p_connected = false;
+    /// Authentication with the proxy completed.
     bool p2p_auth_done = false;
+    /// Proxy ready to carry data.
     bool p2p_ready = false;
 };
 
+/// Outcome of the simulated HandleExternalProxy sequence.
 enum class HandleResult {
-    Ignored,        // P2P disabled
+    /// P2P is disabled in the configuration.
+    Ignored,  // P2P disabled
+    /// The TCP connection failed.
     ConnectFailed,  // TCP connect failed
-    AuthFailed,     // PerformAuth failed
-    ReadyFailed,    // EnsureProxyReady failed
-    Success         // All steps passed
+    /// Authentication failed.
+    AuthFailed,  // PerformAuth failed
+    /// Proxy setup failed.
+    ReadyFailed,  // EnsureProxyReady failed
+    /// Every step passed.
+    Success  // All steps passed
 };
 
 // Simulates HandleExternalProxyConnect logic
+/**
+ * @brief Replay the HandleExternalProxyConnect steps on a mock state.
+ *
+ * The existing connection is reset first; a failing step undoes the flags
+ * set by the earlier ones.
+ *
+ * @param state State updated in place.
+ * @param connect_succeeds Outcome of the TCP connect step.
+ * @param auth_succeeds Outcome of the authentication step.
+ * @param ready_succeeds Outcome of the proxy-ready step.
+ * @return The first failing step, or Success.
+ */
 HandleResult simulate_handle_external_proxy(
     MockState& state,
     bool connect_succeeds,
@@ -415,6 +577,9 @@ HandleResult simulate_handle_external_proxy(
 
 }  // namespace handle_external_proxy
 
+/**
+ * @brief With P2P disabled the request is ignored and nothing connects.
+ */
 TEST(handle_external_p2p_disabled_ignored) {
     handle_external_proxy::MockState state;
     state.use_p2p_proxy = false;
@@ -428,6 +593,9 @@ TEST(handle_external_p2p_disabled_ignored) {
     ASSERT_FALSE(state.p2p_connected);
 }
 
+/**
+ * @brief A failing TCP connect reports ConnectFailed and stays disconnected.
+ */
 TEST(handle_external_connect_failure) {
     handle_external_proxy::MockState state;
     state.use_p2p_proxy = true;
@@ -441,6 +609,9 @@ TEST(handle_external_connect_failure) {
     ASSERT_FALSE(state.p2p_connected);
 }
 
+/**
+ * @brief A failing authentication reports AuthFailed and drops the connection.
+ */
 TEST(handle_external_auth_failure) {
     handle_external_proxy::MockState state;
     state.use_p2p_proxy = true;
@@ -454,6 +625,9 @@ TEST(handle_external_auth_failure) {
     ASSERT_FALSE(state.p2p_connected);
 }
 
+/**
+ * @brief A failing proxy setup reports ReadyFailed and drops the connection.
+ */
 TEST(handle_external_ready_failure) {
     handle_external_proxy::MockState state;
     state.use_p2p_proxy = true;
@@ -467,6 +641,10 @@ TEST(handle_external_ready_failure) {
     ASSERT_FALSE(state.p2p_connected);
 }
 
+/**
+ * @brief When every step succeeds the state is connected, authenticated and
+ *        ready.
+ */
 TEST(handle_external_success) {
     handle_external_proxy::MockState state;
     state.use_p2p_proxy = true;
@@ -482,6 +660,10 @@ TEST(handle_external_success) {
     ASSERT_TRUE(state.p2p_ready);
 }
 
+/**
+ * @brief A failure after an earlier working connection clears all three
+ *        flags.
+ */
 TEST(handle_external_cleanup_on_failure) {
     handle_external_proxy::MockState state;
     state.use_p2p_proxy = true;
@@ -507,6 +689,9 @@ TEST(handle_external_cleanup_on_failure) {
 // DisconnectP2pProxy Logic Tests
 // =============================================================================
 
+/**
+ * @brief Disconnecting a null client is a no-op.
+ */
 TEST(disconnect_p2p_null_safe) {
     // Disconnecting nullptr should be safe (no-op)
     void* ptr = nullptr;
@@ -519,6 +704,9 @@ TEST(disconnect_p2p_null_safe) {
     ASSERT_FALSE(disconnected);
 }
 
+/**
+ * @brief After a disconnect the client pointer is null.
+ */
 TEST(disconnect_p2p_sets_null) {
     // After disconnect, pointer should be null
     int dummy = 42;
@@ -534,16 +722,27 @@ TEST(disconnect_p2p_sets_null) {
 // ProxyPacketCallback Tests
 // =============================================================================
 
+/// Mock of the proxy packet callback and the packet it records.
 namespace callback_test {
 
+/// The last packet seen by mock_callback().
 struct ReceivedPacket {
+    /// Packet ID received.
     protocol::PacketId type;
+    /// Payload size received.
     size_t data_size;
+    /// True once the callback ran.
     bool processed;
 };
 
+/// Last packet recorded by mock_callback().
 ReceivedPacket g_last_packet = {};
 
+/**
+ * @brief Record a packet; the payload pointer is ignored.
+ * @param type Packet ID.
+ * @param size Payload size in bytes.
+ */
 void mock_callback(protocol::PacketId type, const void* /*data*/, size_t size) {
     g_last_packet.type = type;
     g_last_packet.data_size = size;
@@ -552,6 +751,9 @@ void mock_callback(protocol::PacketId type, const void* /*data*/, size_t size) {
 
 }  // namespace callback_test
 
+/**
+ * @brief The callback records a ProxyData packet and its 64-byte size.
+ */
 TEST(callback_receives_proxy_data) {
     callback_test::g_last_packet = {};
 
@@ -566,6 +768,9 @@ TEST(callback_receives_proxy_data) {
     ASSERT_EQ(callback_test::g_last_packet.data_size, 64U);
 }
 
+/**
+ * @brief The callback records a ProxyConfig packet.
+ */
 TEST(callback_receives_proxy_config) {
     callback_test::g_last_packet = {};
 
@@ -583,6 +788,9 @@ TEST(callback_receives_proxy_config) {
 // IP Address Extraction Tests
 // =============================================================================
 
+/**
+ * @brief The first four bytes of proxy_ip format as "192.168.1.100".
+ */
 TEST(ip_extract_from_external_proxy_config_ipv4) {
     protocol::ExternalProxyConfig config{};
     config.address_family = protocol::ADDR_FAMILY_IPV4;
@@ -611,12 +819,18 @@ TEST(ip_extract_from_external_proxy_config_ipv4) {
     ASSERT_EQ(strcmp(ip_str, "192.168.1.100"), 0);
 }
 
+/**
+ * @brief An IPv4 address uses 4 bytes.
+ */
 TEST(ip_extract_length_for_ipv4) {
     // IPv4 should use 4 bytes
     constexpr size_t IPV4_LEN = 4;
     ASSERT_EQ(IPV4_LEN, 4U);
 }
 
+/**
+ * @brief An IPv6 address uses 16 bytes.
+ */
 TEST(ip_extract_length_for_ipv6) {
     // IPv6 should use 16 bytes
     constexpr size_t IPV6_LEN = 16;
@@ -627,6 +841,10 @@ TEST(ip_extract_length_for_ipv6) {
 // Main
 // =============================================================================
 
+/**
+ * @brief Print the totals; tests have already run from static initialisers.
+ * @return 0 when every test passed, 1 otherwise.
+ */
 int main() {
     printf("=== P2P Integration Tests (Story 9.7) ===\n\n");
 

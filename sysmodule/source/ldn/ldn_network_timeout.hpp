@@ -95,6 +95,7 @@ public:
 
     /**
      * @brief Check if timeout is currently active
+     * @return true while a timeout is armed
      */
     bool IsActive() const;
 

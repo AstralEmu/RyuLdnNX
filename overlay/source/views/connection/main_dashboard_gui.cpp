@@ -23,11 +23,14 @@
 
 // Initialize random seed for passphrase generation
 namespace {
+/** Seeds rand() from the wall clock when the overlay is loaded. */
 struct RandomSeeder {
+    /** Calls srand() with the current time. */
     RandomSeeder() {
         srand(time(nullptr));
     }
 };
+/** Static instance whose constructor seeds rand() at startup. */
 RandomSeeder g_seeder;
 }  // namespace
 

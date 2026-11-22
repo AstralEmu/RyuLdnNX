@@ -122,6 +122,7 @@ enum class ProtocolType : int32_t {
 // =============================================================================
 
 /**
+ * @struct SockAddr
  * @brief Generic socket address (sockaddr)
  *
  * Base structure for all socket addresses. The actual data depends on
@@ -135,6 +136,7 @@ struct __attribute__((packed)) SockAddr {
 static_assert(sizeof(SockAddr) == 16, "SockAddr must be 16 bytes");
 
 /**
+ * @struct SockAddrIn
  * @brief IPv4 socket address (sockaddr_in)
  *
  * Used for AF_INET addresses. This is the primary structure for LDN
@@ -149,6 +151,7 @@ struct __attribute__((packed)) SockAddrIn {
 
     /**
      * @brief Check if this address is in the LDN network
+     * @return true if sin_addr lies in the LDN subnet
      */
     /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::IsLdnAddress: this=%p",
     /// args="$x0"}
@@ -160,6 +163,7 @@ struct __attribute__((packed)) SockAddrIn {
 
     /**
      * @brief Get port in host byte order
+     * @return Port converted from network to host byte order
      */
     /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::GetPort"}
     uint16_t GetPort() const {
@@ -168,6 +172,7 @@ struct __attribute__((packed)) SockAddrIn {
 
     /**
      * @brief Get address in host byte order
+     * @return Address converted from network to host byte order
      */
     /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::GetAddr"}
     uint32_t GetAddr() const {
@@ -177,6 +182,7 @@ struct __attribute__((packed)) SockAddrIn {
 static_assert(sizeof(SockAddrIn) == 16, "SockAddrIn must be 16 bytes");
 
 /**
+ * @struct SockAddrIn6
  * @brief IPv6 socket address (sockaddr_in6)
  *
  * Used for AF_INET6 addresses. LDN doesn't use IPv6, but we need
@@ -193,6 +199,7 @@ struct __attribute__((packed)) SockAddrIn6 {
 static_assert(sizeof(SockAddrIn6) == 28, "SockAddrIn6 must be 28 bytes");
 
 /**
+ * @struct SockAddrStorage
  * @brief Socket address storage (large enough for any address type)
  */
 struct __attribute__((packed)) SockAddrStorage {
@@ -208,6 +215,7 @@ static_assert(
 // =============================================================================
 
 /**
+ * @struct LibraryConfigData
  * @brief Library configuration data passed to RegisterClient
  *
  * This structure configures the BSD socket library for a client.
@@ -226,6 +234,7 @@ static_assert(
     sizeof(LibraryConfigData) == 32, "LibraryConfigData must be 32 bytes");
 
 /**
+ * @struct RegisterClientInput
  * @brief RegisterClient IPC input structure
  *
  * This is the exact structure sent by nnSdk/libnx for RegisterClient (cmd 0).
@@ -310,6 +319,7 @@ enum class IoctlRequest : uint32_t {
 // =============================================================================
 
 /**
+ * @struct PollFd
  * @brief Poll file descriptor structure
  */
 struct __attribute__((packed)) PollFd {

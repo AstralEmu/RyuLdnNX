@@ -13,18 +13,32 @@
 
 using ams::mitm::ldn::IClientProcessMonitor;
 
+/**
+ * @brief The monitor can be heap-allocated and deleted without crashing.
+ * It has no required construction arguments, which the MITM service relies on
+ * when it instantiates one per session.
+ */
 TEST(the_monitor_can_be_created_and_destroyed) {
     IClientProcessMonitor* monitor = new IClientProcessMonitor();
     ASSERT_TRUE(monitor != nullptr);
     delete monitor;
 }
 
+/**
+ * @brief RegisterClient accepts any client process id and returns success.
+ * The monitor only exists to satisfy firmware 18.0.0+ and performs no
+ * validation, so a failure here would break every LDN client at startup.
+ */
 TEST(registering_a_client_always_succeeds) {
     ams::sf::ClientProcessId pid;
     pid.process_id.value = 4242;
     ASSERT_TRUE(IClientProcessMonitor::RegisterClient(pid).IsSuccess());
 }
 
+/**
+ * @brief Print the test totals (the tests ran during static initialization).
+ * @return Non-zero when at least one assertion failed.
+ */
 int main() {
     return test_report("IClientProcessMonitor Tests");
 }

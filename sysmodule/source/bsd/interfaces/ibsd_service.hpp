@@ -405,6 +405,9 @@ namespace ams::mitm::bsd {
  *
  * We only intercept games that might use LDN multiplayer.
  * For now, we always intercept to be safe.
+ *
+ * @param client_info Process info of the client opening the session
+ * @return true if the session must be intercepted (currently always)
  */
 inline bool ShouldInterceptBsd(const sm::MitmProcessInfo& client_info) {
     // Always intercept for now - we'll forward non-LDN calls

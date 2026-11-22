@@ -260,9 +260,6 @@ ams::Result ConfigService::GetPassphrase(RyuCfgOutPassphraseString out) {
  * long and contains only printable ASCII (0x20 .. 0x7E). Returns
  * `result::ResultInvalidIpcInput` if the input is rejected; in that case the
  * in-memory passphrase is left untouched.
- *
- * @param passphrase New passphrase (64 bytes, null-terminated)
- * @return Success or `result::ResultInvalidIpcInput` on validation failure
  */
 ams::Result ConfigService::SetPassphrase(RyuCfgPassphraseString passphrase) {
     // Bound the scan by the 64-byte IPC buffer (63 characters + terminator),
@@ -307,9 +304,6 @@ ams::Result ConfigService::GetLdnEnabled(ams::sf::Out<u32> out) {
  * @brief Enable or disable LDN emulation
  *
  * Changes the setting in memory. Call SaveConfig to persist.
- *
- * @param enabled 1 = enable, 0 = disable
- * @return Always succeeds
  */
 ams::Result ConfigService::SetLdnEnabled(u32 enabled) {
     std::scoped_lock lk(g_config_mutex);
@@ -355,9 +349,6 @@ ams::Result ConfigService::GetServerAddress(RyuCfgOutServerAddress out) {
  * and does not contain shell-injection metacharacters (`;`, `|`, `&`,
  * backtick). Returns `result::ResultInvalidIpcInput` if the input is rejected;
  * in that case the in-memory host is left untouched.
- *
- * @param address New server address structure
- * @return Success or `result::ResultInvalidIpcInput` on validation failure
  */
 ams::Result ConfigService::SetServerAddress(RyuCfgInServerAddress address) {
     // The IPC field is 64 bytes: bound the scan by the field, not by the larger

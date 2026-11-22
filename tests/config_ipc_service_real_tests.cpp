@@ -25,6 +25,17 @@ namespace config = ryu_ldn::config;
 
 namespace {
 
+/**
+ * @brief Call a ryu:cfg getter and return its output value.
+ *
+ * A failing call is recorded as a test failure but the (default-constructed)
+ * value is still returned.
+ *
+ * @tparam T Type of the output value.
+ * @tparam Fn Callable taking an Out<T>, i.e. a ConfigService getter.
+ * @param fn Getter to invoke.
+ * @return The value the getter wrote.
+ */
 template <class T, class Fn>
 T get(Fn fn) {
     T value{};
@@ -34,10 +45,23 @@ T get(Fn fn) {
     return value;
 }
 
+/**
+ * @brief Shortcut of get<u32>() for the getters that output a u32.
+ * @param fn ConfigService getter with an Out<u32> output.
+ * @return The u32 the getter wrote.
+ */
 u32 get_u32(ams::Result (*fn)(Out<u32>)) {
     return get<u32>(fn);
 }
 
+/**
+ * @brief Build a 64-byte IPC passphrase buffer.
+ * @param text NUL-terminated initial content.
+ * @param fill_to When greater than strlen(text), pad with 'a' up to this many
+ *        bytes (capped at the buffer size); no terminator is added by the
+ *        padding, so 64 yields an unterminated buffer.
+ * @return The zero-initialised buffer holding text and the padding.
+ */
 RyuCfgPassphraseString make_passphrase(
     const char* text, std::size_t fill_to = 0) {
     RyuCfgPassphraseString p{};
@@ -51,6 +75,12 @@ RyuCfgPassphraseString make_passphrase(
     return p;
 }
 
+/**
+ * @brief Build a server address IPC structure.
+ * @param host Host name, truncated to leave room for the terminator.
+ * @param port Server port.
+ * @return The zero-initialised structure holding host and port.
+ */
 ServerAddressIpc make_address(const char* host, u16 port) {
     ServerAddressIpc a{};
     std::memset(&a, 0, sizeof(a));
@@ -59,6 +89,10 @@ ServerAddressIpc make_address(const char* host, u16 port) {
     return a;
 }
 
+/**
+ * @brief Reset the process-wide SharedState and drop any pending reconnect.
+ * @return The SharedState singleton, in its initial state.
+ */
 ams::mitm::ldn::SharedState& fresh_state() {
     auto& s = ams::mitm::ldn::SharedState::GetInstance();
     s.Reset();
@@ -66,8 +100,10 @@ ams::mitm::ldn::SharedState& fresh_state() {
     return s;
 }
 
+/// Absolute path of the config file the service reads and writes.
 const fsys::path config_file{config::CONFIG_PATH};
 
+/// Remove the grandparent directory of the config file (the config tree).
 void remove_config_tree() {
     std::error_code ec;
     fsys::remove_all(config_file.parent_path().parent_path(), ec);
@@ -75,6 +111,10 @@ void remove_config_tree() {
 
 }  // namespace
 
+/**
+ * @brief The status getters report version "1.0.0", connection status 0 and an
+ *        active service, as the overlay expects.
+ */
 TEST(status_getters_report_version_and_liveness) {
     auto version = get<RyuCfgVersionString>(&ConfigService::GetVersion);
     ASSERT_TRUE(std::strcmp(version.buf.data(), "1.0.0") == 0);
@@ -83,6 +123,10 @@ TEST(status_getters_report_version_and_liveness) {
     ASSERT_EQ(get_u32(&ConfigService::IsServiceActive), static_cast<u32>(1));
 }
 
+/**
+ * @brief The LDN enable, use-passphrase and disable-P2P flags read back what
+ *        was set; a non-zero LDN-enabled value is normalised to 1.
+ */
 TEST(the_ldn_flags_round_trip) {
     ASSERT_TRUE(ConfigService::SetLdnEnabled(0).IsSuccess());
     ASSERT_EQ(get_u32(&ConfigService::GetLdnEnabled), static_cast<u32>(0));
@@ -100,6 +144,9 @@ TEST(the_ldn_flags_round_trip) {
     ASSERT_EQ(get_u32(&ConfigService::GetDisableP2p), static_cast<u32>(0));
 }
 
+/**
+ * @brief A printable-ASCII passphrase is accepted and GetPassphrase returns it.
+ */
 TEST(a_valid_passphrase_is_stored_and_read_back) {
     ASSERT_TRUE(
         ConfigService::SetPassphrase(make_passphrase("room 42 !~"))
@@ -108,8 +155,11 @@ TEST(a_valid_passphrase_is_stored_and_read_back) {
     ASSERT_TRUE(std::strcmp(got.buf.data(), "room 42 !~") == 0);
 }
 
-TEST(
-    the_longest_passphrase_is_63_characters_and_an_unterminated_buffer_is_rejected) {
+/**
+ * @brief A 63-character passphrase is accepted, a 64-byte buffer without
+ *        terminator is rejected and leaves the stored value unchanged.
+ */
+TEST(the_longest_passphrase_is_63_chars_and_unterminated_is_rejected) {
     // Regression: the scan used to be bounded by MAX_PASSPHRASE_LENGTH (64),
     // one more than the 64-byte IPC buffer holds with its terminator, so a
     // buffer full of characters was read one byte past its end.
@@ -124,6 +174,10 @@ TEST(
     ASSERT_EQ(std::strlen(got.buf.data()), static_cast<std::size_t>(63));
 }
 
+/**
+ * @brief Over-long, control-character, DEL and non-ASCII passphrases fail with
+ *        ResultInvalidIpcInput and never overwrite the stored passphrase.
+ */
 TEST(invalid_passphrases_are_rejected_and_leave_the_stored_one_untouched) {
     ASSERT_TRUE(
         ConfigService::SetPassphrase(make_passphrase("keep")).IsSuccess());
@@ -153,6 +207,10 @@ TEST(invalid_passphrases_are_rejected_and_leave_the_stored_one_untouched) {
     ASSERT_TRUE(std::strcmp(got.buf.data(), "keep") == 0);
 }
 
+/**
+ * @brief SetServerAddress followed by GetServerAddress returns the same host
+ *        and port.
+ */
 TEST(the_server_address_round_trips_through_the_service) {
     ASSERT_TRUE(
         ConfigService::SetServerAddress(make_address("ldn.example.org", 31337))
@@ -162,8 +220,12 @@ TEST(the_server_address_round_trips_through_the_service) {
     ASSERT_EQ(got.port, 31337);
 }
 
-TEST(
-    hosts_with_shell_metacharacters_are_rejected_and_leave_the_address_untouched) {
+/**
+ * @brief Hosts containing ';', '|', '&' or a backtick are refused with
+ *        ResultInvalidIpcInput (shell injection guard) and the stored address
+ *        is untouched.
+ */
+TEST(shell_metacharacters_in_a_host_are_rejected_and_keep_the_address) {
     ASSERT_TRUE(
         ConfigService::SetServerAddress(make_address("keep.example.org", 1))
             .IsSuccess());
@@ -178,6 +240,10 @@ TEST(
     ASSERT_EQ(got.port, 1);
 }
 
+/**
+ * @brief A 64-byte host without terminator is rejected, while 63 characters
+ *        plus the terminator is the longest accepted host.
+ */
 TEST(a_host_filling_the_whole_field_without_terminator_is_rejected) {
     // Regression: the scan used to be bounded by MAX_HOST_LENGTH (128) while
     // the IPC field is 64 bytes, so it ran on into the port/padding bytes.
@@ -197,6 +263,10 @@ TEST(a_host_filling_the_whole_field_without_terminator_is_rejected) {
     ASSERT_TRUE(ConfigService::SetServerAddress(longest).IsSuccess());
 }
 
+/**
+ * @brief Debug enable and level read back what was set; level 4 is accepted,
+ *        5 is rejected with ResultInvalidIpcInput and the level is kept.
+ */
 TEST(the_debug_settings_round_trip_and_reject_levels_above_four) {
     ASSERT_TRUE(ConfigService::SetDebugEnabled(1).IsSuccess());
     ASSERT_EQ(get_u32(&ConfigService::GetDebugEnabled), static_cast<u32>(1));
@@ -211,6 +281,10 @@ TEST(the_debug_settings_round_trip_and_reject_levels_above_four) {
     ASSERT_EQ(get_u32(&ConfigService::GetDebugLevel), static_cast<u32>(4));
 }
 
+/**
+ * @brief Game-active flag, LDN state, last RTT, active process id and session
+ *        info reported by the service mirror what is set on SharedState.
+ */
 TEST(the_runtime_state_comes_from_the_shared_state) {
     auto& s = fresh_state();
     s.SetGameActive(true, 0x1234);
@@ -238,12 +312,21 @@ TEST(the_runtime_state_comes_from_the_shared_state) {
     ASSERT_EQ(get<SessionInfoIpc>(&ConfigService::GetSessionInfo).is_host, 0);
 }
 
+/**
+ * @brief ForceReconnect succeeds and leaves a reconnect request on
+ *        SharedState for the network thread to consume.
+ */
 TEST(force_reconnect_requests_a_reconnection) {
     auto& s = fresh_state();
     ASSERT_TRUE(ConfigService::ForceReconnect().IsSuccess());
     ASSERT_TRUE(s.ConsumeReconnectRequest());
 }
 
+/**
+ * @brief ReloadConfig reports FileNotFound without a file, SaveConfig creates
+ *        it, ReloadConfig restores the saved values and SaveConfig reports
+ *        IoError when a directory occupies the file path.
+ */
 TEST(save_and_reload_follow_the_state_of_the_config_file) {
     remove_config_tree();
     std::error_code ec;
@@ -276,6 +359,10 @@ TEST(save_and_reload_follow_the_state_of_the_config_file) {
     remove_config_tree();
 }
 
+/**
+ * @brief InitializeConfig loads the values of an existing config file and
+ *        falls back to the built-in defaults when the file is missing.
+ */
 TEST(initialize_config_loads_the_defaults_then_the_file) {
     remove_config_tree();
     std::error_code ec;
@@ -300,6 +387,10 @@ TEST(initialize_config_loads_the_defaults_then_the_file) {
             config::get_default_config().server.host) == 0);
 }
 
+/**
+ * @brief Test entry point.
+ * @return 0 when every test passed, 1 otherwise (see test_report()).
+ */
 int main() {
     return test_report("ryu:cfg ConfigService Tests");
 }

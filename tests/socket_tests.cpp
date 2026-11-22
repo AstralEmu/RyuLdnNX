@@ -35,6 +35,7 @@
 #include <unistd.h>
 
 // For test build, we mock the socket functions
+/// Selects the mockable build of network/socket.hpp for this test binary
 #define TEST_BUILD_SOCKET_MOCK
 
 #include "network/socket.hpp"
@@ -45,10 +46,19 @@ using namespace ryu_ldn::network;
 // Test Framework (minimal, same as other test files)
 // =============================================================================
 
+/// Number of tests started
 static int g_tests_run = 0;
+/// Number of tests that passed
 static int g_tests_passed = 0;
+/// Number of tests that failed (an assertion threw)
 static int g_tests_failed = 0;
 
+/**
+ * @brief Defines a test: registers a static object whose constructor runs the
+ *        body before main(), counting PASS or, when an assertion throws, FAIL
+ *
+ * @param name test identifier, without the test_ prefix
+ */
 #define TEST(name)                            \
     static void test_##name();                \
     static struct TestRegister_##name {       \
@@ -68,6 +78,11 @@ static int g_tests_failed = 0;
     } g_test_register_##name;                 \
     static void test_##name()
 
+/**
+ * @brief Throws a message that fails the running test when a condition is false
+ *
+ * @param cond expression expected to be true
+ */
 #define ASSERT(cond)                          \
     do {                                      \
         if (!(cond)) {                        \
@@ -75,6 +90,12 @@ static int g_tests_failed = 0;
         }                                     \
     } while (0)
 
+/**
+ * @brief Throws a message that fails the running test when two values differ
+ *
+ * @param a actual value
+ * @param b expected value
+ */
 #define ASSERT_EQ(a, b)                              \
     do {                                             \
         if ((a) != (b)) {                            \
@@ -82,6 +103,12 @@ static int g_tests_failed = 0;
         }                                            \
     } while (0)
 
+/**
+ * @brief Throws a message that fails the running test when two values are equal
+ *
+ * @param a first value
+ * @param b value it must differ from
+ */
 #define ASSERT_NE(a, b)                              \
     do {                                             \
         if ((a) == (b)) {                            \
@@ -89,7 +116,17 @@ static int g_tests_failed = 0;
         }                                            \
     } while (0)
 
+/**
+ * @brief Alias of ASSERT
+ *
+ * @param cond expression expected to be true
+ */
 #define ASSERT_TRUE(cond) ASSERT(cond)
+/**
+ * @brief Fails the running test when a condition is true
+ *
+ * @param cond expression expected to be false
+ */
 #define ASSERT_FALSE(cond) ASSERT(!(cond))
 
 // =============================================================================
@@ -542,6 +579,7 @@ TEST(result_to_string_success) {
         strcmp(socket_result_to_string(SocketResult::Success), "Success") == 0);
 }
 
+/// Verifies that socket_result_to_string names WouldBlock.
 TEST(result_to_string_would_block) {
     ASSERT(
         strcmp(
@@ -549,11 +587,13 @@ TEST(result_to_string_would_block) {
         0);
 }
 
+/// Verifies that socket_result_to_string names Timeout.
 TEST(result_to_string_timeout) {
     ASSERT(
         strcmp(socket_result_to_string(SocketResult::Timeout), "Timeout") == 0);
 }
 
+/// Verifies that socket_result_to_string names ConnectionRefused.
 TEST(result_to_string_connection_refused) {
     ASSERT(
         strcmp(
@@ -561,6 +601,7 @@ TEST(result_to_string_connection_refused) {
             "ConnectionRefused") == 0);
 }
 
+/// Verifies that socket_result_to_string names ConnectionReset.
 TEST(result_to_string_connection_reset) {
     ASSERT(
         strcmp(
@@ -568,6 +609,7 @@ TEST(result_to_string_connection_reset) {
             "ConnectionReset") == 0);
 }
 
+/// Verifies that socket_result_to_string names HostUnreachable.
 TEST(result_to_string_host_unreachable) {
     ASSERT(
         strcmp(
@@ -575,6 +617,7 @@ TEST(result_to_string_host_unreachable) {
             "HostUnreachable") == 0);
 }
 
+/// Verifies that socket_result_to_string names NetworkDown.
 TEST(result_to_string_network_down) {
     ASSERT(
         strcmp(
@@ -582,6 +625,7 @@ TEST(result_to_string_network_down) {
             "NetworkDown") == 0);
 }
 
+/// Verifies that socket_result_to_string names NotConnected.
 TEST(result_to_string_not_connected) {
     ASSERT(
         strcmp(
@@ -589,6 +633,7 @@ TEST(result_to_string_not_connected) {
             "NotConnected") == 0);
 }
 
+/// Verifies that socket_result_to_string names AlreadyConnected.
 TEST(result_to_string_already_connected) {
     ASSERT(
         strcmp(
@@ -596,6 +641,7 @@ TEST(result_to_string_already_connected) {
             "AlreadyConnected") == 0);
 }
 
+/// Verifies that socket_result_to_string names InvalidAddress.
 TEST(result_to_string_invalid_address) {
     ASSERT(
         strcmp(
@@ -603,6 +649,7 @@ TEST(result_to_string_invalid_address) {
             "InvalidAddress") == 0);
 }
 
+/// Verifies that socket_result_to_string names SocketError.
 TEST(result_to_string_socket_error) {
     ASSERT(
         strcmp(
@@ -610,6 +657,7 @@ TEST(result_to_string_socket_error) {
             "SocketError") == 0);
 }
 
+/// Verifies that socket_result_to_string names NotInitialized.
 TEST(result_to_string_not_initialized) {
     ASSERT(
         strcmp(
@@ -617,6 +665,7 @@ TEST(result_to_string_not_initialized) {
             "NotInitialized") == 0);
 }
 
+/// Verifies that socket_result_to_string names Closed.
 TEST(result_to_string_closed) {
     ASSERT(
         strcmp(socket_result_to_string(SocketResult::Closed), "Closed") == 0);
@@ -841,6 +890,9 @@ TEST(is_valid_default_socket) {
 
 /**
  * @test is_valid returns true after successful socket creation
+ *
+ * Despite the name, only the negative path is checked (a fresh Socket is
+ * not valid): a valid descriptor needs a server, see the connected tests.
  */
 TEST(is_valid_after_create) {
     socket_init();
@@ -875,6 +927,12 @@ TEST(result_to_string_all_values) {
             "Unknown") == 0);
 }
 
+/**
+ * @brief Verifies that errno_to_result maps EAGAIN/EWOULDBLOCK to WouldBlock,
+ *        ECONNREFUSED, ECONNRESET, EHOSTUNREACH and ENETUNREACH, ENETDOWN,
+ *        ENOTCONN, EISCONN and ETIMEDOUT to their result, and anything else
+ *        (999, 0) to SocketError.
+ */
 TEST(errno_to_result_all_mappings) {
     ASSERT_EQ(errno_to_result(EAGAIN), SocketResult::WouldBlock);
 #if EAGAIN != EWOULDBLOCK
@@ -897,8 +955,12 @@ TEST(errno_to_result_all_mappings) {
 // =============================================================================
 
 /**
- * Helper: create a local TCP listener and return its port.
- * Returns 0 on failure.
+ * @brief Helper: create a local TCP listener and return its port.
+ *
+ * Listens on the loopback address with a port chosen by the OS.
+ *
+ * @param server_fd receives the listening descriptor, or -1 on failure
+ * @return the bound port, or 0 on failure
  */
 static uint16_t create_local_listener(int& server_fd) {
     server_fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -1147,36 +1209,81 @@ TEST(send_recv_connected) {
 
 namespace {
 
+/**
+ * @brief Libc functions the fault injector can intercept, used as an index into
+ *        g_fault
+ */
 enum Fn {
+    /// socket()
     FN_SOCKET,
+    /// fcntl()
     FN_FCNTL,
+    /// setsockopt()
     FN_SETSOCKOPT,
+    /// getsockopt()
     FN_GETSOCKOPT,
+    /// poll()
     FN_POLL,
+    /// send()
     FN_SEND,
+    /// recv()
     FN_RECV,
+    /// Number of functions (array size), not a function
     FN_COUNT
 };
 
+/**
+ * @brief One armed fault: what the next call(s) of an intercepted function
+ *        return instead of reaching libc
+ */
 struct Fault {
-    bool armed;    // fault pending
-    int skip;      // number of calls to let through before failing
-    int err;       // errno to set (when ret < 0)
-    long ret;      // value returned instead of calling libc
-    bool set_out;  // getsockopt only: succeed and write out_int to *optval
+    /// fault pending
+    bool armed;
+    /// number of calls to let through before failing
+    int skip;
+    /// errno to set (when ret < 0)
+    int err;
+    /// value returned instead of calling libc
+    long ret;
+    /// getsockopt only: succeed and write out_int to *optval
+    bool set_out;
+    /// value written to *optval when set_out is true
     int out_int;
 };
 
+/// Pending fault of each intercepted function
 Fault g_fault[FN_COUNT];
 
+/**
+ * @brief Arms one fault on one function
+ *
+ * @param fn function to fail
+ * @param err errno set when ret is negative
+ * @param skip calls to let through first
+ * @param ret value returned instead of calling libc
+ */
 void arm(Fn fn, int err, int skip = 0, long ret = -1) {
     g_fault[fn] = Fault{true, skip, err, ret, false, 0};
 }
 
+/**
+ * @brief Arms getsockopt() to succeed and report a pending socket error
+ *        (SO_ERROR)
+ *
+ * @param value errno value written to the option
+ */
 void arm_so_error(int value) {
     g_fault[FN_GETSOCKOPT] = Fault{true, 0, 0, 0, true, value};
 }
 
+/**
+ * @brief Consumes the fault of a function when it is due: counts down skip,
+ *        then disarms and sets errno
+ *
+ * @param fn function being called
+ * @return true if the call must fail (use g_fault[fn].ret), false to forward it
+ *         to libc
+ */
 bool take(Fn fn) {
     Fault& f = g_fault[fn];
     if (!f.armed)
@@ -1191,12 +1298,19 @@ bool take(Fn fn) {
     return true;
 }
 
+/// RAII guard that disarms every fault when a test ends
 struct FaultGuard {
     ~FaultGuard() {
         std::memset(g_fault, 0, sizeof(g_fault));
     }
 };
 
+/**
+ * @brief Looks up the real libc function behind an interposed symbol
+ *
+ * @param name symbol name
+ * @return the function pointer, cast to F (null if not found)
+ */
 template <typename F>
 F real(const char* name) {
     return reinterpret_cast<F>(dlsym(RTLD_NEXT, name));
@@ -1206,6 +1320,15 @@ F real(const char* name) {
 
 extern "C" {
 
+/**
+ * @brief Interposed socket(): fails when FN_SOCKET is armed, otherwise forwards
+ *        to libc
+ *
+ * @param d domain
+ * @param t type
+ * @param p protocol
+ * @return the descriptor, or the injected value
+ */
 int socket(int d, int t, int p) noexcept {
     if (take(FN_SOCKET))
         return static_cast<int>(g_fault[FN_SOCKET].ret);
@@ -1213,6 +1336,14 @@ int socket(int d, int t, int p) noexcept {
     return fn(d, t, p);
 }
 
+/**
+ * @brief Interposed fcntl(): fails when FN_FCNTL is armed, otherwise forwards
+ *        to libc
+ *
+ * @param fd descriptor
+ * @param cmd command
+ * @return the libc result, or the injected value
+ */
 int fcntl(int fd, int cmd, ...) {
     va_list ap;
     va_start(ap, cmd);
@@ -1224,6 +1355,17 @@ int fcntl(int fd, int cmd, ...) {
     return fn(fd, cmd, arg);
 }
 
+/**
+ * @brief Interposed setsockopt(): fails when FN_SETSOCKOPT is armed, otherwise
+ *        forwards to libc
+ *
+ * @param fd descriptor
+ * @param l option level
+ * @param n option name
+ * @param v option value
+ * @param len size of v
+ * @return 0 or -1, or the injected value
+ */
 int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
     if (take(FN_SETSOCKOPT))
         return static_cast<int>(g_fault[FN_SETSOCKOPT].ret);
@@ -1232,6 +1374,17 @@ int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
     return fn(fd, l, n, v, len);
 }
 
+/**
+ * @brief Interposed getsockopt(): fails when FN_GETSOCKOPT is armed, or reports
+ *        an injected SO_ERROR, otherwise forwards to libc
+ *
+ * @param fd descriptor
+ * @param l option level
+ * @param n option name
+ * @param v receives the value
+ * @param len size of v
+ * @return 0 or -1, or the injected value
+ */
 int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
     bool inject = take(FN_GETSOCKOPT);
     if (inject && !g_fault[FN_GETSOCKOPT].set_out) {
@@ -1246,6 +1399,15 @@ int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
     return r;
 }
 
+/**
+ * @brief Interposed poll(): fails when FN_POLL is armed, otherwise forwards to
+ *        libc
+ *
+ * @param fds descriptors to watch
+ * @param n number of descriptors
+ * @param t timeout in ms
+ * @return the libc result, or the injected value
+ */
 int poll(struct pollfd* fds, nfds_t n, int t) {
     if (take(FN_POLL))
         return static_cast<int>(g_fault[FN_POLL].ret);
@@ -1253,6 +1415,16 @@ int poll(struct pollfd* fds, nfds_t n, int t) {
     return fn(fds, n, t);
 }
 
+/**
+ * @brief Interposed send(): fails when FN_SEND is armed, otherwise forwards to
+ *        libc
+ *
+ * @param fd descriptor
+ * @param b data
+ * @param n data size
+ * @param f flags
+ * @return bytes sent, or the injected value
+ */
 ssize_t send(int fd, const void* b, size_t n, int f) {
     if (take(FN_SEND))
         return static_cast<ssize_t>(g_fault[FN_SEND].ret);
@@ -1260,6 +1432,16 @@ ssize_t send(int fd, const void* b, size_t n, int f) {
     return fn(fd, b, n, f);
 }
 
+/**
+ * @brief Interposed recv(): fails when FN_RECV is armed, otherwise forwards to
+ *        libc
+ *
+ * @param fd descriptor
+ * @param b receive buffer
+ * @param n buffer size
+ * @param f flags
+ * @return bytes received, or the injected value
+ */
 ssize_t recv(int fd, void* b, size_t n, int f) {
     if (take(FN_RECV))
         return static_cast<ssize_t>(g_fault[FN_RECV].ret);
@@ -1275,9 +1457,16 @@ ssize_t recv(int fd, void* b, size_t n, int f) {
 
 namespace {
 
+/**
+ * @brief Loopback TCP server a Socket under test connects to: listens on an
+ *        OS-chosen port and accepts one connection
+ */
 struct LoopPeer {
+    /// Listening descriptor
     int listen_fd = -1;
+    /// Descriptor of the accepted connection, -1 before accept_one()
     int accepted = -1;
+    /// Port the peer listens on
     uint16_t port = 0;
 
     LoopPeer() {
@@ -1301,6 +1490,10 @@ struct LoopPeer {
             ::close(listen_fd);
     }
 
+    /**
+     * @brief Waits up to 2 s for the pending connection and accepts it; throws
+     * a message on timeout or failure
+     */
     void accept_one() {
         pollfd p{listen_fd, POLLIN, 0};
         if (::poll(&p, 1, 2000) != 1)
@@ -1311,7 +1504,14 @@ struct LoopPeer {
     }
 };
 
-// Connect `sock` to the peer and accept it.
+/**
+ * @brief Connects a Socket to a LoopPeer, asserts success, then accepts the
+ *        connection on the peer
+ *
+ * @param sock Socket to connect
+ * @param peer LoopPeer to connect to
+ * @param timeout connect timeout in ms
+ */
 #define CONNECT_LOCAL(sock, peer, timeout)                       \
     do {                                                         \
         ASSERT_EQ(                                               \
@@ -1320,7 +1520,16 @@ struct LoopPeer {
         (peer).accept_one();                                     \
     } while (0)
 
-// Zero-timeout reads race the loopback delivery: retry until the kernel has it.
+/**
+ * @brief Zero-timeout reads race the loopback delivery, so this retries recv()
+ *        (up to 400 times, 5 ms apart) while it reports WouldBlock
+ *
+ * @param sock connected socket
+ * @param buf receive buffer
+ * @param size buffer size
+ * @param got receives the byte count
+ * @return the last recv() result
+ */
 SocketResult recv_nowait(Socket& sock, uint8_t* buf, size_t size, size_t& got) {
     SocketResult r = SocketResult::WouldBlock;
     for (int i = 0; i < 400 && r == SocketResult::WouldBlock; ++i) {
@@ -1337,6 +1546,10 @@ SocketResult recv_nowait(Socket& sock, uint8_t* buf, size_t size, size_t& got) {
 // Tests: connect() failure paths
 // =============================================================================
 
+/**
+ * @brief Verifies that a second connect() on a connected socket returns
+ *        AlreadyConnected and keeps the connection.
+ */
 TEST(connect_twice_reports_already_connected) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
@@ -1348,6 +1561,10 @@ TEST(connect_twice_reports_already_connected) {
     ASSERT_TRUE(sock.is_connected());
 }
 
+/**
+ * @brief Verifies that connect() returns SocketError and leaves the socket
+ *        invalid when socket() fails (EMFILE injected).
+ */
 TEST(connect_fails_when_socket_creation_fails) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1357,6 +1574,11 @@ TEST(connect_fails_when_socket_creation_fails) {
     ASSERT_FALSE(sock.is_valid());
 }
 
+/**
+ * @brief Verifies that a send error clears the connected flag but keeps the
+ *        descriptor; the next connect() adopts it again (Success) and the
+ *        following one reports AlreadyConnected.
+ */
 TEST(connect_reuses_a_descriptor_left_by_a_failed_send) {
     // A send error clears m_connected but keeps the descriptor open; a new
     // connect() reuses it (create() is idempotent).
@@ -1382,6 +1604,10 @@ TEST(connect_reuses_a_descriptor_left_by_a_failed_send) {
         SocketResult::AlreadyConnected);
 }
 
+/**
+ * @brief Verifies that connect() returns SocketError and closes the socket when
+ *        switching to non-blocking mode fails (fcntl injected).
+ */
 TEST(connect_fails_when_nonblocking_mode_cannot_be_set) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1393,6 +1619,10 @@ TEST(connect_fails_when_nonblocking_mode_cannot_be_set) {
     ASSERT_FALSE(sock.is_valid());
 }
 
+/**
+ * @brief Verifies that connect() returns SocketError and closes the socket when
+ *        SO_ERROR cannot be read (getsockopt injected).
+ */
 TEST(connect_fails_when_so_error_cannot_be_read) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1404,6 +1634,10 @@ TEST(connect_fails_when_so_error_cannot_be_read) {
     ASSERT_FALSE(sock.is_valid());
 }
 
+/**
+ * @brief Verifies that connect() maps a pending SO_ERROR (ECONNREFUSED
+ *        injected) to ConnectionRefused and closes the socket.
+ */
 TEST(connect_reports_the_pending_socket_error) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1416,6 +1650,10 @@ TEST(connect_reports_the_pending_socket_error) {
     ASSERT_FALSE(sock.is_valid());
 }
 
+/**
+ * @brief Verifies that with timeout 0 (blocking connect) a port nobody listens
+ *        on gives ConnectionRefused at once.
+ */
 TEST(connect_to_a_closed_port_fails_immediately_in_blocking_mode) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     uint16_t dead_port = 0;
@@ -1430,6 +1668,10 @@ TEST(connect_to_a_closed_port_fails_immediately_in_blocking_mode) {
     ASSERT_FALSE(sock.is_valid());
 }
 
+/**
+ * @brief Verifies that a setsockopt failure while enabling keepalive (injected)
+ *        does not fail connect(): the socket stays connected.
+ */
 TEST(connect_succeeds_without_keepalive_when_it_cannot_be_enabled) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1446,6 +1688,11 @@ TEST(connect_succeeds_without_keepalive_when_it_cannot_be_enabled) {
 // Tests: send() / send_all()
 // =============================================================================
 
+/**
+ * @brief Verifies that send() on a non-blocking socket whose peer never reads
+ *        ends in WouldBlock once the kernel buffers are full, without dropping
+ *        the connection.
+ */
 TEST(send_reports_would_block_on_a_full_non_blocking_socket) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
@@ -1464,6 +1711,10 @@ TEST(send_reports_would_block_on_a_full_non_blocking_socket) {
     ASSERT_TRUE(sock.is_connected());
 }
 
+/**
+ * @brief Verifies that a send() returning 0 gives Closed, reports 0 bytes sent
+ *        and clears the connected flag.
+ */
 TEST(send_treats_a_zero_byte_result_as_a_closed_connection) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1478,6 +1729,10 @@ TEST(send_treats_a_zero_byte_result_as_a_closed_connection) {
     ASSERT_FALSE(sock.is_connected());
 }
 
+/**
+ * @brief Verifies that send_all() waits for writability when the first send
+ *        reports EAGAIN, then delivers every byte (read back from the peer).
+ */
 TEST(send_all_waits_for_writability_after_would_block) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1494,6 +1749,10 @@ TEST(send_all_waits_for_writability_after_would_block) {
     ASSERT_EQ(std::memcmp(got, payload, 4), 0);
 }
 
+/**
+ * @brief Verifies that send_all() returns SocketError when the wait for
+ *        writability itself fails (poll injected with EINTR).
+ */
 TEST(send_all_returns_the_wait_error_when_writability_cannot_be_awaited) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1511,6 +1770,10 @@ TEST(send_all_returns_the_wait_error_when_writability_cannot_be_awaited) {
 // Tests: recv() in non-blocking and blocking modes
 // =============================================================================
 
+/**
+ * @brief Verifies that recv() with timeout 0 and nothing buffered gives
+ *        WouldBlock with 0 bytes and keeps the connection.
+ */
 TEST(recv_non_blocking_without_data_would_block) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
@@ -1523,6 +1786,10 @@ TEST(recv_non_blocking_without_data_would_block) {
     ASSERT_TRUE(sock.is_connected());
 }
 
+/**
+ * @brief Verifies that recv() with timeout 0 returns the 3 bytes the peer
+ *        already sent.
+ */
 TEST(recv_non_blocking_reads_data_that_is_already_buffered) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
@@ -1539,6 +1806,10 @@ TEST(recv_non_blocking_reads_data_that_is_already_buffered) {
     ASSERT_EQ(std::memcmp(buf, msg, 3), 0);
 }
 
+/**
+ * @brief Verifies that recv() with timeout 0 gives Closed and clears the
+ *        connected flag once the peer closed.
+ */
 TEST(recv_non_blocking_reports_a_graceful_close) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
@@ -1552,6 +1823,10 @@ TEST(recv_non_blocking_reports_a_graceful_close) {
     ASSERT_FALSE(sock.is_connected());
 }
 
+/**
+ * @brief Verifies that recv() with timeout 0 maps a recv error (ECONNRESET
+ *        injected) to ConnectionReset and clears the connected flag.
+ */
 TEST(recv_non_blocking_reports_a_connection_error) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1566,6 +1841,7 @@ TEST(recv_non_blocking_reports_a_connection_error) {
     ASSERT_FALSE(sock.is_connected());
 }
 
+/// Verifies that recv() with timeout -1 returns the 2 bytes the peer sent.
 TEST(recv_blocking_returns_data) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
@@ -1581,6 +1857,10 @@ TEST(recv_blocking_returns_data) {
     ASSERT_EQ(got, static_cast<size_t>(2));
 }
 
+/**
+ * @brief Verifies that recv() with timeout -1 gives Closed and clears the
+ *        connected flag when the peer closed.
+ */
 TEST(recv_blocking_reports_a_graceful_close) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
@@ -1594,6 +1874,10 @@ TEST(recv_blocking_reports_a_graceful_close) {
     ASSERT_FALSE(sock.is_connected());
 }
 
+/**
+ * @brief Verifies that blocking recv() maps EAGAIN to WouldBlock (still
+ *        connected) and ECONNRESET to ConnectionReset (disconnected).
+ */
 TEST(recv_blocking_reports_would_block_and_connection_errors) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1615,6 +1899,10 @@ TEST(recv_blocking_reports_would_block_and_connection_errors) {
 // Tests: option setters and wait_ready()
 // =============================================================================
 
+/**
+ * @brief Verifies that set_non_blocking() returns SocketError when either fcntl
+ *        step fails (F_GETFL, then F_SETFL).
+ */
 TEST(set_non_blocking_reports_fcntl_failures) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1627,6 +1915,10 @@ TEST(set_non_blocking_reports_fcntl_failures) {
     ASSERT_EQ(sock.set_non_blocking(true), SocketResult::SocketError);
 }
 
+/**
+ * @brief Verifies that set_nodelay(), set_recv_buffer_size() and
+ *        set_send_buffer_size() return SocketError when setsockopt fails.
+ */
 TEST(option_setters_report_setsockopt_failures) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1641,6 +1933,10 @@ TEST(option_setters_report_setsockopt_failures) {
     ASSERT_EQ(sock.set_send_buffer_size(4096), SocketResult::SocketError);
 }
 
+/**
+ * @brief Verifies that recv() with a timeout returns SocketError when the
+ *        readiness wait fails (poll injected with EINTR).
+ */
 TEST(wait_ready_failure_is_propagated_by_recv) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
@@ -1657,6 +1953,12 @@ TEST(wait_ready_failure_is_propagated_by_recv) {
 // Main
 // =============================================================================
 
+/**
+ * @brief Runs the suite: tests already ran from static initializers, so this
+ *        prints the totals and releases the socket subsystem
+ *
+ * @return 1 if at least one test failed, 0 otherwise
+ */
 int main() {
     printf("\n");
     printf("========================================\n");

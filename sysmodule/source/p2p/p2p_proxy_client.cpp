@@ -110,7 +110,9 @@ void ClientRecvThreadEntry(void* arg) {
 //
 // One stack is enough — the sysmodule only ever holds a single P2pProxyClient
 // (via ICommunicationService::m_p2p_client) at a time.
+/// Size in bytes of the receive thread stack (16 KB).
 constexpr size_t P2P_CLIENT_STACK_SIZE = 0x4000;
+/// Statically allocated receive thread stack (page aligned, see above).
 alignas(os::ThreadStackAlignment) static constinit u8
     g_p2p_client_recv_thread_stack[P2P_CLIENT_STACK_SIZE];
 
@@ -122,9 +124,8 @@ alignas(os::ThreadStackAlignment) static constinit u8
  * @brief Constructor
  *
  * Initializes client state but does not establish a connection.
- * Call Connect() to connect to a host.
- *
- * @param packet_callback Callback for forwarding received proxy packets
+ * Call Connect() to connect to a host. The callback parameter is
+ * documented with the declaration.
  */
 P2pProxyClient::P2pProxyClient(ProxyPacketCallback packet_callback)
     : m_socket_fd(-1),
@@ -155,10 +156,8 @@ P2pProxyClient::~P2pProxyClient() {
 /**
  * @brief Connect to a P2P host using string address
  *
- * @param address Host IP address as dotted decimal string (e.g.,
- * "192.168.1.100")
- * @param port Host port number
- * @return true if connection established successfully
+ * The address is a dotted decimal string (e.g. "192.168.1.100"). Parameters
+ * and return value are documented with the declaration.
  *
  * ## Implementation Notes
  *
@@ -187,11 +186,6 @@ bool P2pProxyClient::Connect(const char* address, uint16_t port) {
 
 /**
  * @brief Connect to a P2P host using IP bytes
- *
- * @param ip_bytes IP address as byte array (network order)
- * @param ip_len Length of IP address (4 for IPv4)
- * @param port Host port number
- * @return true if connection established successfully
  *
  * This overload is used when we have the IP address from ExternalProxyConfig.
  */
@@ -413,8 +407,8 @@ bool P2pProxyClient::IsConnected() const {
  * Sends the ExternalProxyConfig packet to the host. The host validates the
  * authentication token and responds with ProxyConfig on success.
  *
- * @param config ExternalProxyConfig received from master server
- * @return true if authentication packet was sent successfully
+ * The config comes from the master server (see the declaration for the
+ * parameter and return value).
  *
  * ## Ryujinx Reference
  *
@@ -467,8 +461,7 @@ bool P2pProxyClient::PerformAuth(
  * Blocks until the host sends ProxyConfig (indicating successful
  * authentication) or timeout expires.
  *
- * @param timeout_ms Timeout in milliseconds
- * @return true if ProxyConfig received within timeout
+ * See the declaration for the timeout and return value.
  *
  * ## Ryujinx Reference
  *
@@ -509,6 +502,8 @@ bool P2pProxyClient::EnsureProxyReady(int timeout_ms) {
 
 /**
  * @brief Check if proxy is ready
+ * @return true once ProxyConfig was received from the host (cleared when the
+ *         receive thread exits with an error).
  */
 bool P2pProxyClient::IsReady() const {
     std::scoped_lock lock(m_mutex);
@@ -649,10 +644,9 @@ void P2pProxyClient::ReceiveLoop() {
  * @brief Process received data
  *
  * Parses the received buffer and dispatches each complete packet to
- * the appropriate handler.
- *
- * @param data Buffer containing received data
- * @param size Number of bytes in buffer
+ * the appropriate handler. A partial trailing packet or a bad magic stops
+ * the loop with a warning (the rest of the buffer is dropped). Parameters are
+ * documented with the declaration.
  */
 void P2pProxyClient::ProcessData(const uint8_t* data, size_t size) {
     size_t offset = 0;
@@ -772,6 +766,9 @@ void P2pProxyClient::ProcessData(const uint8_t* data, size_t size) {
  * This packet indicates successful authentication. The ProxyConfig contains
  * our assigned virtual IP and subnet mask.
  *
+ * @param config ProxyConfig received from the host; copied into
+ *               m_proxy_config under m_mutex.
+ *
  * ## Ryujinx Reference
  *
  * ```csharp
@@ -802,7 +799,13 @@ void P2pProxyClient::HandleProxyConfig(
 /**
  * @brief Handle ProxyData from host
  *
- * Forward to the BSD MITM layer via callback.
+ * Forward to the BSD MITM layer via callback. Header and payload are packed
+ * into one 64 KB stack buffer; a packet that does not fit is dropped
+ * silently.
+ *
+ * @param header ProxyData header with the routing information.
+ * @param data Payload bytes following the header.
+ * @param data_len Payload size in bytes.
  */
 void P2pProxyClient::HandleProxyData(
     const ryu_ldn::protocol::ProxyDataHeader& header,
@@ -827,6 +830,8 @@ void P2pProxyClient::HandleProxyData(
  * @brief Handle ProxyConnect from host
  *
  * Forward to the BSD MITM layer via callback.
+ *
+ * @param request Connect request describing the peer socket to open.
  */
 void P2pProxyClient::HandleProxyConnect(
     const ryu_ldn::protocol::ProxyConnectRequest& request) {
@@ -844,6 +849,8 @@ void P2pProxyClient::HandleProxyConnect(
  * @brief Handle ProxyConnectReply from host
  *
  * Forward to the BSD MITM layer via callback.
+ *
+ * @param response Host answer to an earlier ProxyConnect request.
  */
 void P2pProxyClient::HandleProxyConnectReply(
     const ryu_ldn::protocol::ProxyConnectResponse& response) {
@@ -861,6 +868,8 @@ void P2pProxyClient::HandleProxyConnectReply(
  * @brief Handle ProxyDisconnect from host
  *
  * Forward to the BSD MITM layer via callback.
+ *
+ * @param message Disconnect notice for a proxied connection.
  */
 void P2pProxyClient::HandleProxyDisconnect(
     const ryu_ldn::protocol::ProxyDisconnectMessage& message) {

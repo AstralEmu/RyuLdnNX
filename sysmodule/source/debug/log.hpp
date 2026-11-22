@@ -204,6 +204,7 @@ public:
 
     /**
      * @brief Get number of messages in buffer
+     * @return Count of messages currently stored
      */
     size_t count() const {
         return m_count;
@@ -216,11 +217,16 @@ public:
     void clear();
 
 private:
+    /// Ring storage, one NUL-terminated message per slot.
     char m_messages[MAX_LOG_BUFFER_ENTRIES][MAX_LOG_MESSAGE_LENGTH];
+    /// Number of slots in use by the ring.
     size_t m_capacity = MAX_LOG_BUFFER_ENTRIES;
+    /// Messages currently stored (at most m_capacity).
     size_t m_count = 0;
-    size_t m_head = 0;  // Index of oldest message
-    size_t m_tail = 0;  // Index where next message will be written
+    /// Index of the oldest message.
+    size_t m_head = 0;
+    /// Index where the next message will be written.
+    size_t m_tail = 0;
 };
 
 // =============================================================================
@@ -255,6 +261,7 @@ public:
 
     /**
      * @brief Check if logging is enabled
+     * @return true when logging is enabled
      */
     bool is_enabled() const {
         return m_enabled;
@@ -262,6 +269,7 @@ public:
 
     /**
      * @brief Get current log level
+     * @return Active log level
      */
     LogLevel get_level() const {
         return m_level;
@@ -355,29 +363,48 @@ public:
     void check_idle_timeout();
 
 private:
+    /**
+     * @brief Sink for one formatted line (buffer, console, file).
+     *
+     * Adds the line to the ring buffer and the console; when logging is
+     * enabled it also opens the log file on demand and appends it. Called
+     * with m_mutex held.
+     * @param message NUL-terminated line, without trailing newline.
+     */
     void output_message(const char* message);
     /// @gdb{tag="DEBUG:LOGGER", msg="Log file opened"}
     void open_file();
     /// @gdb{tag="DEBUG:LOGGER", msg="Log file closed"}
     void close_file();
 
+    /// Whether file logging is enabled.
     bool m_enabled = false;
+    /// Highest severity that is logged.
     LogLevel m_level = LogLevel::Warning;
+    /// NUL-terminated path of the log file.
     char m_log_path[256] = {0};
+    /// Recent messages, shown by the overlay.
     LogBuffer m_buffer;
-    void* m_file = nullptr;  // FILE* on PC, unused on Switch
+    /// FILE* on PC, unused on Switch.
+    void* m_file = nullptr;
+    /// True while the log file is open.
     bool m_file_open = false;
+    /// Write offset in the log file, in bytes.
     size_t m_file_offset = 0;
-    uint64_t m_last_write_tick = 0;  // Last write timestamp (ticks)
-    bool m_header_written = false;   // Track if header was written this session
+    /// Timestamp of the last write, in ticks.
+    uint64_t m_last_write_tick = 0;
+    /// True once the session header was written.
+    bool m_header_written = false;
 
-    static constexpr uint64_t FILE_IDLE_TIMEOUT_NS =
-        5000000000ULL;  // 5 seconds in nanoseconds
+    /// Idle time before the file is closed: 5 s, in nanoseconds.
+    static constexpr uint64_t FILE_IDLE_TIMEOUT_NS = 5000000000ULL;
 
 #ifdef __SWITCH__
-    mutable ams::os::Mutex m_mutex{false};  // Mutex for thread-safe logging
+    /// Serializes logging across threads.
+    mutable ams::os::Mutex m_mutex{false};
 #else
-    mutable std::mutex m_mutex;  // Mutex for thread-safe logging (PC)
+    /// Serializes logging across threads (host build).
+    mutable std::mutex m_mutex;
 #endif
 };
 
@@ -402,8 +429,9 @@ extern Logger g_logger;
  *
  * Always logged when debug is enabled (level >= 0).
  *
- * @note Uses GNU extension ##__VA_ARGS__ to handle zero variadic arguments.
- *       This is well-supported by GCC, Clang, and devkitPro toolchains.
+ * @note Uses the GNU comma-swallowing paste extension on the variadic
+ *       arguments to handle zero of them. This is well-supported by GCC,
+ *       Clang, and devkitPro toolchains.
  */
 #define LOG_ERROR(fmt, ...)                                             \
     do {                                                                \

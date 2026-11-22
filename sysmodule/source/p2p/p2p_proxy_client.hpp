@@ -166,6 +166,8 @@ public:
 
     /**
      * @brief Check if connected to host
+     * @return true while the TCP connection to the host is established
+     * (read under the client mutex).
      */
     /// @gdb{tag="P2P:CLIENT", msg="Connection state queried"}
     bool IsConnected() const;
@@ -324,18 +326,29 @@ private:
     // Member Variables
     // =========================================================================
 
+    /// Guards the connection, readiness and proxy-config state below; used with
+    /// m_ready_cv.
     mutable os::Mutex m_mutex{false};
 
     // Socket
+    /// TCP socket to the host, or -1 when not connected.
     int m_socket_fd;
+    /// True once the TCP connect succeeded; cleared by Disconnect() and when
+    /// the receive loop ends.
     bool m_connected;
+    /// Set by the destructor so the receive loop stops touching the object.
     bool m_disposed;
 
     // Authentication state
+    /// True once the host's ProxyConfig has been received (authentication
+    /// done).
     bool m_ready;
+    /// Broadcast when m_ready changes or the connection drops; waited on by
+    /// EnsureProxyReady().
     os::ConditionVariable m_ready_cv;
 
     // Proxy config from host
+    /// ProxyConfig received from the host; valid once m_ready is true.
     ryu_ldn::protocol::ProxyConfig m_proxy_config;
 
     // Receive thread (stack lives in BSS — see g_p2p_client_recv_thread_stack
@@ -345,14 +358,21 @@ private:
     // to the unimplemented aligned operator new and std::abort'd 0xFFE the
     // moment the server told us about the external proxy. Same root cause
     // as the P2pProxyServer/P2pProxySession fix.
+    /// Receive thread handle; its stack lives in BSS (see note above).
     os::ThreadType m_recv_thread{};
+    /// True while the receive thread should keep looping; cleared to ask it to
+    /// stop.
     bool m_recv_thread_running;
 
     // Receive buffer
+    /// Size in bytes of m_recv_buffer (64 KB).
     static constexpr size_t RECV_BUFFER_SIZE = 0x10000;
+    /// Accumulation buffer for incoming bytes before packet parsing.
     uint8_t m_recv_buffer[RECV_BUFFER_SIZE]{};
 
     // Packet callback
+    /// Callback notified of proxy packets received from the host; may be
+    /// nullptr.
     ProxyPacketCallback m_packet_callback;
 };
 

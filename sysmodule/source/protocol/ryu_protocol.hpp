@@ -24,8 +24,10 @@ namespace ryu_ldn::protocol {
 // Result Codes
 // ============================================================================
 
+/// Outcome of an encode_*() call.
 enum class EncodeResult { Success = 0, BufferTooSmall, InvalidPacketId };
 
+/// Outcome of a decode_*() call.
 enum class DecodeResult {
     Success = 0,
     BufferTooSmall,
@@ -220,6 +222,13 @@ inline EncodeResult encode_raw(
 
 /**
  * @brief Encode Initialize message
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param id Identifier to encode
+ * @param mac MAC address of the client
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_initialize(
     uint8_t* buffer,
@@ -235,6 +244,13 @@ inline EncodeResult encode_initialize(
 
 /**
  * @brief Encode Passphrase message
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param passphrase Passphrase bytes (may be null)
+ * @param passphrase_len Passphrase length in bytes (truncated to 128)
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_passphrase(
     uint8_t* buffer,
@@ -253,6 +269,13 @@ inline EncodeResult encode_passphrase(
 
 /**
  * @brief Encode Ping message
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param requester Requester identifier
+ * @param id Identifier to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_ping(
     uint8_t* buffer,
@@ -269,7 +292,11 @@ inline EncodeResult encode_ping(
 /**
  * @brief Encode Disconnect message
  *
+ * @param buffer Output buffer receiving the full packet (header + payload)
+ * @param buffer_size Capacity of buffer in bytes
  * @param disconnect_ip IP address of disconnecting client (0 = self)
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or BufferTooSmall if buffer is too small
  */
 inline EncodeResult encode_disconnect(
     uint8_t* buffer,
@@ -283,6 +310,12 @@ inline EncodeResult encode_disconnect(
 
 /**
  * @brief Encode Scan request
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param filter Scan filter to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_scan(
     uint8_t* buffer,
@@ -294,6 +327,12 @@ inline EncodeResult encode_scan(
 
 /**
  * @brief Encode Connect request
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param request Request to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_connect(
     uint8_t* buffer,
@@ -305,6 +344,14 @@ inline EncodeResult encode_connect(
 
 /**
  * @brief Encode CreateAccessPoint request with advertise data
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param request Request to encode
+ * @param advertise_data Advertise data appended after the request
+ * @param advertise_size Advertise data size in bytes
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_create_access_point(
     uint8_t* buffer,
@@ -325,6 +372,12 @@ inline EncodeResult encode_create_access_point(
 
 /**
  * @brief Encode SetAcceptPolicy request
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param policy Accept policy to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_set_accept_policy(
     uint8_t* buffer,
@@ -339,6 +392,13 @@ inline EncodeResult encode_set_accept_policy(
 
 /**
  * @brief Encode SetAdvertiseData request
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param data Payload bytes to copy
+ * @param data_size Payload size in bytes
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_set_advertise_data(
     uint8_t* buffer,
@@ -358,9 +418,13 @@ inline EncodeResult encode_set_advertise_data(
 /**
  * @brief Encode ProxyData packet
  *
+ * @param buffer Output buffer receiving the full packet (header + payload)
+ * @param buffer_size Capacity of buffer in bytes
  * @param info Proxy connection info (source/dest addressing)
  * @param data Payload data to send
  * @param data_size Size of payload
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or BufferTooSmall if buffer is too small
  */
 inline EncodeResult encode_proxy_data(
     uint8_t* buffer,
@@ -384,6 +448,11 @@ inline EncodeResult encode_proxy_data(
 
 /**
  * @brief Encode ScanReplyEnd (no payload)
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_scan_reply_end(
     uint8_t* buffer, size_t buffer_size, size_t& out_size) {
@@ -392,6 +461,11 @@ inline EncodeResult encode_scan_reply_end(
 
 /**
  * @brief Encode RejectReply (no payload)
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_reject_reply(
     uint8_t* buffer, size_t buffer_size, size_t& out_size) {
@@ -400,6 +474,13 @@ inline EncodeResult encode_reject_reply(
 
 /**
  * @brief Encode NetworkInfo (for Connected, SyncNetwork, ScanReply)
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param type Packet type to emit
+ * @param info Network info to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
 inline EncodeResult encode_network_info(
     uint8_t* buffer,
@@ -646,6 +727,12 @@ inline DecodeResult decode_raw(
 
 /**
  * @brief Decode Initialize message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_initialize(
     const uint8_t* buffer,
@@ -657,6 +744,12 @@ inline DecodeResult decode_initialize(
 
 /**
  * @brief Decode Passphrase message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_passphrase(
     const uint8_t* buffer,
@@ -668,6 +761,12 @@ inline DecodeResult decode_passphrase(
 
 /**
  * @brief Decode Ping message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_ping(
     const uint8_t* buffer,
@@ -679,6 +778,12 @@ inline DecodeResult decode_ping(
 
 /**
  * @brief Decode Disconnect message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_disconnect(
     const uint8_t* buffer,
@@ -690,6 +795,12 @@ inline DecodeResult decode_disconnect(
 
 /**
  * @brief Decode NetworkInfo (for Connected, SyncNetwork, ScanReply)
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] info Receives the decoded network info
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_network_info(
     const uint8_t* buffer,
@@ -701,6 +812,12 @@ inline DecodeResult decode_network_info(
 
 /**
  * @brief Decode Scan request
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] filter Receives the decoded scan filter
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_scan(
     const uint8_t* buffer,
@@ -712,6 +829,12 @@ inline DecodeResult decode_scan(
 
 /**
  * @brief Decode Connect request
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] request Receives the decoded request
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_connect(
     const uint8_t* buffer,
@@ -723,6 +846,15 @@ inline DecodeResult decode_connect(
 
 /**
  * @brief Decode CreateAccessPoint request with advertise data
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] request Receives the decoded request
+ * @param[out] advertise_data Receives a pointer to the advertise data inside
+ * buffer
+ * @param[out] advertise_size Receives the advertise data size in bytes
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_create_access_point(
     const uint8_t* buffer,
@@ -737,6 +869,12 @@ inline DecodeResult decode_create_access_point(
 
 /**
  * @brief Decode SetAcceptPolicy request
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] request Receives the decoded request
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_set_accept_policy(
     const uint8_t* buffer,
@@ -748,6 +886,13 @@ inline DecodeResult decode_set_accept_policy(
 
 /**
  * @brief Decode SetAdvertiseData request
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] data Receives a pointer to the payload inside buffer
+ * @param[out] data_size Receives the payload size in bytes
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_set_advertise_data(
     const uint8_t* buffer,
@@ -760,6 +905,14 @@ inline DecodeResult decode_set_advertise_data(
 
 /**
  * @brief Decode ProxyData packet
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] proxy_header Receives the decoded proxy data header
+ * @param[out] data Receives a pointer to the payload inside buffer
+ * @param[out] data_size Receives the payload size in bytes
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_proxy_data(
     const uint8_t* buffer,
@@ -774,6 +927,12 @@ inline DecodeResult decode_proxy_data(
 
 /**
  * @brief Decode ProxyConnect message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_proxy_connect(
     const uint8_t* buffer,
@@ -785,6 +944,12 @@ inline DecodeResult decode_proxy_connect(
 
 /**
  * @brief Decode ProxyConnectReply message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_proxy_connect_reply(
     const uint8_t* buffer,
@@ -796,6 +961,12 @@ inline DecodeResult decode_proxy_connect_reply(
 
 /**
  * @brief Decode ProxyDisconnect message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_proxy_disconnect(
     const uint8_t* buffer,
@@ -807,6 +978,12 @@ inline DecodeResult decode_proxy_disconnect(
 
 /**
  * @brief Decode RejectRequest
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] request Receives the decoded request
+ * @return DecodeResult::Success, or the decoding error
  */
 inline DecodeResult decode_reject(
     const uint8_t* buffer,
@@ -822,6 +999,9 @@ inline DecodeResult decode_reject(
 
 /**
  * @brief Convert DecodeResult to string for debugging
+ *
+ * @param result Result code to describe
+ * @return Static string naming the value (never null)
  */
 inline const char* decode_result_to_string(DecodeResult result) {
     switch (result) {
@@ -844,6 +1024,9 @@ inline const char* decode_result_to_string(DecodeResult result) {
 
 /**
  * @brief Convert EncodeResult to string for debugging
+ *
+ * @param result Result code to describe
+ * @return Static string naming the value (never null)
  */
 inline const char* encode_result_to_string(EncodeResult result) {
     switch (result) {
@@ -860,6 +1043,9 @@ inline const char* encode_result_to_string(EncodeResult result) {
 
 /**
  * @brief Convert PacketId to string for debugging
+ *
+ * @param id Packet identifier
+ * @return Static string naming the value (never null)
  */
 inline const char* packet_id_to_string(PacketId id) {
     switch (id) {

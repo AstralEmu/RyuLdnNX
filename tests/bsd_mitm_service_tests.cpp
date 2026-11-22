@@ -25,11 +25,17 @@ namespace bsdt = ryu_ldn::bsd;
 
 namespace {
 
+/// Program id of the whitelisted game under test.
 constexpr std::uint64_t GAME = 0x0100152000022000ULL;
+/// Program id of a game that is not whitelisted.
 constexpr std::uint64_t OTHER_GAME = 0x0100000000abc000ULL;
+/// Program id of this sysmodule itself.
 constexpr std::uint64_t OUR_SYSMODULE = 0x4200000000000010ULL;
+/// Virtual IP of the host, 10.114.0.1, in Ryujinx format.
 constexpr std::uint32_t LDN_HOST = 0x0A720001;  // 10.114.0.1, Ryujinx format
+/// Virtual IP of a peer, 10.114.0.2, in Ryujinx format.
 constexpr std::uint32_t LDN_PEER = 0x0A720002;  // 10.114.0.2
+/// Process id of the default client.
 constexpr std::uint64_t PID = 100;
 
 /// The whitelist is a load-once latch: load it once, with one known game.
@@ -39,20 +45,32 @@ struct WhitelistFixture {
         ryu_ldn::config::LoadWhitelist();
     }
 };
+/// Loads the whitelist once at static initialization.
 WhitelistFixture g_whitelist;
 
 /// What the fake bsd:u saw on its last forwarded call.
 struct Seen {
+    /// Command id of the forwarded call.
     std::uint32_t command = 0;
+    /// Input bytes of the forwarded call.
     std::vector<std::uint8_t> in;
+    /// Size of the output buffer of the forwarded call.
     std::size_t out_size = 0;
+    /// Dispatch options of the forwarded call.
     host_mitm::Options options{};
+    /// Service the call was forwarded to.
     ::Service* service = nullptr;
 };
+/// What the fake bsd:u saw on its last call.
 Seen g_seen;
 std::vector<std::uint8_t> g_reply;  ///< bytes copied into the out struct
 std::uint32_t g_rc = 0;             ///< Result the fake bsd:u answers with
 
+/**
+ * @brief Fake bsd:u dispatch hook; records the call and answers g_rc.
+ * @param call Forwarded call.
+ * @return Result built from g_rc.
+ */
 ams::Result fake_bsd(const host_mitm::Call& call) {
     g_seen.command = call.command;
     g_seen.in.clear();
@@ -71,30 +89,54 @@ ams::Result fake_bsd(const host_mitm::Call& call) {
 }
 
 template <class T>
+/**
+ * @brief Set the bytes the fake bsd:u copies into the output struct.
+ * @tparam T Type of the reply struct.
+ * @param value Reply to send.
+ */
 void reply_with(const T& value) {
     g_reply.assign(
         reinterpret_cast<const std::uint8_t*>(&value),
         reinterpret_cast<const std::uint8_t*>(&value) + sizeof(value));
 }
 
+/// Two 32-bit values, as returned by some bsd:u calls.
 struct Pair {
+    /// First value.
     std::int32_t a;
+    /// Second value.
     std::int32_t b;
 };
+/// Three 32-bit values, as returned by some bsd:u calls.
 struct Triple {
+    /// First value.
     std::int32_t a;
+    /// Second value.
     std::int32_t b;
+    /// Third value.
     std::uint32_t c;
 };
 
 /// Records the sends of the proxy sockets (the LDN server stand-in).
 struct Sent {
+    /// Number of sends recorded.
     unsigned count = 0;
+    /// Destination IP of the last send.
     std::uint32_t dest_ip = 0;
+    /// Destination port of the last send.
     std::uint16_t dest_port = 0;
+    /// Payload length of the last send.
     std::size_t len = 0;
 };
+/// Sends recorded since reset().
 Sent g_sent;
+/**
+ * @brief Send callback of the proxy sockets; records the send.
+ * @param dest_ip Destination IP.
+ * @param dest_port Destination port.
+ * @param len Payload length.
+ * @return Always true.
+ */
 bool record_send(
     std::uint32_t,
     std::uint16_t,
@@ -110,6 +152,7 @@ bool record_send(
     return true;
 }
 
+/// @brief Reset the hooks, the tracking tables and the proxy manager.
 void reset() {
     host_mitm::g_dispatch_hook = fake_bsd;
     host_mitm::g_dispatch_count = 0;
@@ -128,10 +171,20 @@ void reset() {
     manager.SetSendCallback(record_send);
 }
 
+/**
+ * @brief Count the calls forwarded to the fake bsd:u.
+ * @return Number of dispatches since reset().
+ */
 unsigned forwarded() {
     return host_mitm::g_dispatch_count;
 }
 
+/**
+ * @brief Build the process info of a client.
+ * @param pid Process id.
+ * @param program_id Program id.
+ * @return The process info.
+ */
 ams::sm::MitmProcessInfo client(std::uint64_t pid, std::uint64_t program_id) {
     ams::sm::MitmProcessInfo info{};
     info.process_id.value = pid;
@@ -139,12 +192,23 @@ ams::sm::MitmProcessInfo client(std::uint64_t pid, std::uint64_t program_id) {
     return info;
 }
 
+/**
+ * @brief Create a service for the whitelisted game.
+ * @param pid Process id of the client.
+ * @return The new service.
+ */
 std::unique_ptr<sut::BsdMitmService> make(std::uint64_t pid = PID) {
     return std::make_unique<sut::BsdMitmService>(
         std::make_shared<::Service>(), client(pid, GAME));
 }
 
-/// Address of a peer/host of the LDN subnet, the way a game writes it.
+/**
+ * @brief Address of a peer/host of the LDN subnet, the way a game writes it.
+ *
+ * @param host_ip host-order IPv4 address of the LDN peer
+ * @param port host-order port
+ * @return address with the fields byte-swapped to the wire order
+ */
 bsdt::SockAddrIn ldn_addr(std::uint32_t host_ip, std::uint16_t port) {
     bsdt::SockAddrIn a{};
     a.sin_len = sizeof(a);
@@ -154,12 +218,25 @@ bsdt::SockAddrIn ldn_addr(std::uint32_t host_ip, std::uint16_t port) {
     return a;
 }
 
+/**
+ * @brief Wrap a socket address as an input buffer.
+ * @param a Address to wrap (must outlive the buffer).
+ * @return The buffer.
+ */
 ams::sf::InBuffer in_of(const bsdt::SockAddrIn& a) {
     return ams::sf::InBuffer(
         reinterpret_cast<const std::uint8_t*>(&a), sizeof(a));
 }
 
-/// Adds a socket straight to the tracking table.
+/**
+ * @brief Adds a socket straight to the tracking table.
+ *
+ * @param fd socket descriptor to register
+ * @param type socket type recorded
+ * @param proto protocol recorded
+ * @param is_proxy true when the socket is an LDN proxy socket
+ * @param broadcast true when SO_BROADCAST is set
+ */
 void track(
     std::int32_t fd,
     bsdt::SocketType type,
@@ -170,11 +247,22 @@ void track(
     entry->info = sut::SocketInfo{type, proto, is_proxy, broadcast, 0};
 }
 
+/**
+ * @brief Track a plain (non-proxy) UDP socket.
+ * @param fd Socket descriptor.
+ */
 void track_udp(std::int32_t fd) {
     track(fd, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
 }
 
-/// Binds a tracked UDP socket to an LDN port through the service.
+/**
+ * @brief Binds a tracked UDP socket to an LDN port through the service.
+ *
+ * @param svc service whose Bind() is called
+ * @param fd socket descriptor, tracked as UDP when unknown
+ * @param port LDN port to bind
+ * @return errno value reported by Bind()
+ */
 std::int32_t bind_ldn(
     sut::BsdMitmService& svc, std::int32_t fd, std::uint16_t port) {
     if (sut::FindSocketInfoEntry(fd) == nullptr) {
@@ -187,11 +275,23 @@ std::int32_t bind_ldn(
     return err;
 }
 
+/**
+ * @brief Look up the proxy socket of a descriptor.
+ * @param fd Socket descriptor.
+ * @return The proxy socket, or nullptr.
+ */
 sut::ProxySocket* proxy_of(std::int32_t fd) {
     return sut::ProxySocketManager::GetInstance().GetProxySocket(fd);
 }
 
-/// Routes a datagram to the proxy socket bound for `fd`.
+/**
+ * @brief Routes a datagram to the proxy socket bound for `fd`.
+ *
+ * @param fd descriptor of a bound proxy socket
+ * @param text NUL-terminated datagram payload
+ * @return true when the manager routed the datagram, false without a proxy
+ * socket for fd
+ */
 bool deliver(std::int32_t fd, const char* text) {
     sut::ProxySocket* p = proxy_of(fd);
     if (p == nullptr) {
@@ -208,7 +308,11 @@ bool deliver(std::int32_t fd, const char* text) {
         std::strlen(text));
 }
 
-/// Fills every ephemeral port of a protocol; returns how many were taken.
+/**
+ * @brief Takes every ephemeral port of a protocol from the manager.
+ *
+ * @param proto protocol whose ephemeral ports are taken
+ */
 void exhaust_ports(bsdt::ProtocolType proto) {
     auto& manager = sut::ProxySocketManager::GetInstance();
     while (manager.AllocatePort(proto) != 0) {
@@ -231,12 +335,18 @@ void fill_proxy_table() {
 // ShouldMitm
 // ---------------------------------------------------------------------------
 
+/**
+ * @test Verify our own sysmodule is never intercepted.
+ */
 TEST(our_own_sysmodule_is_never_intercepted) {
     reset();
     ASSERT_FALSE(sut::BsdMitmService::ShouldMitm(client(PID, OUR_SYSMODULE)));
     ASSERT_TRUE(sut::FindMitmPidEntry(PID) == nullptr);
 }
 
+/**
+ * @test Verify a system program is never intercepted.
+ */
 TEST(a_system_program_is_never_intercepted) {
     reset();
     ASSERT_FALSE(
@@ -245,12 +355,19 @@ TEST(a_system_program_is_never_intercepted) {
     ASSERT_TRUE(sut::FindMitmPidEntry(PID) == nullptr);
 }
 
+/**
+ * @test Verify a game outside the whitelist is not intercepted and not counted.
+ */
 TEST(a_game_outside_the_whitelist_is_not_intercepted_and_not_counted) {
     reset();
     ASSERT_FALSE(sut::BsdMitmService::ShouldMitm(client(PID, OTHER_GAME)));
     ASSERT_TRUE(sut::FindMitmPidEntry(PID) == nullptr);
 }
 
+/**
+ * @test Verify the first session of a pid is skipped and the following ones
+ * intercepted.
+ */
 TEST(the_first_session_of_a_pid_is_skipped_and_the_following_ones_intercepted) {
     reset();
     ASSERT_FALSE(sut::BsdMitmService::ShouldMitm(client(PID, GAME)));
@@ -260,6 +377,9 @@ TEST(the_first_session_of_a_pid_is_skipped_and_the_following_ones_intercepted) {
     ASSERT_EQ(sut::FindMitmPidEntry(PID)->count, 3u);
 }
 
+/**
+ * @test Verify a full pid table falls back to pass through without counting.
+ */
 TEST(a_full_pid_table_falls_back_to_pass_through_without_counting) {
     reset();
     for (std::uint64_t pid = 1; pid <= sut::MAX_MITM_PIDS; pid++) {
@@ -277,6 +397,9 @@ TEST(a_full_pid_table_falls_back_to_pass_through_without_counting) {
 // Construction and teardown
 // ---------------------------------------------------------------------------
 
+/**
+ * @test Verify a session counts in the shared state while it lives.
+ */
 TEST(a_session_counts_in_the_shared_state_while_it_lives) {
     reset();
     auto& shared = ams::mitm::ldn::SharedState::GetInstance();
@@ -288,6 +411,9 @@ TEST(a_session_counts_in_the_shared_state_while_it_lives) {
     ASSERT_EQ(shared.GetActiveSessionCount(), before);
 }
 
+/**
+ * @test Verify a session without a forward service constructs and tears down.
+ */
 TEST(a_session_without_a_forward_service_constructs_and_tears_down) {
     reset();
     {
@@ -301,6 +427,9 @@ TEST(a_session_without_a_forward_service_constructs_and_tears_down) {
     ASSERT_EQ(abandoned, 0u);
 }
 
+/**
+ * @test Verify a session that never registered parks its forward service.
+ */
 TEST(a_session_that_never_registered_parks_its_forward_service) {
     reset();
     std::weak_ptr<::Service> fwd;
@@ -317,6 +446,9 @@ TEST(a_session_that_never_registered_parks_its_forward_service) {
     ASSERT_EQ(abandoned, 1u);
 }
 
+/**
+ * @test Verify a registered session releases its forward service normally.
+ */
 TEST(a_registered_session_releases_its_forward_service_normally) {
     reset();
     std::weak_ptr<::Service> fwd;
@@ -341,6 +473,10 @@ TEST(a_registered_session_releases_its_forward_service_normally) {
     ASSERT_EQ(abandoned, 0u);
 }
 
+/**
+ * @test Verify the last session of a pid frees the abandoned services and its
+ * pid entry.
+ */
 TEST(the_last_session_of_a_pid_frees_the_abandoned_services_and_its_pid_entry) {
     reset();
     std::weak_ptr<::Service> parked;
@@ -358,6 +494,10 @@ TEST(the_last_session_of_a_pid_frees_the_abandoned_services_and_its_pid_entry) {
     ASSERT_TRUE(sut::FindMitmPidEntry(PID) == nullptr);
 }
 
+/**
+ * @test Verify a session that is not the last of its pid keeps the abandoned
+ * services.
+ */
 TEST(a_session_that_is_not_the_last_of_its_pid_keeps_the_abandoned_services) {
     reset();
     std::weak_ptr<::Service> parked;
@@ -376,6 +516,10 @@ TEST(a_session_that_is_not_the_last_of_its_pid_keeps_the_abandoned_services) {
     ASSERT_EQ(sut::FindMitmPidEntry(PID)->count, 1u);
 }
 
+/**
+ * @test Verify a session without a pid entry runs the abandoned cleanup as a
+ * fail safe.
+ */
 TEST(a_session_without_a_pid_entry_runs_the_abandoned_cleanup_as_a_fail_safe) {
     reset();
     std::weak_ptr<::Service> parked;
@@ -391,6 +535,9 @@ TEST(a_session_without_a_pid_entry_runs_the_abandoned_cleanup_as_a_fail_safe) {
     ASSERT_TRUE(parked.expired());
 }
 
+/**
+ * @test Verify the cleanup of an empty abandoned table does nothing.
+ */
 TEST(the_cleanup_of_an_empty_abandoned_table_does_nothing) {
     reset();
     sut::BsdMitmService::CleanupAbandonedServices();
@@ -399,6 +546,10 @@ TEST(the_cleanup_of_an_empty_abandoned_table_does_nothing) {
     }
 }
 
+/**
+ * @test Verify the teardown frees a full abandoned table to park its own
+ * service.
+ */
 TEST(the_teardown_frees_a_full_abandoned_table_to_park_its_own_service) {
     reset();
     std::vector<std::weak_ptr<::Service>> parked;
@@ -429,10 +580,12 @@ TEST(the_teardown_frees_a_full_abandoned_table_to_park_its_own_service) {
 }
 
 namespace {
+/// Number of locks of the abandoned-services table seen so far.
 unsigned g_abandoned_locks = 0;
 /// Stages what a concurrent session would do between the cleanup and the
 /// retry: on the third lock of the abandoned table (insert, cleanup, retry)
 /// it refills every slot.
+/// @param mutex Mutex about to be locked; only the abandoned table's counts.
 void refill_on_third_lock(const void* mutex) {
     if (mutex != &sut::g_abandoned_services_mutex) {
         return;
@@ -447,8 +600,11 @@ void refill_on_third_lock(const void* mutex) {
 }
 }  // namespace
 
-TEST(
-    a_table_refilled_during_the_cleanup_leaves_the_service_to_the_base_destructor) {
+/**
+ * @test Verify a table refilled during cleanup leaves service to base
+ * destructor.
+ */
+TEST(a_table_refilled_during_cleanup_leaves_service_to_base_destructor) {
     reset();
     for (auto& slot : sut::g_abandoned_forward_services) {
         slot.service = std::make_shared<::Service>();
@@ -474,6 +630,10 @@ TEST(
     ASSERT_EQ(abandoned, sut::MAX_ABANDONED_SERVICES);
 }
 
+/**
+ * @test Verify the teardown forgets the sockets of its session and closes their
+ * proxies.
+ */
 TEST(the_teardown_forgets_the_sockets_of_its_session_and_closes_their_proxies) {
     reset();
     std::int32_t fd_proxy = 11;
@@ -510,6 +670,10 @@ TEST(the_teardown_forgets_the_sockets_of_its_session_and_closes_their_proxies) {
 // Registration and plain forwarding
 // ---------------------------------------------------------------------------
 
+/**
+ * @test Verify register client forwards the config the handle and the client
+ * pid.
+ */
 TEST(register_client_forwards_the_config_the_handle_and_the_client_pid) {
     reset();
     auto svc = make();
@@ -535,8 +699,11 @@ TEST(register_client_forwards_the_config_the_handle_and_the_client_pid) {
     ASSERT_EQ(tmem_size, 0x4000u);
 }
 
-TEST(
-    register_client_with_an_invalid_handle_is_still_forwarded_and_a_failure_is_not_registered) {
+/**
+ * @test Verify register client invalid handle is forwarded and failure not
+ * registered.
+ */
+TEST(register_client_invalid_handle_is_forwarded_and_failure_not_registered) {
     reset();
     auto svc = make();
     std::uint64_t out_result = 0;
@@ -551,8 +718,11 @@ TEST(
     ASSERT_EQ(g_seen.options.in_handles[0], INVALID_HANDLE);
 }
 
-TEST(
-    register_client_shared_forwards_the_client_pid_and_marks_the_session_registered) {
+/**
+ * @test Verify register client shared forwards the pid and marks session
+ * registered.
+ */
+TEST(register_client_shared_forwards_the_pid_and_marks_session_registered) {
     reset();
     auto svc = make();
     std::uint64_t out_result = 0;
@@ -571,6 +741,9 @@ TEST(
     ASSERT_EQ(other->RegisterClientShared(out, cfg, cp, 0x2000).GetValue(), 5u);
 }
 
+/**
+ * @test Verify start monitoring forwards the pid and returns the errno.
+ */
 TEST(start_monitoring_forwards_the_pid_and_returns_the_errno) {
     reset();
     auto svc = make();
@@ -585,6 +758,10 @@ TEST(start_monitoring_forwards_the_pid_and_returns_the_errno) {
     ASSERT_EQ(e, 3);
 }
 
+/**
+ * @test Verify socket tracks a new tcp or udp socket with the protocol the type
+ * implies.
+ */
 TEST(socket_tracks_a_new_tcp_or_udp_socket_with_the_protocol_the_type_implies) {
     reset();
     auto svc = make();
@@ -614,6 +791,9 @@ TEST(socket_tracks_a_new_tcp_or_udp_socket_with_the_protocol_the_type_implies) {
     ASSERT_FALSE(sut::FindSocketInfoEntry(23)->info.is_proxy);
 }
 
+/**
+ * @test Verify socket does not track a failed creation.
+ */
 TEST(socket_does_not_track_a_failed_creation) {
     reset();
     auto svc = make();
@@ -628,6 +808,9 @@ TEST(socket_does_not_track_a_failed_creation) {
     ASSERT_TRUE(sut::FindSocketInfoEntry(30) == nullptr);
 }
 
+/**
+ * @test Verify socket with a full tracking table still returns the socket.
+ */
 TEST(socket_with_a_full_tracking_table_still_returns_the_socket) {
     reset();
     auto svc = make();
@@ -642,6 +825,9 @@ TEST(socket_with_a_full_tracking_table_still_returns_the_socket) {
     ASSERT_TRUE(sut::FindSocketInfoEntry(500) == nullptr);
 }
 
+/**
+ * @test Verify socket exempt tracks like socket and forwards command 3.
+ */
 TEST(socket_exempt_tracks_like_socket_and_forwards_command_3) {
     reset();
     auto svc = make();
@@ -666,6 +852,10 @@ TEST(socket_exempt_tracks_like_socket_and_forwards_command_3) {
     ASSERT_EQ(forwarded(), 4u);
 }
 
+/**
+ * @test Verify socket exempt with a full tracking table still returns the
+ * socket.
+ */
 TEST(socket_exempt_with_a_full_tracking_table_still_returns_the_socket) {
     reset();
     auto svc = make();
@@ -680,6 +870,9 @@ TEST(socket_exempt_with_a_full_tracking_table_still_returns_the_socket) {
     ASSERT_TRUE(sut::FindSocketInfoEntry(500) == nullptr);
 }
 
+/**
+ * @test Verify open forwards the path buffer and returns the fd.
+ */
 TEST(open_forwards_the_path_buffer_and_returns_the_fd) {
     reset();
     auto svc = make();
@@ -695,6 +888,9 @@ TEST(open_forwards_the_path_buffer_and_returns_the_fd) {
     ASSERT_EQ(fd, 9);
 }
 
+/**
+ * @test Verify close forgets the socket and closes its proxy.
+ */
 TEST(close_forgets_the_socket_and_closes_its_proxy) {
     reset();
     auto svc = make();
@@ -713,6 +909,10 @@ TEST(close_forgets_the_socket_and_closes_its_proxy) {
     ASSERT_EQ(forwarded(), 3u);
 }
 
+/**
+ * @test Verify close of a proxy flag without a proxy socket just forgets the
+ * entry.
+ */
 TEST(close_of_a_proxy_flag_without_a_proxy_socket_just_forgets_the_entry) {
     reset();
     auto svc = make();
@@ -723,6 +923,10 @@ TEST(close_of_a_proxy_flag_without_a_proxy_socket_just_forgets_the_entry) {
     ASSERT_TRUE(sut::FindSocketInfoEntry(60) == nullptr);
 }
 
+/**
+ * @test Verify plain commands are forwarded with their command id and return
+ * the reply.
+ */
 TEST(plain_commands_are_forwarded_with_their_command_id_and_return_the_reply) {
     reset();
     auto svc = make();
@@ -781,6 +985,10 @@ TEST(plain_commands_are_forwarded_with_their_command_id_and_return_the_reply) {
     ASSERT_EQ(g_seen.options.buffers[2].size, sizeof(buf));
 }
 
+/**
+ * @test Verify multi message commands are forwarded for plain and proxy
+ * sockets.
+ */
 TEST(multi_message_commands_are_forwarded_for_plain_and_proxy_sockets) {
     reset();
     auto svc = make();
@@ -815,6 +1023,10 @@ TEST(multi_message_commands_are_forwarded_for_plain_and_proxy_sockets) {
 // Bind
 // ---------------------------------------------------------------------------
 
+/**
+ * @test Verify bind to an ldn address creates a proxy socket and is not
+ * forwarded.
+ */
 TEST(bind_to_an_ldn_address_creates_a_proxy_socket_and_is_not_forwarded) {
     reset();
     auto svc = make();
@@ -827,6 +1039,9 @@ TEST(bind_to_an_ldn_address_creates_a_proxy_socket_and_is_not_forwarded) {
     ASSERT_TRUE(p->GetState() == sut::ProxySocketState::Bound);
 }
 
+/**
+ * @test Verify bind to port zero allocates an ephemeral port.
+ */
 TEST(bind_to_port_zero_allocates_an_ephemeral_port) {
     reset();
     auto svc = make();
@@ -834,6 +1049,9 @@ TEST(bind_to_port_zero_allocates_an_ephemeral_port) {
     ASSERT_TRUE(proxy_of(101)->GetLocalAddr().GetPort() != 0);
 }
 
+/**
+ * @test Verify bind applies the so broadcast saved before the proxy existed.
+ */
 TEST(bind_applies_the_so_broadcast_saved_before_the_proxy_existed) {
     reset();
     auto svc = make();
@@ -846,8 +1064,11 @@ TEST(bind_applies_the_so_broadcast_saved_before_the_proxy_existed) {
     ASSERT_TRUE(proxy_of(102)->IsBroadcastEnabled());
 }
 
-TEST(
-    bind_to_inaddr_any_binds_the_proxy_to_the_local_ldn_ip_and_the_real_socket_too) {
+/**
+ * @test Verify bind to inaddr any binds proxy to local ldn ip and real socket
+ * too.
+ */
+TEST(bind_to_inaddr_any_binds_proxy_to_local_ldn_ip_and_real_socket_too) {
     reset();
     auto svc = make();
     track_udp(103);
@@ -863,6 +1084,10 @@ TEST(
     ASSERT_TRUE(sut::FindSocketInfoEntry(103)->info.is_proxy);
 }
 
+/**
+ * @test Verify bind to inaddr any keeps the proxy going when the real bind
+ * fails.
+ */
 TEST(bind_to_inaddr_any_keeps_the_proxy_going_when_the_real_bind_fails) {
     reset();
     auto svc = make();
@@ -883,6 +1108,10 @@ TEST(bind_to_inaddr_any_keeps_the_proxy_going_when_the_real_bind_fails) {
     ASSERT_TRUE(proxy_of(105) != nullptr);
 }
 
+/**
+ * @test Verify bind to inaddr any without a local ldn ip keeps inaddr any on
+ * the proxy.
+ */
 TEST(bind_to_inaddr_any_without_a_local_ldn_ip_keeps_inaddr_any_on_the_proxy) {
     reset();
     auto svc = make();
@@ -896,6 +1125,9 @@ TEST(bind_to_inaddr_any_without_a_local_ldn_ip_keeps_inaddr_any_on_the_proxy) {
     ASSERT_EQ(proxy_of(106)->GetLocalAddr().sin_addr, 0u);
 }
 
+/**
+ * @test Verify bind of an untracked socket is forwarded.
+ */
 TEST(bind_of_an_untracked_socket_is_forwarded) {
     reset();
     auto svc = make();
@@ -909,6 +1141,9 @@ TEST(bind_of_an_untracked_socket_is_forwarded) {
     ASSERT_TRUE(proxy_of(107) == nullptr);
 }
 
+/**
+ * @test Verify bind of a foreign short or missing address is forwarded.
+ */
 TEST(bind_of_a_foreign_short_or_missing_address_is_forwarded) {
     reset();
     auto svc = make();
@@ -931,6 +1166,9 @@ TEST(bind_of_a_foreign_short_or_missing_address_is_forwarded) {
     ASSERT_TRUE(proxy_of(108) == nullptr);
 }
 
+/**
+ * @test Verify bind reports enomem when the proxy table is full.
+ */
 TEST(bind_reports_enomem_when_the_proxy_table_is_full) {
     reset();
     auto svc = make();
@@ -941,6 +1179,9 @@ TEST(bind_reports_enomem_when_the_proxy_table_is_full) {
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify bind reports eaddrinuse when no ephemeral port is left.
+ */
 TEST(bind_reports_eaddrinuse_when_no_ephemeral_port_is_left) {
     reset();
     auto svc = make();
@@ -950,6 +1191,9 @@ TEST(bind_reports_eaddrinuse_when_no_ephemeral_port_is_left) {
         static_cast<std::int32_t>(bsdt::BsdErrno::AddrInUse));
 }
 
+/**
+ * @test Verify bind reports eaddrinuse when the port is reserved.
+ */
 TEST(bind_reports_eaddrinuse_when_the_port_is_reserved) {
     reset();
     auto svc = make();
@@ -961,6 +1205,9 @@ TEST(bind_reports_eaddrinuse_when_the_port_is_reserved) {
         static_cast<std::int32_t>(bsdt::BsdErrno::AddrInUse));
 }
 
+/**
+ * @test Verify a second bind of the same socket is refused by the proxy.
+ */
 TEST(a_second_bind_of_the_same_socket_is_refused_by_the_proxy) {
     reset();
     auto svc = make();
@@ -974,6 +1221,10 @@ TEST(a_second_bind_of_the_same_socket_is_refused_by_the_proxy) {
 // Connect
 // ---------------------------------------------------------------------------
 
+/**
+ * @test Verify connect of a udp socket to an ldn peer creates binds and
+ * connects a proxy.
+ */
 TEST(
     connect_of_a_udp_socket_to_an_ldn_peer_creates_binds_and_connects_a_proxy) {
     reset();
@@ -993,6 +1244,9 @@ TEST(
     ASSERT_TRUE(sut::FindSocketInfoEntry(120)->info.is_proxy);
 }
 
+/**
+ * @test Verify connect of a bound proxy keeps its local port.
+ */
 TEST(connect_of_a_bound_proxy_keeps_its_local_port) {
     reset();
     auto svc = make();
@@ -1006,6 +1260,10 @@ TEST(connect_of_a_bound_proxy_keeps_its_local_port) {
     ASSERT_TRUE(proxy_of(121)->GetState() == sut::ProxySocketState::Connected);
 }
 
+/**
+ * @test Verify connect of a tcp socket without a server link reports
+ * enetunreach.
+ */
 TEST(connect_of_a_tcp_socket_without_a_server_link_reports_enetunreach) {
     reset();
     auto svc = make();
@@ -1018,6 +1276,9 @@ TEST(connect_of_a_tcp_socket_without_a_server_link_reports_enetunreach) {
     ASSERT_FALSE(sut::FindSocketInfoEntry(122)->info.is_proxy);
 }
 
+/**
+ * @test Verify connect of a closed proxy reports ebadf.
+ */
 TEST(connect_of_a_closed_proxy_reports_ebadf) {
     reset();
     auto svc = make();
@@ -1030,6 +1291,9 @@ TEST(connect_of_a_closed_proxy_reports_ebadf) {
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::BadF));
 }
 
+/**
+ * @test Verify connect forwards untracked foreign short and missing addresses.
+ */
 TEST(connect_forwards_untracked_foreign_short_and_missing_addresses) {
     reset();
     auto svc = make();
@@ -1053,6 +1317,9 @@ TEST(connect_forwards_untracked_foreign_short_and_missing_addresses) {
     ASSERT_TRUE(proxy_of(124) == nullptr);
 }
 
+/**
+ * @test Verify connect reports enomem when the proxy table is full.
+ */
 TEST(connect_reports_enomem_when_the_proxy_table_is_full) {
     reset();
     auto svc = make();
@@ -1065,6 +1332,9 @@ TEST(connect_reports_enomem_when_the_proxy_table_is_full) {
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::NoMem));
 }
 
+/**
+ * @test Verify connect reports eaddrinuse when no ephemeral port is left.
+ */
 TEST(connect_reports_eaddrinuse_when_no_ephemeral_port_is_left) {
     reset();
     auto svc = make();
@@ -1078,8 +1348,11 @@ TEST(connect_reports_eaddrinuse_when_no_ephemeral_port_is_left) {
 }
 
 namespace {
+/// Descriptor the staged concurrent thread binds.
 std::int32_t g_race_fd = 0;
+/// True while the concurrent bind is waiting to fire.
 bool g_race_armed = false;
+/// Number of proxy-manager locks seen while armed.
 unsigned g_race_locks = 0;
 /// Stages a concurrent IPC thread that binds the very socket a Connect or a
 /// SendTo is about to create the proxy of: the creation call then returns the
@@ -1097,8 +1370,11 @@ void bind_the_proxy_first() {
 }
 }  // namespace
 
-TEST(
-    connect_reports_the_error_and_releases_the_port_when_the_auto_bind_is_refused) {
+/**
+ * @test Verify connect reports error and releases port when auto bind is
+ * refused.
+ */
+TEST(connect_reports_error_and_releases_port_when_auto_bind_is_refused) {
     reset();
     auto svc = make();
     track_udp(128);
@@ -1126,8 +1402,11 @@ TEST(
 // Send / SendTo / Write
 // ---------------------------------------------------------------------------
 
-TEST(
-    sendto_an_ldn_peer_from_a_plain_socket_creates_a_proxy_and_sends_through_it) {
+/**
+ * @test Verify sendto ldn peer from plain socket creates a proxy and sends
+ * through it.
+ */
+TEST(sendto_ldn_peer_from_plain_socket_creates_a_proxy_and_sends_through_it) {
     reset();
     auto svc = make();
     track_udp(130);
@@ -1153,6 +1432,9 @@ TEST(
     ASSERT_TRUE(proxy_of(130)->GetState() == sut::ProxySocketState::Bound);
 }
 
+/**
+ * @test Verify sendto through an existing proxy does not create another.
+ */
 TEST(sendto_through_an_existing_proxy_does_not_create_another) {
     reset();
     auto svc = make();
@@ -1170,6 +1452,9 @@ TEST(sendto_through_an_existing_proxy_does_not_create_another) {
     ASSERT_TRUE(sut::FindSocketInfoEntry(131)->info.is_proxy);
 }
 
+/**
+ * @test Verify sendto reports the proxy error as errno and zero bytes.
+ */
 TEST(sendto_reports_the_proxy_error_as_errno_and_zero_bytes) {
     reset();
     auto svc = make();
@@ -1185,6 +1470,10 @@ TEST(sendto_reports_the_proxy_error_as_errno_and_zero_bytes) {
     ASSERT_EQ(n, 0);
 }
 
+/**
+ * @test Verify sendto reports enetunreach without a proxy or with a short
+ * address.
+ */
 TEST(sendto_reports_enetunreach_without_a_proxy_or_with_a_short_address) {
     reset();
     auto svc = make();
@@ -1215,6 +1504,9 @@ TEST(sendto_reports_enetunreach_without_a_proxy_or_with_a_short_address) {
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify sendto with the proxy table full reports enetunreach.
+ */
 TEST(sendto_with_the_proxy_table_full_reports_enetunreach) {
     reset();
     auto svc = make();
@@ -1229,8 +1521,11 @@ TEST(sendto_with_the_proxy_table_full_reports_enetunreach) {
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::NetUnreach));
 }
 
-TEST(
-    sendto_without_an_ephemeral_port_leaves_the_proxy_unbound_and_refuses_the_send) {
+/**
+ * @test Verify sendto without ephemeral port leaves proxy unbound and refuses
+ * send.
+ */
+TEST(sendto_without_ephemeral_port_leaves_proxy_unbound_and_refuses_send) {
     reset();
     auto svc = make();
     track_udp(136);
@@ -1246,6 +1541,9 @@ TEST(
     ASSERT_EQ(g_sent.count, 0u);
 }
 
+/**
+ * @test Verify sendto returns the error of a refused auto bind.
+ */
 TEST(sendto_returns_the_error_of_a_refused_auto_bind) {
     reset();
     auto svc = make();
@@ -1265,6 +1563,9 @@ TEST(sendto_returns_the_error_of_a_refused_auto_bind) {
     ASSERT_FALSE(sut::FindSocketInfoEntry(137)->info.is_proxy);
 }
 
+/**
+ * @test Verify sendto a non ldn destination is forwarded with both buffers.
+ */
 TEST(sendto_a_non_ldn_destination_is_forwarded_with_both_buffers) {
     reset();
     auto svc = make();
@@ -1311,6 +1612,9 @@ TEST(sendto_a_non_ldn_destination_is_forwarded_with_both_buffers) {
     ASSERT_EQ(forwarded(), 5u);
 }
 
+/**
+ * @test Verify send and write go through a connected proxy.
+ */
 TEST(send_and_write_go_through_a_connected_proxy) {
     reset();
     auto svc = make();
@@ -1331,6 +1635,9 @@ TEST(send_and_write_go_through_a_connected_proxy) {
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify send and write report the proxy error of an unconnected proxy.
+ */
 TEST(send_and_write_report_the_proxy_error_of_an_unconnected_proxy) {
     reset();
     auto svc = make();
@@ -1347,6 +1654,9 @@ TEST(send_and_write_report_the_proxy_error_of_an_unconnected_proxy) {
     ASSERT_EQ(n, 0);
 }
 
+/**
+ * @test Verify send and write of a plain socket are forwarded.
+ */
 TEST(send_and_write_of_a_plain_socket_are_forwarded) {
     reset();
     auto svc = make();
@@ -1375,6 +1685,10 @@ TEST(send_and_write_of_a_plain_socket_are_forwarded) {
 // Recv / RecvFrom / Read
 // ---------------------------------------------------------------------------
 
+/**
+ * @test Verify recv and read return the datagram of a connected proxy then
+ * report eagain.
+ */
 TEST(
     recv_and_read_return_the_datagram_of_a_connected_proxy_then_report_eagain) {
     reset();
@@ -1409,6 +1723,9 @@ TEST(
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify recvfrom returns the datagram with the sender address.
+ */
 TEST(recvfrom_returns_the_datagram_with_the_sender_address) {
     reset();
     auto svc = make();
@@ -1451,6 +1768,9 @@ TEST(recvfrom_returns_the_datagram_with_the_sender_address) {
     ASSERT_EQ(len, 0u);
 }
 
+/**
+ * @test Verify recvfrom reports the error of an empty non blocking proxy.
+ */
 TEST(recvfrom_reports_the_error_of_an_empty_non_blocking_proxy) {
     reset();
     auto svc = make();
@@ -1474,6 +1794,9 @@ TEST(recvfrom_reports_the_error_of_an_empty_non_blocking_proxy) {
     ASSERT_EQ(len, 0u);
 }
 
+/**
+ * @test Verify recv recvfrom and read of a plain socket are forwarded.
+ */
 TEST(recv_recvfrom_and_read_of_a_plain_socket_are_forwarded) {
     reset();
     auto svc = make();
@@ -1511,19 +1834,51 @@ TEST(recv_recvfrom_and_read_of_a_plain_socket_are_forwarded) {
 // ---------------------------------------------------------------------------
 
 namespace {
+/**
+ * @brief Set a descriptor's bit in an fd_set-like bitmap.
+ * @param[in,out] fds Bitmap.
+ * @param fd Descriptor to set.
+ */
 void set_bit(std::uint8_t* fds, std::int32_t fd) {
     fds[fd / 8] = static_cast<std::uint8_t>(fds[fd / 8] | (1U << (fd % 8)));
 }
+/**
+ * @brief Test a descriptor's bit in an fd_set-like bitmap.
+ * @param fds Bitmap.
+ * @param fd Descriptor to test.
+ * @return true when the bit is set.
+ */
 bool has_bit(const std::uint8_t* fds, std::int32_t fd) {
     return (fds[fd / 8] & (1U << (fd % 8))) != 0;
 }
 
+/// Input and output buffers of one Select call.
 struct SelectSets {
-    std::uint8_t r_in[16] = {}, w_in[16] = {}, e_in[16] = {};
-    std::uint8_t r_out[16] = {}, w_out[16] = {}, e_out[16] = {};
+    /// Read set passed in.
+    std::uint8_t r_in[16] = {};
+    /// Write set passed in.
+    std::uint8_t w_in[16] = {};
+    /// Exception set passed in.
+    std::uint8_t e_in[16] = {};
+    /// Read set returned.
+    std::uint8_t r_out[16] = {};
+    /// Write set returned.
+    std::uint8_t w_out[16] = {};
+    /// Exception set returned.
+    std::uint8_t e_out[16] = {};
+    /// Timeout structure passed in.
     std::uint8_t timeout[16] = {};
-    std::int32_t errno_out = -1, count = -1;
+    /// errno returned by Select.
+    std::int32_t errno_out = -1;
+    /// Ready count returned by Select.
+    std::int32_t count = -1;
 
+    /**
+     * @brief Call Select with these sets.
+     * @param[in,out] svc Service under test.
+     * @param nfds Highest descriptor plus one.
+     * @return The Select result.
+     */
     ams::Result run(sut::BsdMitmService& svc, std::int32_t nfds) {
         ams::sf::Out<std::int32_t> oe(errno_out), oc(count);
         return svc.Select(
@@ -1541,6 +1896,9 @@ struct SelectSets {
 };
 }  // namespace
 
+/**
+ * @test Verify select over proxy sockets only is answered locally.
+ */
 TEST(select_over_proxy_sockets_only_is_answered_locally) {
     reset();
     auto svc = make();
@@ -1566,6 +1924,10 @@ TEST(select_over_proxy_sockets_only_is_answered_locally) {
     ASSERT_FALSE(has_bit(s.e_out, 4));
 }
 
+/**
+ * @test Verify select mixing real sockets answers locally when a proxy is
+ * ready.
+ */
 TEST(select_mixing_real_sockets_answers_locally_when_a_proxy_is_ready) {
     reset();
     auto svc = make();
@@ -1580,6 +1942,9 @@ TEST(select_mixing_real_sockets_answers_locally_when_a_proxy_is_ready) {
     ASSERT_TRUE(has_bit(s.r_out, 3));
 }
 
+/**
+ * @test Verify select mixing real sockets forwards when no proxy is ready.
+ */
 TEST(select_mixing_real_sockets_forwards_when_no_proxy_is_ready) {
     reset();
     auto svc = make();
@@ -1600,6 +1965,8 @@ namespace {
 /// Stages what a concurrent IPC thread does while the real select waits: the
 /// game's fd 4 becomes a proxy socket that is then closed, and data lands on
 /// the proxy of fd 3.
+/// @param call Forwarded Select call; its output receives a fixed Pair.
+/// @return Success.
 ams::Result proxies_change_during_the_real_wait(const host_mitm::Call& call) {
     deliver(3, "late");
     auto& manager = sut::ProxySocketManager::GetInstance();
@@ -1612,6 +1979,10 @@ ams::Result proxies_change_during_the_real_wait(const host_mitm::Call& call) {
 }
 }  // namespace
 
+/**
+ * @test Verify select adds the proxy readiness that appeared during the real
+ * wait.
+ */
 TEST(select_adds_the_proxy_readiness_that_appeared_during_the_real_wait) {
     reset();
     auto svc = make();
@@ -1631,6 +2002,9 @@ TEST(select_adds_the_proxy_readiness_that_appeared_during_the_real_wait) {
     ASSERT_TRUE(has_bit(s.e_out, 4));
 }
 
+/**
+ * @test Verify select after a failed real wait does not add proxy results.
+ */
 TEST(select_after_a_failed_real_wait_does_not_add_proxy_results) {
     reset();
     auto svc = make();
@@ -1646,6 +2020,9 @@ TEST(select_after_a_failed_real_wait_does_not_add_proxy_results) {
     ASSERT_FALSE(has_bit(s.r_out, 3));
 }
 
+/**
+ * @test Verify select over real sockets only is forwarded.
+ */
 TEST(select_over_real_sockets_only_is_forwarded) {
     reset();
     auto svc = make();
@@ -1659,6 +2036,9 @@ TEST(select_over_real_sockets_only_is_forwarded) {
     ASSERT_EQ(g_seen.options.buffers[6].size, sizeof(s.e_out));
 }
 
+/**
+ * @test Verify select ignores descriptors past the set and works without sets.
+ */
 TEST(select_ignores_descriptors_past_the_set_and_works_without_sets) {
     reset();
     auto svc = make();
@@ -1698,6 +2078,9 @@ TEST(select_ignores_descriptors_past_the_set_and_works_without_sets) {
     ASSERT_EQ(forwarded(), 2u);
 }
 
+/**
+ * @test Verify select never writes a ready proxy into missing output sets.
+ */
 TEST(select_never_writes_a_ready_proxy_into_missing_output_sets) {
     reset();
     auto svc = make();
@@ -1740,11 +2123,24 @@ TEST(select_never_writes_a_ready_proxy_into_missing_output_sets) {
 }
 
 namespace {
+/// Input and output arrays of one Poll call.
 struct PollSet {
+    /// Poll entries passed in.
     bsdt::PollFd in[4]{};
+    /// Poll entries returned.
     bsdt::PollFd out[4]{};
-    std::int32_t errno_out = -1, count = -1;
+    /// errno returned by Poll.
+    std::int32_t errno_out = -1;
+    /// Ready count returned by Poll.
+    std::int32_t count = -1;
 
+    /**
+     * @brief Call Poll with these entries.
+     * @param[in,out] svc Service under test.
+     * @param nfds Number of entries in `in`.
+     * @param out_bytes Size of the output buffer handed to Poll.
+     * @return The Poll result.
+     */
     ams::Result run(
         sut::BsdMitmService& svc,
         std::int32_t nfds,
@@ -1763,6 +2159,9 @@ struct PollSet {
 };
 }  // namespace
 
+/**
+ * @test Verify poll over proxy sockets only is answered locally.
+ */
 TEST(poll_over_proxy_sockets_only_is_answered_locally) {
     reset();
     auto svc = make();
@@ -1783,6 +2182,9 @@ TEST(poll_over_proxy_sockets_only_is_answered_locally) {
     ASSERT_EQ(p.out[2].revents, POLLOUT | POLLHUP);
 }
 
+/**
+ * @test Verify poll mixing real sockets answers locally when a proxy is ready.
+ */
 TEST(poll_mixing_real_sockets_answers_locally_when_a_proxy_is_ready) {
     reset();
     auto svc = make();
@@ -1799,8 +2201,12 @@ TEST(poll_mixing_real_sockets_answers_locally_when_a_proxy_is_ready) {
     ASSERT_EQ(p.out[1].revents, 0);
 }
 
+/**
+ * @test Verify poll mixing real sockets forwards if no proxy ready and adds
+ * proxy events.
+ */
 TEST(
-    poll_mixing_real_sockets_forwards_when_no_proxy_is_ready_and_adds_the_proxy_events) {
+    poll_mixing_real_sockets_forwards_if_no_proxy_ready_and_adds_proxy_events) {
     reset();
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 3, 5704), 0);
@@ -1830,6 +2236,9 @@ TEST(
     ASSERT_EQ(r.count, 1);
 }
 
+/**
+ * @test Verify poll adds the events that arrived while the real wait ran.
+ */
 TEST(poll_adds_the_events_that_arrived_while_the_real_wait_ran) {
     reset();
     auto svc = make();
@@ -1850,6 +2259,9 @@ TEST(poll_adds_the_events_that_arrived_while_the_real_wait_ran) {
     ASSERT_EQ(p.count, 1);
 }
 
+/**
+ * @test Verify poll after a failed real wait does not add proxy events.
+ */
 TEST(poll_after_a_failed_real_wait_does_not_add_proxy_events) {
     reset();
     auto svc = make();
@@ -1862,6 +2274,9 @@ TEST(poll_after_a_failed_real_wait_does_not_add_proxy_events) {
     ASSERT_EQ(p.count, 0);
 }
 
+/**
+ * @test Verify poll over real sockets only is forwarded with both buffers.
+ */
 TEST(poll_over_real_sockets_only_is_forwarded_with_both_buffers) {
     reset();
     auto svc = make();
@@ -1875,6 +2290,10 @@ TEST(poll_over_real_sockets_only_is_forwarded_with_both_buffers) {
     ASSERT_EQ(p.count, 1);
 }
 
+/**
+ * @test Verify poll with an output buffer smaller than the input does not copy
+ * it.
+ */
 TEST(poll_with_an_output_buffer_smaller_than_the_input_does_not_copy_it) {
     reset();
     auto svc = make();
@@ -1890,6 +2309,9 @@ TEST(poll_with_an_output_buffer_smaller_than_the_input_does_not_copy_it) {
 // Ioctl / Fcntl / socket options / names
 // ---------------------------------------------------------------------------
 
+/**
+ * @test Verify ioctl fionread on a proxy is answered locally.
+ */
 TEST(ioctl_fionread_on_a_proxy_is_answered_locally) {
     reset();
     auto svc = make();
@@ -1927,6 +2349,9 @@ TEST(ioctl_fionread_on_a_proxy_is_answered_locally) {
     ASSERT_EQ(tiny[0], 0x55);
 }
 
+/**
+ * @test Verify ioctl other requests on a proxy are refused.
+ */
 TEST(ioctl_other_requests_on_a_proxy_are_refused) {
     reset();
     auto svc = make();
@@ -1948,6 +2373,9 @@ TEST(ioctl_other_requests_on_a_proxy_are_refused) {
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify ioctl on a plain socket is forwarded.
+ */
 TEST(ioctl_on_a_plain_socket_is_forwarded) {
     reset();
     auto svc = make();
@@ -1969,6 +2397,9 @@ TEST(ioctl_on_a_plain_socket_is_forwarded) {
     ASSERT_EQ(r, 12);
 }
 
+/**
+ * @test Verify fcntl on a proxy reads and sets the non blocking flag.
+ */
 TEST(fcntl_on_a_proxy_reads_and_sets_the_non_blocking_flag) {
     reset();
     auto svc = make();
@@ -1990,6 +2421,9 @@ TEST(fcntl_on_a_proxy_reads_and_sets_the_non_blocking_flag) {
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify fcntl on a plain socket is forwarded.
+ */
 TEST(fcntl_on_a_plain_socket_is_forwarded) {
     reset();
     auto svc = make();
@@ -2001,6 +2435,9 @@ TEST(fcntl_on_a_plain_socket_is_forwarded) {
     ASSERT_EQ(r, 5);
 }
 
+/**
+ * @test Verify getsockopt on a proxy is answered by the proxy.
+ */
 TEST(getsockopt_on_a_proxy_is_answered_by_the_proxy) {
     reset();
     auto svc = make();
@@ -2028,6 +2465,9 @@ TEST(getsockopt_on_a_proxy_is_answered_by_the_proxy) {
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify getsockopt on a plain socket is forwarded.
+ */
 TEST(getsockopt_on_a_plain_socket_is_forwarded) {
     reset();
     auto svc = make();
@@ -2048,6 +2488,10 @@ TEST(getsockopt_on_a_plain_socket_is_forwarded) {
     ASSERT_EQ(e, 3);
 }
 
+/**
+ * @test Verify setsockopt on a proxy is applied by the proxy and reports its
+ * error.
+ */
 TEST(setsockopt_on_a_proxy_is_applied_by_the_proxy_and_reports_its_error) {
     reset();
     auto svc = make();
@@ -2078,6 +2522,10 @@ TEST(setsockopt_on_a_proxy_is_applied_by_the_proxy_and_reports_its_error) {
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify setsockopt so broadcast on a plain socket is saved and
+ * forwarded.
+ */
 TEST(setsockopt_so_broadcast_on_a_plain_socket_is_saved_and_forwarded) {
     reset();
     auto svc = make();
@@ -2135,6 +2583,9 @@ TEST(setsockopt_so_broadcast_on_a_plain_socket_is_saved_and_forwarded) {
     ASSERT_EQ(forwarded(), 5u);
 }
 
+/**
+ * @test Verify getpeername of a connected proxy returns the peer address.
+ */
 TEST(getpeername_of_a_connected_proxy_returns_the_peer_address) {
     reset();
     auto svc = make();
@@ -2159,6 +2610,9 @@ TEST(getpeername_of_a_connected_proxy_returns_the_peer_address) {
     ASSERT_EQ(forwarded(), 1u - 1u);
 }
 
+/**
+ * @test Verify getpeername of an unconnected proxy reports enotconn.
+ */
 TEST(getpeername_of_an_unconnected_proxy_reports_enotconn) {
     reset();
     auto svc = make();
@@ -2174,6 +2628,9 @@ TEST(getpeername_of_an_unconnected_proxy_reports_enotconn) {
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::NotConn));
 }
 
+/**
+ * @test Verify getsockname of a proxy returns the local address.
+ */
 TEST(getsockname_of_a_proxy_returns_the_local_address) {
     reset();
     auto svc = make();
@@ -2194,6 +2651,9 @@ TEST(getsockname_of_a_proxy_returns_the_local_address) {
     ASSERT_EQ(forwarded(), 0u);
 }
 
+/**
+ * @test Verify getpeername and getsockname of a plain socket are forwarded.
+ */
 TEST(getpeername_and_getsockname_of_a_plain_socket_are_forwarded) {
     reset();
     auto svc = make();
@@ -2208,6 +2668,9 @@ TEST(getpeername_and_getsockname_of_a_plain_socket_are_forwarded) {
     ASSERT_EQ(g_seen.command, 16u);
 }
 
+/**
+ * @test Verify socket reusing a tracked descriptor number overwrites its entry.
+ */
 TEST(socket_reusing_a_tracked_descriptor_number_overwrites_its_entry) {
     reset();
     auto svc = make();
@@ -2225,6 +2688,8 @@ TEST(socket_reusing_a_tracked_descriptor_number_overwrites_its_entry) {
 namespace {
 /// Stages a concurrent IPC thread: fd 4 becomes a closed proxy socket while
 /// the real poll waits.
+/// @param call Forwarded Poll call.
+/// @return Success.
 ams::Result a_proxy_closes_during_the_real_poll(const host_mitm::Call& call) {
     sut::ProxySocketManager::GetInstance()
         .CreateProxySocket(4, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp)
@@ -2235,8 +2700,11 @@ ams::Result a_proxy_closes_during_the_real_poll(const host_mitm::Call& call) {
 }
 }  // namespace
 
-TEST(
-    poll_adds_the_writable_and_hang_up_events_of_a_proxy_that_appeared_during_the_real_wait) {
+/**
+ * @test Verify poll adds writable and hangup events of proxy that appeared mid
+ * wait.
+ */
+TEST(poll_adds_writable_and_hangup_events_of_proxy_that_appeared_mid_wait) {
     reset();
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 3, 5709), 0);
@@ -2251,6 +2719,10 @@ TEST(
     ASSERT_EQ(p.count, 1 + 2);
 }
 
+/**
+ * @brief Run the registered tests.
+ * @return The harness exit status.
+ */
 int main() {
     return test_report("bsd_mitm_service");
 }

@@ -30,21 +30,31 @@
 // be referenced without any `::` qualifier inside the SF macro.
 // The member is named `buf` (not `data`) to avoid conflicting with
 // std::array::data().
+
+/// Fixed 32-byte buffer carrying the version string over IPC
 struct RyuCfgVersionString {
+    /// Null-terminated string storage
     std::array<char, 32> buf;
+    /// @return Buffer capacity in bytes (32)
     static constexpr size_t size() {
         return 32;
     }
 };
+
+/// Fixed 64-byte buffer carrying the passphrase over IPC
 struct RyuCfgPassphraseString {
+    /// Null-terminated string storage
     std::array<char, 64> buf;
+    /// @return Buffer capacity in bytes (64)
     static constexpr size_t size() {
         return 64;
     }
 };
 
 // Global-scope typedefs for the wrapper structs (used in SF macro)
+/// Output parameter alias for the version string (see SF macro note above)
 using RyuCfgOutVersionString = ams::sf::Out<RyuCfgVersionString>;
+/// Output parameter alias for the passphrase (see SF macro note above)
 using RyuCfgOutPassphraseString = ams::sf::Out<RyuCfgPassphraseString>;
 
 /**
@@ -109,8 +119,9 @@ enum class ConfigResult : u32 {
 R_DEFINE_NAMESPACE_RESULT_MODULE(ryu_ldn::ipc::result, 353);
 
 namespace ryu_ldn::ipc::result {
+/// Result returned by setters when the IPC caller passes an invalid argument
 R_DEFINE_ERROR_RESULT(InvalidIpcInput, 1);
-}
+}  // namespace ryu_ldn::ipc::result
 
 namespace ryu_ldn::ipc {
 
@@ -118,9 +129,9 @@ namespace ryu_ldn::ipc {
  * @brief Server address structure for IPC
  */
 struct ServerAddressIpc {
-    char host[64];
-    u16 port;
-    u16 padding;
+    char host[64];  ///< Null-terminated server host name
+    u16 port;       ///< Server TCP port
+    u16 padding;    ///< Explicit padding so the struct is 68 bytes
 };
 static_assert(sizeof(ServerAddressIpc) == 68);
 
@@ -160,9 +171,13 @@ void InitializeConfig();
 // These MUST be at global scope because AMS_SF_DEFINE_INTERFACE is at
 // global scope. The C preprocessor cannot handle `::` inside macro
 // arguments, so we create plain aliases for every namespaced type.
+/// Output parameter alias for SessionInfoIpc
 using RyuCfgOutSessionInfo = ams::sf::Out<ryu_ldn::ipc::SessionInfoIpc>;
+/// Output parameter alias for ConfigResult
 using RyuCfgOutConfigResult = ams::sf::Out<ConfigResult>;
+/// Output parameter alias for ServerAddressIpc
 using RyuCfgOutServerAddress = ams::sf::Out<ryu_ldn::ipc::ServerAddressIpc>;
+/// Input parameter alias for ServerAddressIpc
 using RyuCfgInServerAddress = const ryu_ldn::ipc::ServerAddressIpc&;
 
 // =============================================================================
@@ -474,6 +489,7 @@ public:
 
     /** @brief Check if a game is actively using LDN
      *  @param out 1 if a game is using LDN, 0 otherwise
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="IsGameActive"}
     static ams::Result IsGameActive(ams::sf::Out<u32> out);
@@ -481,28 +497,34 @@ public:
     /** @brief Get current LDN CommState
      *  @param out CommState value (0=None, 1=Initialized, 2=AccessPoint,
      * 3=AccessPointCreated, 4=Station, 5=StationConnected)
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="GetLdnState"}
     static ams::Result GetLdnState(ams::sf::Out<u32> out);
 
     /** @brief Get session information
      *  @param out SessionInfoIpc struct (node count, max, local ID, is_host)
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="GetSessionInfo"}
     static ams::Result GetSessionInfo(RyuCfgOutSessionInfo out);
 
     /** @brief Get last measured RTT
      *  @param out RTT in milliseconds
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="GetLastRtt"}
     static ams::Result GetLastRtt(ams::sf::Out<u32> out);
 
-    /** @brief Request the MITM service to reconnect */
+    /** @brief Request the MITM service to reconnect
+     *  @return Result of the reconnect request
+     */
     /// @gdb{tag="CONFIG:IPC", msg="ForceReconnect"}
     static ams::Result ForceReconnect();
 
     /** @brief Get the process ID of the active game
      *  @param out Process id (for debugging)
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="GetActiveProcessId"}
     static ams::Result GetActiveProcessId(ams::sf::Out<u64> out);
@@ -511,31 +533,40 @@ public:
     // Sysmodule General Settings (IDs 9-14)
     // =========================================================================
 
-    /** @brief Get whether debug logging is enabled */
+    /** @brief Get whether debug logging is enabled
+     *  @param out 1 if debug logging is enabled, 0 otherwise
+     *  @return Always succeeds
+     */
     /// @gdb{tag="CONFIG:IPC", msg="GetDebugEnabled"}
     static ams::Result GetDebugEnabled(ams::sf::Out<u32> out);
     /** @brief Enable or disable debug logging
      *  @param enabled 1 to enable, 0 to disable
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="SetDebugEnabled"}
     static ams::Result SetDebugEnabled(u32 enabled);
-    /** @brief Get the debug log level (0=errors, 1=warnings, 2=info, 3=verbose)
+    /** @brief Get the debug log level
+     *  @param out Level (0=errors, 1=warnings, 2=info, 3=verbose)
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="GetDebugLevel"}
     static ams::Result GetDebugLevel(ams::sf::Out<u32> out);
     /** @brief Set the debug log level
      *  @param level 0=errors, 1=warnings, 2=info, 3=verbose
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="SetDebugLevel"}
     static ams::Result SetDebugLevel(u32 level);
 
     /** @brief Save current configuration to disk
      *  @param out Result of the save operation
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="SaveConfig"}
     static ams::Result SaveConfig(RyuCfgOutConfigResult out);
     /** @brief Reload configuration from disk
      *  @param out Result of the reload operation
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="ReloadConfig"}
     static ams::Result ReloadConfig(RyuCfgOutConfigResult out);
@@ -549,6 +580,7 @@ public:
     static ams::Result GetServerAddress(RyuCfgOutServerAddress out);
     /** @brief Set the server address (host + port)
      *  @param address New server address to use
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="SetServerAddress"}
     static ams::Result SetServerAddress(RyuCfgInServerAddress address);
@@ -558,18 +590,21 @@ public:
     static ams::Result GetLdnEnabled(ams::sf::Out<u32> out);
     /** @brief Enable or disable LDN emulation
      *  @param enabled 1 to enable, 0 to disable
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="SetLdnEnabled"}
     static ams::Result SetLdnEnabled(u32 enabled);
 
     /** @brief Get whether P2P proxy is disabled
      *  @param out 1 if P2P proxy is disabled, 0 if enabled
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="GetDisableP2p"}
     static ams::Result GetDisableP2p(ams::sf::Out<u32> out);
 
     /** @brief Set P2P proxy disabled state
      *  @param disabled 1 to disable P2P proxy, 0 to enable
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="SetDisableP2p"}
     static ams::Result SetDisableP2p(u32 disabled);
@@ -579,11 +614,13 @@ public:
      *  configured passphrase. When false, the sysmodule connects to
      *  public rooms regardless of the passphrase value.
      *  @param out 1 if passphrase filtering is enabled, 0 if public
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="GetUsePassphrase"}
     static ams::Result GetUsePassphrase(ams::sf::Out<u32> out);
     /** @brief Enable or disable passphrase filtering
      *  @param enabled 1 to enable passphrase filtering, 0 for public rooms
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="SetUsePassphrase"}
     static ams::Result SetUsePassphrase(u32 enabled);
@@ -593,6 +630,7 @@ public:
     static ams::Result GetPassphrase(RyuCfgOutPassphraseString out);
     /** @brief Set the LDN room passphrase
      *  @param passphrase Null-terminated passphrase string (max 63 chars)
+     *  @return Always succeeds
      */
     /// @gdb{tag="CONFIG:IPC", msg="SetPassphrase"}
     static ams::Result SetPassphrase(RyuCfgPassphraseString passphrase);

@@ -18,24 +18,38 @@ using ams::mitm::ldn::CommState;
 using ams::mitm::ldn::LdnStateMachine;
 using ams::mitm::ldn::StateTransitionResult;
 
+/// Short alias for the result enum returned by every transition.
 using R = StateTransitionResult;
 
 namespace {
 
+/// One state-change notification captured by record().
 struct Seen {
+    /// State the machine left.
     CommState from;
+    /// State the machine entered.
     CommState to;
+    /// The user-data pointer registered with SetStateCallback.
     void* user;
 };
 
+/// Notifications received by record(), in delivery order.
 std::vector<Seen> g_seen;
 
+/**
+ * @brief State-change callback appending each notification to g_seen.
+ *
+ * @param from State left.
+ * @param to State entered.
+ * @param user User-data pointer registered with the callback.
+ */
 void record(CommState from, CommState to, void* user) {
     g_seen.push_back({from, to, user});
 }
 
 }  // namespace
 
+/// A freshly built machine starts in None with nothing initialized or active.
 TEST(a_new_machine_is_in_none_and_not_initialized) {
     LdnStateMachine sm;
     ASSERT_TRUE(sm.GetState() == CommState::None);
@@ -44,6 +58,8 @@ TEST(a_new_machine_is_in_none_and_not_initialized) {
     ASSERT_FALSE(sm.IsNetworkActive());
 }
 
+/// @brief The AP path Initialize..Finalize succeeds step by step; the
+/// network is active only between CreateNetwork and DestroyNetwork.
 TEST(the_access_point_path_walks_up_and_back_down) {
     LdnStateMachine sm;
     ASSERT_TRUE(sm.Initialize() == R::Success);
@@ -60,6 +76,7 @@ TEST(the_access_point_path_walks_up_and_back_down) {
     ASSERT_TRUE(sm.IsInState(CommState::None));
 }
 
+/// The station path mirrors the AP path; active only while connected.
 TEST(the_station_path_walks_up_and_back_down) {
     LdnStateMachine sm;
     ASSERT_TRUE(sm.Initialize() == R::Success);
@@ -73,6 +90,8 @@ TEST(the_station_path_walks_up_and_back_down) {
     ASSERT_TRUE(sm.IsInState(CommState::Initialized));
 }
 
+/// @brief Closing the AP or station while the network is up drops straight to
+/// Initialized without a prior Destroy/Disconnect.
 TEST(closing_from_the_connected_states_goes_straight_to_initialized) {
     LdnStateMachine ap;
     ap.Initialize();
@@ -89,6 +108,7 @@ TEST(closing_from_the_connected_states_goes_straight_to_initialized) {
     ASSERT_TRUE(st.IsInState(CommState::Initialized));
 }
 
+/// Re-requesting the current state yields AlreadyInState, not an error.
 TEST(repeating_a_transition_reports_already_in_state) {
     LdnStateMachine sm;
     ASSERT_TRUE(sm.Finalize() == R::AlreadyInState);
@@ -111,6 +131,7 @@ TEST(repeating_a_transition_reports_already_in_state) {
     ASSERT_TRUE(sm.IsInState(CommState::StationConnected));
 }
 
+/// Out-of-order calls return InvalidTransition and never change the state.
 TEST(transitions_from_the_wrong_state_are_invalid_and_leave_the_state_alone) {
     LdnStateMachine sm;
     ASSERT_TRUE(sm.OpenAccessPoint() == R::InvalidTransition);
@@ -132,6 +153,8 @@ TEST(transitions_from_the_wrong_state_are_invalid_and_leave_the_state_alone) {
     ASSERT_TRUE(sm.IsInState(CommState::AccessPoint));
 }
 
+/// @brief SetError works from any state, then only Finalize leaves Error, so
+/// Initialize is refused until then.
 TEST(set_error_works_from_any_state_and_blocks_initialize_until_finalize) {
     LdnStateMachine sm;
     ASSERT_TRUE(sm.SetError() == R::Success);
@@ -143,6 +166,8 @@ TEST(set_error_works_from_any_state_and_blocks_initialize_until_finalize) {
     ASSERT_TRUE(sm.Initialize() == R::Success);
 }
 
+/// @brief Each machine has its own non-zero state-change event handle that
+/// stays stable across Initialize and SignalStateChange.
 TEST(each_machine_owns_a_stable_distinct_state_change_event) {
     LdnStateMachine a;
     LdnStateMachine b;
@@ -154,6 +179,8 @@ TEST(each_machine_owns_a_stable_distinct_state_change_event) {
     ASSERT_TRUE(b.GetStateChangeEventHandle() != h);
 }
 
+/// @brief The callback fires once per real change with old, new and user data;
+/// no-op and invalid transitions are silent, and a null callback unhooks.
 TEST(the_callback_sees_each_change_with_old_new_and_user_data) {
     g_seen.clear();
     LdnStateMachine sm;
@@ -197,6 +224,8 @@ TEST(the_callback_sees_each_change_with_old_new_and_user_data) {
     ASSERT_EQ(g_seen.size(), static_cast<size_t>(0));
 }
 
+/// @brief StateToString/ResultToString name every enum value and return
+/// "Unknown" for out-of-range input.
 TEST(state_and_result_names_cover_every_value_and_unknown) {
     ASSERT_TRUE(
         std::strcmp(LdnStateMachine::StateToString(CommState::None), "None") ==
@@ -246,6 +275,9 @@ TEST(state_and_result_names_cover_every_value_and_unknown) {
         0);
 }
 
+/// @brief Print the totals.
+///
+/// @return Process exit code, non-zero when a test failed.
 int main() {
     return test_report("LdnStateMachine (real) Tests");
 }

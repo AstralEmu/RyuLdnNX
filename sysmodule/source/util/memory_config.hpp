@@ -80,6 +80,7 @@ inline constexpr size_t MALLOC_BUFFER_SIZE =
 inline constexpr size_t MITM_THREAD_STACK_SIZE =
     0x8000;                                    ///< 32 KB per MITM thread
 inline constexpr size_t MITM_NUM_THREADS = 2;  ///< Total MITM request threads
+/// Extra MITM threads besides the one that runs the server loop itself
 inline constexpr size_t MITM_NUM_EXTRA_THREADS = MITM_NUM_THREADS - 1;
 
 // Config IPC service thread (ryu:cfg): 8 KB stack, light IPC dispatch.

@@ -70,7 +70,6 @@ LdnProxyHandler::LdnProxyHandler()
  * The callback is invoked when ProxyConfig packet is received.
  * Use this to initialize the virtual network interface.
  *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnProxyHandler::set_config_callback(ProxyConfigCallback callback) {
     m_config_callback = callback;
@@ -82,7 +81,6 @@ void LdnProxyHandler::set_config_callback(ProxyConfigCallback callback) {
  * Called when a peer initiates a P2P connection to us.
  * The application should prepare to receive data from this peer.
  *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnProxyHandler::set_connect_callback(ProxyConnectCallback callback) {
     m_connect_callback = callback;
@@ -94,7 +92,6 @@ void LdnProxyHandler::set_connect_callback(ProxyConnectCallback callback) {
  * Called when a peer responds to our connect request.
  * A successful reply means the connection is established.
  *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnProxyHandler::set_connect_reply_callback(
     ProxyConnectReplyCallback callback) {
@@ -107,7 +104,6 @@ void LdnProxyHandler::set_connect_reply_callback(
  * Called when game data arrives through the proxy tunnel.
  * This is the main data path for P2P communication.
  *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnProxyHandler::set_data_callback(ProxyDataCallback callback) {
     m_data_callback = callback;
@@ -119,7 +115,6 @@ void LdnProxyHandler::set_data_callback(ProxyDataCallback callback) {
  * Called when a proxied connection is closed by peer or server.
  * The application should clean up resources for this connection.
  *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnProxyHandler::set_disconnect_callback(
     ProxyDisconnectCallback callback) {
@@ -141,8 +136,6 @@ void LdnProxyHandler::set_disconnect_callback(
  * This information is used to configure the virtual network interface
  * that the game communicates through.
  *
- * @param header Packet header (unused but kept for consistency)
- * @param config Proxy configuration with network settings
  */
 void LdnProxyHandler::handle_proxy_config(
     const protocol::LdnHeader& header, const protocol::ProxyConfig& config) {
@@ -170,8 +163,6 @@ void LdnProxyHandler::handle_proxy_config(
  *
  * We add this to our connection table to track the active connection.
  *
- * @param header Packet header (unused)
- * @param req Connect request with connection info
  */
 void LdnProxyHandler::handle_proxy_connect(
     const protocol::LdnHeader& header,
@@ -206,8 +197,6 @@ void LdnProxyHandler::handle_proxy_connect(
  * Note: We don't add to connection table here because we already
  * added it when we sent the connect request.
  *
- * @param header Packet header (unused)
- * @param resp Connect response with connection info
  */
 void LdnProxyHandler::handle_proxy_connect_reply(
     const protocol::LdnHeader& header,
@@ -232,10 +221,6 @@ void LdnProxyHandler::handle_proxy_connect_reply(
  * The application callback receives the raw payload to forward
  * to the game's virtual network interface.
  *
- * @param header Packet header (unused)
- * @param data_header Proxy data header with connection info and length
- * @param payload Pointer to game data (may be nullptr if length is 0)
- * @param payload_length Length of payload in bytes
  */
 void LdnProxyHandler::handle_proxy_data(
     const protocol::LdnHeader& header,
@@ -260,8 +245,6 @@ void LdnProxyHandler::handle_proxy_data(
  *
  * We remove the connection from our table and notify the application.
  *
- * @param header Packet header (unused)
- * @param msg Disconnect message with connection info and reason
  */
 void LdnProxyHandler::handle_proxy_disconnect(
     const protocol::LdnHeader& header,
@@ -287,11 +270,6 @@ void LdnProxyHandler::handle_proxy_disconnect(
  * Searches the connection table for an entry matching all parameters.
  * Note that protocol type matters - TCP and UDP connections are distinct.
  *
- * @param src_ip Source IPv4 address
- * @param src_port Source port
- * @param dest_ip Destination IPv4 address
- * @param dest_port Destination port
- * @param proto Protocol type (default UDP)
  * @return true if a matching connection exists
  */
 bool LdnProxyHandler::has_connection(
@@ -342,7 +320,6 @@ void LdnProxyHandler::reset() {
  * Note: Does not check for duplicates. The server should not send
  * duplicate connect requests, but if it does we'll have duplicates.
  *
- * @param info Connection info from ProxyConnect packet
  * @return true if added, false if the table was full (caller should log)
  */
 bool LdnProxyHandler::add_connection(const protocol::ProxyInfo& info) {
@@ -372,7 +349,6 @@ bool LdnProxyHandler::add_connection(const protocol::ProxyInfo& info) {
  *
  * If no matching connection is found, does nothing (no error).
  *
- * @param info Connection info identifying which connection to remove
  */
 void LdnProxyHandler::remove_connection(const protocol::ProxyInfo& info) {
     for (size_t i = 0; i < m_connection_count; ++i) {

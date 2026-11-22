@@ -577,6 +577,7 @@ private:
     // Guards the m_p2p_client pointer and its use by the IPC send path. The
     // async connect worker, the IPC threads (Finalize, CloseAccessPoint,
     // SendTo) and the inactivity timer all reach the client.
+    /// Mutex guarding m_p2p_client (see comment above)
     os::SdkMutex m_p2p_client_mutex;
     std::unique_ptr<p2p::P2pProxyServer>
         m_p2p_server;  ///< Hosted P2P proxy server (host side)
@@ -587,9 +588,13 @@ private:
     // `Connected` packet can still be parsed while the P2P client is
     // mid-handshake. Now that the receive thread is dedicated and never
     // blocks on P2P connect, this stays for compatibility.
+    /// Worker thread running the async ExternalProxy connect
     os::ThreadType m_p2p_connect_thread;
+    /// True while the connect worker is running
     std::atomic<bool> m_p2p_connect_thread_active{false};
+    /// True once m_p2p_connect_thread was created (so it can be joined)
     bool m_p2p_connect_thread_initialized = false;
+    /// ExternalProxy config handed to the connect worker
     ryu_ldn::protocol::ExternalProxyConfig m_pending_p2p_config{};
 
     // Inactivity timeout (like Ryujinx _timeout)

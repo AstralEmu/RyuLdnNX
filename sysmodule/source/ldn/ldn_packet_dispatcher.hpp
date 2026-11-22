@@ -219,21 +219,37 @@ public:
 
 private:
     // Handler pointers (nullptr = not registered)
+    /// Initialize packet handler (unset = ignored)
     PacketHandler<protocol::InitializeMessage> m_initialize_handler;
+    /// Connected packet handler (NetworkInfo) (unset = ignored)
     PacketHandler<protocol::NetworkInfo> m_connected_handler;
+    /// SyncNetwork packet handler (NetworkInfo) (unset = ignored)
     PacketHandler<protocol::NetworkInfo> m_sync_network_handler;
+    /// ScanReply packet handler (one NetworkInfo per hit) (unset = ignored)
     PacketHandler<protocol::NetworkInfo> m_scan_reply_handler;
+    /// ScanReplyEnd handler (empty payload) (unset = ignored)
     EmptyPacketHandler m_scan_reply_end_handler;
+    /// Disconnect packet handler (unset = ignored)
     PacketHandler<protocol::DisconnectMessage> m_disconnect_handler;
+    /// Ping packet handler (unset = ignored)
     PacketHandler<protocol::PingMessage> m_ping_handler;
+    /// NetworkError packet handler (unset = ignored)
     PacketHandler<protocol::NetworkErrorMessage> m_network_error_handler;
+    /// ProxyConfig packet handler (virtual IP and mask) (unset = ignored)
     PacketHandler<protocol::ProxyConfig> m_proxy_config_handler;
+    /// ProxyConnect request handler (unset = ignored)
     PacketHandler<protocol::ProxyConnectRequest> m_proxy_connect_handler;
+    /// ProxyConnectReply response handler (unset = ignored)
     PacketHandler<protocol::ProxyConnectResponse> m_proxy_connect_reply_handler;
+    /// ProxyData handler (header plus raw payload) (unset = ignored)
     ProxyDataHandler m_proxy_data_handler;
+    /// ProxyDisconnect packet handler (unset = ignored)
     PacketHandler<protocol::ProxyDisconnectMessage> m_proxy_disconnect_handler;
+    /// Reject request handler (unset = ignored)
     PacketHandler<protocol::RejectRequest> m_reject_handler;
+    /// RejectReply handler (empty payload) (unset = ignored)
     EmptyPacketHandler m_reject_reply_handler;
+    /// SetAcceptPolicy request handler (unset = ignored)
     PacketHandler<protocol::SetAcceptPolicyRequest> m_accept_policy_handler;
 
     /**

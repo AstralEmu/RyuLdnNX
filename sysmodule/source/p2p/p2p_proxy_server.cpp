@@ -188,8 +188,10 @@ namespace ams::mitm::p2p {
 // Move the stacks out of the class into BSS, where the linker honors
 // the alignment, and have the (singleton) server reference them.
 // Single-host model means we only ever need one set of stacks.
+/// Stack (16 KB, 4 KB aligned) of the accept-loop thread
 alignas(os::ThreadStackAlignment) static constinit u8
     g_p2p_accept_thread_stack[0x4000];
+/// Stack (8 KB, 4 KB aligned) of the UPnP lease-renewal thread
 alignas(os::ThreadStackAlignment) static constinit u8
     g_p2p_lease_thread_stack[0x2000];
 
@@ -206,15 +208,26 @@ alignas(os::ThreadStackAlignment) static constinit u8
 // Slots are claimed/released under g_p2p_session_stack_mutex so concurrent
 // accept() callers (the accept thread is single, but Disconnect() can race
 // with the next accept) don't double-allocate or leak slots.
+/// Number of session recv-thread stacks (one per possible peer)
 constexpr int P2P_SESSION_STACK_COUNT = P2pProxyServer::MAX_PLAYERS;
+/// Size in bytes of each session recv-thread stack
 constexpr size_t P2P_SESSION_STACK_SIZE = 0x4000;
+/// Backing storage of the session stack pool (BSS, 4 KB aligned)
 alignas(os::ThreadStackAlignment) static constinit u8
     g_p2p_session_stacks[P2P_SESSION_STACK_COUNT][P2P_SESSION_STACK_SIZE];
+/// Per-slot in-use flags of the pool; guarded by g_p2p_session_stack_mutex
 static constinit bool g_p2p_session_stack_used[P2P_SESSION_STACK_COUNT] = {};
+/// Protects g_p2p_session_stack_used
 static constinit os::SdkMutex g_p2p_session_stack_mutex;
 
-// Returns slot index in [0, P2P_SESSION_STACK_COUNT), or -1 if the pool is
-// full.
+/**
+ * @brief Claim a free session stack slot
+ *
+ * Thread-safe (takes g_p2p_session_stack_mutex).
+ *
+ * @return Slot index in [0, P2P_SESSION_STACK_COUNT), or -1 if the pool is
+ *         full
+ */
 static int AllocateSessionStackSlot() {
     std::scoped_lock lock(g_p2p_session_stack_mutex);
     for (int i = 0; i < P2P_SESSION_STACK_COUNT; ++i) {
@@ -226,6 +239,14 @@ static int AllocateSessionStackSlot() {
     return -1;
 }
 
+/**
+ * @brief Return a session stack slot to the pool
+ *
+ * Thread-safe. An out-of-range slot (for instance -1 from a failed
+ * AllocateSessionStackSlot) is ignored.
+ *
+ * @param slot Index previously returned by AllocateSessionStackSlot
+ */
 static void ReleaseSessionStackSlot(int slot) {
     if (slot < 0 || slot >= P2P_SESSION_STACK_COUNT) {
         return;
@@ -298,7 +319,6 @@ void SessionRecvThreadEntry(void* arg) {
 /**
  * @brief Constructor - initializes server state
  *
- * @param master_callback Callback function to send packets to the master
  * server. Used to notify about client disconnections. Can be nullptr if
  * notifications aren't needed.
  *
@@ -356,7 +376,6 @@ P2pProxyServer::~P2pProxyServer() {
 /**
  * @brief Start the TCP server and begin accepting connections
  *
- * @param port Specific port to bind to, or 0 for auto-select from range
  * @return true if server started successfully, false on error
  *
  * ## Socket Creation Flow
@@ -931,7 +950,6 @@ void P2pProxyServer::LeaseRenewalLoop() const {
 /**
  * @brief Add a waiting token for an expected joiner
  *
- * @param token Token received from master server
  *
  * ## Token Flow
  *
@@ -981,9 +999,6 @@ void P2pProxyServer::AddWaitingToken(
 /**
  * @brief Try to authenticate a connecting client
  *
- * @param session The P2pProxySession attempting to authenticate
- * @param config The ExternalProxyConfig sent by the client
- * @param remote_ip The client's physical IP address (network byte order)
  * @return true if authentication succeeded, false if no matching token found
  *
  * ## Authentication Process
@@ -1194,7 +1209,6 @@ bool P2pProxyServer::TryRegisterUser(
 /**
  * @brief Configure broadcast address from ProxyConfig
  *
- * @param config ProxyConfig containing IP and subnet mask
  *
  * Calculates the broadcast address for the virtual network.
  * Formula: broadcast = IP | ~mask
@@ -1502,9 +1516,6 @@ void P2pProxyServer::AcceptLoop() {
  * @brief Route a proxy message to appropriate destination(s)
  *
  * @tparam SendFunc Callable type for sending to a session
- * @param sender The session that sent the message
- * @param info ProxyInfo containing source and destination IPs
- * @param send_func Function to call for each target session
  * @return false if the message was rejected as spoofed (nothing routed)
  *
  * ## Routing Logic
@@ -1614,16 +1625,18 @@ bool P2pProxyServer::RouteMessage(
 }
 
 /**
- * @brief Handle ProxyData message from a session
+ * @brief Whether a given dest IP lands on the host's local game
  *
- * ProxyData is the main data transfer message used for UDP game traffic.
- * Routes the data to the destination session(s) based on ProxyInfo.
+ * The caller passes the destination RouteMessage already translated (the
+ * legacy broadcast is rewritten there; a rejected spoof never gets this
+ * far). Caller must hold m_mutex (or be otherwise safe against concurrent
+ * updates to m_host_virtual_ip / m_broadcast_address).
+ *
+ * @param dest_ip Destination IPv4 (Ryujinx format) after RouteMessage
+ * @param host_vip Host's own virtual IPv4; 0 means not assigned yet
+ * @param broadcast_address Network broadcast IPv4 of the session
+ * @return true if the host's game must also receive the packet
  */
-// Whether a given dest IP lands on the host's local game. The caller passes
-// the destination RouteMessage already translated (the legacy broadcast is
-// rewritten there; a rejected spoof never gets this far). Caller must hold
-// m_mutex (or be otherwise safe against concurrent updates to
-// m_host_virtual_ip / m_broadcast_address).
 static inline bool HostShouldReceive(
     uint32_t dest_ip, uint32_t host_vip, uint32_t broadcast_address) {
     if (dest_ip == broadcast_address) {
@@ -1635,6 +1648,14 @@ static inline bool HostShouldReceive(
     return false;
 }
 
+/**
+ * @brief Handle ProxyData message from a session
+ *
+ * ProxyData is the main data transfer message used for UDP game traffic.
+ * Routes the data to the destination session(s) based on ProxyInfo and,
+ * when the destination also covers the host (see HostShouldReceive), hands
+ * it to the host callback. A spoofed source is dropped for everyone.
+ */
 void P2pProxyServer::HandleProxyData(
     P2pProxySession* sender,
     ryu_ldn::protocol::ProxyDataHeader& header,
@@ -1715,6 +1736,9 @@ void P2pProxyServer::HandleProxyData(
  *
  * ProxyConnect initiates a virtual TCP connection between two players.
  * The target responds with ProxyConnectReply (accept/reject).
+ *
+ * @param sender Session the request came from (spoof check in RouteMessage)
+ * @param request Connect request; its ProxyInfo selects the target(s)
  */
 void P2pProxyServer::HandleProxyConnect(
     P2pProxySession* sender, ryu_ldn::protocol::ProxyConnectRequest& request) {
@@ -1735,6 +1759,9 @@ void P2pProxyServer::HandleProxyConnect(
  * @brief Handle ProxyConnectReply message from a session
  *
  * Response to ProxyConnect - indicates whether the connection was accepted.
+ *
+ * @param sender Session the reply came from (spoof check in RouteMessage)
+ * @param response Reply; its ProxyInfo selects the target(s)
  */
 void P2pProxyServer::HandleProxyConnectReply(
     P2pProxySession* sender,
@@ -1756,6 +1783,9 @@ void P2pProxyServer::HandleProxyConnectReply(
  * @brief Handle ProxyDisconnect message from a session
  *
  * Notifies the target that a virtual connection has been closed.
+ *
+ * @param sender Session the message came from (spoof check in RouteMessage)
+ * @param message Disconnect message; its ProxyInfo selects the target(s)
  */
 void P2pProxyServer::HandleProxyDisconnect(
     P2pProxySession* sender,
@@ -1997,9 +2027,6 @@ void P2pProxyServer::NotifyMasterDisconnect(uint32_t virtual_ip) {
 /**
  * @brief Constructor - initialize session state
  *
- * @param server Parent P2pProxyServer
- * @param socket_fd Connected TCP socket file descriptor
- * @param remote_ip Client's IP address (host byte order)
  */
 P2pProxySession::P2pProxySession(
     P2pProxyServer* server, int socket_fd, uint32_t remote_ip)
@@ -2116,7 +2143,6 @@ bool P2pProxySession::Send(const void* data, size_t size) const {
 /**
  * @brief Disconnect the session
  *
- * @param from_master true if disconnect was initiated by master server/cleanup
  *
  * Closes the socket and optionally notifies the parent server.
  * If from_master is true, we skip the notification (already handled).
@@ -2340,7 +2366,10 @@ void P2pProxySession::ProcessData(const uint8_t* data, size_t size) {
  * @brief Handle ExternalProxy packet (client authentication)
  *
  * Called when a client sends their auth token. Delegates to server's
- * TryRegisterUser() for validation.
+ * TryRegisterUser() for validation. On failure the session is closed and
+ * the parent server is notified (Disconnect(false)).
+ *
+ * @param config Auth token and metadata sent by the client
  */
 void P2pProxySession::HandleExternalProxy(
     const ryu_ldn::protocol::ExternalProxyConfig& config) {

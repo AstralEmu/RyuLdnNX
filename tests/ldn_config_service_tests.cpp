@@ -22,6 +22,13 @@ using ryu_ldn::config::ConfigManager;
 
 namespace {
 
+/**
+ * @brief Calls an IPC getter and returns what it wrote
+ *
+ * @param fn LdnConfigService getter taking an Out<T>
+ * @return the value written by the getter (value-initialized if the call
+ *         failed)
+ */
 template <class T>
 T get(ams::Result (*fn)(Out<T>)) {
     T value{};
@@ -31,6 +38,12 @@ T get(ams::Result (*fn)(Out<T>)) {
     return value;
 }
 
+/**
+ * @brief The shared state, cleared
+ *
+ * @return the SharedState singleton, reset and with no pending reconnect
+ *         request
+ */
 SharedState& fresh_state() {
     SharedState& s = SharedState::GetInstance();
     s.Reset();
@@ -38,6 +51,11 @@ SharedState& fresh_state() {
     return s;
 }
 
+/**
+ * @brief Unique config file path in /tmp, not created
+ *
+ * @return path of a not yet existing file
+ */
 std::string temp_config_path() {
     char path[128];
     std::snprintf(
@@ -51,7 +69,11 @@ std::string temp_config_path() {
 
 }  // namespace
 
-// Must stay first: it relies on ConfigManager::Initialize() not having run yet.
+/**
+ * @brief Verifies that SaveConfig and ReloadConfig report IoError while
+ *        ConfigManager is not initialized. Must stay first: it relies on
+ *        ConfigManager::Initialize() not having run yet.
+ */
 TEST(saving_or_reloading_before_the_config_is_initialized_reports_io_error) {
     ASSERT_TRUE(
         get<ConfigResult>(&LdnConfigService::SaveConfig) ==
@@ -61,6 +83,10 @@ TEST(saving_or_reloading_before_the_config_is_initialized_reports_io_error) {
         ConfigResult::IoError);
 }
 
+/**
+ * @brief Verifies that the service can be constructed with a null parent and
+ *        with a parent communication service.
+ */
 TEST(the_service_can_be_built_with_or_without_a_parent) {
     LdnConfigService without(nullptr);
     LdnConfigService with(reinterpret_cast<ICommunicationService*>(&without));
@@ -68,12 +94,19 @@ TEST(the_service_can_be_built_with_or_without_a_parent) {
     ASSERT_TRUE(true);
 }
 
+/// Verifies that GetVersion returns a non-empty, NUL-terminated string.
 TEST(the_version_is_a_terminated_string) {
     auto version = get<std::array<char, 32>>(&LdnConfigService::GetVersion);
     ASSERT_TRUE(version[31] == '\0');
     ASSERT_TRUE(std::strlen(version.data()) > 0);
 }
 
+/**
+ * @brief Verifies the CommState to ConnectionStatus mapping of
+ *        GetConnectionStatus: None and Error are Disconnected, Initialized is
+ *        Connecting, AccessPoint and Station are Connected, the two
+ *        session-established states are Ready.
+ */
 TEST(the_connection_status_follows_the_ldn_state) {
     SharedState& s = fresh_state();
     struct Case {
@@ -97,6 +130,10 @@ TEST(the_connection_status_follows_the_ldn_state) {
     }
 }
 
+/**
+ * @brief Verifies that GetLdnState and GetLastRtt return the raw values held by
+ *        SharedState.
+ */
 TEST(the_raw_ldn_state_and_rtt_come_from_the_shared_state) {
     SharedState& s = fresh_state();
     s.SetLdnState(CommState::Station);
@@ -107,6 +144,10 @@ TEST(the_raw_ldn_state_and_rtt_come_from_the_shared_state) {
     ASSERT_EQ(get<u32>(&LdnConfigService::GetLastRtt), static_cast<u32>(77));
 }
 
+/**
+ * @brief Verifies that GetSessionInfo returns the node count, node count max,
+ *        local node id and host flag set in SharedState.
+ */
 TEST(the_session_info_comes_from_the_shared_state) {
     SharedState& s = fresh_state();
     s.SetSessionInfo(3, 8, 1, true);
@@ -117,12 +158,20 @@ TEST(the_session_info_comes_from_the_shared_state) {
     ASSERT_EQ(info.is_host, 1);
 }
 
+/**
+ * @brief Verifies that ForceReconnect succeeds and raises the reconnect request
+ *        in SharedState.
+ */
 TEST(force_reconnect_requests_a_reconnection) {
     SharedState& s = fresh_state();
     ASSERT_TRUE(LdnConfigService::ForceReconnect().IsSuccess());
     ASSERT_TRUE(s.ConsumeReconnectRequest());
 }
 
+/**
+ * @brief Verifies that initializing ConfigManager on a missing file succeeds
+ *        and that ReloadConfig then reports FileNotFound.
+ */
 TEST(the_config_is_initialized_on_a_missing_file_and_reloads_as_not_found) {
     const std::string path = temp_config_path();
     ASSERT_TRUE(ConfigManager::Instance().Initialize(path.c_str()));
@@ -131,6 +180,11 @@ TEST(the_config_is_initialized_on_a_missing_file_and_reloads_as_not_found) {
         ConfigResult::FileNotFound);
 }
 
+/**
+ * @brief Verifies that SetServerAddress stores the address (read back by
+ *        GetServerAddress) and asks for a reconnect only when an LDN session is
+ *        active (Station), not in None or Initialized.
+ */
 TEST(setting_the_server_address_stores_it_and_reconnects_only_when_in_session) {
     SharedState& s = fresh_state();
     ServerAddress addr{};
@@ -152,6 +206,11 @@ TEST(setting_the_server_address_stores_it_and_reconnects_only_when_in_session) {
     ASSERT_EQ(got.port, 31337);
 }
 
+/**
+ * @brief Verifies the debug settings: SetDebugEnabled and SetLogToFile read
+ *        back consistently, any non-zero value counts as 1, and SetDebugLevel
+ *        clamps values above 3 to 3.
+ */
 TEST(debug_settings_round_trip) {
     ASSERT_TRUE(LdnConfigService::SetDebugEnabled(1).IsSuccess());
     ASSERT_EQ(
@@ -173,6 +232,10 @@ TEST(debug_settings_round_trip) {
     ASSERT_EQ(get<u32>(&LdnConfigService::GetDebugLevel), static_cast<u32>(3));
 }
 
+/**
+ * @brief Verifies that the LDN-enabled flag and the passphrase are stored and
+ *        read back unchanged.
+ */
 TEST(ldn_enabled_and_passphrase_round_trip) {
     ASSERT_TRUE(LdnConfigService::SetLdnEnabled(0).IsSuccess());
     ASSERT_EQ(get<u32>(&LdnConfigService::GetLdnEnabled), static_cast<u32>(0));
@@ -186,6 +249,11 @@ TEST(ldn_enabled_and_passphrase_round_trip) {
     ASSERT_TRUE(std::strcmp(got.passphrase, "Ryujinx-0123abcd") == 0);
 }
 
+/**
+ * @brief Verifies that the connect timeout (5000), ping interval (0), reconnect
+ *        delay (1000) and max reconnect attempts (0) are fixed values and that
+ *        their setters succeed without changing them.
+ */
 TEST(the_fixed_network_settings_keep_their_documented_values) {
     ASSERT_EQ(
         get<u32>(&LdnConfigService::GetConnectTimeout), static_cast<u32>(5000));
@@ -212,6 +280,11 @@ TEST(the_fixed_network_settings_keep_their_documented_values) {
         static_cast<u32>(0));
 }
 
+/**
+ * @brief Verifies that SaveConfig and ReloadConfig succeed and that a reload
+ *        restores the value saved earlier (debug level 1) over a later change
+ *        (3).
+ */
 TEST(save_then_reload_report_success_and_keep_the_saved_values) {
     ASSERT_TRUE(LdnConfigService::SetDebugLevel(1).IsSuccess());
     ASSERT_TRUE(
@@ -224,6 +297,10 @@ TEST(save_then_reload_report_success_and_keep_the_saved_values) {
     ASSERT_EQ(get<u32>(&LdnConfigService::GetDebugLevel), static_cast<u32>(1));
 }
 
+/**
+ * @brief Verifies that ToIpcResult maps each ConfigResult to its IPC
+ *        counterpart and an unknown value to IoError.
+ */
 TEST(every_config_file_result_maps_to_its_ipc_counterpart) {
     using Src = ryu_ldn::config::ConfigResult;
     ASSERT_TRUE(
@@ -241,6 +318,11 @@ TEST(every_config_file_result_maps_to_its_ipc_counterpart) {
         ConfigResult::IoError);
 }
 
+/**
+ * @brief Runs every registered test of this suite
+ *
+ * @return 1 if at least one test failed, 0 otherwise
+ */
 int main() {
     return test_report("LdnConfigService Tests");
 }

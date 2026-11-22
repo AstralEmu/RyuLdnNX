@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  *
- * @section Test Categories
+ * @section client_test_categories Test Categories
  *
  * ### Configuration Tests
  * Verify default and custom config values.
@@ -173,7 +173,9 @@ static std::unique_ptr<RyuLdnClient> make_client_no_reconnect(
 
 /** @brief Recorded state transitions for callback verification */
 struct StateChange {
+    /** @brief State before the transition */
     ConnectionState old_state;
+    /** @brief State after the transition */
     ConnectionState new_state;
 };
 
@@ -256,6 +258,8 @@ static void drive_to_ready(
  * Verifies that default host is "127.0.0.1", port is 30456,
  * recv_timeout is 20ms, ping_interval is 0 (disabled), and
  * auto_reconnect is true.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_config_defaults() {
     RyuLdnClientConfig cfg;
@@ -273,6 +277,8 @@ bool test_config_defaults() {
  *
  * Verifies that values from a Config struct are properly copied
  * and that ping_interval is forced to 0 regardless of config.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_config_from_app_config() {
     config::Config app_cfg = config::get_default_config();
@@ -295,6 +301,8 @@ bool test_config_from_app_config() {
 
 /**
  * @brief Test default constructor creates client in Disconnected state
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_default_construction() {
     RyuLdnClient client;
@@ -308,6 +316,8 @@ bool test_default_construction() {
 
 /**
  * @brief Test constructor with custom config
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_construction_with_config() {
     RyuLdnClientConfig cfg;
@@ -322,6 +332,8 @@ bool test_construction_with_config() {
 
 /**
  * @brief Test constructor with injected ITcpClient (dependency injection)
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_construction_with_mock() {
     MockTcpClient* mock;
@@ -334,6 +346,8 @@ bool test_construction_with_mock() {
 
 /**
  * @brief Test that multiple client instances coexist safely
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_multiple_clients() {
     RyuLdnClient c1, c2, c3;
@@ -345,6 +359,8 @@ bool test_multiple_clients() {
 
 /**
  * @brief Test set_config updates configuration and reconnect manager
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_set_config() {
     MockTcpClient* mock;
@@ -362,6 +378,8 @@ bool test_set_config() {
 
 /**
  * @brief Test move constructor transfers state correctly
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_move_constructor() {
     RyuLdnClientConfig cfg;
@@ -375,6 +393,8 @@ bool test_move_constructor() {
 
 /**
  * @brief Test move assignment transfers state correctly
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_move_assignment() {
     RyuLdnClientConfig cfg;
@@ -389,6 +409,8 @@ bool test_move_assignment() {
 
 /**
  * @brief Test self-move-assignment is safe (guarded by if)
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_self_move_assignment() {
     RyuLdnClientConfig cfg;
@@ -408,6 +430,8 @@ bool test_self_move_assignment() {
 
 /**
  * @brief Test is_connected() returns false when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_is_connected_when_disconnected() {
     RyuLdnClient client;
@@ -417,6 +441,8 @@ bool test_is_connected_when_disconnected() {
 
 /**
  * @brief Test is_ready() returns false when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_is_ready_when_disconnected() {
     RyuLdnClient client;
@@ -426,6 +452,8 @@ bool test_is_ready_when_disconnected() {
 
 /**
  * @brief Test is_transitioning() returns false when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_is_transitioning_when_disconnected() {
     RyuLdnClient client;
@@ -435,6 +463,8 @@ bool test_is_transitioning_when_disconnected() {
 
 /**
  * @brief Test get_retry_count() returns 0 initially
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_get_retry_count_initial() {
     RyuLdnClient client;
@@ -448,6 +478,8 @@ bool test_get_retry_count_initial() {
 
 /**
  * @brief Test disconnect() is safe when already disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_disconnect_when_disconnected() {
     RyuLdnClient client;
@@ -458,6 +490,8 @@ bool test_disconnect_when_disconnected() {
 
 /**
  * @brief Test multiple disconnect() calls are safe
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_multiple_disconnect_calls() {
     RyuLdnClient client;
@@ -474,6 +508,8 @@ bool test_multiple_disconnect_calls() {
 
 /**
  * @brief Test send_scan returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_scan_not_ready() {
     RyuLdnClient client;
@@ -484,6 +520,8 @@ bool test_send_scan_not_ready() {
 
 /**
  * @brief Test send_create_access_point returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_create_access_point_not_ready() {
     RyuLdnClient client;
@@ -494,6 +532,8 @@ bool test_send_create_access_point_not_ready() {
 
 /**
  * @brief Test send_connect returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_connect_not_ready() {
     RyuLdnClient client;
@@ -505,6 +545,8 @@ bool test_send_connect_not_ready() {
 /**
  * @brief Test send_create_access_point_private returns NotReady when
  * disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_create_access_point_private_not_ready() {
     RyuLdnClient client;
@@ -516,6 +558,8 @@ bool test_send_create_access_point_private_not_ready() {
 
 /**
  * @brief Test send_connect_private returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_connect_private_not_ready() {
     RyuLdnClient client;
@@ -526,6 +570,8 @@ bool test_send_connect_private_not_ready() {
 
 /**
  * @brief Test send_proxy_data returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_proxy_data_not_ready() {
     RyuLdnClient client;
@@ -539,6 +585,8 @@ bool test_send_proxy_data_not_ready() {
 
 /**
  * @brief Test send_ping returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_ping_not_ready() {
     RyuLdnClient client;
@@ -548,6 +596,8 @@ bool test_send_ping_not_ready() {
 
 /**
  * @brief Test send_ping_response returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_ping_response_not_ready() {
     RyuLdnClient client;
@@ -557,6 +607,8 @@ bool test_send_ping_response_not_ready() {
 
 /**
  * @brief Test send_disconnect_network returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_disconnect_network_not_ready() {
     RyuLdnClient client;
@@ -566,6 +618,8 @@ bool test_send_disconnect_network_not_ready() {
 
 /**
  * @brief Test send_set_accept_policy returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_set_accept_policy_not_ready() {
     RyuLdnClient client;
@@ -577,6 +631,8 @@ bool test_send_set_accept_policy_not_ready() {
 
 /**
  * @brief Test send_set_advertise_data returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_set_advertise_data_not_ready() {
     RyuLdnClient client;
@@ -589,6 +645,8 @@ bool test_send_set_advertise_data_not_ready() {
 
 /**
  * @brief Test send_reject returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_reject_not_ready() {
     RyuLdnClient client;
@@ -600,6 +658,8 @@ bool test_send_reject_not_ready() {
 
 /**
  * @brief Test send_raw_packet returns NotReady when disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_raw_packet_not_ready() {
     RyuLdnClient client;
@@ -615,6 +675,8 @@ bool test_send_raw_packet_not_ready() {
 
 /**
  * @brief Test set_state_callback(nullptr) is safe (no-op)
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_set_state_callback_null() {
     RyuLdnClient client;
@@ -624,6 +686,8 @@ bool test_set_state_callback_null() {
 
 /**
  * @brief Test set_packet_callback(nullptr) is safe (no-op)
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_set_packet_callback_null() {
     RyuLdnClient client;
@@ -636,6 +700,8 @@ bool test_set_packet_callback_null() {
  *
  * After connect() with a succeeding mock, the state callback
  * should receive at least one transition.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_state_callback_on_connect_success() {
     MockTcpClient* mock;
@@ -655,6 +721,8 @@ bool test_state_callback_on_connect_success() {
  *
  * After connect() with a failing mock and auto_reconnect,
  * the state callback should record Disconnected → Connecting → Backoff.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_state_callback_on_connect_fail() {
     MockTcpClient* mock;
@@ -671,6 +739,8 @@ bool test_state_callback_on_connect_fail() {
 
 /**
  * @brief Test that user_data pointer is passed through to state callback
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_state_callback_user_data() {
     MockTcpClient* mock;
@@ -687,6 +757,8 @@ bool test_state_callback_user_data() {
 
 /**
  * @brief Test setting and clearing packet callback
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_packet_callback_set_and_clear() {
     MockTcpClient* mock;
@@ -705,6 +777,8 @@ bool test_packet_callback_set_and_clear() {
  *
  * Verifies connect() returns Success, the mock receives the host/port,
  * and the client enters Connected state.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_success_via_mock() {
     MockTcpClient* mock;
@@ -725,6 +799,8 @@ bool test_connect_success_via_mock() {
 
 /**
  * @brief Test connect failure leads to Backoff state (auto_reconnect=true)
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_fail_backoff() {
     MockTcpClient* mock;
@@ -742,6 +818,8 @@ bool test_connect_fail_backoff() {
 
 /**
  * @brief Test connect failure with auto_reconnect=false stays in Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_fail_no_reconnect() {
     MockTcpClient* mock;
@@ -755,6 +833,8 @@ bool test_connect_fail_no_reconnect() {
 
 /**
  * @brief Test connect() returns AlreadyConnected when already connected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_already_connected() {
     MockTcpClient* mock;
@@ -770,6 +850,8 @@ bool test_connect_already_connected() {
 
 /**
  * @brief Test connect() with null host uses config default
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_null_host() {
     MockTcpClient* mock;
@@ -783,6 +865,8 @@ bool test_connect_null_host() {
 
 /**
  * @brief Test connect() with explicit host/port updates config
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_with_host_and_port() {
     MockTcpClient* mock;
@@ -800,6 +884,8 @@ bool test_connect_with_host_and_port() {
 
 /**
  * @brief Test connect() returns InternalError when initialize() fails
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_initialize_error() {
     MockTcpClient* mock;
@@ -817,6 +903,8 @@ bool test_connect_initialize_error() {
 
 /**
  * @brief Test disconnect() fires state callback and reaches Disconnected
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_disconnect_with_callback() {
     MockTcpClient* mock;
@@ -843,6 +931,8 @@ bool test_disconnect_with_callback() {
  *
  * After connect(), the first update() in Connected state should call
  * send_passphrase and send_initialize on the mock.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_connected_sends_handshake() {
     MockTcpClient* mock;
@@ -868,6 +958,8 @@ bool test_update_connected_sends_handshake() {
  *
  * When send_initialize() fails (ConnectionLost), the client should
  * transition to Backoff and fire the state callback.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_connected_handshake_fail() {
     MockTcpClient* mock;
@@ -891,6 +983,8 @@ bool test_update_connected_handshake_fail() {
  *
  * After entering Handshaking, advancing time past the 5000ms timeout
  * should transition to Backoff.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_handshaking_timeout() {
     MockTcpClient* mock;
@@ -917,6 +1011,8 @@ bool test_update_handshaking_timeout() {
  *
  * After receiving an Initialize packet from the server, the client
  * should transition from Handshaking to Ready.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_handshaking_recv_init_response() {
     MockTcpClient* mock;
@@ -931,6 +1027,8 @@ bool test_update_handshaking_recv_init_response() {
 
 /**
  * @brief Test ConnectionLost during handshake triggers callback and Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_handshaking_recv_connection_lost() {
     MockTcpClient* mock;
@@ -954,6 +1052,8 @@ bool test_update_handshaking_recv_connection_lost() {
  * @brief Test NetworkError response (non-fatal) triggers Backoff
  *
  * Server sends a ConnectionRejected error during handshake → Backoff.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_handshaking_recv_network_error() {
     MockTcpClient* mock;
@@ -984,6 +1084,8 @@ bool test_update_handshaking_recv_network_error() {
  * @brief Test VersionMismatch error triggers fatal Error state
  *
  * Server sends VersionMismatch → Error (no retry).
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_handshaking_recv_network_error_version_mismatch() {
     MockTcpClient* mock;
@@ -1009,6 +1111,8 @@ bool test_update_handshaking_recv_network_error_version_mismatch() {
 
 /**
  * @brief Test SyncNetwork response as alternative handshake success
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_handshaking_recv_sync_network() {
     MockTcpClient* mock;
@@ -1032,6 +1136,8 @@ bool test_update_handshaking_recv_sync_network() {
 
 /**
  * @brief Test server Disconnect during handshake triggers Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_handshaking_recv_disconnect() {
     MockTcpClient* mock;
@@ -1056,6 +1162,8 @@ bool test_update_handshaking_recv_disconnect() {
 /**
  * @brief Test handshake timeout with auto_reconnect=false still transitions to
  * Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handshake_timeout_no_reconnect() {
     MockTcpClient* mock;
@@ -1078,6 +1186,8 @@ bool test_handshake_timeout_no_reconnect() {
  *
  * When config has a non-empty passphrase, send_initialize should
  * send it first, then the Initialize message.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handshake_passphrase_with_value() {
     auto mock = std::make_unique<MockTcpClient>();
@@ -1109,6 +1219,8 @@ bool test_handshake_passphrase_with_value() {
  *
  * When receive_packet returns ConnectionLost, the client should
  * transition to Backoff and fire the state callback.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_ready_process_packets_connection_lost() {
     MockTcpClient* mock;
@@ -1135,6 +1247,8 @@ bool test_update_ready_process_packets_connection_lost() {
  *
  * After connect failure → Backoff, advancing time past the backoff
  * delay should trigger a retry that connects successfully.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_backoff_expiry_and_retry() {
     MockTcpClient* mock;
@@ -1172,6 +1286,8 @@ bool test_update_backoff_expiry_and_retry() {
  *
  * The state machine still transitions to Backoff, but no retry timer
  * is started, so the client stays in Backoff indefinitely.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_backoff_no_reconnect() {
     MockTcpClient* mock;
@@ -1192,6 +1308,8 @@ bool test_update_backoff_no_reconnect() {
 
 /**
  * @brief Test disconnect() transitions to Disconnected via Disconnecting
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_disconnecting() {
     MockTcpClient* mock;
@@ -1211,6 +1329,8 @@ bool test_update_disconnecting() {
  *
  * VersionMismatch causes Error state. Subsequent update() calls
  * should be no-ops.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_error_state_noop() {
     MockTcpClient* mock;
@@ -1241,6 +1361,8 @@ bool test_update_error_state_noop() {
  *
  * When in Ready state and the mock returns ConnectionLost for send_scan,
  * the client should transition to Backoff and invoke the state callback.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_scan_connection_lost_callback() {
     MockTcpClient* mock;
@@ -1268,6 +1390,8 @@ bool test_send_scan_connection_lost_callback() {
 
 /**
  * @brief Test client_op_result_to_string for all enum values and unknown
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_client_op_result_all_to_string() {
     ASSERT_STREQ(
@@ -1303,6 +1427,8 @@ bool test_client_op_result_all_to_string() {
 
 /**
  * @brief Test NetworkErrorCode enum values
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_error_code_types() {
     ASSERT_EQ(static_cast<uint32_t>(NetworkErrorCode::None), 0);
@@ -1321,6 +1447,8 @@ bool test_error_code_types() {
 
 /**
  * @brief Test get_last_rtt_ms returns 0 initially
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_get_last_rtt_initial() {
     RyuLdnClient client;
@@ -1330,6 +1458,8 @@ bool test_get_last_rtt_initial() {
 
 /**
  * @brief Test get_last_error_code returns None initially
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_get_last_error_code_initial() {
     RyuLdnClient client;
@@ -1348,6 +1478,8 @@ bool test_get_last_error_code_initial() {
  *
  * Verifies that the default connect() forwards to connect(host, port)
  * with the configured values.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_no_args() {
     MockTcpClient* mock;
@@ -1370,6 +1502,8 @@ bool test_connect_no_args() {
  *
  * Per Ryujinx: connect is a one-shot attempt. If the state machine is in
  * a state where Connect is not a valid event, it returns InvalidState.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_invalid_state() {
     MockTcpClient* mock;
@@ -1406,6 +1540,8 @@ bool test_connect_invalid_state() {
 
 /**
  * @brief Test update(Disconnected) is a no-op
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_disconnected_noop() {
     MockTcpClient* mock;
@@ -1421,6 +1557,8 @@ bool test_update_disconnected_noop() {
  *
  * Per Ryujinx: connect is synchronous. If we somehow enter Connecting
  * during update(), try_connect is called again.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_connecting_retries_and_succeeds() {
     MockTcpClient* mock;
@@ -1455,6 +1593,8 @@ bool test_update_connecting_retries_and_succeeds() {
  *
  * Per Ryujinx: on disconnect the client sends a Disconnect message,
  * then transitions Disconnecting -> Disconnected.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_disconnecting_transitions() {
     MockTcpClient* mock;
@@ -1481,6 +1621,8 @@ bool test_update_disconnecting_transitions() {
  *
  * Per Ryujinx protocol: server sends Ping with requester=0, client
  * echoes it back with the same ID and requester=0.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handle_packet_ping_echo() {
     MockTcpClient* mock;
@@ -1511,6 +1653,8 @@ bool test_handle_packet_ping_echo() {
  *
  * Per Ryujinx: when we receive a pong (requester=1), it means the
  * server is responding to our ping. We clear the pending count.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handle_packet_pong_response() {
     MockTcpClient* mock;
@@ -1545,6 +1689,8 @@ bool test_handle_packet_pong_response() {
  *
  * Per Ryujinx: server sends PacketId::Disconnect to tell client to
  * disconnect. The client processes it via handle_packet → Disconnect event.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handle_packet_disconnect() {
     MockTcpClient* mock;
@@ -1574,6 +1720,8 @@ bool test_handle_packet_disconnect() {
  * Per Ryujinx protocol: packets not handled by the client itself
  * (Connected, ScanReply, ProxyData, etc.) are forwarded to the
  * user-registered packet callback for game-level processing.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handle_packet_unknown_forwarded_to_callback() {
     MockTcpClient* mock;
@@ -1621,6 +1769,8 @@ bool test_handle_packet_unknown_forwarded_to_callback() {
  * pings are disabled. This test verifies that IF ping_interval_ms
  * were enabled, and pending_ping_count > 0 with timeout elapsed,
  * the client detects the timeout and reconnects.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_ready_ping_timeout() {
     MockTcpClient* mock;
@@ -1653,6 +1803,8 @@ bool test_update_ready_ping_timeout() {
  *
  * Per Ryujinx: ping_interval_ms is forced to 0 in production config.
  * This test validates the ping sending path works when enabled.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_ready_ping_send() {
     MockTcpClient* mock;
@@ -1679,6 +1831,8 @@ bool test_update_ready_ping_send() {
  *
  * When send_ping returns ConnectionLost, the client should
  * transition to Backoff and fire the state callback.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_ping_connection_lost_callback() {
     MockTcpClient* mock;
@@ -1708,6 +1862,10 @@ bool test_send_ping_connection_lost_callback() {
 
 /**
  * @brief Helper: drive a client to Ready state and check it's ready
+ *
+ * @param mock mock transport behind client
+ * @param client client to drive
+ * @return true if the client reached Ready
  */
 static bool drive_and_check_ready(MockTcpClient* mock, RyuLdnClient* client) {
     drive_to_ready(client, mock, 1000);
@@ -1720,6 +1878,8 @@ static bool drive_and_check_ready(MockTcpClient* mock, RyuLdnClient* client) {
  * Per the pattern established in send_scan: all send_* methods that
  * detect ConnectionLost should fire the state callback and transition
  * to Backoff.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_create_access_point_connection_lost() {
     MockTcpClient* mock;
@@ -1738,6 +1898,13 @@ bool test_send_create_access_point_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_connect_request returns SendFailed and the client moves
+ *        to Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_connect_request_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1755,6 +1922,13 @@ bool test_send_connect_request_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_create_access_point_private returns SendFailed and the
+ *        client moves to Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_create_access_point_private_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1771,6 +1945,13 @@ bool test_send_create_access_point_private_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_connect_private returns SendFailed and the client moves
+ *        to Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_connect_private_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1787,6 +1968,13 @@ bool test_send_connect_private_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_proxy_data returns SendFailed and the client moves to
+ *        Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_proxy_data_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1804,6 +1992,13 @@ bool test_send_proxy_data_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_ping_response returns SendFailed and the client moves to
+ *        Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_ping_response_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1819,6 +2014,13 @@ bool test_send_ping_response_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_disconnect_network returns SendFailed and the client
+ *        moves to Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_disconnect_network_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1834,6 +2036,13 @@ bool test_send_disconnect_network_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_set_accept_policy returns SendFailed and the client moves
+ *        to Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_set_accept_policy_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1850,6 +2059,13 @@ bool test_send_set_accept_policy_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_set_advertise_data returns SendFailed and the client
+ *        moves to Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_set_advertise_data_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1866,6 +2082,12 @@ bool test_send_set_advertise_data_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_reject returns SendFailed and the client moves to Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_reject_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1881,6 +2103,13 @@ bool test_send_reject_connection_lost() {
     return true;
 }
 
+/**
+ * @brief Verifies that when the transport reports ConnectionLost,
+ *        client->send_raw_packet returns SendFailed and the client moves to
+ *        Backoff
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_raw_packet_connection_lost() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1903,6 +2132,8 @@ bool test_send_raw_packet_connection_lost() {
 
 /**
  * @brief Test successful send_create_access_point increments mock counter
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_create_access_point_success() {
     MockTcpClient* mock;
@@ -1917,6 +2148,12 @@ bool test_send_create_access_point_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_connect_request forwards the request to the
+ *        TCP client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_connect_request_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1930,6 +2167,12 @@ bool test_send_connect_request_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_create_access_point_private forwards the
+ *        request to the TCP client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_create_access_point_private_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1943,6 +2186,12 @@ bool test_send_create_access_point_private_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_connect_private forwards the request to the
+ *        TCP client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_connect_private_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1956,6 +2205,12 @@ bool test_send_connect_private_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_proxy_data forwards the request to the TCP
+ *        client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_proxy_data_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1970,6 +2225,12 @@ bool test_send_proxy_data_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_ping forwards the request to the TCP client
+ *        exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_ping_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1982,6 +2243,12 @@ bool test_send_ping_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_ping_response forwards the request to the
+ *        TCP client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_ping_response_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -1994,6 +2261,12 @@ bool test_send_ping_response_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_disconnect_network forwards the request to
+ *        the TCP client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_disconnect_network_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -2006,6 +2279,12 @@ bool test_send_disconnect_network_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_set_accept_policy forwards the request to
+ *        the TCP client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_set_accept_policy_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -2019,6 +2298,12 @@ bool test_send_set_accept_policy_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_set_advertise_data forwards the request to
+ *        the TCP client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_set_advertise_data_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -2032,6 +2317,12 @@ bool test_send_set_advertise_data_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_reject forwards the request to the TCP
+ *        client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_reject_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -2045,6 +2336,12 @@ bool test_send_reject_success() {
     return true;
 }
 
+/**
+ * @brief Verifies that client->send_raw_packet forwards the request to the TCP
+ *        client exactly once and returns Success
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_raw_packet_success() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -2069,6 +2366,8 @@ bool test_send_raw_packet_success() {
  * Per the pattern: when send returns a failure that is NOT ConnectionLost,
  * the state remains Ready and SendFailed is returned. Only ConnectionLost
  * triggers state transition.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_scan_generic_failure() {
     MockTcpClient* mock;
@@ -2083,6 +2382,12 @@ bool test_send_scan_generic_failure() {
     return true;
 }
 
+/**
+ * @brief Verifies that a non-ConnectionLost transport failure makes
+ *        client->send_ping return SendFailed and leaves the client in Ready
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
 bool test_send_ping_generic_failure() {
     MockTcpClient* mock;
     auto client = make_client(mock);
@@ -2105,6 +2410,8 @@ bool test_send_ping_generic_failure() {
  * Per Ryujinx protocol: the passphrase is sent before Initialize.
  * If the connection is lost during passphrase send, the client should
  * transition to Backoff with auto-reconnect.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_initialize_passphrase_connection_lost() {
     MockTcpClient* mock;
@@ -2130,6 +2437,8 @@ bool test_send_initialize_passphrase_connection_lost() {
  *
  * Per the same pattern as passphrase: if the TCP connection drops
  * while sending the Initialize message, we get ConnectionLost.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_initialize_connection_lost() {
     MockTcpClient* mock;
@@ -2165,6 +2474,8 @@ bool test_send_initialize_connection_lost() {
  * When passphrase or initialize send fails with a non-ConnectionLost
  * error (e.g., SendFailed), the client should transition to Backoff
  * with HandshakeFailed.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_initialize_generic_failure() {
     MockTcpClient* mock;
@@ -2194,6 +2505,8 @@ bool test_send_initialize_generic_failure() {
  *
  * Even with auto_reconnect=false, is_backoff_expired() can be true
  * if time has advanced. The state machine allows BackoffExpired → Retrying.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_backoff_expired_no_reconnect_stays() {
     MockTcpClient* mock;
@@ -2237,6 +2550,8 @@ bool test_update_backoff_expired_no_reconnect_stays() {
  *
  * When receive_packet returns Timeout, the client should stay in Ready
  * and not change state.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_ready_no_packets() {
     MockTcpClient* mock;
@@ -2257,6 +2572,8 @@ bool test_update_ready_no_packets() {
  *
  * When receive_packet returns a generic error (e.g., BufferTooSmall),
  * the client should stay in Ready and simply break out of the loop.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_ready_recv_generic_error() {
     MockTcpClient* mock;
@@ -2281,6 +2598,8 @@ bool test_update_ready_recv_generic_error() {
  * If m_handshake_sent is true and we're still in Connected, we should
  * not re-send the handshake. This path shouldn't normally be reached
  * since Connected transitions to Handshaking after handshake is sent.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_update_connected_handshake_already_sent() {
     MockTcpClient* mock;
@@ -2304,6 +2623,8 @@ bool test_update_connected_handshake_already_sent() {
 
 /**
  * @brief Test connect() with default config uses correct host and port
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_connect_default_args() {
     MockTcpClient* mock;
@@ -2326,6 +2647,8 @@ bool test_connect_default_args() {
  *
  * Per Ryujinx protocol: NetworkError packet carries an error code
  * that the client stores for later inspection.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_get_last_error_code_after_network_error() {
     MockTcpClient* mock;
@@ -2357,7 +2680,15 @@ bool test_get_last_error_code_after_network_error() {
 // handshake responses with a state callback registered
 // ============================================================================
 
-/** @brief Push a packet of the given type and payload bytes onto the mock queue
+/**
+ * @brief Push a packet of the given type and payload bytes onto the mock queue
+ *
+ * @param mock mock whose recv_queue receives the packet; next_recv_result is
+ *             set to Success
+ * @param id packet type
+ * @param payload payload bytes copied into the packet, may be null when size
+ *                is 0
+ * @param size payload size in bytes
  */
 static void push_packet(
     MockTcpClient* mock, PacketId id, const void* payload, size_t size) {
@@ -2371,7 +2702,14 @@ static void push_packet(
     mock->next_recv_result = ClientResult::Success;
 }
 
-/** @brief Connect and send the handshake so the client waits in Handshaking */
+/**
+ * @brief Connect and send the handshake so the client waits in Handshaking
+ *
+ * @param client client to drive
+ * @param mock mock transport behind client, scripted to succeed
+ * @param t timestamp passed to update(), which also starts the handshake
+ *          timeout clock
+ */
 static void drive_to_handshaking(
     RyuLdnClient* client, MockTcpClient* mock, uint64_t t) {
     mock->next_connect_result = ClientResult::Success;
@@ -2383,6 +2721,8 @@ static void drive_to_handshaking(
 /**
  * @brief A Disconnect packet from the server in Ready moves the client to
  * Disconnecting; the next update() completes it to Disconnected.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_server_disconnect_in_ready_walks_through_disconnecting() {
     MockTcpClient* mock;
@@ -2408,6 +2748,8 @@ bool test_server_disconnect_in_ready_walks_through_disconnecting() {
 /**
  * @brief A Ping reply (requester != 0) is not echoed back and the client stays
  * Ready.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_ping_reply_from_server_is_not_echoed() {
     MockTcpClient* mock;
@@ -2428,6 +2770,8 @@ bool test_ping_reply_from_server_is_not_echoed() {
 
 /**
  * @brief In Ready, update() does not poll the socket once the TCP link is down.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_ready_update_skips_packet_polling_when_tcp_is_down() {
     MockTcpClient* mock;
@@ -2446,6 +2790,8 @@ bool test_ready_update_skips_packet_polling_when_tcp_is_down() {
  * @brief Initialize lost mid-send (passphrase succeeded): the client leaves
  * the Connected state through the connection-lost path and never reaches
  * Handshaking.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_initialize_connection_lost_aborts_handshake() {
     MockTcpClient* mock;
@@ -2467,6 +2813,8 @@ bool test_send_initialize_connection_lost_aborts_handshake() {
 /**
  * @brief Initialize rejected for a non-connection reason: the handshake is
  * reported as failed and the client does not reach Handshaking.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_send_initialize_failure_aborts_handshake() {
     MockTcpClient* mock;
@@ -2491,6 +2839,8 @@ bool test_send_initialize_failure_aborts_handshake() {
  *
  * This documents current behaviour: on hardware the update clock is a tick
  * counter that is never 0 at handshake time.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handshake_started_at_time_zero_never_times_out() {
     MockTcpClient* mock;
@@ -2506,6 +2856,8 @@ bool test_handshake_started_at_time_zero_never_times_out() {
 /**
  * @brief NetworkError shorter than a NetworkErrorMessage is recorded as
  * InternalError.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handshake_network_error_truncated_payload_is_internal_error() {
     MockTcpClient* mock;
@@ -2523,6 +2875,8 @@ bool test_handshake_network_error_truncated_payload_is_internal_error() {
 /**
  * @brief VersionMismatch during handshake notifies the state callback with the
  * final state.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handshake_version_mismatch_notifies_state_callback() {
     MockTcpClient* mock;
@@ -2546,6 +2900,8 @@ bool test_handshake_version_mismatch_notifies_state_callback() {
 /**
  * @brief SyncNetwork as handshake answer notifies the state callback with
  * Ready.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handshake_sync_network_notifies_state_callback() {
     MockTcpClient* mock;
@@ -2567,6 +2923,8 @@ bool test_handshake_sync_network_notifies_state_callback() {
 /**
  * @brief A server Disconnect during handshake notifies the state callback and
  * records ConnectionRejected.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handshake_server_disconnect_notifies_state_callback() {
     MockTcpClient* mock;
@@ -2589,8 +2947,16 @@ bool test_handshake_server_disconnect_notifies_state_callback() {
     return true;
 }
 
+/// Number of packets seen by count_unexpected_packet
 static int g_unexpected_packets = 0;
+/// Id of the last packet seen by count_unexpected_packet
 static PacketId g_unexpected_id = PacketId::Initialize;
+/**
+ * @brief Packet callback that counts packets and remembers the last id; the
+ * payload and the user data are ignored.
+ *
+ * @param id packet id received
+ */
 static void count_unexpected_packet(
     PacketId id, const uint8_t*, size_t, void*) {
     ++g_unexpected_packets;
@@ -2600,6 +2966,8 @@ static void count_unexpected_packet(
 /**
  * @brief A packet that is not a handshake answer is forwarded to the packet
  * callback (when set) and the client keeps waiting in Handshaking.
+ *
+ * @return true if the test passes, false at the first failed assertion
  */
 bool test_handshake_unexpected_packet_is_forwarded_and_keeps_waiting() {
     MockTcpClient* mock;
@@ -2625,6 +2993,8 @@ bool test_handshake_unexpected_packet_is_forwarded_and_keeps_waiting() {
 
 /**
  * @brief Run all RyuLdnClient unit tests
+ *
+ * @return 0 when every test passed, 1 otherwise
  */
 int main() {
     printf("\n========================================\n");

@@ -570,13 +570,21 @@ private:
     protocol::AcceptPolicy m_accept_policy;  ///< Current accept policy
 
     // Callbacks
+    /// Invoked on session state transitions.
     SessionStateCallback m_state_callback;
+    /// Invoked when the server pushes updated network info.
     NetworkUpdatedCallback m_network_updated_callback;
+    /// Invoked for each ScanReply entry received.
     ScanResultCallback m_scan_result_callback;
+    /// Invoked when ScanReplyEnd closes a scan.
     ScanCompletedCallback m_scan_completed_callback;
+    /// Invoked when the server disconnects the session.
     DisconnectedCallback m_disconnected_callback;
+    /// Invoked on a NetworkError packet.
     ErrorCallback m_error_callback;
+    /// Invoked when the host rejects our join request.
     RejectedCallback m_rejected_callback;
+    /// Invoked when the host changes the accept policy.
     AcceptPolicyChangedCallback m_accept_policy_changed_callback;
 
     // ========================================================================

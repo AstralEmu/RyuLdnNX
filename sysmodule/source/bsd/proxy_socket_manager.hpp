@@ -602,7 +602,9 @@ private:
      * @param dest_ip Destination IP (host byte order)
      * @param dest_port Destination port (host byte order)
      * @param protocol Protocol type
-     * @param out_sockets Output vector to populate with matching sockets
+     * @param[out] out_sockets Array filled with the matching sockets
+     * @param max_sockets Capacity of out_sockets (matches beyond it are
+     *        not stored)
      * @return Number of matching sockets found
      *
      * @note Caller must hold m_mutex
@@ -621,10 +623,14 @@ private:
      * cap (MAX_PROXY_SOCKETS = 64) is small and game fds are mostly sequential.
      */
     struct ProxySocketEntry {
+        /// Virtual file descriptor, INVALID_FD when the slot is free
         s32 fd = INVALID_FD;
+        /// Owned socket for this fd (null when the slot is free)
         std::unique_ptr<ProxySocket> socket;
     };
+    /// Socket table, guarded by m_mutex
     std::array<ProxySocketEntry, MAX_PROXY_SOCKETS> m_sockets{};
+    /// Number of used slots in m_sockets
     size_t m_socket_count = 0;
 
     /**
@@ -639,6 +645,8 @@ private:
 
     /**
      * @brief Const overload of FindSocketEntry
+     * @param fd File descriptor to look up
+     * @return Pointer to the entry, or nullptr if not found
      */
     const ProxySocketEntry* FindSocketEntry(s32 fd) const;
 
@@ -685,24 +693,38 @@ private:
     // Packet Buffering (for packets arriving before socket bind)
     // =========================================================================
 
+    /// Ring capacity in packets; when full the oldest packet is dropped
     static constexpr size_t MaxPendingPackets = 16;
+    /// Max payload bytes stored per pending packet
     static constexpr size_t PendingPayloadMax = 1400;
 
+    /// A packet received before any socket was bound to its destination
     struct PendingPacket {
+        /// Source LDN IP
         uint32_t source_ip;
+        /// Source port
         uint16_t source_port;
+        /// Destination LDN IP
         uint32_t dest_ip;
+        /// Destination port
         uint16_t dest_port;
+        /// Valid bytes in data (<= PendingPayloadMax)
         uint16_t len;
+        /// Transport protocol (TCP or UDP)
         ryu_ldn::bsd::ProtocolType protocol;
+        /// Payload bytes
         uint8_t data[PendingPayloadMax];
     };
 
     // Fixed-size ring buffer — same rationale as ProxySocket's rx ring:
     // no heap allocation per arriving packet.
+    /// Ring storage, guarded by m_mutex
     PendingPacket m_pending_ring[MaxPendingPackets];
+    /// Index of the oldest pending packet
     size_t m_pending_head = 0;
+    /// Index where the next packet is written
     size_t m_pending_tail = 0;
+    /// Number of packets currently stored
     size_t m_pending_count = 0;
 };
 

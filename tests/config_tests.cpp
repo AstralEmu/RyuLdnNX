@@ -18,10 +18,21 @@ using namespace ryu_ldn::config;
 // Test Framework (minimal, no external dependencies)
 // ============================================================================
 
+/// Number of registered tests that were executed.
 static int g_tests_run = 0;
+/// Number of tests that returned without a failed assertion.
 static int g_tests_passed = 0;
+/// Number of tests aborted by a failed assertion.
 static int g_tests_failed = 0;
 
+/**
+ * @brief Define a test and register it for main() to run.
+ *
+ * Declares test_<name>() and a static object whose constructor registers it
+ * through register_test(); the body follows the macro.
+ *
+ * @param name Identifier of the test (becomes test_<name>).
+ */
 #define TEST(name)                             \
     static void test_##name();                 \
     static struct TestRegister_##name {        \
@@ -31,6 +42,10 @@ static int g_tests_failed = 0;
     } g_test_register_##name;                  \
     static void test_##name()
 
+/**
+ * @brief Abort the current test by exception when cond is false.
+ * @param cond Expression expected to be true.
+ */
 #define ASSERT_TRUE(cond)                                      \
     do {                                                       \
         if (!(cond)) {                                         \
@@ -39,8 +54,17 @@ static int g_tests_failed = 0;
         }                                                      \
     } while (0)
 
+/**
+ * @brief Abort the current test by exception when cond is true.
+ * @param cond Expression expected to be false.
+ */
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
+/**
+ * @brief Abort the current test by exception when a != b.
+ * @param a Actual value (integral).
+ * @param b Expected value (integral).
+ */
 #define ASSERT_EQ(a, b)                                                      \
     do {                                                                     \
         auto _a = (a);                                                       \
@@ -52,6 +76,11 @@ static int g_tests_failed = 0;
         }                                                                    \
     } while (0)
 
+/**
+ * @brief Abort the current test by exception when the C strings differ.
+ * @param a Actual NUL-terminated string.
+ * @param b Expected NUL-terminated string.
+ */
 #define ASSERT_STREQ(a, b)                                            \
     do {                                                              \
         const char* _a = (a);                                         \
@@ -63,14 +92,24 @@ static int g_tests_failed = 0;
         }                                                             \
     } while (0)
 
+/// A registered test: its name and its body.
 struct TestEntry {
+    /// Test name as printed in the run log.
     const char* name;
+    /// Test body.
     void (*func)();
 };
 
+/// Registered tests, in registration order.
 static TestEntry g_tests[128];
+/// Number of valid entries in g_tests.
 static int g_test_count = 0;
 
+/**
+ * @brief Add a test to g_tests (silently ignored once 128 are registered).
+ * @param name Test name.
+ * @param func Test body.
+ */
 static void register_test(const char* name, void (*func)()) {
     if (g_test_count < 128) {
         g_tests[g_test_count++] = {name, func};
@@ -78,8 +117,15 @@ static void register_test(const char* name, void (*func)()) {
 }
 
 // Helper to create temp config file
+/**
+ * @brief RAII temporary INI file under /tmp, removed on destruction.
+ */
 class TempConfigFile {
 public:
+    /**
+     * @brief Create the file with the given content.
+     * @param content Text written to the file.
+     */
     TempConfigFile(const char* content) {
         snprintf(m_path, sizeof(m_path), "/tmp/test_config_%d.ini", rand());
         std::ofstream f(m_path);
@@ -93,11 +139,16 @@ public:
         std::remove(m_path);
     }
 
+    /**
+     * @brief Get the path of the temporary file.
+     * @return NUL-terminated path, valid for the object's lifetime.
+     */
     const char* path() const {
         return m_path;
     }
 
 private:
+    /// Path of the temporary file.
     char m_path[256];
 };
 
@@ -105,6 +156,9 @@ private:
 // Default Values Tests
 // ============================================================================
 
+/**
+ * @brief get_default_config() returns the documented defaults.
+ */
 TEST(default_values) {
     Config config = get_default_config();
 
@@ -131,6 +185,9 @@ TEST(default_values) {
 // Parse Tests
 // ============================================================================
 
+/**
+ * @brief An empty file loads successfully and keeps the defaults.
+ */
 TEST(parse_empty_file) {
     TempConfigFile file("");
     Config config = get_default_config();
@@ -141,6 +198,9 @@ TEST(parse_empty_file) {
     ASSERT_STREQ(config.server.host, "ryuldnnx.ddns.net");
 }
 
+/**
+ * @brief The [server] host and port are parsed.
+ */
 TEST(parse_server_section) {
     const char* content =
         "[server]\n"
@@ -156,6 +216,9 @@ TEST(parse_server_section) {
     ASSERT_EQ(config.server.port, 12345);
 }
 
+/**
+ * @brief The [ldn] flags and passphrase are parsed.
+ */
 TEST(parse_ldn_section) {
     const char* content =
         "[ldn]\n"
@@ -175,6 +238,9 @@ TEST(parse_ldn_section) {
     ASSERT_EQ(config.ldn.disable_p2p, false);
 }
 
+/**
+ * @brief The [debug] enabled flag and level are parsed.
+ */
 TEST(parse_debug_section) {
     const char* content =
         "[debug]\n"
@@ -190,6 +256,9 @@ TEST(parse_debug_section) {
     ASSERT_EQ(config.debug.level, 3u);
 }
 
+/**
+ * @brief Lines starting with ';' (even indented) are ignored.
+ */
 TEST(parse_comments_ignored) {
     const char* content =
         "; This is a comment\n"
@@ -208,6 +277,9 @@ TEST(parse_comments_ignored) {
     ASSERT_EQ(config.server.port, 9999);
 }
 
+/**
+ * @brief Spaces around keys and values are trimmed; none are required.
+ */
 TEST(parse_whitespace_handling) {
     const char* content =
         "[server]\n"
@@ -223,6 +295,9 @@ TEST(parse_whitespace_handling) {
     ASSERT_EQ(config.server.port, 12345);
 }
 
+/**
+ * @brief An unknown section is skipped and later sections still load.
+ */
 TEST(parse_unknown_section_ignored) {
     const char* content =
         "[unknown]\n"
@@ -238,6 +313,9 @@ TEST(parse_unknown_section_ignored) {
     ASSERT_EQ(config.server.port, 11111);
 }
 
+/**
+ * @brief An unknown key is skipped and later keys still load.
+ */
 TEST(parse_unknown_key_ignored) {
     const char* content =
         "[server]\n"
@@ -252,6 +330,9 @@ TEST(parse_unknown_key_ignored) {
     ASSERT_EQ(config.server.port, 22222);
 }
 
+/**
+ * @brief A missing file reports FileNotFound and leaves the defaults.
+ */
 TEST(file_not_found) {
     Config config = get_default_config();
     ConfigResult result = load_config("/nonexistent/path/config.ini", config);
@@ -261,6 +342,9 @@ TEST(file_not_found) {
     ASSERT_STREQ(config.server.host, "ryuldnnx.ddns.net");
 }
 
+/**
+ * @brief A passphrase longer than 64 characters is truncated to 64.
+ */
 TEST(passphrase_truncated) {
     // Passphrase > 64 chars should be truncated
     const char* content =
@@ -277,6 +361,9 @@ TEST(passphrase_truncated) {
     ASSERT_EQ(strlen(config.ldn.passphrase), 64u);
 }
 
+/**
+ * @brief A host longer than 128 characters is truncated to 128.
+ */
 TEST(host_truncated) {
     // Host > 128 chars should be truncated
     char long_host[200];
@@ -294,6 +381,9 @@ TEST(host_truncated) {
     ASSERT_EQ(strlen(config.server.host), 128u);
 }
 
+/**
+ * @brief A file with all three sections loads every value.
+ */
 TEST(full_config_example) {
     const char* content =
         "; Full example\n"
@@ -330,6 +420,9 @@ TEST(full_config_example) {
 // Save Config Tests
 // ============================================================================
 
+/**
+ * @brief save_config() writes a file that load_config() reads back.
+ */
 TEST(save_config_creates_file) {
     char path[256];
     snprintf(path, sizeof(path), "/tmp/test_save_config_%d.ini", rand());
@@ -350,6 +443,9 @@ TEST(save_config_creates_file) {
     std::remove(path);
 }
 
+/**
+ * @brief Every modified setting survives a save and reload.
+ */
 TEST(save_config_preserves_values) {
     char path[256];
     snprintf(path, sizeof(path), "/tmp/test_save_preserve_%d.ini", rand());
@@ -389,6 +485,9 @@ TEST(save_config_preserves_values) {
 // Ensure Config Exists Tests
 // ============================================================================
 
+/**
+ * @brief ensure_config_exists() creates a missing file with the defaults.
+ */
 TEST(ensure_config_exists_creates_new) {
     char path[256];
     snprintf(path, sizeof(path), "/tmp/test_ensure_%d.ini", rand());
@@ -411,6 +510,9 @@ TEST(ensure_config_exists_creates_new) {
     std::remove(path);
 }
 
+/**
+ * @brief ensure_config_exists() does not overwrite an existing file.
+ */
 TEST(ensure_config_exists_keeps_existing) {
     char path[256];
     snprintf(path, sizeof(path), "/tmp/test_ensure_existing_%d.ini", rand());
@@ -446,6 +548,11 @@ TEST(ensure_config_exists_keeps_existing) {
 
 // Loads `[ldn]\nenabled = <value>` over a config whose `enabled` is the
 // opposite of `expected`, so the assertion proves the parser actually decided.
+/**
+ * @brief Assert how the parser reads an [ldn] enabled value as a boolean.
+ * @param value Text written after "enabled =".
+ * @param expected Boolean the parser must produce.
+ */
 static void expect_bool(const char* value, bool expected) {
     char content[128];
     snprintf(content, sizeof(content), "[ldn]\nenabled = %s\n", value);
@@ -456,6 +563,10 @@ static void expect_bool(const char* value, bool expected) {
     ASSERT_EQ(config.ldn.enabled, expected);
 }
 
+/**
+ * @brief config_result_to_string() names every ConfigResult, and Unknown
+ * otherwise.
+ */
 TEST(every_config_result_has_its_own_name) {
     using ryu_ldn::config::config_result_to_string;
     using ryu_ldn::config::ConfigResult;
@@ -469,6 +580,9 @@ TEST(every_config_result_has_its_own_name) {
         config_result_to_string(static_cast<ConfigResult>(99)), "Unknown");
 }
 
+/**
+ * @brief Booleans accept 1, true (any case), 0 and false (any case).
+ */
 TEST(parse_bool_accepts_only_the_four_documented_spellings) {
     expect_bool("1", true);
     expect_bool("true", true);
@@ -478,6 +592,10 @@ TEST(parse_bool_accepts_only_the_four_documented_spellings) {
     expect_bool("FALSE", false);
 }
 
+/**
+ * @brief Any other boolean spelling, including prefixes and an empty value,
+ * reads as false.
+ */
 TEST(parse_bool_rejects_anything_else_as_false) {
     expect_bool("yes", false);
     expect_bool("on", false);
@@ -488,6 +606,11 @@ TEST(parse_bool_rejects_anything_else_as_false) {
 }
 
 // Loads `[debug]\nlevel = <value>` over a config whose level is 77.
+/**
+ * @brief Load a [debug] level value and return what the parser stored.
+ * @param value Text written after "level =".
+ * @return The resulting debug level (preset to 77 before loading).
+ */
 static long long load_debug_level(const char* value) {
     char content[128];
     snprintf(content, sizeof(content), "[debug]\nlevel = %s\n", value);
@@ -498,12 +621,18 @@ static long long load_debug_level(const char* value) {
     return static_cast<long long>(config.debug.level);
 }
 
+/**
+ * @brief Unsigned values from 0 to 4294967295 are parsed exactly.
+ */
 TEST(parse_uint32_accepts_clean_integers) {
     ASSERT_EQ(load_debug_level("0"), 0);
     ASSERT_EQ(load_debug_level("3"), 3);
     ASSERT_EQ(load_debug_level("4294967295"), 4294967295LL);
 }
 
+/**
+ * @brief Empty, negative, overflowing or garbled integers become 0.
+ */
 TEST(parse_uint32_turns_malformed_values_into_zero) {
     ASSERT_EQ(load_debug_level(""), 0);            // empty
     ASSERT_EQ(load_debug_level("-1"), 0);          // negative
@@ -513,6 +642,9 @@ TEST(parse_uint32_turns_malformed_values_into_zero) {
     ASSERT_EQ(load_debug_level("abc"), 0);    // nothing parsed
 }
 
+/**
+ * @brief An empty or negative server port becomes 0.
+ */
 TEST(server_port_with_empty_or_negative_value_is_zero) {
     const char* values[] = {"", "-1"};
     for (const char* v : values) {
@@ -525,6 +657,10 @@ TEST(server_port_with_empty_or_negative_value_is_zero) {
     }
 }
 
+/**
+ * @brief Keys before any section, in an unknown section or without '=' change
+ * nothing.
+ */
 TEST(keys_outside_a_known_section_are_ignored) {
     const char* content =
         "orphan = 1\n"  // before any section
@@ -542,6 +678,9 @@ TEST(keys_outside_a_known_section_are_ignored) {
     ASSERT_EQ(config.server.port, 4242);
 }
 
+/**
+ * @brief save_config() returns IoError when the parent path is a regular file.
+ */
 TEST(save_config_reports_io_error_when_the_file_cannot_be_created) {
     // The parent "directory" is a regular file, so neither mkdir nor fopen can
     // succeed.
@@ -556,6 +695,10 @@ TEST(save_config_reports_io_error_when_the_file_cannot_be_created) {
 // Main
 // ============================================================================
 
+/**
+ * @brief Run every registered test and print the totals.
+ * @return 1 when at least one test failed, otherwise 0.
+ */
 int main() {
     printf("=== ryu_ldn_nx Config Unit Tests ===\n\n");
     printf("Running %d tests...\n\n", g_test_count);

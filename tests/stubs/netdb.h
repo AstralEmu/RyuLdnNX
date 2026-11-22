@@ -22,10 +22,17 @@
 #undef EAI_OVERFLOW
 #undef EAI_SYSTEM
 
+/// Temporary failure in name resolution (target value).
 #define EAI_AGAIN 2
+/// Non-recoverable resolver failure (target value).
 #define EAI_FAIL 4
+/// Address family not supported (target value).
 #define EAI_FAMILY 5
+/// Resolver out of memory (target value).
 #define EAI_MEMORY 6
+/// Name or service not known (target value).
 #define EAI_NONAME 8
+/// System error, see errno (target value).
 #define EAI_SYSTEM 11
+/// Argument buffer overflow (target value).
 #define EAI_OVERFLOW 14

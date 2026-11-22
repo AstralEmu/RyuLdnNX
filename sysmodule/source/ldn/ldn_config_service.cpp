@@ -11,6 +11,7 @@
 #include "../config/config.hpp"
 #include "../config/config_manager.hpp"
 
+/// Version string reported over IPC; the build system overrides it with -D.
 #ifndef RYU_LDN_VERSION
 #define RYU_LDN_VERSION "0.1.0-dev"
 #endif

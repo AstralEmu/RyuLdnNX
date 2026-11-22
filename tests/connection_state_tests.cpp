@@ -9,7 +9,7 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  *
- * @section Test Categories
+ * @section conn_state_test_categories Test Categories
  *
  * The tests are organized into the following categories:
  *
@@ -989,6 +989,7 @@ TEST(is_not_transitioning_in_ready) {
 // Additional Transition Coverage Tests
 // ============================================================================
 
+/** @brief Test case: disconnected retry requested. */
 TEST(disconnected_retry_requested) {
     ConnectionStateMachine sm;
     TransitionResult result = sm.process_event(ConnectionEvent::RetryRequested);
@@ -996,6 +997,7 @@ TEST(disconnected_retry_requested) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Connecting);
 }
 
+/** @brief Test case: connecting disconnect. */
 TEST(connecting_disconnect) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Connecting);
@@ -1004,6 +1006,7 @@ TEST(connecting_disconnect) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
 }
 
+/** @brief Test case: connecting fatal error. */
 TEST(connecting_fatal_error) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Connecting);
@@ -1012,6 +1015,7 @@ TEST(connecting_fatal_error) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Error);
 }
 
+/** @brief Test case: connected connection lost. */
 TEST(connected_connection_lost) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Connected);
@@ -1020,6 +1024,7 @@ TEST(connected_connection_lost) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Backoff);
 }
 
+/** @brief Test case: connected disconnect to disconnecting. */
 TEST(connected_disconnect_to_disconnecting) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Connected);
@@ -1028,6 +1033,7 @@ TEST(connected_disconnect_to_disconnecting) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnecting);
 }
 
+/** @brief Test case: connected fatal error. */
 TEST(connected_fatal_error) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Connected);
@@ -1036,6 +1042,7 @@ TEST(connected_fatal_error) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Error);
 }
 
+/** @brief Test case: handshaking disconnect. */
 TEST(handshaking_disconnect) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Handshaking);
@@ -1044,6 +1051,7 @@ TEST(handshaking_disconnect) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnecting);
 }
 
+/** @brief Test case: handshaking fatal error. */
 TEST(handshaking_fatal_error) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Handshaking);
@@ -1052,6 +1060,7 @@ TEST(handshaking_fatal_error) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Error);
 }
 
+/** @brief Test case: ready fatal error. */
 TEST(ready_fatal_error) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Ready);
@@ -1060,6 +1069,7 @@ TEST(ready_fatal_error) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Error);
 }
 
+/** @brief Test case: backoff retry requested. */
 TEST(backoff_retry_requested) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Backoff);
@@ -1068,6 +1078,7 @@ TEST(backoff_retry_requested) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Retrying);
 }
 
+/** @brief Test case: backoff fatal error. */
 TEST(backoff_fatal_error) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Backoff);
@@ -1076,6 +1087,7 @@ TEST(backoff_fatal_error) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Error);
 }
 
+/** @brief Test case: retrying connect success. */
 TEST(retrying_connect_success) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Retrying);
@@ -1084,6 +1096,7 @@ TEST(retrying_connect_success) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Connected);
 }
 
+/** @brief Test case: retrying connect failed. */
 TEST(retrying_connect_failed) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Retrying);
@@ -1092,6 +1105,7 @@ TEST(retrying_connect_failed) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Backoff);
 }
 
+/** @brief Test case: retrying disconnect. */
 TEST(retrying_disconnect) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Retrying);
@@ -1100,6 +1114,7 @@ TEST(retrying_disconnect) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
 }
 
+/** @brief Test case: retrying fatal error. */
 TEST(retrying_fatal_error) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Retrying);
@@ -1108,6 +1123,7 @@ TEST(retrying_fatal_error) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Error);
 }
 
+/** @brief Test case: disconnecting connect success. */
 TEST(disconnecting_connect_success) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Disconnecting);
@@ -1116,6 +1132,7 @@ TEST(disconnecting_connect_success) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
 }
 
+/** @brief Test case: disconnecting connect failed. */
 TEST(disconnecting_connect_failed) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Disconnecting);
@@ -1124,6 +1141,7 @@ TEST(disconnecting_connect_failed) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
 }
 
+/** @brief Test case: disconnecting connection lost. */
 TEST(disconnecting_connection_lost) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Disconnecting);
@@ -1132,6 +1150,7 @@ TEST(disconnecting_connection_lost) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
 }
 
+/** @brief Test case: disconnecting fatal error. */
 TEST(disconnecting_fatal_error) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Disconnecting);
@@ -1140,6 +1159,7 @@ TEST(disconnecting_fatal_error) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
 }
 
+/** @brief Test case: ready connect success noop. */
 TEST(ready_connect_success_noop) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Ready);
@@ -1148,6 +1168,7 @@ TEST(ready_connect_success_noop) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Ready);
 }
 
+/** @brief Test case: connected handshake started. */
 TEST(connected_handshake_started) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Connected);
@@ -1157,24 +1178,28 @@ TEST(connected_handshake_started) {
     ASSERT_TRUE(sm.get_state() == ConnectionState::Handshaking);
 }
 
+/** @brief Test case: is transitioning in handshaking. */
 TEST(is_transitioning_in_handshaking) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Handshaking);
     ASSERT_TRUE(sm.is_transitioning());
 }
 
+/** @brief Test case: is transitioning in retrying. */
 TEST(is_transitioning_in_retrying) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Retrying);
     ASSERT_TRUE(sm.is_transitioning());
 }
 
+/** @brief Test case: is transitioning in disconnecting. */
 TEST(is_transitioning_in_disconnecting) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Disconnecting);
     ASSERT_TRUE(sm.is_transitioning());
 }
 
+/** @brief Test case: is connected in handshaking detailed. */
 TEST(is_connected_in_handshaking_detailed) {
     ConnectionStateMachine sm;
     sm.force_state(ConnectionState::Handshaking);
@@ -1182,24 +1207,28 @@ TEST(is_connected_in_handshaking_detailed) {
     ASSERT_FALSE(sm.is_ready());
 }
 
+/** @brief Test case: state to string unknown. */
 TEST(state_to_string_unknown) {
     const char* result = ConnectionStateMachine::state_to_string(
         static_cast<ConnectionState>(99));
     ASSERT_STREQ(result, "Unknown");
 }
 
+/** @brief Test case: event to string unknown. */
 TEST(event_to_string_unknown) {
     const char* result = ConnectionStateMachine::event_to_string(
         static_cast<ConnectionEvent>(99));
     ASSERT_STREQ(result, "Unknown");
 }
 
+/** @brief Test case: transition result to string unknown. */
 TEST(transition_result_to_string_unknown) {
     ASSERT_STREQ(
         transition_result_to_string(static_cast<TransitionResult>(99)),
         "Unknown");
 }
 
+/** @brief Test case: process event rejects out of range state and event. */
 TEST(process_event_rejects_out_of_range_state_and_event) {
     ConnectionStateMachine sm;
     sm.force_state(static_cast<ConnectionState>(99));

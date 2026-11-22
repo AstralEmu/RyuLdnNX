@@ -628,6 +628,10 @@ private:
 
     /**
      * @brief Handle state machine callback
+     *
+     * @param old_state State before the transition
+     * @param new_state State after the transition
+     * @param event Event that triggered the transition
      */
     static void state_machine_callback(
         ConnectionState old_state,
@@ -777,8 +781,8 @@ private:
 /**
  * @brief Convert ClientOpResult to string for logging
  *
- * @param result Result to convert
- * @return Human-readable string representation
+ * The parameter and return value are documented on the definition in
+ * client.cpp (documenting them in both places makes Doxygen warn).
  */
 /// @gdb{tag="NETWORK:PACKET", msg="client_op_result_to_string"}
 const char* client_op_result_to_string(ClientOpResult result);

@@ -68,16 +68,34 @@
 // Mock Switch/libnx types for testing
 //=============================================================================
 
+/// Unsigned 8-bit integer, as in libnx types.
 typedef uint8_t u8;
+/// Unsigned 16-bit integer, as in libnx types.
 typedef uint16_t u16;
+/// Unsigned 32-bit integer, as in libnx types.
 typedef uint32_t u32;
+/// Unsigned 64-bit integer, as in libnx types.
 typedef uint64_t u64;
+/// Signed 32-bit integer, as in libnx types.
 typedef int32_t s32;
+/// Signed 64-bit integer, as in libnx types.
 typedef int64_t s64;
+/// Result code; 0 means success, as in libnx.
 typedef int32_t Result;
 
+/**
+ * @brief Check a Result for success.
+ * @param res Result code to test.
+ * @return true when res is 0.
+ */
 #define R_SUCCEEDED(res) ((res) == 0)
+/**
+ * @brief Check a Result for failure.
+ * @param res Result code to test.
+ * @return true when res is not 0.
+ */
 #define R_FAILED(res) ((res) != 0)
+/// @brief Return the success Result from the enclosing function.
 #define R_SUCCEED() return 0
 
 //=============================================================================
@@ -162,7 +180,9 @@ namespace mock {
  * @brief Mock server configuration
  */
 struct ServerConfig {
+    /// Server hostname or IP (null-terminated).
     char host[128];
+    /// Server port number.
     u16 port;
 };
 
@@ -170,9 +190,13 @@ struct ServerConfig {
  * @brief Mock LDN configuration
  */
 struct LdnConfig {
+    /// True when LDN emulation is enabled.
     bool enabled;
+    /// Room passphrase (null-terminated).
     char passphrase[65];
+    /// True when passphrase filtering is on.
     bool use_passphrase;
+    /// True when the P2P proxy is disabled.
     bool disable_p2p;
 };
 
@@ -180,7 +204,9 @@ struct LdnConfig {
  * @brief Mock debug configuration
  */
 struct DebugConfig {
+    /// True when debug logging is enabled.
     bool enabled;
+    /// Log verbosity level (0-3).
     u32 level;
 };
 
@@ -188,8 +214,11 @@ struct DebugConfig {
  * @brief Mock complete configuration
  */
 struct Config {
+    /// Server address settings.
     ServerConfig server;
+    /// LDN settings.
     LdnConfig ldn;
+    /// Debug settings.
     DebugConfig debug;
 };
 
@@ -234,6 +263,10 @@ namespace mock {
 
 /**
  * @brief Safe string copy utility (matches sysmodule implementation)
+ *
+ * @param dest destination buffer, at least max_len + 1 bytes
+ * @param src NUL-terminated source string
+ * @param max_len maximum number of characters copied
  */
 void safe_strcpy(char* dest, const char* src, size_t max_len) {
     size_t i = 0;
@@ -253,6 +286,11 @@ void safe_strcpy(char* dest, const char* src, size_t max_len) {
 class MockConfigService {
 public:
     // Version
+    /**
+     * @brief Copy the version string.
+     * @param[out] out Receives the null-terminated version.
+     * @return Always 0.
+     */
     Result GetVersion(std::array<char, 32>& out) {
         static constexpr const char* VERSION = "1.0.0";
         std::memset(out.data(), 0, out.size());
@@ -261,24 +299,44 @@ public:
     }
 
     // Connection status
+    /**
+     * @brief Report the connection status.
+     * @param[out] out Receives 0 (ready).
+     * @return Always 0.
+     */
     Result GetConnectionStatus(u32& out) {
         out = 0;  // Always ready
         R_SUCCEED();
     }
 
     // Passphrase
+    /**
+     * @brief Copy the room passphrase.
+     * @param[out] out Receives the null-terminated passphrase.
+     * @return Always 0.
+     */
     Result GetPassphrase(std::array<char, 64>& out) {
         std::memset(out.data(), 0, out.size());
         safe_strcpy(out.data(), g_mock_config.ldn.passphrase, out.size() - 1);
         R_SUCCEED();
     }
 
+    /**
+     * @brief Store the room passphrase.
+     * @param passphrase New passphrase.
+     * @return Always 0.
+     */
     Result SetPassphrase(const std::array<char, 64>& passphrase) {
         safe_strcpy(g_mock_config.ldn.passphrase, passphrase.data(), 64);
         R_SUCCEED();
     }
 
     // Server address
+    /**
+     * @brief Read the server host and port.
+     * @param[out] out Receives the address.
+     * @return Always 0.
+     */
     Result GetServerAddress(ServerAddressIpc& out) {
         std::memset(&out, 0, sizeof(out));
         safe_strcpy(out.host, g_mock_config.server.host, sizeof(out.host) - 1);
@@ -286,6 +344,11 @@ public:
         R_SUCCEED();
     }
 
+    /**
+     * @brief Store the server host and port.
+     * @param address New address.
+     * @return Always 0.
+     */
     Result SetServerAddress(const ServerAddressIpc& address) {
         safe_strcpy(g_mock_config.server.host, address.host, 127);
         g_mock_config.server.port = address.port;
@@ -293,61 +356,116 @@ public:
     }
 
     // LDN enabled
+    /**
+     * @brief Read the LDN-enabled flag.
+     * @param[out] out Receives 1 when enabled, else 0.
+     * @return Always 0.
+     */
     Result GetLdnEnabled(u32& out) {
         out = g_mock_config.ldn.enabled ? 1 : 0;
         R_SUCCEED();
     }
 
+    /**
+     * @brief Set the LDN-enabled flag.
+     * @param enabled Non-zero to enable.
+     * @return Always 0.
+     */
     Result SetLdnEnabled(u32 enabled) {
         g_mock_config.ldn.enabled = (enabled != 0);
         R_SUCCEED();
     }
 
     // Debug enabled
+    /**
+     * @brief Read the debug-logging flag.
+     * @param[out] out Receives 1 when enabled, else 0.
+     * @return Always 0.
+     */
     Result GetDebugEnabled(u32& out) {
         out = g_mock_config.debug.enabled ? 1 : 0;
         R_SUCCEED();
     }
 
+    /**
+     * @brief Set the debug-logging flag.
+     * @param enabled Non-zero to enable.
+     * @return Always 0.
+     */
     Result SetDebugEnabled(u32 enabled) {
         g_mock_config.debug.enabled = (enabled != 0);
         R_SUCCEED();
     }
 
     // Debug level
+    /**
+     * @brief Read the log verbosity.
+     * @param[out] out Receives the level.
+     * @return Always 0.
+     */
     Result GetDebugLevel(u32& out) {
         out = g_mock_config.debug.level;
         R_SUCCEED();
     }
 
+    /**
+     * @brief Set the log verbosity.
+     * @param level New level.
+     * @return Always 0.
+     */
     Result SetDebugLevel(u32 level) {
         g_mock_config.debug.level = level;
         R_SUCCEED();
     }
 
     // Service check
+    /**
+     * @brief Ping the service.
+     * @param[out] out Receives 1.
+     * @return Always 0.
+     */
     Result IsServiceActive(u32& out) {
         out = 1;
         R_SUCCEED();
     }
 
     // Use passphrase filtering
+    /**
+     * @brief Read the passphrase-filtering flag.
+     * @param[out] out Receives 1 when on, else 0.
+     * @return Always 0.
+     */
     Result GetUsePassphrase(u32& out) {
         out = g_mock_config.ldn.use_passphrase ? 1 : 0;
         R_SUCCEED();
     }
 
+    /**
+     * @brief Set the passphrase-filtering flag.
+     * @param enabled Non-zero to enable.
+     * @return Always 0.
+     */
     Result SetUsePassphrase(u32 enabled) {
         g_mock_config.ldn.use_passphrase = (enabled != 0);
         R_SUCCEED();
     }
 
     // P2P proxy disabled state
+    /**
+     * @brief Read the P2P-disabled flag.
+     * @param[out] out Receives 1 when disabled, else 0.
+     * @return Always 0.
+     */
     Result GetDisableP2p(u32& out) {
         out = g_mock_config.ldn.disable_p2p ? 1 : 0;
         R_SUCCEED();
     }
 
+    /**
+     * @brief Set the P2P-disabled flag.
+     * @param disabled Non-zero to disable P2P.
+     * @return Always 0.
+     */
     Result SetDisableP2p(u32 disabled) {
         g_mock_config.ldn.disable_p2p = (disabled != 0);
         R_SUCCEED();
@@ -360,10 +478,20 @@ public:
 // Test Framework
 //=============================================================================
 
+/// Number of tests started.
 static int g_tests_run = 0;
+/// Number of tests that finished without a failed assertion.
 static int g_tests_passed = 0;
 
+/**
+ * @brief Define a test body as a void function.
+ * @param name Identifier of the test.
+ */
 #define TEST(name) void name()
+/**
+ * @brief Reset the mock config, run a test and count it as passed.
+ * @param name Identifier of the test to run.
+ */
 #define RUN_TEST(name)                   \
     do {                                 \
         g_tests_run++;                   \
@@ -374,6 +502,10 @@ static int g_tests_passed = 0;
         printf(" PASS\n");               \
     } while (0)
 
+/**
+ * @brief Abort the process when cond is false.
+ * @param cond Expression expected to be true.
+ */
 #define ASSERT(cond)                                               \
     do {                                                           \
         if (!(cond)) {                                             \
@@ -386,11 +518,38 @@ static int g_tests_passed = 0;
         }                                                          \
     } while (0)
 
+/**
+ * @brief Assert a == b.
+ * @param a First value.
+ * @param b Second value.
+ */
 #define ASSERT_EQ(a, b) ASSERT((a) == (b))
+/**
+ * @brief Assert a != b.
+ * @param a First value.
+ * @param b Second value.
+ */
 #define ASSERT_NE(a, b) ASSERT((a) != (b))
+/**
+ * @brief Assert two C strings are equal.
+ * @param a First string.
+ * @param b Second string.
+ */
 #define ASSERT_STREQ(a, b) ASSERT(strcmp((a), (b)) == 0)
+/**
+ * @brief Assert a is true.
+ * @param a Value expected to be true.
+ */
 #define ASSERT_TRUE(a) ASSERT((a) == true)
+/**
+ * @brief Assert a is false.
+ * @param a Value expected to be false.
+ */
 #define ASSERT_FALSE(a) ASSERT((a) == false)
+/**
+ * @brief Assert a Result is successful.
+ * @param r Result code to check.
+ */
 #define ASSERT_SUCCESS(r) ASSERT(R_SUCCEEDED(r))
 
 //=============================================================================
@@ -818,6 +977,7 @@ TEST(debug_level_set_get_roundtrip) {
 // Use Passphrase Tests
 //=============================================================================
 
+/// @test Passphrase filtering is off by default.
 TEST(use_passphrase_default_false) {
     mock::MockConfigService svc;
     u32 enabled = 99;
@@ -826,6 +986,7 @@ TEST(use_passphrase_default_false) {
     ASSERT_EQ(enabled, 0u);
 }
 
+/// @test Set/Get of the passphrase-filtering flag round-trips.
 TEST(use_passphrase_set_get_roundtrip) {
     mock::MockConfigService svc;
     svc.SetUsePassphrase(1);
@@ -842,6 +1003,7 @@ TEST(use_passphrase_set_get_roundtrip) {
 // Disable P2P Tests
 //=============================================================================
 
+/// @test P2P is disabled by default.
 TEST(disable_p2p_default_true) {
     mock::MockConfigService svc;
     u32 disabled = 0;
@@ -850,6 +1012,7 @@ TEST(disable_p2p_default_true) {
     ASSERT_EQ(disabled, 1u);
 }
 
+/// @test Set/Get of the P2P-disabled flag round-trips.
 TEST(disable_p2p_set_get_roundtrip) {
     mock::MockConfigService svc;
 
@@ -869,6 +1032,10 @@ TEST(disable_p2p_set_get_roundtrip) {
 // Main
 //=============================================================================
 
+/**
+ * @brief Run every test and print the summary.
+ * @return 0 when all tests passed (a failed assertion exits with 1).
+ */
 int main() {
     printf("\n========================================\n");
     printf("  ryu:cfg IPC Service Tests\n");

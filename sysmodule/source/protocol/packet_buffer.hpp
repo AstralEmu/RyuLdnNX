@@ -321,7 +321,9 @@ public:
     }
 
 private:
+    /// Backing storage for the accumulated bytes
     uint8_t m_buffer[BufferSize];
+    /// Number of valid bytes in m_buffer (next write offset)
     size_t m_write_pos;
 };
 

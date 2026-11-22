@@ -15,8 +15,18 @@
 #include "app/overlay_state.hpp"
 #include "views/connection/main_dashboard_gui.hpp"
 
+/**
+ * @brief Tesla overlay object: owns the ryu:cfg service session lifetime.
+ */
 class RyuLdnOverlay : public tsl::Overlay {
 public:
+    /**
+     * @brief Connects to ryu:cfg and caches its version in OverlayState.
+     *
+     * Runs inside an sm session; the status ends as Error when the
+     * connection fails, Loaded otherwise (version "Unknown" if the version
+     * query fails).
+     */
     virtual void initServices() override {
         auto& state = OverlayState::Instance();
         state.SetStatus(OverlayState::InitStatus::Uninit);
@@ -35,18 +45,29 @@ public:
             state.SetStatus(OverlayState::InitStatus::Loaded);
         });
     }
+    /// Closes the ryu:cfg session if initServices() loaded it.
     virtual void exitServices() override {
         if (OverlayState::Instance().GetStatus() ==
             OverlayState::InitStatus::Loaded)
             ryuLdnExit();
     }
+    /// Overlay became visible; nothing to do.
     virtual void onShow() override {}
+    /// Overlay was hidden; nothing to do.
     virtual void onHide() override {}
+    /// @return The MainDashboardGui shown when the overlay opens.
     virtual std::unique_ptr<tsl::Gui> loadInitialGui() override {
         return initially<MainDashboardGui>();
     }
 };
 
+/**
+ * @brief Overlay entry point; runs the Tesla loop for RyuLdnOverlay.
+ *
+ * @param argc Argument count forwarded to Tesla.
+ * @param argv Argument vector forwarded to Tesla.
+ * @return Exit code of tsl::loop.
+ */
 int main(int argc, char** argv) {
     return tsl::loop<RyuLdnOverlay>(argc, argv);
 }

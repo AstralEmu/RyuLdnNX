@@ -22,10 +22,14 @@ using namespace ryu_ldn::config;
 // Test Framework (minimal, no external dependencies)
 // ============================================================================
 
+/// Number of test cases started so far.
 static int g_tests_run = 0;
+/// Number of test cases that finished without a failed assertion.
 static int g_tests_passed = 0;
+/// Number of test cases that hit a failed assertion.
 static int g_tests_failed = 0;
 
+/// Defines a test function and registers it in the test table.
 #define TEST(name)                             \
     static void test_##name();                 \
     static struct TestRegister_##name {        \
@@ -35,6 +39,7 @@ static int g_tests_failed = 0;
     } g_test_register_##name;                  \
     static void test_##name()
 
+/// Fails the current test when the expression is false.
 #define ASSERT_TRUE(cond)                                      \
     do {                                                       \
         if (!(cond)) {                                         \
@@ -43,8 +48,10 @@ static int g_tests_failed = 0;
         }                                                      \
     } while (0)
 
+/// Fails the current test when the expression is true.
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
+/// Fails the current test when the two values differ.
 #define ASSERT_EQ(a, b)                                                      \
     do {                                                                     \
         auto _a = (a);                                                       \
@@ -56,6 +63,7 @@ static int g_tests_failed = 0;
         }                                                                    \
     } while (0)
 
+/// Fails the current test when the two C strings differ.
 #define ASSERT_STREQ(a, b)                                            \
     do {                                                              \
         const char* _a = (a);                                         \
@@ -67,14 +75,25 @@ static int g_tests_failed = 0;
         }                                                             \
     } while (0)
 
+/// One registered test case (name and body).
 struct TestEntry {
+    /// Test fixture value: name.
     const char* name;
+    /// Test function to run.
     void (*func)();
 };
 
+/// Table of registered test cases.
 static TestEntry g_tests[128];
+/// Number of entries used in the test table.
 static int g_test_count = 0;
 
+/**
+ * @brief Appends a test case to the test table.
+ *
+ * @param name test name printed by main()
+ * @param func test body; throws on a failed assertion
+ */
 static void register_test(const char* name, void (*func)()) {
     if (g_test_count < 128) {
         g_tests[g_test_count++] = {name, func};
@@ -85,8 +104,10 @@ static void register_test(const char* name, void (*func)()) {
 // Test Helpers
 // ============================================================================
 
+/// Test fixture value: test config path.
 static char g_test_config_path[256];
 
+/// Test helper: create test config file.
 static void create_test_config_file() {
     snprintf(
         g_test_config_path,
@@ -113,14 +134,22 @@ static void create_test_config_file() {
     }
 }
 
+/// Test helper: remove test config file.
 static void remove_test_config_file() {
     std::remove(g_test_config_path);
 }
 
 // Track change callbacks
+/// Test fixture value: last changed section.
 static const char* g_last_changed_section = nullptr;
+/// Test fixture value: change callback count.
 static int g_change_callback_count = 0;
 
+/**
+ * @brief Test helper: test change callback.
+ *
+ * @param section name of the changed section, stored in g_last_changed_section
+ */
 static void test_change_callback(const char* section) {
     g_last_changed_section = section;
     g_change_callback_count++;
@@ -130,12 +159,14 @@ static void test_change_callback(const char* section) {
 // Initialization Tests
 // ============================================================================
 
+/** @brief Test case: singleton instance. */
 TEST(singleton_instance) {
     ConfigManager& m1 = ConfigManager::Instance();
     ConfigManager& m2 = ConfigManager::Instance();
     ASSERT_TRUE(&m1 == &m2);
 }
 
+/** @brief Test case: save and reload before initialize report io error. */
 // Must stay the first test that touches the singleton after
 // singleton_instance: it relies on Initialize() not having run yet.
 TEST(save_and_reload_before_initialize_report_io_error) {
@@ -144,6 +175,10 @@ TEST(save_and_reload_before_initialize_report_io_error) {
     ASSERT_EQ(ConfigManager::Instance().Reload(), ConfigResult::IoError);
 }
 
+/**
+ * @brief Test case: initialize without a path falls back to the default
+ *   location.
+ */
 TEST(initialize_without_a_path_falls_back_to_the_default_location) {
     // The default path is an SD-card path that does not exist on the host:
     // a missing file is acceptable and leaves the defaults in place.
@@ -152,6 +187,7 @@ TEST(initialize_without_a_path_falls_back_to_the_default_location) {
     ASSERT_FALSE(ConfigManager::Instance().HasUnsavedChanges());
 }
 
+/** @brief Test case: save writes the file and clears the dirty flag. */
 TEST(save_writes_the_file_and_clears_the_dirty_flag) {
     char path[256];
     snprintf(path, sizeof(path), "/tmp/config_manager_save_%d.ini", rand());
@@ -168,6 +204,7 @@ TEST(save_writes_the_file_and_clears_the_dirty_flag) {
     std::remove(path);
 }
 
+/** @brief Test case: save failure keeps the dirty flag. */
 TEST(save_failure_keeps_the_dirty_flag) {
     // Parent directory does not exist and mkdir only creates the last level.
     char path[256];
@@ -182,6 +219,7 @@ TEST(save_failure_keeps_the_dirty_flag) {
     ASSERT_TRUE(ConfigManager::Instance().HasUnsavedChanges());
 }
 
+/** @brief Test case: use passphrase setter updates value and notifies. */
 TEST(use_passphrase_setter_updates_value_and_notifies) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent_config_12345.ini");
     g_change_callback_count = 0;
@@ -197,6 +235,10 @@ TEST(use_passphrase_setter_updates_value_and_notifies) {
     ConfigManager::Instance().SetChangeCallback(nullptr);
 }
 
+/**
+ * @brief Test case: generate random passphrase rejects null and undersized
+ *   buffers.
+ */
 TEST(generate_random_passphrase_rejects_null_and_undersized_buffers) {
     char buf[17];
     std::memset(buf, 'x', sizeof(buf));
@@ -211,6 +253,7 @@ TEST(generate_random_passphrase_rejects_null_and_undersized_buffers) {
     ASSERT_EQ(std::strlen(buf), 16u);
 }
 
+/** @brief Test case: initialize with missing file. */
 TEST(initialize_with_missing_file) {
     // Initialize with non-existent file should use defaults
     bool result = ConfigManager::Instance().Initialize(
@@ -219,6 +262,7 @@ TEST(initialize_with_missing_file) {
     ASSERT_TRUE(result || !result);  // Just ensure no crash
 }
 
+/** @brief Test case: initialize with valid file. */
 TEST(initialize_with_valid_file) {
     create_test_config_file();
     bool result = ConfigManager::Instance().Initialize(g_test_config_path);
@@ -231,18 +275,21 @@ TEST(initialize_with_valid_file) {
 // Server Settings Tests
 // ============================================================================
 
+/** @brief Test case: get default server host. */
 TEST(get_default_server_host) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     const char* host = ConfigManager::Instance().GetServerHost();
     ASSERT_STREQ(host, DEFAULT_HOST);
 }
 
+/** @brief Test case: set server host. */
 TEST(set_server_host) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetServerHost("new.server.com");
     ASSERT_STREQ(ConfigManager::Instance().GetServerHost(), "new.server.com");
 }
 
+/** @brief Test case: set server host truncates long name. */
 TEST(set_server_host_truncates_long_name) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     char long_host[256];
@@ -254,11 +301,13 @@ TEST(set_server_host_truncates_long_name) {
         strlen(ConfigManager::Instance().GetServerHost()) <= MAX_HOST_LENGTH);
 }
 
+/** @brief Test case: get default server port. */
 TEST(get_default_server_port) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ASSERT_EQ(ConfigManager::Instance().GetServerPort(), DEFAULT_PORT);
 }
 
+/** @brief Test case: set server port. */
 TEST(set_server_port) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetServerPort(9999);
@@ -269,11 +318,13 @@ TEST(set_server_port) {
 // LDN Settings Tests
 // ============================================================================
 
+/** @brief Test case: get default ldn enabled. */
 TEST(get_default_ldn_enabled) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ASSERT_EQ(ConfigManager::Instance().GetLdnEnabled(), DEFAULT_LDN_ENABLED);
 }
 
+/** @brief Test case: set ldn enabled. */
 TEST(set_ldn_enabled) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetLdnEnabled(false);
@@ -282,11 +333,13 @@ TEST(set_ldn_enabled) {
     ASSERT_TRUE(ConfigManager::Instance().GetLdnEnabled());
 }
 
+/** @brief Test case: get default passphrase. */
 TEST(get_default_passphrase) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ASSERT_STREQ(ConfigManager::Instance().GetPassphrase(), "");
 }
 
+/** @brief Test case: set passphrase valid. */
 TEST(set_passphrase_valid) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     // Valid format: Ryujinx-[0-9a-f]{8}
@@ -295,6 +348,7 @@ TEST(set_passphrase_valid) {
     ASSERT_STREQ(ConfigManager::Instance().GetPassphrase(), "Ryujinx-abcd1234");
 }
 
+/** @brief Test case: set passphrase invalid rejected. */
 TEST(set_passphrase_invalid_rejected) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetPassphrase("");  // Clear first
@@ -304,6 +358,7 @@ TEST(set_passphrase_invalid_rejected) {
     ASSERT_STREQ(ConfigManager::Instance().GetPassphrase(), "");  // Unchanged
 }
 
+/** @brief Test case: set passphrase empty. */
 TEST(set_passphrase_empty) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetPassphrase("Ryujinx-12345678");
@@ -311,6 +366,7 @@ TEST(set_passphrase_empty) {
     ASSERT_STREQ(ConfigManager::Instance().GetPassphrase(), "");
 }
 
+/** @brief Test case: set passphrase truncates long rejected. */
 TEST(set_passphrase_truncates_long_rejected) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetPassphrase("");  // Clear first
@@ -327,6 +383,7 @@ TEST(set_passphrase_truncates_long_rejected) {
 // Passphrase Validation Tests (format: Ryujinx-[0-9a-f]{8})
 // ============================================================================
 
+/** @brief Test case: is valid passphrase correct format. */
 TEST(is_valid_passphrase_correct_format) {
     ASSERT_TRUE(IsValidPassphrase("Ryujinx-12345678"));
     ASSERT_TRUE(IsValidPassphrase("Ryujinx-abcdef01"));
@@ -335,12 +392,14 @@ TEST(is_valid_passphrase_correct_format) {
     ASSERT_TRUE(IsValidPassphrase("Ryujinx-a1b2c3d4"));
 }
 
+/** @brief Test case: is valid passphrase empty is valid. */
 TEST(is_valid_passphrase_empty_is_valid) {
     // Empty passphrase is allowed (means no passphrase filtering)
     ASSERT_TRUE(IsValidPassphrase(""));
     ASSERT_TRUE(IsValidPassphrase(nullptr));
 }
 
+/** @brief Test case: is valid passphrase wrong prefix. */
 TEST(is_valid_passphrase_wrong_prefix) {
     ASSERT_FALSE(IsValidPassphrase("ryujinx-12345678"));  // lowercase
     ASSERT_FALSE(IsValidPassphrase("RYUJINX-12345678"));  // uppercase
@@ -349,6 +408,7 @@ TEST(is_valid_passphrase_wrong_prefix) {
     ASSERT_FALSE(IsValidPassphrase("12345678"));          // no prefix
 }
 
+/** @brief Test case: is valid passphrase wrong hex length. */
 TEST(is_valid_passphrase_wrong_hex_length) {
     ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234567"));    // 7 chars
     ASSERT_FALSE(IsValidPassphrase("Ryujinx-123456789"));  // 9 chars
@@ -356,6 +416,7 @@ TEST(is_valid_passphrase_wrong_hex_length) {
     ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234"));       // 4 chars
 }
 
+/** @brief Test case: is valid passphrase invalid hex chars. */
 TEST(is_valid_passphrase_invalid_hex_chars) {
     ASSERT_FALSE(IsValidPassphrase("Ryujinx-1234567g"));  // 'g' not hex
     ASSERT_FALSE(IsValidPassphrase("Ryujinx-ABCDEF01"));  // uppercase hex
@@ -364,11 +425,13 @@ TEST(is_valid_passphrase_invalid_hex_chars) {
     ASSERT_FALSE(IsValidPassphrase("Ryujinx-!@#$%^&*"));  // special chars
 }
 
+/** @brief Test case: is valid passphrase missing dash. */
 TEST(is_valid_passphrase_missing_dash) {
     ASSERT_FALSE(IsValidPassphrase("Ryujinx12345678"));
     ASSERT_FALSE(IsValidPassphrase("Ryujinx 12345678"));
 }
 
+/** @brief Test case: set passphrase rejects invalid. */
 TEST(set_passphrase_rejects_invalid) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetPassphrase("");  // Clear first
@@ -384,6 +447,7 @@ TEST(set_passphrase_rejects_invalid) {
     ASSERT_STREQ(ConfigManager::Instance().GetPassphrase(), "Ryujinx-12345678");
 }
 
+/** @brief Test case: set passphrase allows empty. */
 TEST(set_passphrase_allows_empty) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetPassphrase("Ryujinx-12345678");
@@ -404,6 +468,7 @@ TEST(set_passphrase_allows_empty) {
 // Random Passphrase Generation Tests
 // ============================================================================
 
+/** @brief Test case: generate random passphrase format. */
 TEST(generate_random_passphrase_format) {
     char passphrase[32];
     GenerateRandomPassphrase(passphrase, sizeof(passphrase));
@@ -416,6 +481,7 @@ TEST(generate_random_passphrase_format) {
     ASSERT_TRUE(strncmp(passphrase, "Ryujinx-", 8) == 0);
 }
 
+/** @brief Test case: generate random passphrase varies. */
 TEST(generate_random_passphrase_varies) {
     char p1[32], p2[32], p3[32];
     GenerateRandomPassphrase(p1, sizeof(p1));
@@ -427,6 +493,7 @@ TEST(generate_random_passphrase_varies) {
     ASSERT_FALSE(all_same);
 }
 
+/** @brief Test case: generate random passphrase only lowercase hex. */
 TEST(generate_random_passphrase_only_lowercase_hex) {
     char passphrase[32];
     GenerateRandomPassphrase(passphrase, sizeof(passphrase));
@@ -443,12 +510,14 @@ TEST(generate_random_passphrase_only_lowercase_hex) {
 // Debug Settings Tests
 // ============================================================================
 
+/** @brief Test case: get default debug enabled. */
 TEST(get_default_debug_enabled) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ASSERT_EQ(
         ConfigManager::Instance().GetDebugEnabled(), DEFAULT_DEBUG_ENABLED);
 }
 
+/** @brief Test case: set debug enabled. */
 TEST(set_debug_enabled) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetDebugEnabled(true);
@@ -457,11 +526,13 @@ TEST(set_debug_enabled) {
     ASSERT_FALSE(ConfigManager::Instance().GetDebugEnabled());
 }
 
+/** @brief Test case: get default debug level. */
 TEST(get_default_debug_level) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ASSERT_EQ(ConfigManager::Instance().GetDebugLevel(), DEFAULT_DEBUG_LEVEL);
 }
 
+/** @brief Test case: set debug level. */
 TEST(set_debug_level) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetDebugLevel(3);
@@ -470,6 +541,7 @@ TEST(set_debug_level) {
     ASSERT_EQ(ConfigManager::Instance().GetDebugLevel(), 0u);
 }
 
+/** @brief Test case: set debug level clamps to max. */
 TEST(set_debug_level_clamps_to_max) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetDebugLevel(100);
@@ -480,6 +552,7 @@ TEST(set_debug_level_clamps_to_max) {
 // Save and Reload Tests
 // ============================================================================
 
+/** @brief Test case: save creates file. */
 TEST(save_creates_file) {
     char save_path[256];
     snprintf(
@@ -494,6 +567,7 @@ TEST(save_creates_file) {
     std::remove(save_path);
 }
 
+/** @brief Test case: reload restores values. */
 TEST(reload_restores_values) {
     create_test_config_file();
 
@@ -511,6 +585,7 @@ TEST(reload_restores_values) {
     remove_test_config_file();
 }
 
+/** @brief Test case: has unsaved changes after modification. */
 TEST(has_unsaved_changes_after_modification) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
 
@@ -526,6 +601,7 @@ TEST(has_unsaved_changes_after_modification) {
 // Change Callback Tests
 // ============================================================================
 
+/** @brief Test case: change callback invoked on server change. */
 TEST(change_callback_invoked_on_server_change) {
     g_change_callback_count = 0;
     g_last_changed_section = nullptr;
@@ -542,6 +618,7 @@ TEST(change_callback_invoked_on_server_change) {
     ConfigManager::Instance().SetChangeCallback(nullptr);
 }
 
+/** @brief Test case: change callback invoked on ldn change. */
 TEST(change_callback_invoked_on_ldn_change) {
     g_change_callback_count = 0;
     g_last_changed_section = nullptr;
@@ -558,6 +635,7 @@ TEST(change_callback_invoked_on_ldn_change) {
     ConfigManager::Instance().SetChangeCallback(nullptr);
 }
 
+/** @brief Test case: change callback invoked on debug change. */
 TEST(change_callback_invoked_on_debug_change) {
     g_change_callback_count = 0;
     g_last_changed_section = nullptr;
@@ -573,6 +651,7 @@ TEST(change_callback_invoked_on_debug_change) {
     ConfigManager::Instance().SetChangeCallback(nullptr);
 }
 
+/** @brief Test case: null callback safe. */
 TEST(null_callback_safe) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetChangeCallback(nullptr);
@@ -586,6 +665,7 @@ TEST(null_callback_safe) {
 // Load From File Tests
 // ============================================================================
 
+/** @brief Test case: load server settings from file. */
 TEST(load_server_settings_from_file) {
     create_test_config_file();
     ConfigManager::Instance().Initialize(g_test_config_path);
@@ -596,6 +676,7 @@ TEST(load_server_settings_from_file) {
     remove_test_config_file();
 }
 
+/** @brief Test case: load ldn settings from file. */
 TEST(load_ldn_settings_from_file) {
     create_test_config_file();
     ConfigManager::Instance().Initialize(g_test_config_path);
@@ -606,6 +687,7 @@ TEST(load_ldn_settings_from_file) {
     remove_test_config_file();
 }
 
+/** @brief Test case: load debug settings from file. */
 TEST(load_debug_settings_from_file) {
     create_test_config_file();
     ConfigManager::Instance().Initialize(g_test_config_path);
@@ -620,6 +702,7 @@ TEST(load_debug_settings_from_file) {
 // Use Passphrase Configuration Tests
 //=============================================================================
 
+/** @brief Test case: get default use passphrase. */
 TEST(get_default_use_passphrase) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     // Default should be false (no passphrase filtering)
@@ -631,6 +714,11 @@ TEST(get_default_use_passphrase) {
 // Main
 // ============================================================================
 
+/**
+ * @brief Runs the whole suite; the exit code is non-zero if any test failed.
+ *
+ * @return 0 when every test passed, non-zero otherwise
+ */
 int main() {
     printf("=== ryu_ldn_nx ConfigManager Unit Tests ===\n\n");
     printf("Running %d tests...\n\n", g_test_count);

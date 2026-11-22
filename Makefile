@@ -81,6 +81,9 @@ debug: ## Interactive GDB session: make debug IP=<SWITCH_IP> [PID=<pid>]
 
 hooks: ## Wire the tracked git hooks (hooks/) and the wiki's own pre-commit
 	git config core.hooksPath hooks
+	@# Git hooks call `docker compose` without going through make: compose
+	@# reads the untracked .env, so the containers run as the caller there too.
+	@printf 'DOCS_UID=%s\nDOCS_GID=%s\n' "$(DOCS_UID)" "$(DOCS_GID)" > .env
 	@if [ -e docs/.git ]; then \
 		gd=$$(git -C docs rev-parse --absolute-git-dir) && \
 		install -m 755 hooks/docs-pre-commit "$$gd/hooks/pre-commit" && \

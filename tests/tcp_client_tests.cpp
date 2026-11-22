@@ -42,10 +42,20 @@ using namespace ryu_ldn::protocol;
 // Test Framework
 // =============================================================================
 
+/// Number of tests started by the TEST registrars.
 static int g_tests_run = 0;
+/// Number of tests that finished without a failed assertion.
 static int g_tests_passed = 0;
+/// Number of tests aborted by a failed assertion (non-zero fails the run).
 static int g_tests_failed = 0;
 
+/**
+ * @brief Define and auto-run a test.
+ * Declares test_<name>() and a static registrar whose constructor runs the
+ * body during static initialization, counting it as passed or, when an
+ * ASSERT throws a message, as failed.
+ * @param name Identifier of the test (also printed, stringified).
+ */
 #define TEST(name)                            \
     static void test_##name();                \
     static struct TestRegister_##name {       \
@@ -65,6 +75,10 @@ static int g_tests_failed = 0;
     } g_test_register_##name;                 \
     static void test_##name()
 
+/**
+ * @brief Fail the current test (throw) when cond is false.
+ * @param cond Expression expected to be true.
+ */
 #define ASSERT(cond)                          \
     do {                                      \
         if (!(cond)) {                        \
@@ -72,6 +86,11 @@ static int g_tests_failed = 0;
         }                                     \
     } while (0)
 
+/**
+ * @brief Fail the current test (throw) when a != b.
+ * @param a First value.
+ * @param b Expected value.
+ */
 #define ASSERT_EQ(a, b)                              \
     do {                                             \
         if ((a) != (b)) {                            \
@@ -79,6 +98,11 @@ static int g_tests_failed = 0;
         }                                            \
     } while (0)
 
+/**
+ * @brief Fail the current test (throw) when a == b.
+ * @param a First value.
+ * @param b Value that must differ.
+ */
 #define ASSERT_NE(a, b)                              \
     do {                                             \
         if ((a) == (b)) {                            \
@@ -86,7 +110,15 @@ static int g_tests_failed = 0;
         }                                            \
     } while (0)
 
+/**
+ * @brief Alias of ASSERT.
+ * @param cond Expression expected to be true.
+ */
 #define ASSERT_TRUE(cond) ASSERT(cond)
+/**
+ * @brief Fail the current test when cond is true.
+ * @param cond Expression expected to be false.
+ */
 #define ASSERT_FALSE(cond) ASSERT(!(cond))
 
 // =============================================================================
@@ -438,6 +470,7 @@ TEST(result_to_string_success) {
         strcmp(client_result_to_string(ClientResult::Success), "Success") == 0);
 }
 
+/// @brief client_result_to_string maps NotConnected to "NotConnected".
 TEST(result_to_string_not_connected) {
     ASSERT(
         strcmp(
@@ -445,6 +478,7 @@ TEST(result_to_string_not_connected) {
             "NotConnected") == 0);
 }
 
+/// @brief client_result_to_string maps AlreadyConnected to "AlreadyConnected".
 TEST(result_to_string_already_connected) {
     ASSERT(
         strcmp(
@@ -452,6 +486,7 @@ TEST(result_to_string_already_connected) {
             "AlreadyConnected") == 0);
 }
 
+/// @brief client_result_to_string maps ConnectionFailed to "ConnectionFailed".
 TEST(result_to_string_connection_failed) {
     ASSERT(
         strcmp(
@@ -459,6 +494,7 @@ TEST(result_to_string_connection_failed) {
             "ConnectionFailed") == 0);
 }
 
+/// @brief client_result_to_string maps ConnectionLost to "ConnectionLost".
 TEST(result_to_string_connection_lost) {
     ASSERT(
         strcmp(
@@ -466,11 +502,13 @@ TEST(result_to_string_connection_lost) {
             "ConnectionLost") == 0);
 }
 
+/// @brief client_result_to_string maps Timeout to "Timeout".
 TEST(result_to_string_timeout) {
     ASSERT(
         strcmp(client_result_to_string(ClientResult::Timeout), "Timeout") == 0);
 }
 
+/// @brief client_result_to_string maps InvalidPacket to "InvalidPacket".
 TEST(result_to_string_invalid_packet) {
     ASSERT(
         strcmp(
@@ -478,6 +516,7 @@ TEST(result_to_string_invalid_packet) {
             "InvalidPacket") == 0);
 }
 
+/// @brief client_result_to_string maps ProtocolError to "ProtocolError".
 TEST(result_to_string_protocol_error) {
     ASSERT(
         strcmp(
@@ -485,6 +524,7 @@ TEST(result_to_string_protocol_error) {
             "ProtocolError") == 0);
 }
 
+/// @brief client_result_to_string maps BufferTooSmall to "BufferTooSmall".
 TEST(result_to_string_buffer_too_small) {
     ASSERT(
         strcmp(
@@ -492,6 +532,7 @@ TEST(result_to_string_buffer_too_small) {
             "BufferTooSmall") == 0);
 }
 
+/// @brief client_result_to_string maps EncodingError to "EncodingError".
 TEST(result_to_string_encoding_error) {
     ASSERT(
         strcmp(
@@ -499,6 +540,7 @@ TEST(result_to_string_encoding_error) {
             "EncodingError") == 0);
 }
 
+/// @brief client_result_to_string maps NotInitialized to "NotInitialized".
 TEST(result_to_string_not_initialized) {
     ASSERT(
         strcmp(
@@ -506,6 +548,7 @@ TEST(result_to_string_not_initialized) {
             "NotInitialized") == 0);
 }
 
+/// @brief client_result_to_string maps InternalError to "InternalError".
 TEST(result_to_string_internal_error) {
     ASSERT(
         strcmp(
@@ -513,6 +556,7 @@ TEST(result_to_string_internal_error) {
             "InternalError") == 0);
 }
 
+/// @brief An out-of-range ClientResult value maps to "Unknown".
 TEST(result_to_string_unknown) {
     ClientResult unknown = static_cast<ClientResult>(9999);
     ASSERT(strcmp(client_result_to_string(unknown), "Unknown") == 0);
@@ -840,6 +884,7 @@ TEST(has_packet_available_not_connected) {
     ASSERT_FALSE(client.has_packet_available());
 }
 
+/// @brief TcpClient::initialize() succeeds (it initializes the socket layer).
 TEST(tcp_client_initialize) {
     TcpClient client;
     bool result = client.initialize();
@@ -847,6 +892,7 @@ TEST(tcp_client_initialize) {
     socket_exit();
 }
 
+/// @brief TcpClient::initialize() is idempotent: a second call also succeeds.
 TEST(tcp_client_initialize_already_init) {
     TcpClient client;
     bool result = client.initialize();
@@ -857,17 +903,24 @@ TEST(tcp_client_initialize_already_init) {
     socket_exit();
 }
 
+/// @brief A disconnected client reports no packet available.
 TEST(tcp_client_has_packet_when_disconnected) {
     TcpClient client;
     ASSERT_TRUE(!client.has_packet_available());
 }
 
+/// @brief set_nodelay() on a disconnected client returns NotConnected.
 TEST(tcp_client_set_nodelay_not_connected) {
     TcpClient client;
     ClientResult r = client.set_nodelay(true);
     ASSERT_EQ(r, ClientResult::NotConnected);
 }
 
+/**
+ * @brief Second check of the ClientResult names (ConnectionFailed,
+ * ProtocolError, BufferTooSmall, EncodingError, NotInitialized,
+ * InternalError) through ASSERT_TRUE.
+ */
 TEST(client_result_to_string_additional) {
     ASSERT_TRUE(
         strcmp(
@@ -895,6 +948,10 @@ TEST(client_result_to_string_additional) {
             "InternalError") == 0);
 }
 
+/**
+ * @brief send_create_access_point_private() with default arguments on a
+ * disconnected client returns NotConnected.
+ */
 TEST(tcp_client_send_create_access_point_private_not_connected) {
     TcpClient client;
     CreateAccessPointPrivateRequest req{};
@@ -902,6 +959,10 @@ TEST(tcp_client_send_create_access_point_private_not_connected) {
     ASSERT_EQ(r, ClientResult::NotConnected);
 }
 
+/**
+ * @brief send_connect_private() on a disconnected client returns
+ * NotConnected.
+ */
 TEST(tcp_client_send_connect_private_not_connected) {
     TcpClient client;
     ConnectPrivateRequest req{};
@@ -943,11 +1004,21 @@ public:
     Peer(const Peer&) = delete;
     Peer& operator=(const Peer&) = delete;
 
+    /**
+     * @brief Get the port the peer listens on.
+     * @return Listening port in host byte order.
+     */
     uint16_t port() const {
         return m_port;
     }
 
-    /// Accept the pending client connection (the client already connected).
+    /**
+     * @brief Accept the pending client connection (the client already
+     * connected).
+     *
+     * @return true when a client was accepted (receive timeout set to 2 s),
+     * false when accept() failed
+     */
     bool accept_client() {
         m_conn = ::accept(m_listen, nullptr, nullptr);
         if (m_conn < 0) {
@@ -958,8 +1029,10 @@ public:
         return true;
     }
 
-    /// Read exactly `size` bytes; returns what was read (shorter on
+    /// @brief Read exactly `size` bytes; returns what was read (shorter on
     /// EOF/timeout).
+    /// @param size Number of bytes to read (2 s receive timeout per recv).
+    /// @return The bytes read, possibly fewer than `size`.
     std::vector<uint8_t> read_bytes(size_t size) {
         std::vector<uint8_t> out(size);
         size_t got = 0;
@@ -974,7 +1047,12 @@ public:
         return out;
     }
 
-    /// Read one whole LDN packet (header, then data_size payload bytes).
+    /**
+     * @brief Read one whole LDN packet (header, then data_size payload bytes).
+     *
+     * @return header plus payload bytes; shorter than a header when the read
+     * timed out
+     */
     std::vector<uint8_t> read_packet() {
         std::vector<uint8_t> pkt = read_bytes(sizeof(LdnHeader));
         if (pkt.size() != sizeof(LdnHeader)) {
@@ -988,11 +1066,18 @@ public:
         return pkt;
     }
 
+    /**
+     * @brief Send bytes to the connected client (as the server would).
+     * @param data Bytes to send.
+     * @param size Number of bytes in `data`.
+     * @return true when all `size` bytes were written.
+     */
     bool write_bytes(const void* data, size_t size) {
         return ::send(m_conn, data, size, MSG_NOSIGNAL) ==
                static_cast<ssize_t>(size);
     }
 
+    /// @brief Close the accepted connection (FIN); safe to call repeatedly.
     void close_connection() {
         if (m_conn >= 0) {
             ::close(m_conn);
@@ -1010,8 +1095,11 @@ public:
     }
 
 private:
+    /// Listening socket on the loopback interface, or -1.
     int m_listen = -1;
+    /// Accepted connection to the client under test, or -1.
     int m_conn = -1;
+    /// Port the OS assigned to the listening socket (host order).
     uint16_t m_port = 0;
 };
 
@@ -1036,7 +1124,14 @@ private:
             return false;                                         \
     } while (0)
 
-/// Build one wire packet (header + payload) the way the server would.
+/**
+ * @brief Build one wire packet (header + payload) the way the server would.
+ *
+ * @param type packet id
+ * @param payload payload bytes, may be null when size is 0
+ * @param size payload size in bytes
+ * @return encoded header plus payload, throws a C string when encoding fails
+ */
 static std::vector<uint8_t> make_packet(
     PacketId type, const void* payload, size_t size) {
     std::vector<uint8_t> buf(sizeof(LdnHeader) + size);
@@ -1068,6 +1163,10 @@ static std::vector<uint8_t> make_packet(
             static_cast<size_t>(expect_payload));                      \
     } while (0)
 
+/**
+ * @brief A connected client can toggle TCP_NODELAY, answers a second
+ * connect() with AlreadyConnected, and disconnects cleanly.
+ */
 TEST(connected_connect_enables_nodelay_and_rejects_second_connect) {
     Peer peer;
     TcpClient client;
@@ -1083,6 +1182,10 @@ TEST(connected_connect_enables_nodelay_and_rejects_second_connect) {
     ASSERT_FALSE(client.is_connected());
 }
 
+/**
+ * @brief Move-assigning a connected client moves the live connection: the
+ * target can send on it and the source reads as disconnected.
+ */
 TEST(connected_move_assignment_transfers_the_connection) {
     Peer peer;
     TcpClient source;
@@ -1095,6 +1198,10 @@ TEST(connected_move_assignment_transfers_the_connection) {
     ASSERT_EQ(peer.read_bytes(2).size(), static_cast<size_t>(2));
 }
 
+/**
+ * @brief send_packet() puts an LdnHeader followed by the payload on the
+ * wire, with the right packet type and size.
+ */
 TEST(connected_send_packet_writes_header_and_payload) {
     Peer peer;
     TcpClient client;
@@ -1110,6 +1217,10 @@ TEST(connected_send_packet_writes_header_and_payload) {
         0);
 }
 
+/**
+ * @brief A payload that does not fit the fixed send buffer is refused with
+ * EncodingError and nothing is sent.
+ */
 TEST(connected_send_packet_larger_than_buffer_is_an_encoding_error) {
     Peer peer;
     TcpClient client;
@@ -1120,6 +1231,10 @@ TEST(connected_send_packet_larger_than_buffer_is_an_encoding_error) {
         ClientResult::EncodingError);
 }
 
+/**
+ * @brief send_raw() refuses a null pointer or zero length with
+ * EncodingError and otherwise forwards the bytes untouched.
+ */
 TEST(connected_send_raw_forwards_bytes_unchanged_and_validates_input) {
     Peer peer;
     TcpClient client;
@@ -1133,6 +1248,10 @@ TEST(connected_send_raw_forwards_bytes_unchanged_and_validates_input) {
     ASSERT_EQ(std::memcmp(got.data(), raw, sizeof(raw)), 0);
 }
 
+/**
+ * @brief Every fixed-size send_*() helper emits a packet with its own
+ * PacketId and the sizeof of its message.
+ */
 TEST(connected_fixed_size_messages_carry_their_packet_id_and_size) {
     Peer peer;
     TcpClient client;
@@ -1186,6 +1305,9 @@ TEST(connected_fixed_size_messages_carry_their_packet_id_and_size) {
 
 /// A payload whose every byte is distinct and non-zero, so any reordering,
 /// truncation or padding change on the wire shows up as a byte difference.
+/// @tparam T Trivially copyable message type to fill.
+/// @param seed Value that shifts the byte pattern so messages differ.
+/// @return A T whose byte i equals seed + 31 * i + 1 (mod 256).
 template <typename T>
 static T patterned(uint8_t seed) {
     T value{};
@@ -1198,6 +1320,13 @@ static T patterned(uint8_t seed) {
 
 /// Send `msg` through the real TcpClient and require the bytes on the wire to
 /// equal what protocol::encode() (the C#-server-verified layout) produces.
+/// @tparam T Message type.
+/// @tparam SendFn Callable `ClientResult(TcpClient&, const T&)`.
+/// @param id Packet id passed to the reference encoder.
+/// @param msg Message to send and to encode as reference.
+/// @param send Calls the TcpClient send_*() helper under test.
+/// @return true when the send succeeded and the peer read exactly the
+/// reference bytes.
 template <typename T, typename SendFn>
 static bool wire_matches_reference(PacketId id, const T& msg, SendFn send) {
     Peer peer;
@@ -1216,8 +1345,12 @@ static bool wire_matches_reference(PacketId id, const T& msg, SendFn send) {
     return written == expected.size() && got == expected;
 }
 
-TEST(
-    connected_fixed_size_messages_are_byte_identical_to_the_reference_encoder) {
+/**
+ * @brief The bytes each fixed-size send_*() helper puts on the wire equal
+ * the output of protocol::encode(), whose layout is verified against the
+ * C# server, using payloads with all-distinct bytes.
+ */
+TEST(connected_fixed_size_messages_are_byte_identical_to_reference_encoder) {
     ASSERT_TRUE(wire_matches_reference(
         PacketId::Initialize,
         patterned<InitializeMessage>(1),
@@ -1268,6 +1401,11 @@ TEST(
         [](TcpClient& c, const RejectRequest& m) { return c.send_reject(m); }));
 }
 
+/**
+ * @brief send_passphrase(const char*) copies the string into the fixed
+ * message, accepts nullptr (empty passphrase) and truncates to 127 characters
+ * keeping the NUL terminator.
+ */
 TEST(connected_send_passphrase_string_copies_and_truncates) {
     Peer peer;
     TcpClient client;
@@ -1295,6 +1433,10 @@ TEST(connected_send_passphrase_string_copies_and_truncates) {
     ASSERT_EQ(p[sizeof(LdnHeader) + 127], static_cast<uint8_t>(0));
 }
 
+/**
+ * @brief send_create_access_point() appends the advertise data after the
+ * request, and sends the request alone when there is none.
+ */
 TEST(connected_send_create_access_point_appends_advertise_data) {
     Peer peer;
     TcpClient client;
@@ -1317,6 +1459,10 @@ TEST(connected_send_create_access_point_appends_advertise_data) {
     ASSERT_WIRE(p, PacketId::CreateAccessPoint, sizeof(req));
 }
 
+/**
+ * @brief Advertise data too large for the packet buffer is refused with
+ * BufferTooSmall.
+ */
 TEST(connected_send_create_access_point_rejects_oversized_advertise_data) {
     Peer peer;
     TcpClient client;
@@ -1328,6 +1474,10 @@ TEST(connected_send_create_access_point_rejects_oversized_advertise_data) {
         ClientResult::BufferTooSmall);
 }
 
+/**
+ * @brief The private variant also appends advertise data, sends the bare
+ * request without it, and refuses oversized data with BufferTooSmall.
+ */
 TEST(connected_send_create_access_point_private_appends_advertise_data) {
     Peer peer;
     TcpClient client;
@@ -1355,6 +1505,10 @@ TEST(connected_send_create_access_point_private_appends_advertise_data) {
         ClientResult::BufferTooSmall);
 }
 
+/**
+ * @brief send_proxy_data() sends the ProxyDataHeader followed by the
+ * payload, and returns EncodingError when the payload is too large.
+ */
 TEST(connected_send_proxy_data_encodes_header_and_payload) {
     Peer peer;
     TcpClient client;
@@ -1376,6 +1530,10 @@ TEST(connected_send_proxy_data_encodes_header_and_payload) {
         ClientResult::EncodingError);
 }
 
+/**
+ * @brief send_set_advertise_data() accepts empty and small data, and clamps
+ * larger data to the 384-byte protocol maximum instead of failing.
+ */
 TEST(connected_send_set_advertise_data_clamps_to_protocol_maximum) {
     Peer peer;
     TcpClient client;
@@ -1401,6 +1559,10 @@ TEST(connected_send_set_advertise_data_clamps_to_protocol_maximum) {
     ASSERT_WIRE(p, PacketId::SetAdvertiseData, static_cast<size_t>(384));
 }
 
+/**
+ * @brief After the peer closes, sends eventually fail (the kernel first
+ * buffers, then the RST surfaces) and keep failing afterwards.
+ */
 TEST(connected_send_fails_once_the_peer_is_gone) {
     Peer peer;
     TcpClient client;
@@ -1423,6 +1585,10 @@ TEST(connected_send_fails_once_the_peer_is_gone) {
         client.send_packet(PacketId::Ping, &one, 1), ClientResult::Success);
 }
 
+/**
+ * @brief receive_packet() returns the packet type and payload, and the
+ * packet is consumed so no further packet is available.
+ */
 TEST(connected_receive_packet_returns_payload_and_consumes_it) {
     Peer peer;
     TcpClient client;
@@ -1443,6 +1609,7 @@ TEST(connected_receive_packet_returns_payload_and_consumes_it) {
     ASSERT_FALSE(client.has_packet_available());
 }
 
+/// @brief A packet with an empty payload yields Success with payload size 0.
 TEST(connected_receive_packet_without_payload) {
     Peer peer;
     TcpClient client;
@@ -1460,6 +1627,10 @@ TEST(connected_receive_packet_without_payload) {
     ASSERT_EQ(out_size, static_cast<size_t>(0));
 }
 
+/**
+ * @brief A packet delivered in two TCP writes (header cut short) is
+ * reassembled and returned whole.
+ */
 TEST(connected_receive_packet_reassembles_a_split_packet) {
     Peer peer;
     TcpClient client;
@@ -1480,6 +1651,11 @@ TEST(connected_receive_packet_reassembles_a_split_packet) {
     ASSERT_EQ(std::memcmp(out, payload, sizeof(payload)), 0);
 }
 
+/**
+ * @brief With a too-small output buffer receive_packet() returns
+ * BufferTooSmall, reports the needed size and keeps the packet so a retry
+ * with a larger buffer succeeds.
+ */
 TEST(connected_receive_packet_keeps_the_packet_when_the_buffer_is_too_small) {
     Peer peer;
     TcpClient client;
@@ -1504,6 +1680,10 @@ TEST(connected_receive_packet_keeps_the_packet_when_the_buffer_is_too_small) {
     ASSERT_EQ(std::memcmp(big, payload, sizeof(payload)), 0);
 }
 
+/**
+ * @brief Without incoming data receive_packet() returns Timeout, both with a
+ * finite timeout and with a zero (poll) timeout.
+ */
 TEST(connected_receive_packet_times_out_without_data) {
     Peer peer;
     TcpClient client;
@@ -1519,6 +1699,7 @@ TEST(connected_receive_packet_times_out_without_data) {
         ClientResult::Timeout);
 }
 
+/// @brief An orderly close by the peer is reported as ConnectionLost.
 TEST(connected_receive_packet_reports_connection_lost_on_peer_close) {
     Peer peer;
     TcpClient client;
@@ -1532,6 +1713,10 @@ TEST(connected_receive_packet_reports_connection_lost_on_peer_close) {
         ClientResult::ConnectionLost);
 }
 
+/**
+ * @brief A header with an invalid magic is never treated as complete: the
+ * client keeps waiting and times out instead of returning garbage.
+ */
 TEST(connected_receive_packet_rejects_a_corrupt_header) {
     Peer peer;
     TcpClient client;
@@ -1549,6 +1734,10 @@ TEST(connected_receive_packet_rejects_a_corrupt_header) {
         ClientResult::Timeout);
 }
 
+/**
+ * @brief A valid header announcing more payload than the stream buffer can
+ * hold, followed by filler, ends in InvalidPacket instead of overflowing.
+ */
 TEST(connected_receive_packet_overflowing_the_stream_buffer_is_invalid) {
     Peer peer;
     TcpClient client;
@@ -1575,6 +1764,7 @@ TEST(connected_receive_packet_overflowing_the_stream_buffer_is_invalid) {
     ASSERT_EQ(result, ClientResult::InvalidPacket);
 }
 
+/// @brief A connection reset (RST) by the peer is reported as ConnectionLost.
 TEST(connected_receive_packet_maps_a_connection_reset) {
     Peer peer;
     TcpClient client;
@@ -1588,6 +1778,10 @@ TEST(connected_receive_packet_maps_a_connection_reset) {
         ClientResult::ConnectionLost);
 }
 
+/**
+ * @brief When the listener's accept queue is full and never drained, the
+ * next connect() ends in Timeout rather than hanging.
+ */
 TEST(connect_times_out_when_the_server_never_accepts) {
     socket_init();
     // Listener with a one-slot accept queue that nobody drains: once it is
@@ -1615,6 +1809,10 @@ TEST(connect_times_out_when_the_server_never_accepts) {
     ASSERT_EQ(last, ClientResult::Timeout);
 }
 
+/**
+ * @brief TcpClient::socket_to_client_result() maps every SocketResult to the
+ * intended ClientResult (WouldBlock counts as Success).
+ */
 TEST(socket_result_mapping_covers_every_socket_outcome) {
     struct Row {
         SocketResult in;
@@ -1644,6 +1842,11 @@ TEST(socket_result_mapping_covers_every_socket_outcome) {
 // Main
 // =============================================================================
 
+/**
+ * @brief Print the banner and the totals (the tests already ran during
+ * static initialization) and close the socket layer.
+ * @return 1 when at least one test failed, 0 otherwise.
+ */
 int main() {
     printf("\n");
     printf("========================================\n");

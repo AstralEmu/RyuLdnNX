@@ -33,6 +33,9 @@ namespace {
 
 /**
  * @brief Trim leading whitespace from string
+ *
+ * @param str Null-terminated input
+ * @return Pointer to the first non-blank character of str
  */
 const char* trim_start(const char* str) {
     while (*str == ' ' || *str == '\t') {
@@ -43,6 +46,8 @@ const char* trim_start(const char* str) {
 
 /**
  * @brief Trim trailing whitespace from string (modifies in place)
+ *
+ * @param str Null-terminated buffer, shortened in place
  */
 void trim_end(char* str) {
     size_t len = std::strlen(str);
@@ -54,6 +59,10 @@ void trim_end(char* str) {
 
 /**
  * @brief Copy string with length limit
+ *
+ * @param dest Destination buffer (at least max_len + 1 bytes)
+ * @param src Null-terminated source
+ * @param max_len Maximum number of characters copied
  */
 void safe_strcpy(char* dest, const char* src, size_t max_len) {
     size_t i = 0;
@@ -65,7 +74,7 @@ void safe_strcpy(char* dest, const char* src, size_t max_len) {
 }
 
 /**
- * @brief Parse boolean value (strict: "true"/"false"/"1"/"0", case-insensitive)
+ * @brief Parse a boolean (strict: true/false/1/0, case-insensitive)
  *
  * Returns false for any value that is not one of the four accepted forms.
  * The previous implementation accepted "f/F/n/N" prefixes and defaulted to
@@ -137,6 +146,10 @@ bool parse_bool(const char* value) {
  *         does not fit in uint32_t.
  *       This makes malformed config values loud (default applied) rather
  *       than quietly producing a wrong-but-plausible number.
+ *
+ * @param value Null-terminated decimal string (may be nullptr)
+ * @return the parsed value, or 0 if the input is null, empty, negative,
+ *         malformed, has trailing characters or does not fit in 32 bits
  */
 uint32_t parse_uint32(const char* value) {
     if (value == nullptr || value[0] == '\0') {
@@ -179,11 +192,15 @@ uint32_t parse_uint32(const char* value) {
     return static_cast<uint32_t>(parsed);
 }
 
-// Section identifiers
+/// INI section being parsed (None before the first header)
 enum class Section { None, Server, Ldn, Debug, Unknown };
 
 /**
  * @brief Identify section from header line
+ *
+ * @param line Trimmed line text
+ * @return Section named by the header, Unknown for other headers, None if
+ *         the line is not a header
  */
 Section parse_section(const char* line) {
     if (std::strcmp(line, "[server]") == 0) {
@@ -203,6 +220,10 @@ Section parse_section(const char* line) {
 
 /**
  * @brief Process a key=value line for server section
+ *
+ * @param key Option name
+ * @param value Option value text
+ * @param config Server configuration updated in place
  */
 void process_server_key(
     const char* key, const char* value, ServerConfig& config) {
@@ -223,6 +244,10 @@ void process_server_key(
 
 /**
  * @brief Process a key=value line for ldn section
+ *
+ * @param key Option name
+ * @param value Option value text
+ * @param config LDN configuration updated in place
  */
 void process_ldn_key(const char* key, const char* value, LdnConfig& config) {
     if (std::strcmp(key, "enabled") == 0) {
@@ -238,6 +263,10 @@ void process_ldn_key(const char* key, const char* value, LdnConfig& config) {
 
 /**
  * @brief Process a key=value line for debug section
+ *
+ * @param key Option name
+ * @param value Option value text
+ * @param config Debug configuration updated in place
  */
 void process_debug_key(
     const char* key, const char* value, DebugConfig& config) {

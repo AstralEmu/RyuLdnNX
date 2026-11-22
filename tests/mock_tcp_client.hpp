@@ -18,52 +18,119 @@
 
 namespace ryu_ldn::network::test {
 
+/// @brief Packet queued in MockTcpClient::recv_queue and handed back by
+/// receive_packet().
 struct MockPacket {
+    /// Packet type reported through the `type` output of receive_packet().
     protocol::PacketId id;
+    /// Raw payload copied into the caller's buffer by receive_packet().
     std::vector<uint8_t> data;
 };
 
+/**
+ * @brief Scriptable ITcpClient test double.
+ * Every call is counted, results come from the next_*_result fields and
+ * incoming packets come from recv_queue. No sockets are opened.
+ */
 class MockTcpClient : public ITcpClient {
 public:
+    /// True between a successful connect() and disconnect().
     bool connected = false;
+    /// Set by initialize() when initialize_should_fail is false.
     bool initialized = false;
+    /// When true, initialize() returns false and leaves initialized unset.
     bool initialize_should_fail = false;
 
+    /// Result returned by connect(); connected only becomes true on Success.
     ClientResult next_connect_result = ClientResult::Success;
+    /// Result returned by every send_*() call (except send_initialize() when
+    /// use_initialize_result is set).
     ClientResult next_send_result = ClientResult::Success;
+    /// Result returned by receive_packet() when recv_queue is empty; Success is
+    /// mapped to Timeout.
     ClientResult next_recv_result = ClientResult::Timeout;
 
     /// When true, send_initialize() returns next_initialize_result instead of
     /// next_send_result.
     bool use_initialize_result = false;
+    /// Result returned by send_initialize() when use_initialize_result is true.
     ClientResult next_initialize_result = ClientResult::Success;
 
+    /// FIFO of packets receive_packet() delivers, one per call, before
+    /// reporting next_recv_result.
     std::queue<MockPacket> recv_queue;
 
+    /// Number of connect() calls since construction or the last
+    /// reset_counters().
     uint32_t connect_call_count = 0;
+    /// Number of disconnect() calls since construction or the last
+    /// reset_counters().
     uint32_t disconnect_call_count = 0;
+    /// Number of send_packet() calls since construction or the last
+    /// reset_counters().
     uint32_t send_packet_call_count = 0;
+    /// Number of send_raw() calls since construction or the last
+    /// reset_counters().
     uint32_t send_raw_call_count = 0;
+    /// Number of send_initialize() calls since construction or the last
+    /// reset_counters().
     uint32_t send_initialize_call_count = 0;
+    /// Number of send_passphrase(const PassphraseMessage&) calls since
+    /// construction or the last reset_counters().
     uint32_t send_passphrase_msg_call_count = 0;
+    /// Number of send_passphrase(const char*) calls since construction or the
+    /// last reset_counters().
     uint32_t send_passphrase_str_call_count = 0;
+    /// Number of send_ping() calls since construction or the last
+    /// reset_counters().
     uint32_t send_ping_call_count = 0;
+    /// Number of send_disconnect() calls since construction or the last
+    /// reset_counters().
     uint32_t send_disconnect_call_count = 0;
+    /// Number of send_create_access_point() calls since construction or the
+    /// last reset_counters().
     uint32_t send_create_access_point_call_count = 0;
+    /// Number of send_create_access_point_private() calls since construction or
+    /// the last reset_counters().
     uint32_t send_create_access_point_private_call_count = 0;
+    /// Number of send_connect() calls since construction or the last
+    /// reset_counters().
     uint32_t send_connect_call_count = 0;
+    /// Number of send_connect_private() calls since construction or the last
+    /// reset_counters().
     uint32_t send_connect_private_call_count = 0;
+    /// Number of send_scan() calls since construction or the last
+    /// reset_counters().
     uint32_t send_scan_call_count = 0;
+    /// Number of send_proxy_data() calls since construction or the last
+    /// reset_counters().
     uint32_t send_proxy_data_call_count = 0;
+    /// Number of send_set_accept_policy() calls since construction or the last
+    /// reset_counters().
     uint32_t send_set_accept_policy_call_count = 0;
+    /// Number of send_set_advertise_data() calls since construction or the last
+    /// reset_counters().
     uint32_t send_set_advertise_data_call_count = 0;
+    /// Number of send_reject() calls since construction or the last
+    /// reset_counters().
     uint32_t send_reject_call_count = 0;
+    /// Number of receive_packet() calls since construction or the last
+    /// reset_counters().
     uint32_t recv_call_count = 0;
 
+    /// Host passed to the last connect() call ("" for a null host).
     std::string last_connect_host;
+    /// Port passed to the last connect() call.
     uint16_t last_connect_port = 0;
+    /// Timeout (ms) passed to the last connect() call.
     uint32_t last_connect_timeout_ms = 0;
 
+    /**
+     * @brief Mock initialize: marks the client initialized unless scripted to
+     * fail.
+     *
+     * @return false when initialize_should_fail is set, else true
+     */
     bool initialize() override {
         if (initialize_should_fail)
             return false;
@@ -71,6 +138,14 @@ public:
         return true;
     }
 
+    /**
+     * @brief Records the arguments and connects unless scripted to fail.
+     *
+     * @param host host to record; null is stored as an empty string
+     * @param port port to record
+     * @param timeout_ms timeout to record, in milliseconds
+     * @return next_connect_result
+     */
     ClientResult connect(
         const char* host, uint16_t port, uint32_t timeout_ms) override {
         connect_call_count++;
@@ -83,15 +158,32 @@ public:
         return next_connect_result;
     }
 
+    /**
+     * @brief Counts the call and clears the connected flag.
+     *
+     */
     void disconnect() override {
         disconnect_call_count++;
         connected = false;
     }
 
+    /**
+     * @brief Reports the scripted connection flag.
+     *
+     * @return the value of connected
+     */
     bool is_connected() const override {
         return connected;
     }
 
+    /**
+     * @brief Counts the call; the packet is not stored.
+     *
+     * @param type packet id, ignored
+     * @param payload payload bytes, ignored
+     * @param payload_size payload size, ignored
+     * @return next_send_result
+     */
     ClientResult send_packet(
         protocol::PacketId type,
         const void* payload,
@@ -100,11 +192,25 @@ public:
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call; the bytes are not stored.
+     *
+     * @param data bytes, ignored
+     * @param size byte count, ignored
+     * @return next_send_result
+     */
     ClientResult send_raw(const void* data, size_t size) override {
         send_raw_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call; may fail independently of the other send methods.
+     *
+     * @param msg Initialize message, ignored
+     * @return next_initialize_result when use_initialize_result is set, else
+     * next_send_result
+     */
     ClientResult send_initialize(
         const protocol::InitializeMessage& msg) override {
         send_initialize_call_count++;
@@ -115,28 +221,60 @@ public:
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call of the message overload.
+     *
+     * @param msg Passphrase message, ignored
+     * @return next_send_result
+     */
     ClientResult send_passphrase(
         const protocol::PassphraseMessage& msg) override {
         send_passphrase_msg_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call of the C-string overload.
+     *
+     * @param passphrase passphrase, ignored
+     * @return next_send_result
+     */
     ClientResult send_passphrase(const char* passphrase) override {
         send_passphrase_str_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param msg Ping message, ignored
+     * @return next_send_result
+     */
     ClientResult send_ping(const protocol::PingMessage& msg) override {
         send_ping_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param msg Disconnect message, ignored
+     * @return next_send_result
+     */
     ClientResult send_disconnect(
         const protocol::DisconnectMessage& msg) override {
         send_disconnect_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param request request, ignored
+     * @param advertise_data advertise data, ignored
+     * @param advertise_size advertise data size, ignored
+     * @return next_send_result
+     */
     ClientResult send_create_access_point(
         const protocol::CreateAccessPointRequest& request,
         const uint8_t* advertise_data,
@@ -145,6 +283,14 @@ public:
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param request private request, ignored
+     * @param advertise_data advertise data, ignored
+     * @param advertise_size advertise data size, ignored
+     * @return next_send_result
+     */
     ClientResult send_create_access_point_private(
         const protocol::CreateAccessPointPrivateRequest& request,
         const uint8_t* advertise_data,
@@ -153,23 +299,49 @@ public:
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param request request, ignored
+     * @return next_send_result
+     */
     ClientResult send_connect(
         const protocol::ConnectRequest& request) override {
         send_connect_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param request private request, ignored
+     * @return next_send_result
+     */
     ClientResult send_connect_private(
         const protocol::ConnectPrivateRequest& request) override {
         send_connect_private_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param filter scan filter, ignored
+     * @return next_send_result
+     */
     ClientResult send_scan(const protocol::ScanFilterFull& filter) override {
         send_scan_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call; the payload is not stored.
+     *
+     * @param header proxy header, ignored
+     * @param data payload, ignored
+     * @param data_size payload size, ignored
+     * @return next_send_result
+     */
     ClientResult send_proxy_data(
         const protocol::ProxyDataHeader& header,
         const uint8_t* data,
@@ -178,23 +350,56 @@ public:
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param request accept policy request, ignored
+     * @return next_send_result
+     */
     ClientResult send_set_accept_policy(
         const protocol::SetAcceptPolicyRequest& request) override {
         send_set_accept_policy_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param data advertise data, ignored
+     * @param size advertise data size, ignored
+     * @return next_send_result
+     */
     ClientResult send_set_advertise_data(
         const uint8_t* data, size_t size) override {
         send_set_advertise_data_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Counts the call.
+     *
+     * @param request reject request, ignored
+     * @return next_send_result
+     */
     ClientResult send_reject(const protocol::RejectRequest& request) override {
         send_reject_call_count++;
         return next_send_result;
     }
 
+    /**
+     * @brief Pops the next scripted packet from recv_queue.
+     *
+     * With an empty queue it returns next_recv_result, except that Success is
+     * mapped to Timeout so process loops that run until a non-Success result
+     * terminate.
+     *
+     * @param[out] type packet id of the popped packet (0xFF when empty)
+     * @param[out] payload buffer receiving the packet data, may be null
+     * @param payload_buffer_size capacity of payload in bytes
+     * @param[out] payload_size size of the popped packet data
+     * @return Success, BufferTooSmall when the packet exceeds the buffer, or
+     *         the scripted result when the queue is empty
+     */
     ClientResult receive_packet(
         protocol::PacketId& type,
         void* payload,
@@ -250,10 +455,20 @@ public:
         recv_call_count = 0;
     }
 
+    /**
+     * @brief Tells whether a scripted packet is waiting.
+     *
+     * @return true while recv_queue is not empty
+     */
     bool has_packet_available() const override {
         return !recv_queue.empty();
     }
 
+    /**
+     * @brief Accepts and ignores the TCP_NODELAY request.
+     *
+     * @return always Success
+     */
     ClientResult set_nodelay(bool /*enable*/) override {
         return ClientResult::Success;
     }

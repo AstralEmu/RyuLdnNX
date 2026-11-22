@@ -71,9 +71,9 @@ enum class ConnectionStatus : u32 {
  * @brief Server address structure
  */
 struct ServerAddress {
-    char host[64];
-    u16 port;
-    u16 padding;
+    char host[64];  ///< Null-terminated server host name
+    u16 port;       ///< Server TCP port
+    u16 padding;    ///< Explicit padding so the struct is 68 bytes
 };
 static_assert(sizeof(ServerAddress) == 68);
 
@@ -81,7 +81,7 @@ static_assert(sizeof(ServerAddress) == 68);
  * @brief Passphrase structure for IPC
  */
 struct Passphrase {
-    char passphrase[64];
+    char passphrase[64];  ///< Null-terminated passphrase (max 63 characters)
 };
 static_assert(sizeof(Passphrase) == 64);
 
@@ -89,10 +89,10 @@ static_assert(sizeof(Passphrase) == 64);
  * @brief Network settings structure for batch retrieval
  */
 struct NetworkSettings {
-    u32 connect_timeout_ms;
-    u32 ping_interval_ms;
-    u32 reconnect_delay_ms;
-    u32 max_reconnect_attempts;
+    u32 connect_timeout_ms;      ///< Connection timeout in milliseconds
+    u32 ping_interval_ms;        ///< Ping interval in milliseconds
+    u32 reconnect_delay_ms;      ///< Initial reconnect delay in milliseconds
+    u32 max_reconnect_attempts;  ///< Max reconnect attempts (0 = no retry)
 };
 static_assert(sizeof(NetworkSettings) == 16);
 
@@ -103,7 +103,7 @@ struct DebugSettings {
     u32 enabled;      ///< Bool as u32
     u32 level;        ///< 0-3
     u32 log_to_file;  ///< Bool as u32
-    u32 reserved;
+    u32 reserved;     ///< Reserved for future use
 };
 static_assert(sizeof(DebugSettings) == 16);
 
@@ -229,96 +229,156 @@ public:
 
     /**
      * @brief Get passphrase (65011)
+     *
+     * @param[out] out Passphrase, truncated to 63 characters
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetPassphrase"}
     static Result GetPassphrase(sf::Out<Passphrase> out);
 
     /**
      * @brief Set passphrase (65012)
+     *
+     * @param passphrase New passphrase (null-terminated, 64-byte buffer)
+     * @return Always succeeds (no validation is done here)
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetPassphrase"}
     static Result SetPassphrase(Passphrase passphrase);
 
     /**
      * @brief Get LDN enabled state (65013)
+     *
+     * @param[out] out 1 if LDN emulation is enabled, 0 otherwise
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetLdnEnabled"}
     static Result GetLdnEnabled(sf::Out<u32> out);
 
     /**
      * @brief Set LDN enabled state (65014)
+     *
+     * @param enabled Non-zero to enable LDN emulation, 0 to disable
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetLdnEnabled"}
     static Result SetLdnEnabled(u32 enabled);
 
     /**
      * @brief Get connect timeout in ms (65017)
+     *
+     * @param[out] out Timeout in ms (fixed value, not configurable)
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetConnectTimeout"}
     static Result GetConnectTimeout(sf::Out<u32> out);
 
     /**
      * @brief Set connect timeout in ms (65018)
+     *
+     * No-op kept for IPC protocol compatibility (the timeout is fixed).
+     *
+     * @param timeout_ms Ignored
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetConnectTimeout"}
     static Result SetConnectTimeout(u32 timeout_ms);
 
     /**
      * @brief Get ping interval in ms (65019)
+     *
+     * @param[out] out Interval in ms (fixed at 0: the server drives pings)
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetPingInterval"}
     static Result GetPingInterval(sf::Out<u32> out);
 
     /**
      * @brief Set ping interval in ms (65020)
+     *
+     * No-op kept for IPC protocol compatibility (the interval is fixed).
+     *
+     * @param interval_ms Ignored
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetPingInterval"}
     static Result SetPingInterval(u32 interval_ms);
 
     /**
      * @brief Get reconnect delay in ms (65021)
+     *
+     * @param[out] out Initial reconnect delay in ms (fixed value)
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetReconnectDelay"}
     static Result GetReconnectDelay(sf::Out<u32> out);
 
     /**
      * @brief Set reconnect delay in ms (65022)
+     *
+     * No-op kept for IPC protocol compatibility (the delay is fixed).
+     *
+     * @param delay_ms Ignored
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetReconnectDelay"}
     static Result SetReconnectDelay(u32 delay_ms);
 
     /**
      * @brief Get max reconnect attempts (65023)
+     *
+     * @param[out] out Attempts (fixed at 0, meaning auto-reconnect is off)
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetMaxReconnectAttempts"}
     static Result GetMaxReconnectAttempts(sf::Out<u32> out);
 
     /**
      * @brief Set max reconnect attempts (65024)
+     *
+     * No-op kept for IPC protocol compatibility (the value is fixed).
+     *
+     * @param attempts Ignored
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetMaxReconnectAttempts"}
     static Result SetMaxReconnectAttempts(u32 attempts);
 
     /**
      * @brief Get debug level 0-3 (65025)
+     *
+     * @param[out] out Current log verbosity
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetDebugLevel"}
     static Result GetDebugLevel(sf::Out<u32> out);
 
     /**
      * @brief Set debug level 0-3 (65026)
+     *
+     * @param level New log verbosity, passed to the ConfigManager as is
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetDebugLevel"}
     static Result SetDebugLevel(u32 level);
 
     /**
      * @brief Get log to file state (65027)
+     *
+     * Maps to the debug.enabled config key.
+     *
+     * @param[out] out 1 if debug logging is enabled, 0 otherwise
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetLogToFile"}
     static Result GetLogToFile(sf::Out<u32> out);
 
     /**
      * @brief Set log to file state (65028)
+     *
+     * Maps to the debug.enabled config key.
+     *
+     * @param enabled Non-zero to enable debug logging, 0 to disable
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetLogToFile"}
     static Result SetLogToFile(u32 enabled);
@@ -326,7 +386,8 @@ public:
     /**
      * @brief Save config to file (65029)
      *
-     * @param out Result of save operation
+     * @param[out] out Result of save operation
+     * @return Always succeeds; the operation outcome is in out
      */
     /// @gdb{tag="LDN:CONFIG", msg="SaveConfig"}
     static Result SaveConfig(sf::Out<ConfigResult> out);
@@ -334,7 +395,8 @@ public:
     /**
      * @brief Reload config from file (65030)
      *
-     * @param out Result of reload operation
+     * @param[out] out Result of reload operation
+     * @return Always succeeds; the operation outcome is in out
      */
     /// @gdb{tag="LDN:CONFIG", msg="ReloadConfig"}
     static Result ReloadConfig(sf::Out<ConfigResult> out);
@@ -344,6 +406,9 @@ public:
      *
      * Shared by SaveConfig and ReloadConfig. Any value that has no IPC
      * counterpart is reported as IoError.
+     *
+     * @param result Result returned by the ConfigManager
+     * @return The matching IPC ConfigResult
      */
     static ConfigResult ToIpcResult(ryu_ldn::config::ConfigResult result);
 

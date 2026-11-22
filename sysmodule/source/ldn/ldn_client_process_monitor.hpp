@@ -17,6 +17,12 @@
 
 namespace ams::mitm::ldn {
 
+/**
+ * @brief Stateless implementation of the client process monitor interface.
+ *
+ * Exposed to games alongside the LDN communication service; it only logs
+ * the registration of the client process.
+ */
 class IClientProcessMonitor {
 public:
     /// @gdb{tag="LDN:LIFECYCLE", msg="ClientProcessMonitor created"}
@@ -24,6 +30,13 @@ public:
     /// @gdb{tag="LDN:LIFECYCLE", msg="ClientProcessMonitor destroyed"}
     ~IClientProcessMonitor();
 
+    /**
+     * @brief Registers the calling client process (logged only).
+     *
+     * @param client_process_id Process id of the client, from the IPC
+     *                          context.
+     * @return Always ResultSuccess.
+     */
     static Result RegisterClient(const sf::ClientProcessId& client_process_id);
 };
 

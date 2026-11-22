@@ -20,20 +20,21 @@ namespace ryu_ldn::network {
 // Result Codes
 // ============================================================================
 
+/** @brief Outcome of a socket operation (errno mapped to portable codes). */
 enum class SocketResult {
-    Success = 0,
-    WouldBlock,         // Non-blocking operation would block
-    Timeout,            // Operation timed out
-    ConnectionRefused,  // Server refused connection
-    ConnectionReset,    // Connection reset by peer
-    HostUnreachable,    // Cannot reach host
-    NetworkDown,        // Network is down
-    NotConnected,       // Socket not connected
-    AlreadyConnected,   // Socket already connected
-    InvalidAddress,     // Invalid address format
-    SocketError,        // Generic socket error
-    NotInitialized,     // Socket subsystem not initialized
-    Closed              // Socket was closed
+    Success = 0,        ///< Operation completed
+    WouldBlock,         ///< Non-blocking operation would block
+    Timeout,            ///< Operation timed out
+    ConnectionRefused,  ///< Server refused connection
+    ConnectionReset,    ///< Connection reset by peer
+    HostUnreachable,    ///< Cannot reach host
+    NetworkDown,        ///< Network is down
+    NotConnected,       ///< Socket not connected
+    AlreadyConnected,   ///< Socket already connected
+    InvalidAddress,     ///< Invalid address format
+    SocketError,        ///< Generic socket error
+    NotInitialized,     ///< Socket subsystem not initialized
+    Closed              ///< Socket was closed
 };
 
 // ============================================================================
@@ -182,7 +183,9 @@ public:
     SocketResult set_send_buffer_size(int size) const;
 
 private:
+    /// Native socket descriptor, -1 when the socket is invalid.
     int m_fd;
+    /// true once connect() has completed successfully.
     bool m_connected;
 
     /**
@@ -234,6 +237,7 @@ bool socket_is_initialized();
 // Utility Functions
 // ============================================================================
 
+#ifdef TEST_BUILD
 /**
  * @brief Convert errno to SocketResult (for testing)
  *
@@ -241,7 +245,6 @@ bool socket_is_initialized();
  * @param err errno value
  * @return Corresponding SocketResult
  */
-#ifdef TEST_BUILD
 SocketResult errno_to_result(int err);
 #endif
 

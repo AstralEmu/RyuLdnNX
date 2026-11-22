@@ -15,7 +15,14 @@
 #include "ryu_ldn_ipc.h"
 #include "app/overlay_state.hpp"
 
-/** @brief Save config via IPC. Returns true on success. */
+/**
+ * @brief Persist the sysmodule config to the SD card through IPC.
+ *
+ * Does nothing unless the overlay state is Loaded. On success the overlay
+ * dirty flag is cleared with OverlayState::MarkSaved().
+ *
+ * @return true if the sysmodule reported ConfigResult Success.
+ */
 inline bool DoSaveConfig() {
     if (OverlayState::Instance().GetStatus() !=
         OverlayState::InitStatus::Loaded)
@@ -32,7 +39,14 @@ inline bool DoSaveConfig() {
     return false;
 }
 
-/** @brief Reload config from disk via IPC. Returns true on success. */
+/**
+ * @brief Reload the sysmodule config from the SD card through IPC.
+ *
+ * Does nothing unless the overlay state is Loaded. In-memory sysmodule
+ * changes are discarded; the overlay dirty flag is not touched here.
+ *
+ * @return true if the sysmodule reported ConfigResult Success.
+ */
 inline bool DoReloadConfig() {
     if (OverlayState::Instance().GetStatus() !=
         OverlayState::InitStatus::Loaded)

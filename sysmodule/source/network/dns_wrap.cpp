@@ -12,8 +12,8 @@
  * panics inside libnx before getting back to us.
  *
  * This compilation unit defines `__wrap_*` versions and the Makefile
- * adds
- * `-Wl,--wrap=getaddrinfo,--wrap=freeaddrinfo,--wrap=getnameinfo,--wrap=gai_strerror`.
+ * adds the linker options `-Wl,--wrap=getaddrinfo`,
+ * `--wrap=freeaddrinfo`, `--wrap=getnameinfo` and `--wrap=gai_strerror`.
  * The linker redirects every call (including those baked into
  * `libminiupnpc.a`) to these implementations, so miniupnpc's SSDP
  * discovery + HTTP control flow can run without ever touching sfdnsres.
@@ -58,7 +58,7 @@
 #include <cstdio>
 #include <utility>
 
-// Forward declaration needed for EAI_MEMORY cleanup in __wrap_getaddrinfo
+/// @brief Forward declaration for EAI_MEMORY cleanup in __wrap_getaddrinfo.
 extern "C" void __wrap_freeaddrinfo(struct addrinfo* res);
 
 /**
@@ -71,7 +71,9 @@ extern "C" void __wrap_freeaddrinfo(struct addrinfo* res);
  * corrupted the resolved IP address on ARM64.
  */
 struct AddrinfoStorage {
+    /// Result node handed to the caller; ai_addr points at #sa.
     struct addrinfo ai;
+    /// IPv4 socket address referenced by ai.ai_addr.
     struct sockaddr_in sa;
 };
 
@@ -672,6 +674,25 @@ extern "C" {
 // success paths (DNS list at `*res = head; return 0;` and single IP at
 // `*res = &storage->ai; return 0;`) are the function's terminal exits.
 // ============================================================================
+
+/**
+ * @brief IPv4-only replacement for getaddrinfo (linker `--wrap` target).
+ *
+ * Accepts an IPv4 literal, resolves a hostname through the built-in DNS
+ * client (ResolveHostnameDns), or, when @p node is null, yields the loopback
+ * (or wildcard with AI_PASSIVE) address. The result is a heap list released
+ * with __wrap_freeaddrinfo. Only AF_INET and AF_UNSPEC are supported;
+ * @p service is parsed as a numeric port (atoi), never as a service name.
+ *
+ * @param node Hostname or dotted IPv4 literal; may be null if @p service is
+ *             not.
+ * @param service Numeric port string; may be null if @p node is not.
+ * @param hints Optional filter; only ai_family, ai_socktype, ai_protocol and
+ *              the AI_PASSIVE flag are honored. May be null.
+ * @param[out] res Receives the head of the addrinfo list, or null on failure.
+ * @return 0 on success, otherwise an EAI_* code (EAI_SYSTEM if @p res is
+ *         null, EAI_NONAME, EAI_FAMILY, EAI_AGAIN, EAI_FAIL, EAI_MEMORY).
+ */
 int __wrap_getaddrinfo(
     const char* node,
     const char* service,
@@ -803,6 +824,14 @@ int __wrap_getaddrinfo(
     return 0;
 }
 
+/**
+ * @brief Frees a list built by __wrap_getaddrinfo.
+ *
+ * Each node is one malloc block (addrinfo + sockaddr_in), so a single
+ * std::free per node releases ai_addr too.
+ *
+ * @param res Head of the list; null is accepted (no-op).
+ */
 void __wrap_freeaddrinfo(struct addrinfo* res) {
     while (res != nullptr) {
         struct addrinfo* next = res->ai_next;
@@ -815,6 +844,24 @@ void __wrap_freeaddrinfo(struct addrinfo* res) {
     }
 }
 
+/**
+ * @brief Numeric-only getnameinfo replacement (no reverse DNS).
+ *
+ * Formats the IPv4 address with inet_ntop and the port in decimal. Flags are
+ * ignored.
+ *
+ * @param sa Socket address; must be AF_INET.
+ * @param salen Size of @p sa in bytes; must cover a sockaddr_in.
+ * @param[out] host Receives the dotted address; skipped if null or
+ *                  @p hostlen is 0.
+ * @param hostlen Capacity of @p host in bytes.
+ * @param[out] serv Receives the port number; skipped if null or
+ *                  @p servlen is 0.
+ * @param servlen Capacity of @p serv in bytes.
+ * @param flags Ignored.
+ * @return 0 on success, EAI_FAMILY for a bad address, EAI_OVERFLOW if
+ *         @p host is too small.
+ */
 int __wrap_getnameinfo(
     const struct sockaddr* sa,
     socklen_t salen,
@@ -822,7 +869,7 @@ int __wrap_getnameinfo(
     socklen_t hostlen,
     char* serv,
     socklen_t servlen,
-    int /*flags*/) {
+    [[maybe_unused]] int flags) {
     if ((sa == nullptr) ||
         salen < static_cast<socklen_t>(sizeof(struct sockaddr_in))) {
         return EAI_FAMILY;
@@ -844,6 +891,14 @@ int __wrap_getnameinfo(
     return 0;
 }
 
+/**
+ * @brief gai_strerror replacement returning one fixed message.
+ *
+ * The EAI_* code argument is ignored.
+ *
+ * @param ecode EAI_* code (unnamed in the definition, ignored).
+ * @return Static string "dns error"; never null, must not be freed.
+ */
 const char* __wrap_gai_strerror(int /*ecode*/) {
     return "dns error";
 }

@@ -120,6 +120,13 @@ struct ProxyConnection {
 
     /**
      * @brief Check if this connection matches the given parameters
+     *
+     * @param src_ip Source IPv4 address
+     * @param src_port Source port
+     * @param dst_ip Destination IPv4 address
+     * @param dst_port Destination port
+     * @param proto Transport protocol (TCP or UDP)
+     * @return true if every field equals the stored connection
      */
     bool matches(
         uint32_t src_ip,
@@ -134,6 +141,9 @@ struct ProxyConnection {
 
     /**
      * @brief Check if this connection matches a ProxyInfo
+     *
+     * @param info Proxy info carrying the endpoints and protocol
+     * @return true if every field equals the stored connection
      */
     bool matches(const protocol::ProxyInfo& info) const {
         return matches(
@@ -413,10 +423,15 @@ private:
     size_t m_connection_count;  ///< Number of active entries in m_connections
 
     // Callbacks
+    /// Invoked when a ProxyConfig packet is handled
     ProxyConfigCallback m_config_callback;
+    /// Invoked when a ProxyConnect packet is handled
     ProxyConnectCallback m_connect_callback;
+    /// Invoked when a ProxyConnectReply packet is handled
     ProxyConnectReplyCallback m_connect_reply_callback;
+    /// Invoked when a ProxyData packet is handled
     ProxyDataCallback m_data_callback;
+    /// Invoked when a ProxyDisconnect packet is handled
     ProxyDisconnectCallback m_disconnect_callback;
 
     // ========================================================================

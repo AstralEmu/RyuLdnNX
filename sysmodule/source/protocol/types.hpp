@@ -253,8 +253,9 @@ struct __attribute__((packed)) MacAddress {
 
     /**
      * @brief Compare two MAC addresses for equality
-     * @param other MAC address to compare with
-     * @return true if addresses are identical
+     * @param other Right-hand operand
+     * @return true if addresses are identical (compared against the other
+     *         MAC address passed as the right-hand operand)
      */
     bool operator==(const MacAddress& other) const {
         return std::memcmp(data, other.data, 6) == 0;
@@ -901,9 +902,9 @@ static_assert(
  * @brief Security Config - 0x44 bytes (68 bytes)
  */
 struct __attribute__((packed)) SecurityConfig {
-    uint16_t security_mode;
-    uint16_t passphrase_size;
-    uint8_t passphrase[64];
+    uint16_t security_mode;    ///< Security mode (SecurityMode value)
+    uint16_t passphrase_size;  ///< Used bytes in passphrase
+    uint8_t passphrase[64];    ///< Passphrase bytes
 };
 static_assert(
     sizeof(SecurityConfig) == 0x44, "SecurityConfig must be 0x44 bytes");
@@ -956,12 +957,12 @@ static_assert(sizeof(UserConfig) == 0x30, "UserConfig must be 0x30 bytes");
  * @brief Network Config - 0x20 bytes (32 bytes)
  */
 struct __attribute__((packed)) NetworkConfig {
-    IntentId intent_id;
-    uint16_t channel;
-    uint8_t node_count_max;
-    uint8_t reserved1;
-    uint16_t local_communication_version;
-    uint8_t reserved2[10];
+    IntentId intent_id;                    ///< Game and scene identifier
+    uint16_t channel;                      ///< Wi-Fi channel
+    uint8_t node_count_max;                ///< Maximum number of nodes
+    uint8_t reserved1;                     ///< Reserved
+    uint16_t local_communication_version;  ///< LDN communication version
+    uint8_t reserved2[10];                 ///< Reserved
 };
 static_assert(
     sizeof(NetworkConfig) == 0x20, "NetworkConfig must be 0x20 bytes");
@@ -971,11 +972,11 @@ static_assert(
  * Extended config for Ryujinx-specific features
  */
 struct __attribute__((packed)) RyuNetworkConfig {
-    uint8_t game_version[16];
-    uint8_t private_ip[16];   // For external proxy LAN detection
-    uint32_t address_family;  // AddressFamily enum (2=IPv4, 23=IPv6)
-    uint16_t external_proxy_port;
-    uint16_t internal_proxy_port;
+    uint8_t game_version[16];  ///< Game version string
+    uint8_t private_ip[16];    ///< Private IP, for external proxy LAN detection
+    uint32_t address_family;   ///< AddressFamily enum (2=IPv4, 23=IPv6)
+    uint16_t external_proxy_port;  ///< Externally reachable proxy port
+    uint16_t internal_proxy_port;  ///< Proxy port on the local network
 };
 static_assert(
     sizeof(RyuNetworkConfig) == 0x28, "RyuNetworkConfig must be 0x28 bytes");
@@ -985,10 +986,10 @@ static_assert(
  * Note: Advertise data is appended after this structure
  */
 struct __attribute__((packed)) CreateAccessPointRequest {
-    SecurityConfig security_config;
-    UserConfig user_config;
-    NetworkConfig network_config;
-    RyuNetworkConfig ryu_network_config;
+    SecurityConfig security_config;       ///< Security settings
+    UserConfig user_config;               ///< User name and flags
+    NetworkConfig network_config;         ///< Network settings
+    RyuNetworkConfig ryu_network_config;  ///< Ryujinx-specific settings
 };
 static_assert(
     sizeof(CreateAccessPointRequest) == 0xBC,
@@ -1051,13 +1052,12 @@ static_assert(
  * Total: 96 bytes (0x60)
  */
 struct __attribute__((packed)) ScanFilterFull {
-    NetworkId network_id;  // 0x00: 32 bytes
-    uint32_t
-        network_type;  // 0x20: 4 bytes (matches server's NetworkType : uint)
-    MacAddress mac_address;  // 0x24: 6 bytes
-    Ssid ssid;               // 0x2A: 34 bytes
-    uint8_t reserved[16];    // 0x4C: 16 bytes
-    uint32_t flag;           // 0x5C: 4 bytes
+    NetworkId network_id;    ///< 0x00: 32 bytes
+    uint32_t network_type;   ///< 0x20: 4 bytes (server's NetworkType : uint)
+    MacAddress mac_address;  ///< 0x24: 6 bytes
+    Ssid ssid;               ///< 0x2A: 34 bytes
+    uint8_t reserved[16];    ///< 0x4C: 16 bytes
+    uint32_t flag;           ///< 0x5C: 4 bytes
 };
 static_assert(
     sizeof(ScanFilterFull) == 0x60, "ScanFilterFull must be 96 bytes (0x60)");
@@ -1074,12 +1074,12 @@ static_assert(
  * We must add explicit padding to match the C# layout.
  */
 struct __attribute__((packed)) ConnectRequest {
-    SecurityConfig security_config;        // 0x00: 0x44 bytes (68)
-    UserConfig user_config;                // 0x44: 0x30 bytes (48)
-    uint32_t local_communication_version;  // 0x74: 4 bytes
-    uint32_t option_unknown;               // 0x78: 4 bytes
-    uint32_t _padding;         // 0x7C: 4 bytes padding for 8-byte alignment
-    NetworkInfo network_info;  // 0x80: 0x480 bytes (1152)
+    SecurityConfig security_config;        ///< 0x00: 0x44 bytes (68)
+    UserConfig user_config;                ///< 0x44: 0x30 bytes (48)
+    uint32_t local_communication_version;  ///< 0x74: 4 bytes
+    uint32_t option_unknown;               ///< 0x78: 4 bytes
+    uint32_t _padding;         ///< 0x7C: 4 bytes padding for 8-byte alignment
+    NetworkInfo network_info;  ///< 0x80: 0x480 bytes (1152)
 };
 static_assert(
     sizeof(ConnectRequest) == 0x500,
@@ -1120,25 +1120,38 @@ static_assert(sizeof(RejectRequest) == 8, "RejectRequest must be 8 bytes");
 // Enums
 // ============================================================================
 
+/// Which stations the host admits (SetAcceptPolicyRequest::accept_policy).
 enum class AcceptPolicy : uint8_t {
-    AcceptAll = 0,
-    RejectAll = 1,
-    BlackList = 2,
-    WhiteList = 3
+    AcceptAll = 0,  ///< Admit every station
+    RejectAll = 1,  ///< Admit nobody
+    BlackList = 2,  ///< Admit everyone except listed stations
+    WhiteList = 3   ///< Admit only listed stations
 };
 
-enum class SecurityMode : uint16_t { Any = 0, Product = 1, Debug = 2 };
+/// LDN security mode of a network (same values as Nintendo's LDN).
+enum class SecurityMode : uint16_t {
+    Any = 0,      ///< No restriction
+    Product = 1,  ///< Retail security
+    Debug = 2     ///< Debug security
+};
 
-enum class NetworkType : uint8_t { None = 0, General = 1, Ldn = 2, All = 3 };
+/// LDN network type (same values as Nintendo's LDN).
+enum class NetworkType : uint8_t {
+    None = 0,     ///< Unspecified
+    General = 1,  ///< General network
+    Ldn = 2,      ///< LDN network
+    All = 3       ///< Any type
+};
 
+/// Why a node left or was removed (RejectRequest::disconnect_reason).
 enum class DisconnectReason : uint32_t {
-    None = 0,
-    User = 1,
-    SystemRequest = 2,
-    DestroyedByHost = 3,
-    DestroyedByAdmin = 4,
-    Rejected = 5,
-    SignalLost = 6
+    None = 0,              ///< No reason
+    User = 1,              ///< Left by user choice
+    SystemRequest = 2,     ///< Requested by the system
+    DestroyedByHost = 3,   ///< Host destroyed the network
+    DestroyedByAdmin = 4,  ///< Destroyed by an administrator
+    Rejected = 5,          ///< Rejected by the host
+    SignalLost = 6         ///< Connection lost
 };
 
 /**

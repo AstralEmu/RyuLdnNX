@@ -193,14 +193,24 @@ static bool SendProxyDataCallback(
     return result == ryu_ldn::network::ClientOpResult::Success;
 }
 
-// Inbound data plane for the P2P host: P2pProxyServer hands us each ProxyData
-// payload that targets either the broadcast address or the host's vIP, so we
-// can deliver it to the same BSD MITM sink relay-mode ProxyData uses
-// (ProxySocketManager::RouteIncomingData). This is the in-process replacement
-// for Ryujinx's "host dials its own P2pProxyServer over TCP" loopback, which
-// we deliberately skip on Switch (TCP loopback for talking to ourselves costs
-// +1 connection, +2 worker threads, +128 KB recv buffers and +2 bsd:s IPC
-// sessions — too much for the sysmodule budget).
+/**
+ * @brief Inbound data plane for the P2P host: P2pProxyServer hands us each
+ * ProxyData payload that targets either the broadcast address or the host's
+ * vIP, so we can deliver it to the same BSD MITM sink relay-mode ProxyData
+ * uses (ProxySocketManager::RouteIncomingData). This is the in-process
+ * replacement for Ryujinx's "host dials its own P2pProxyServer over TCP"
+ * loopback, which we deliberately skip on Switch (TCP loopback for talking to
+ * ourselves costs +1 connection, +2 worker threads, +128 KB recv buffers and
+ * +2 bsd:s IPC sessions — too much for the sysmodule budget).
+ *
+ * @param source_ip Sender virtual IP (Ryujinx format)
+ * @param source_port Sender UDP/TCP port
+ * @param dest_ip Destination virtual IP (broadcast or the host's vIP)
+ * @param dest_port Destination port
+ * @param protocol Transport protocol of the payload (Tcp or Udp)
+ * @param data Payload bytes
+ * @param data_len Payload size in bytes
+ */
 static void HostP2pInboundDataCallback(
     uint32_t source_ip,
     uint16_t source_port,
@@ -1251,7 +1261,8 @@ Result ICommunicationService::CreateNetwork(const CreateNetworkConfig& data) {
         //
         // Wire format: network byte order (big-endian), to match what Ryujinx
         // sends — its LdnMasterProxyClient does
-        //   `unicastAddress.Address.GetAddressBytes().AsSpan().CopyTo(request.PrivateIp.AsSpan());`
+        //   `unicastAddress.Address.GetAddressBytes().AsSpan()
+        //    .CopyTo(request.PrivateIp.AsSpan());`
         // and IPAddress.GetAddressBytes() returns big-endian. The receiver
         // (sysmodule HandleExternalProxyConnect or another Ryujinx joiner)
         // memcpys the bytes straight into sockaddr_in::sin_addr.s_addr,

@@ -45,22 +45,34 @@
 namespace proto = ryu_ldn::protocol;
 namespace lm = ams::mitm::ldn;
 
-/// bsd/bsd_mitm_service.cpp is not hostable yet (it needs the Atmosphere MITM
-/// dispatch); the communication service only calls this one function of it.
-/// Once the BSD service has its own host suite, link the real file and delete
-/// this definition.
+/**
+ * @brief Host stand-in for BsdMitmService::CleanupAbandonedServices.
+ *
+ * bsd/bsd_mitm_service.cpp is not hostable yet (it needs the Atmosphere MITM
+ * dispatch); the communication service only calls this one function of it.
+ * Once the BSD service has its own host suite, link the real file and delete
+ * this definition.
+ */
 void ams::mitm::bsd::BsdMitmService::CleanupAbandonedServices() {}
 
 namespace {
 
+/// Title id the service under test is built for.
 constexpr std::uint64_t GAME_ID = 0x0100152000022000ULL;
+/// Virtual LDN address of the host (10.114.0.1, Ryujinx byte order).
 constexpr std::uint32_t HOST_VIP = 0x0A720001;
+/// Subnet mask of the virtual LDN network (255.255.0.0).
 constexpr std::uint32_t VIP_MASK = 0xFFFF0000;
 
+/// Result the service returns for a command that the current state forbids.
 constexpr std::uint32_t RC_BAD_STATE = MAKERESULT(0x10, 1);
+/// Result returned when there is no connection to the server.
 constexpr std::uint32_t RC_NOT_CONNECTED = MAKERESULT(0x10, 2);
+/// Result returned when a packet could not be written to the server.
 constexpr std::uint32_t RC_SEND_FAILED = MAKERESULT(0x10, 3);
+/// Result returned for a failed handshake or a reject/refused answer.
 constexpr std::uint32_t RC_HANDSHAKE_OR_REJECT = MAKERESULT(0x10, 4);
+/// Result returned when the server does not answer in time.
 constexpr std::uint32_t RC_TIMEOUT = MAKERESULT(0x10, 5);
 
 // =============================================================================
@@ -68,17 +80,22 @@ constexpr std::uint32_t RC_TIMEOUT = MAKERESULT(0x10, 5);
 // =============================================================================
 
 /**
- * Listens on an OS-assigned loopback port. It answers the client's Initialize
- * with an Initialize (which completes the handshake), records every packet it
- * receives and hands each one to the handler a test installed, so a test can
- * script the server's replies.
+ * @brief Listens on an OS-assigned loopback port. It answers the client's
+ * Initialize with an Initialize (which completes the handshake), records every
+ * packet it receives and hands each one to the handler a test installed, so a
+ * test can script the server's replies.
  */
 class FakeServer {
 public:
+    /// A received packet: its id and its payload.
     using Packet = std::pair<proto::PacketId, std::vector<std::uint8_t>>;
+    /// Script run for every packet received: the server, the id and the
+    /// payload.
     using Handler = std::function<void(
         FakeServer&, proto::PacketId, const std::vector<std::uint8_t>&)>;
 
+    /// Bind a loopback listener on an OS-assigned port and start the server
+    /// thread.
     FakeServer() {
         m_listen = ::socket(AF_INET, SOCK_STREAM, 0);
         sockaddr_in addr{};
@@ -93,6 +110,7 @@ public:
         m_thread = std::thread([this] { run(); });
     }
 
+    /// Stop the server thread, then close the connection and the listener.
     ~FakeServer() {
         m_stop = true;
         m_thread.join();
@@ -100,32 +118,62 @@ public:
         ::close(m_listen);
     }
 
+    /// Not copyable: owns a socket and a thread.
     FakeServer(const FakeServer&) = delete;
+    /// Not assignable: owns a socket and a thread.
+    /// @return Never returns (deleted).
     FakeServer& operator=(const FakeServer&) = delete;
 
+    /**
+     * @brief Get the port the server listens on.
+     * @return The OS-assigned loopback port.
+     */
     std::uint16_t port() const {
         return m_port;
     }
 
+    /**
+     * @brief Install the script run for every received packet.
+     * @param handler Script called after the built-in handshake answer.
+     */
     void set_handler(Handler handler) {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_handler = std::move(handler);
     }
 
-    /// When false the server accepts the TCP connection but never answers the
-    /// Initialize, so the handshake can only time out.
+    /**
+     * @brief Choose whether the Initialize of the client is answered.
+     *
+     * When false the server accepts the TCP connection but never answers the
+     * Initialize, so the handshake can only time out.
+     *
+     * @param answer True to answer with an Initialize (default behaviour).
+     */
     void answer_handshake(bool answer) {
         m_answer_handshake = answer;
     }
 
-    /// When true, an EOF from the client (it shut its write side down) no
-    /// longer closes the connection: the server stops reading and keeps its
-    /// own side open, so the client stays "connected" yet every send fails.
+    /**
+     * @brief Choose how an EOF from the client is handled.
+     *
+     * When true, an EOF from the client (it shut its write side down) no
+     * longer closes the connection: the server stops reading and keeps its
+     * own side open, so the client stays "connected" yet every send fails.
+     *
+     * @param keep True to keep the connection open after the EOF.
+     */
     void keep_open_on_eof(bool keep) {
         m_keep_open_on_eof = keep;
     }
 
-    /// Send one packet to the connected client; false when nobody is connected.
+    /**
+     * @brief Send one packet to the connected client.
+     * @param id Packet type to put in the LdnHeader.
+     * @param payload Packet body, or nullptr for a header-only packet.
+     * @param size Size of payload in bytes.
+     * @return true when the packet was written; false when nobody is
+     *         connected or it could not be encoded or written.
+     */
     bool send(
         proto::PacketId id,
         const void* payload = nullptr,
@@ -148,6 +196,13 @@ public:
     }
 
     template <class T>
+    /**
+     * @brief Send a packet whose payload is a plain object.
+     * @tparam T Trivially copyable payload type.
+     * @param id Packet id.
+     * @param payload Object sent byte for byte as the payload.
+     * @return true when the whole packet was written.
+     */
     bool send(proto::PacketId id, const T& payload) {
         return send(id, &payload, sizeof(payload));
     }
@@ -160,13 +215,22 @@ public:
         }
     }
 
-    /// True while a client connection is open on the server side.
+    /**
+     * @brief Tell whether a client connection is open on the server side.
+     * @return true while a client connection is open.
+     */
     bool has_client() {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_conn >= 0;
     }
 
-    /// Wait until `count` packets of this type were received.
+    /**
+     * @brief Wait until `count` packets of this type were received.
+     * @param id Packet type to wait for.
+     * @param timeout_ms Longest wait, in milliseconds.
+     * @param count Number of packets of that type to wait for (total).
+     * @return true when the count was reached before the timeout.
+     */
     bool wait_for(proto::PacketId id, int timeout_ms, std::size_t count = 1) {
         std::unique_lock<std::mutex> lock(m_mutex);
         return m_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] {
@@ -174,12 +238,22 @@ public:
         });
     }
 
+    /**
+     * @brief Count the packets of a type received so far.
+     * @param id Packet id to count.
+     * @return Number of packets of that type.
+     */
     std::size_t count(proto::PacketId id) {
         std::lock_guard<std::mutex> lock(m_mutex);
         return count_locked(id);
     }
 
-    /// Payload of the most recent packet of this type (empty when none).
+    /**
+     * @brief Payload of the most recent packet of this type.
+     * @param id Packet type to look for.
+     * @return The payload bytes; empty when none was received (or when the
+     *         packet had no body).
+     */
     std::vector<std::uint8_t> last(proto::PacketId id) {
         std::lock_guard<std::mutex> lock(m_mutex);
         for (auto it = m_received.rbegin(); it != m_received.rend(); ++it) {
@@ -191,6 +265,11 @@ public:
     }
 
 private:
+    /**
+     * @brief Count the packets of a type; the caller must hold m_mutex.
+     * @param id Packet id to count.
+     * @return Number of packets of that type.
+     */
     std::size_t count_locked(proto::PacketId id) const {
         std::size_t n = 0;
         for (const auto& p : m_received) {
@@ -199,6 +278,7 @@ private:
         return n;
     }
 
+    /// Close the client connection, if any.
     void close_connection() {
         std::lock_guard<std::mutex> lock(m_mutex);
         if (m_conn >= 0) {
@@ -207,6 +287,13 @@ private:
         }
     }
 
+    /**
+     * @brief Read exactly size bytes, giving up after one second of silence.
+     * @param fd Connected socket.
+     * @param out Destination buffer of at least size bytes.
+     * @param size Number of bytes to read.
+     * @return true when size bytes were read; false on timeout, EOF or error.
+     */
     bool read_full(int fd, std::uint8_t* out, std::size_t size) {
         std::size_t got = 0;
         while (got < size) {
@@ -223,6 +310,13 @@ private:
         return true;
     }
 
+    /**
+     * @brief Server thread: accept a client, read its packets and dispatch
+     * them.
+     *
+     * Runs until m_stop is set. A read failure closes the connection, except
+     * with m_keep_open_on_eof where the server then only stops reading.
+     */
     void run() {
         while (!m_stop) {
             int conn;
@@ -268,6 +362,15 @@ private:
         }
     }
 
+    /**
+     * @brief Record a packet and run the answers.
+     *
+     * Wakes the waiters, answers an Initialize with an Initialize when
+     * m_answer_handshake is set, then runs the installed handler.
+     *
+     * @param id Packet id.
+     * @param body Packet payload.
+     */
     void dispatch(proto::PacketId id, const std::vector<std::uint8_t>& body) {
         Handler handler;
         {
@@ -285,17 +388,29 @@ private:
         }
     }
 
+    /// Listening socket.
     int m_listen = -1;
+    /// Connected client socket, -1 when nobody is connected.
     int m_conn = -1;
+    /// Port the listening socket is bound to.
     std::uint16_t m_port = 0;
+    /// Set to stop the server thread.
     std::atomic<bool> m_stop{false};
+    /// Whether an Initialize is answered with an Initialize.
     std::atomic<bool> m_answer_handshake{true};
+    /// Whether an EOF from the client leaves the connection open.
     std::atomic<bool> m_keep_open_on_eof{false};
+    /// Set once the client shut its write side down (see m_keep_open_on_eof).
     std::atomic<bool> m_client_half_closed{false};
+    /// Protects m_conn, m_received and m_handler.
     std::mutex m_mutex;
+    /// Notified for every received packet (see wait_for()).
     std::condition_variable m_cv;
+    /// Every packet received, in order.
     std::vector<Packet> m_received;
+    /// Script run for every received packet.
     Handler m_handler;
+    /// Thread running run().
     std::thread m_thread;
 };
 
@@ -303,7 +418,12 @@ private:
 // Fixtures
 // =============================================================================
 
-/// Point the global configuration at `port` and build the service.
+/**
+ * @brief Point the global configuration at `port` and build the service.
+ * @param port Loopback port of the FakeServer to connect to.
+ * @param p2p True to leave the P2P path enabled (disable_p2p = false).
+ * @return A service built exactly as the sysmodule builds it.
+ */
 std::unique_ptr<lm::ICommunicationService> make_service(
     std::uint16_t port, bool p2p) {
     ryu_ldn::config::Config cfg = ryu_ldn::config::get_default_config();
@@ -317,39 +437,73 @@ std::unique_ptr<lm::ICommunicationService> make_service(
 
 /// A service wired to a FakeServer.
 struct Env {
+    /// Fake server the service talks to.
     FakeServer server;
+    /// Service under test.
     std::unique_ptr<lm::ICommunicationService> svc;
 
+    /**
+     * @brief Build the server and a service pointing at it.
+     * @param p2p Enable the P2P path (sets the inverse of ldn.disable_p2p).
+     */
     explicit Env(bool p2p = false) : svc(make_service(server.port(), p2p)) {}
+    /// Destroy the service before the server it talks to.
     ~Env() {
         svc.reset();
     }
 
+    /**
+     * @brief Access the service.
+     * @return The service.
+     */
     lm::ICommunicationService& operator*() {
         return *svc;
     }
+    /**
+     * @brief Access the service members.
+     * @return The service.
+     */
     lm::ICommunicationService* operator->() {
         return svc.get();
     }
 };
 
+/**
+ * @brief Build a client process id.
+ * @param pid Process id value.
+ * @return The id holding pid.
+ */
 ams::sf::ClientProcessId process(std::uint64_t pid) {
     ams::sf::ClientProcessId id;
     id.process_id.value = pid;
     return id;
 }
 
+/**
+ * @brief Read the state through GetState().
+ * @param svc Service to query.
+ * @return The reported state, 0xFFFFFFFF when GetState wrote nothing.
+ */
 std::uint32_t get_state(lm::ICommunicationService& svc) {
     std::uint32_t state = 0xFFFFFFFF;
     svc.GetState(ams::sf::Out<std::uint32_t>(state));
     return state;
 }
 
+/**
+ * @brief Convert a CommState to the value GetState() reports.
+ * @param s State.
+ * @return Its numeric value.
+ */
 constexpr std::uint32_t state_of(lm::CommState s) {
     return static_cast<std::uint32_t>(s);
 }
 
-/// A NetworkInfo with `nodes` connected nodes (node n has IP HOST_VIP + n).
+/**
+ * @brief Build a NetworkInfo with `nodes` connected nodes.
+ * @param nodes Number of connected nodes (node n has IP HOST_VIP + n).
+ * @return The zero-initialised NetworkInfo (node capacity 8).
+ */
 lm::NetworkInfo make_info(std::uint8_t nodes) {
     lm::NetworkInfo info{};
     std::memset(&info, 0, sizeof(info));
@@ -363,13 +517,22 @@ lm::NetworkInfo make_info(std::uint8_t nodes) {
     return info;
 }
 
+/**
+ * @brief Build a scan filter with every field zero.
+ * @return The zeroed filter.
+ */
 lm::ScanFilter make_filter() {
     lm::ScanFilter filter{};
     std::memset(&filter, 0, sizeof(filter));
     return filter;
 }
 
-/// Script: answer a CreateAccessPoint with the proxy config then Connected.
+/**
+ * @brief Script: answer a CreateAccessPoint with the proxy config then
+ *        Connected, and a Reject with a RejectReply.
+ * @param server Server to reply through.
+ * @param id Type of the packet the server just received.
+ */
 void host_script(
     FakeServer& server, proto::PacketId id, const std::vector<std::uint8_t>&) {
     if (id == proto::PacketId::CreateAccessPoint) {
@@ -384,7 +547,11 @@ void host_script(
     }
 }
 
-/// Initialize + OpenAccessPoint + CreateNetwork against `env`.
+/**
+ * @brief Initialize + OpenAccessPoint + CreateNetwork against `env`.
+ * @param env Service under test; its server runs host_script.
+ * @return true when every step succeeded.
+ */
 bool host_a_network(Env& env) {
     env.server.set_handler(host_script);
     if (env->Initialize(process(1)).IsFailure()) {
@@ -399,14 +566,27 @@ bool host_a_network(Env& env) {
     return env->CreateNetwork(config).IsSuccess();
 }
 
-/// Initialize + OpenStation against `env`.
+/**
+ * @brief Initialize + OpenStation against `env`.
+ * @param env Service under test.
+ * @return true when both calls succeeded.
+ */
 bool open_station(Env& env) {
     return env->Initialize(process(1)).IsSuccess() &&
            env->OpenStation().IsSuccess();
 }
 
-/// Wait until `cond` holds (the receive thread processes packets on its own).
 template <class F>
+/**
+ * @brief Wait until a condition holds.
+ *
+ * The receive thread processes packets on its own, so a test polls.
+ *
+ * @tparam F Callable returning a value convertible to bool.
+ * @param cond Condition to poll every 2 ms.
+ * @param timeout_ms Maximum wait in milliseconds.
+ * @return Whether cond held at the end of the wait.
+ */
 bool eventually(F cond, int timeout_ms = 2000) {
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::milliseconds(timeout_ms);
@@ -419,9 +599,15 @@ bool eventually(F cond, int timeout_ms = 2000) {
     return cond();
 }
 
-/// Round trip through the receive thread: the server pings, the client echoes.
-/// TCP keeps the order, so once the echo is back every packet sent before the
-/// call has been dispatched.
+/**
+ * @brief Round trip through the receive thread.
+ *
+ * The server pings, the client echoes. TCP keeps the order, so once the echo
+ * is back every packet sent before the call has been dispatched.
+ *
+ * @param env Environment to synchronise.
+ * @return true when the ping was sent and its echo came back in 2 s.
+ */
 bool round_trip(Env& env) {
     proto::PingMessage ping{};
     ping.requester = 0;
@@ -431,12 +617,19 @@ bool round_trip(Env& env) {
            env.server.wait_for(proto::PacketId::Ping, 2000, before + 1);
 }
 
-/// Shut the write side of the service's TCP connection down while the server
-/// keeps its side open: the client still looks connected, but every send now
-/// fails with EPIPE. This is the deterministic way to reach the send-failure
-/// branches (a plain server close is noticed by the receive thread and turns
-/// the failure into "not connected" instead). The client's descriptor is the
-/// one whose peer is the server's port.
+/**
+ * @brief Shut down the write side of the client connection towards a port.
+ *
+ * The server keeps its side open: the client still looks connected, but
+ * every send now fails with EPIPE. This is the deterministic way to reach the
+ * send-failure branches (a plain server close is noticed by the receive
+ * thread and turns the failure into "not connected" instead). The client's
+ * descriptor is the one whose peer is the server's port; descriptors 3 to
+ * 1023 are scanned.
+ *
+ * @param port Port of the server.
+ * @return true when such a descriptor was found and shut down.
+ */
 bool cut_write_side_towards(std::uint16_t port) {
     for (int fd = 3; fd < 1024; ++fd) {
         sockaddr_in peer{};
@@ -449,6 +642,15 @@ bool cut_write_side_towards(std::uint16_t port) {
     return false;
 }
 
+/**
+ * @brief Make every send of the service fail while it stays connected.
+ *
+ * Makes the server keep its side open on EOF, then shuts the client write
+ * side down with cut_write_side_towards().
+ *
+ * @param env Environment whose connection is cut.
+ * @return true when the client descriptor was found and shut down.
+ */
 bool cut_the_client_write_side(Env& env) {
     env.server.keep_open_on_eof(true);
     return cut_write_side_towards(env.server.port());
@@ -463,9 +665,15 @@ bool cut_the_client_write_side(Env& env) {
 // true when it ran, false to stay armed for the next call.
 // -----------------------------------------------------------------------------
 
+/**
+ * @brief An armed action and the thread it is armed for.
+ */
 struct HookSlot {
+    /// Protects action and owner.
     std::mutex mutex;
+    /// Action to run, empty when nothing is armed; returns false to stay armed.
     std::function<bool()> action;
+    /// Thread the action is armed for.
     std::thread::id owner;
 };
 
@@ -478,12 +686,20 @@ HookSlot g_recursive_lock_hook;  ///< before a recursive Mutex is taken
 /// inside P2pProxyClient::Connect). Unlike a HookSlot it has no owner thread:
 /// the thread to hold is not the one the test runs on.
 struct StartGate {
+    /// Protects action.
     std::mutex mutex;
+    /// Action to run once on the next thread start, or empty.
     std::function<void()> action;
 };
 
+/// The start gate shared by every thread start.
 StartGate g_start_gate;
 
+/**
+ * @brief Run and disarm the start gate action for a starting thread.
+ * @param thread_name Name of the thread being started; "p2p_connect" is
+ *        ignored.
+ */
 void run_start_gate(const char* thread_name) {
     if (std::strcmp(thread_name, "p2p_connect") == 0) {
         return;
@@ -499,11 +715,22 @@ void run_start_gate(const char* thread_name) {
     }
 }
 
+/**
+ * @brief Arm the start gate.
+ * @param action Action to run once at the next thread start.
+ */
 void arm_start_gate(std::function<void()> action) {
     std::lock_guard<std::mutex> lock(g_start_gate.mutex);
     g_start_gate.action = std::move(action);
 }
 
+/**
+ * @brief Run the action armed on a slot for the calling thread.
+ *
+ * The action is consumed; it is armed again when it returns false.
+ *
+ * @param slot Slot to run.
+ */
 void run_hook(HookSlot& slot) {
     std::function<bool()> action;
     {
@@ -525,24 +752,41 @@ void run_hook(HookSlot& slot) {
 /// Arms `action` on `slot` for the calling thread until the object dies.
 class ScopedHook {
 public:
+    /**
+     * @brief Arm an action on a slot for the calling thread.
+     * @param slot Slot to arm.
+     * @param action Action to run; returns true when done, false to stay armed.
+     */
     ScopedHook(HookSlot& slot, std::function<bool()> action) : m_slot(slot) {
         std::lock_guard<std::mutex> lock(m_slot.mutex);
         m_slot.action = std::move(action);
         m_slot.owner = std::this_thread::get_id();
     }
+    /// Disarm the slot.
     ~ScopedHook() {
         std::lock_guard<std::mutex> lock(m_slot.mutex);
         m_slot.action = nullptr;
     }
+    /// Not copyable: owns the arming of one slot.
     ScopedHook(const ScopedHook&) = delete;
+    /// Not assignable: owns the arming of one slot.
+    /// @return Never returns (deleted).
     ScopedHook& operator=(const ScopedHook&) = delete;
 
 private:
+    /// Slot armed by this object.
     HookSlot& m_slot;
 };
 
-/// Block the calling thread until the server has received an Initialize, then
-/// give the receive thread time to process everything the server answered.
+/**
+ * @brief Wait for the handshake to complete.
+ *
+ * Blocks the calling thread until the server has received an Initialize, then
+ * gives the receive thread time to process everything the server answered.
+ *
+ * @param env Environment to wait on.
+ * @return false when no Initialize arrived in 2 s.
+ */
 bool let_the_handshake_play_out(Env& env) {
     if (!env.server.wait_for(proto::PacketId::Initialize, 2000)) {
         return false;
@@ -551,8 +795,18 @@ bool let_the_handshake_play_out(Env& env) {
     return true;
 }
 
-/// A server that answers CreateAccessPoint after `delay_ms` with `packets`
-/// sent in order, `gap_ms` apart.
+/**
+ * @brief Build a server script answering a CreateAccessPoint late.
+ *
+ * After delay_ms, each id of `before` is sent as an empty packet, gap_ms
+ * apart, and then the usual host_script() answer follows (ProxyConfig and
+ * Connected).
+ *
+ * @param delay_ms Delay before the first packet.
+ * @param before Ids of the empty packets sent before the real answer.
+ * @param gap_ms Pause after each packet of `before`.
+ * @return The script, to install with set_handler().
+ */
 FakeServer::Handler delayed_host_script(
     int delay_ms, std::vector<proto::PacketId> before, int gap_ms) {
     return [=](FakeServer& server,
@@ -576,11 +830,14 @@ FakeServer::Handler delayed_host_script(
 // Lifecycle, no server involved
 // =============================================================================
 
+/// A new service is in the None state.
 TEST(a_new_service_starts_uninitialized) {
     Env env;
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::None));
 }
 
+/// Initialize moves to Initialized and records the game and its pid in the
+/// shared state.
 TEST(initialize_moves_to_initialized_and_registers_the_game) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(4242)).IsSuccess());
@@ -589,18 +846,22 @@ TEST(initialize_moves_to_initialized_and_registers_the_game) {
     ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 4242u);
 }
 
+/// A second Initialize fails with the bad-state result.
 TEST(a_second_initialize_is_refused) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
     ASSERT_EQ(env->Initialize(process(1)).GetValue(), RC_BAD_STATE);
 }
 
+/// InitializeSystem2 initializes the service like Initialize does.
 TEST(initialize_system2_records_the_error_state_and_initializes) {
     Env env;
     ASSERT_TRUE(env->InitializeSystem2(1, process(7)).IsSuccess());
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Initialized));
 }
 
+/// Finalize returns to None and clears the game flag and pid of the shared
+/// state.
 TEST(finalize_returns_to_none_and_clears_the_shared_state) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(9)).IsSuccess());
@@ -610,6 +871,7 @@ TEST(finalize_returns_to_none_and_clears_the_shared_state) {
     ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 0u);
 }
 
+/// A second Finalize also succeeds.
 TEST(finalize_twice_is_harmless) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(9)).IsSuccess());
@@ -617,6 +879,7 @@ TEST(finalize_twice_is_harmless) {
     ASSERT_TRUE(env->Finalize().IsSuccess());
 }
 
+/// Initialize works again after Finalize and records the new pid.
 TEST(initialize_can_be_repeated_after_finalize) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
@@ -625,6 +888,8 @@ TEST(initialize_can_be_repeated_after_finalize) {
     ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 2u);
 }
 
+/// Creating a service adds one active IPC session to the shared state and
+/// destroying it removes it.
 TEST(the_service_counts_as_one_ipc_session) {
     const std::uint32_t before =
         lm::SharedState::GetInstance().GetActiveSessionCount();
@@ -640,8 +905,9 @@ TEST(the_service_counts_as_one_ipc_session) {
 // Queries, no server involved
 // =============================================================================
 
-TEST(
-    get_state_reports_the_error_when_a_disconnect_reason_is_pending_in_error_state) {
+/// InitializeSystem2 with error state 1 and no disconnect reason pending:
+/// GetState succeeds (the reported state itself is not asserted).
+TEST(get_state_succeeds_in_the_error_state_without_a_disconnect_reason) {
     Env env;
     ASSERT_TRUE(env->InitializeSystem2(1, process(1)).IsSuccess());
     // No disconnect reason yet: the error state alone is not reported.
@@ -649,6 +915,7 @@ TEST(
     ASSERT_TRUE(env->GetState(ams::sf::Out<std::uint32_t>(state)).IsSuccess());
 }
 
+/// GetNetworkInfo outside a network returns an info with no nodes.
 TEST(the_empty_network_info_is_zeroed) {
     Env env;
     lm::NetworkInfo info = make_info(3);
@@ -657,6 +924,7 @@ TEST(the_empty_network_info_is_zeroed) {
     ASSERT_EQ(info.ldn.nodeCount, 0);
 }
 
+/// GetDisconnectReason is 0 on a new service.
 TEST(the_disconnect_reason_starts_at_none) {
     Env env;
     std::uint32_t reason = 99;
@@ -665,6 +933,8 @@ TEST(the_disconnect_reason_starts_at_none) {
     ASSERT_EQ(reason, 0u);
 }
 
+/// Outside a network the security parameter random bytes, the channel and
+/// the maximum node count read zero.
 TEST(the_security_parameter_and_network_config_of_an_empty_network_are_zero) {
     Env env;
     lm::SecurityParameter param{};
@@ -683,6 +953,7 @@ TEST(the_security_parameter_and_network_config_of_an_empty_network_are_zero) {
     ASSERT_EQ(config.nodeCountMax, 0);
 }
 
+/// AttachStateChangeEvent succeeds and hands out an unmanaged handle.
 TEST(the_state_change_event_handle_is_handed_out) {
     Env env;
     ams::sf::CopyHandle handle;
@@ -692,6 +963,8 @@ TEST(the_state_change_event_handle_is_handed_out) {
     ASSERT_FALSE(handle.managed);
 }
 
+/// Without a network, GetIpv4Address returns the address and mask of the
+/// system network configuration.
 TEST(the_ipv4_address_falls_back_to_the_system_network_configuration) {
     Env env;
     g_host_nifm_result = 0;
@@ -707,6 +980,8 @@ TEST(the_ipv4_address_falls_back_to_the_system_network_configuration) {
     ASSERT_EQ(mask, 0xFFFFFF00u);
 }
 
+/// A failing system network query is returned as is and the outputs are left
+/// untouched.
 TEST(a_failing_system_network_query_is_passed_through) {
     Env env;
     g_host_nifm_result = MAKERESULT(0xCD, 3);
@@ -721,6 +996,8 @@ TEST(a_failing_system_network_query_is_passed_through) {
     ASSERT_EQ(mask, 0x9ABCDEF0u);
 }
 
+/// For an empty network every latest-update entry has no state change and
+/// zero unknown bytes.
 TEST(the_latest_update_reports_nothing_for_an_empty_network) {
     Env env;
     lm::NetworkInfo info{};
@@ -740,6 +1017,7 @@ TEST(the_latest_update_reports_nothing_for_an_empty_network) {
     }
 }
 
+/// The latest-update command accepts an empty update array.
 TEST(the_latest_update_accepts_an_empty_update_buffer) {
     Env env;
     lm::NetworkInfo info{};
@@ -749,6 +1027,8 @@ TEST(the_latest_update_accepts_an_empty_update_buffer) {
                     .IsSuccess());
 }
 
+/// SetWirelessControllerRestriction, AddAcceptFilterEntry and
+/// ClearAcceptFilter succeed.
 TEST(the_stub_commands_always_succeed) {
     ASSERT_TRUE(
         lm::ICommunicationService::SetWirelessControllerRestriction()
@@ -761,6 +1041,9 @@ TEST(the_stub_commands_always_succeed) {
 // Commands that need a server connection, issued without one
 // =============================================================================
 
+/**
+ * @brief Scan before any server connection returns the not-connected result.
+ */
 TEST(scan_without_a_server_connection_is_refused) {
     Env env;
     std::uint32_t count = 7;
@@ -776,6 +1059,10 @@ TEST(scan_without_a_server_connection_is_refused) {
         RC_NOT_CONNECTED);
 }
 
+/**
+ * @brief A Scan whose filter carries the wildcard local communication id (all
+ * ones) is still processed, and without a connection it fails as not connected.
+ */
 TEST(scan_replaces_a_wildcard_local_communication_id) {
     Env env;
     std::uint32_t count = 0;
@@ -793,6 +1080,10 @@ TEST(scan_replaces_a_wildcard_local_communication_id) {
         RC_NOT_CONNECTED);
 }
 
+/**
+ * @brief CreateNetwork with a wildcard communication id but no server
+ * connection returns the not-connected result.
+ */
 TEST(creating_a_network_without_a_server_connection_is_refused) {
     Env env;
     lm::CreateNetworkConfig config{};
@@ -802,6 +1093,9 @@ TEST(creating_a_network_without_a_server_connection_is_refused) {
     ASSERT_EQ(env->CreateNetwork(config).GetValue(), RC_NOT_CONNECTED);
 }
 
+/**
+ * @brief Connect without a server connection returns the not-connected result.
+ */
 TEST(connecting_without_a_server_connection_is_refused) {
     Env env;
     lm::ConnectNetworkData data{};
@@ -810,6 +1104,10 @@ TEST(connecting_without_a_server_connection_is_refused) {
     ASSERT_EQ(env->Connect(data, target).GetValue(), RC_NOT_CONNECTED);
 }
 
+/**
+ * @brief CreateNetworkPrivate and ConnectPrivate without a server connection
+ * return the not-connected result.
+ */
 TEST(the_private_commands_without_a_server_connection_are_refused) {
     Env env;
     lm::CreateNetworkPrivateConfig create{};
@@ -825,11 +1123,19 @@ TEST(the_private_commands_without_a_server_connection_are_refused) {
     ASSERT_EQ(env->ConnectPrivate(connect).GetValue(), RC_NOT_CONNECTED);
 }
 
+/**
+ * @brief Reject without a server connection returns the not-connected result.
+ */
 TEST(rejecting_a_node_outside_a_network_is_refused) {
     Env env;
     ASSERT_EQ(env->Reject(1).GetValue(), RC_NOT_CONNECTED);
 }
 
+/**
+ * @brief DestroyNetwork, CloseAccessPoint, CloseStation, Disconnect and
+ *        OpenAccessPoint called in the None state are refused (bad state, never
+ * a crash).
+ */
 TEST(the_commands_of_the_wrong_state_are_refused) {
     Env env;
     ASSERT_EQ(env->DestroyNetwork().GetValue(), RC_BAD_STATE);
@@ -839,12 +1145,21 @@ TEST(the_commands_of_the_wrong_state_are_refused) {
     ASSERT_EQ(env->OpenAccessPoint().GetValue() != 0, true);
 }
 
+/**
+ * @brief OpenStation and OpenAccessPoint before Initialize return the bad-state
+ *        result.
+ */
 TEST(opening_before_initializing_is_refused) {
     Env env;
     ASSERT_EQ(env->OpenStation().GetValue(), RC_BAD_STATE);
     ASSERT_EQ(env->OpenAccessPoint().GetValue(), RC_BAD_STATE);
 }
 
+/**
+ * @brief Outside a hosted network SetAdvertiseData (also with an empty buffer)
+ * and SetStationAcceptPolicy only keep the values locally: nothing is sent to
+ *        the server.
+ */
 TEST(advertise_data_and_accept_policy_are_kept_locally_outside_a_network) {
     Env env;
     const std::uint8_t data[8] = {1, 2, 3, 4, 5, 6, 7, 8};
@@ -862,6 +1177,10 @@ TEST(advertise_data_and_accept_policy_are_kept_locally_outside_a_network) {
 // Connecting to the server
 // =============================================================================
 
+/**
+ * @brief OpenStation connects to the server, completes the Initialize handshake
+ * and moves the service (and the shared state) to Station.
+ */
 TEST(opening_a_station_connects_to_the_server_and_completes_the_handshake) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -871,6 +1190,10 @@ TEST(opening_a_station_connects_to_the_server_and_completes_the_handshake) {
         lm::SharedState::GetInstance().GetLdnState(), lm::CommState::Station);
 }
 
+/**
+ * @brief OpenAccessPoint connects to the server and moves the service (and the
+ *        shared state) to AccessPoint.
+ */
 TEST(opening_an_access_point_connects_to_the_server) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
@@ -881,6 +1204,10 @@ TEST(opening_an_access_point_connects_to_the_server) {
         lm::CommState::AccessPoint);
 }
 
+/**
+ * @brief Closing and reopening a station reuses the live server connection: the
+ *        server sees a single Initialize.
+ */
 TEST(opening_a_station_twice_keeps_the_existing_connection) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -889,6 +1216,10 @@ TEST(opening_a_station_twice_keeps_the_existing_connection) {
     ASSERT_EQ(env.server.count(proto::PacketId::Initialize), 1u);
 }
 
+/**
+ * @brief When nothing listens on the server port, OpenStation and
+ * OpenAccessPoint fail as not connected and the state goes back to Initialized.
+ */
 TEST(a_server_that_is_not_listening_refuses_the_connection) {
     std::uint16_t dead_port = 0;
     {
@@ -904,6 +1235,11 @@ TEST(a_server_that_is_not_listening_refuses_the_connection) {
     ASSERT_EQ(get_state(*svc), state_of(lm::CommState::Initialized));
 }
 
+/**
+ * @brief A server that accepts the TCP connection but never answers the
+ * Initialize makes OpenStation fail on the handshake and roll back to
+ * Initialized.
+ */
 TEST(a_server_that_never_answers_the_handshake_times_out) {
     Env env;
     env.server.answer_handshake(false);
@@ -918,7 +1254,12 @@ TEST(a_server_that_never_answers_the_handshake_times_out) {
 
 namespace {
 
-/// Script: answer a Scan with `replies` ScanReply then ScanReplyEnd.
+/**
+ * @brief Script: answer a Scan with `replies` ScanReply then ScanReplyEnd.
+ * @param replies Number of ScanReply packets to send.
+ * @param scene Scene id written into every reply.
+ * @return The handler to install with FakeServer::set_handler.
+ */
 FakeServer::Handler scan_script(int replies, std::uint64_t scene = 0) {
     return [replies, scene](
                FakeServer& server,
@@ -938,6 +1279,15 @@ FakeServer::Handler scan_script(int replies, std::uint64_t scene = 0) {
     };
 }
 
+/**
+ * @brief Issue a Scan and return its raw result.
+ * @param env Service under test.
+ * @param[out] out Buffer receiving the networks.
+ * @param capacity Capacity of `out`, in elements.
+ * @param filter Scan filter to pass.
+ * @param[out] count Number of networks returned (preset to 99 first).
+ * @return The raw result code of Scan.
+ */
 std::uint32_t run_scan(
     Env& env,
     lm::NetworkInfo* out,
@@ -956,6 +1306,10 @@ std::uint32_t run_scan(
 
 }  // namespace
 
+/**
+ * @brief Scan returns every ScanReply the server sent before ScanReplyEnd, with
+ * the game's communication id filled in, sending a single Scan packet.
+ */
 TEST(scan_returns_every_network_the_server_reports) {
     Env env;
     env.server.set_handler(scan_script(2));
@@ -969,6 +1323,10 @@ TEST(scan_returns_every_network_the_server_reports) {
     ASSERT_EQ(env.server.count(proto::PacketId::Scan), 1u);
 }
 
+/**
+ * @brief Scan stops at 8 results even when the server reports more and the
+ * caller's buffer is larger.
+ */
 TEST(scan_keeps_at_most_eight_results) {
     Env env;
     env.server.set_handler(scan_script(12));
@@ -979,6 +1337,9 @@ TEST(scan_keeps_at_most_eight_results) {
     ASSERT_EQ(count, 8u);
 }
 
+/**
+ * @brief Scan never returns more networks than the caller's buffer holds.
+ */
 TEST(scan_is_bounded_by_the_caller_buffer) {
     Env env;
     env.server.set_handler(scan_script(6));
@@ -989,6 +1350,10 @@ TEST(scan_is_bounded_by_the_caller_buffer) {
     ASSERT_EQ(count, 3u);
 }
 
+/**
+ * @brief The scene id of every scan reply is rewritten to the one in the game's
+ *        filter, so the game recognises the networks it asked for.
+ */
 TEST(scan_rewrites_the_scene_id_of_the_replies_to_the_filtered_one) {
     Env env;
     env.server.set_handler(scan_script(1, 0x55));
@@ -1002,6 +1367,10 @@ TEST(scan_rewrites_the_scene_id_of_the_replies_to_the_filtered_one) {
     ASSERT_EQ(results[0].networkId.intentId.sceneId, 0x42);
 }
 
+/**
+ * @brief A Scan with the wildcard local communication id is sent for the
+ * running game and still returns the server's networks.
+ */
 TEST(scan_with_a_wildcard_local_id_asks_for_the_running_game) {
     Env env;
     env.server.set_handler(scan_script(1));
@@ -1015,6 +1384,10 @@ TEST(scan_with_a_wildcard_local_id_asks_for_the_running_game) {
     ASSERT_EQ(count, 1u);
 }
 
+/**
+ * @brief A NetworkError answering a Scan makes Scan fail with the timeout
+ * result instead of returning networks.
+ */
 TEST(scan_fails_when_the_server_answers_with_an_error) {
     Env env;
     env.server.set_handler([](FakeServer& server,
@@ -1032,6 +1405,10 @@ TEST(scan_fails_when_the_server_answers_with_an_error) {
     ASSERT_EQ(run_scan(env, results, 2, make_filter(), count), RC_TIMEOUT);
 }
 
+/**
+ * @brief When the server never answers, Scan ends at its (shortened) timeout
+ * and succeeds with zero results.
+ */
 TEST(scan_returns_nothing_when_the_server_stays_silent) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1041,6 +1418,9 @@ TEST(scan_returns_nothing_when_the_server_stays_silent) {
     ASSERT_EQ(count, 0u);
 }
 
+/**
+ * @brief ScanPrivate returns the same networks as Scan.
+ */
 TEST(scan_private_behaves_like_scan) {
     Env env;
     env.server.set_handler(scan_script(2));
@@ -1056,6 +1436,10 @@ TEST(scan_private_behaves_like_scan) {
     ASSERT_EQ(count, 2u);
 }
 
+/**
+ * @brief Once the receive thread has seen the server drop the connection, Scan
+ *        fails; Finalize still succeeds afterwards.
+ */
 TEST(scan_reports_a_dropped_connection_as_a_send_failure) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1069,6 +1453,10 @@ TEST(scan_reports_a_dropped_connection_as_a_send_failure) {
     ASSERT_TRUE(env->Finalize().IsSuccess());
 }
 
+/**
+ * @brief A station that stays idle after a scan is disconnected from the server
+ * by the inactivity timeout (6 s of real time).
+ */
 TEST(the_inactivity_timeout_disconnects_an_idle_station) {
     Env env;
     env.server.set_handler(scan_script(1));
@@ -1087,6 +1475,11 @@ TEST(the_inactivity_timeout_disconnects_an_idle_station) {
 // Hosting
 // =============================================================================
 
+/**
+ * @brief CreateNetwork builds the access point from the server's ProxyConfig
+ * and Connected: state AccessPointCreated, the game's communication id, a
+ * usable channel (6) when the server left 0, and the virtual address and mask.
+ */
 TEST(creating_a_network_sets_up_the_access_point_from_the_server_answer) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1113,6 +1506,10 @@ TEST(creating_a_network_sets_up_the_access_point_from_the_server_answer) {
     ASSERT_EQ(mask, VIP_MASK);
 }
 
+/**
+ * @brief Advertise data set before CreateNetwork is included in the
+ *        CreateAccessPoint request.
+ */
 TEST(creating_a_network_forwards_the_advertise_data_buffered_before_it) {
     Env env;
     const std::uint8_t data[4] = {9, 8, 7, 6};
@@ -1130,6 +1527,10 @@ TEST(creating_a_network_forwards_the_advertise_data_buffered_before_it) {
     ASSERT_TRUE(found);
 }
 
+/**
+ * @brief Once the network is hosted, SetAdvertiseData and
+ * SetStationAcceptPolicy are forwarded to the server with the exact bytes.
+ */
 TEST(advertise_data_and_accept_policy_reach_the_server_once_hosting) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1148,6 +1549,10 @@ TEST(advertise_data_and_accept_policy_reach_the_server_once_hosting) {
     ASSERT_EQ(policy[0], 2);
 }
 
+/**
+ * @brief When the server never answers CreateAccessPoint, CreateNetwork times
+ * out and the state goes back to AccessPoint.
+ */
 TEST(a_server_that_never_confirms_the_network_times_out_and_rolls_back) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
@@ -1158,6 +1563,10 @@ TEST(a_server_that_never_confirms_the_network_times_out_and_rolls_back) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::AccessPoint));
 }
 
+/**
+ * @brief CreateNetwork while a network already exists returns the bad-state
+ * result.
+ */
 TEST(creating_a_network_twice_is_refused) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1166,6 +1575,11 @@ TEST(creating_a_network_twice_is_refused) {
     ASSERT_EQ(env->CreateNetwork(config).GetValue(), RC_BAD_STATE);
 }
 
+/**
+ * @brief GetNetworkInfoLatestUpdate reports Connect for a new node, nothing for
+ * an unchanged snapshot, and Disconnect for a node that left after a
+ *        SyncNetwork.
+ */
 TEST(the_latest_update_reports_nodes_joining_and_leaving) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1208,6 +1622,10 @@ TEST(the_latest_update_reports_nodes_joining_and_leaving) {
         static_cast<std::uint8_t>(lm::NodeStateChange::Disconnect));
 }
 
+/**
+ * @brief GetNetworkInfoLatestUpdate neither writes beyond the caller's update
+ *        buffer nor fails with a buffer smaller than the node table.
+ */
 TEST(the_latest_update_ignores_nodes_beyond_the_buffer) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1226,6 +1644,10 @@ TEST(the_latest_update_ignores_nodes_beyond_the_buffer) {
                     .IsSuccess());
 }
 
+/**
+ * @brief DestroyNetwork goes back to AccessPoint and empties the network info;
+ *        CloseAccessPoint then returns to Initialized.
+ */
 TEST(destroying_the_network_returns_to_the_access_point_state) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1239,6 +1661,10 @@ TEST(destroying_the_network_returns_to_the_access_point_state) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Initialized));
 }
 
+/**
+ * @brief Finalize while hosting returns to None (it drops the server
+ * connection).
+ */
 TEST(finalizing_while_hosting_drops_the_server_connection) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1246,6 +1672,10 @@ TEST(finalizing_while_hosting_drops_the_server_connection) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::None));
 }
 
+/**
+ * @brief CreateNetworkPrivate sends a CreateAccessPointPrivate and ends in
+ *        AccessPointCreated when the server answers Connected.
+ */
 TEST(a_private_network_is_created_with_its_address_list) {
     Env env;
     env.server.set_handler([](FakeServer& server,
@@ -1270,6 +1700,10 @@ TEST(a_private_network_is_created_with_its_address_list) {
         env.server.wait_for(proto::PacketId::CreateAccessPointPrivate, 1000));
 }
 
+/**
+ * @brief CreateNetworkPrivate accepts an address list buffer shorter than the
+ *        protocol's AddressList.
+ */
 TEST(a_private_network_with_a_short_address_list_is_still_created) {
     Env env;
     env.server.set_handler([](FakeServer& server,
@@ -1291,6 +1725,10 @@ TEST(a_private_network_with_a_short_address_list_is_still_created) {
             .IsSuccess());
 }
 
+/**
+ * @brief When the server never confirms a private network, CreateNetworkPrivate
+ *        times out and rolls back to AccessPoint.
+ */
 TEST(a_private_network_the_server_never_confirms_times_out) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
@@ -1312,6 +1750,11 @@ TEST(a_private_network_the_server_never_confirms_times_out) {
 
 namespace {
 
+/**
+ * @brief Script: answer Connect and ConnectPrivate with a 2-node Connected.
+ * @param server Server to reply through.
+ * @param id Type of the packet the server just received.
+ */
 void join_script(
     FakeServer& server, proto::PacketId id, const std::vector<std::uint8_t>&) {
     if (id == proto::PacketId::Connect ||
@@ -1321,6 +1764,10 @@ void join_script(
     }
 }
 
+/**
+ * @brief A zeroed ConnectNetworkData.
+ * @return The connect data.
+ */
 lm::ConnectNetworkData make_connect() {
     lm::ConnectNetworkData data{};
     std::memset(&data, 0, sizeof(data));
@@ -1329,6 +1776,10 @@ lm::ConnectNetworkData make_connect() {
 
 }  // namespace
 
+/**
+ * @brief Connect sends a Connect, joins the network from the server's Connected
+ *        (state StationConnected, node count from the answer).
+ */
 TEST(connecting_to_a_network_joins_it) {
     Env env;
     env.server.set_handler(join_script);
@@ -1346,6 +1797,9 @@ TEST(connecting_to_a_network_joins_it) {
     ASSERT_EQ(info.ldn.nodeCount, 2);
 }
 
+/**
+ * @brief Connect fails with the timeout result when the server never answers.
+ */
 TEST(connecting_to_a_network_that_does_not_answer_times_out) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1353,6 +1807,9 @@ TEST(connecting_to_a_network_that_does_not_answer_times_out) {
     ASSERT_EQ(env->Connect(make_connect(), target).GetValue(), RC_TIMEOUT);
 }
 
+/**
+ * @brief A second Connect while joined returns the bad-state result.
+ */
 TEST(connecting_while_already_joined_is_refused) {
     Env env;
     env.server.set_handler(join_script);
@@ -1362,6 +1819,10 @@ TEST(connecting_while_already_joined_is_refused) {
     ASSERT_EQ(env->Connect(make_connect(), target).GetValue(), RC_BAD_STATE);
 }
 
+/**
+ * @brief Disconnect notifies the server, goes back to Station and records the
+ * User disconnect reason.
+ */
 TEST(disconnecting_tells_the_server_and_goes_back_to_the_station_state) {
     Env env;
     env.server.set_handler(join_script);
@@ -1378,6 +1839,9 @@ TEST(disconnecting_tells_the_server_and_goes_back_to_the_station_state) {
     ASSERT_TRUE(env->CloseStation().IsSuccess());
 }
 
+/**
+ * @brief ConnectPrivate sends a ConnectPrivate and joins like Connect.
+ */
 TEST(a_private_connect_joins_the_network) {
     Env env;
     env.server.set_handler(join_script);
@@ -1389,6 +1853,10 @@ TEST(a_private_connect_joins_the_network) {
     ASSERT_TRUE(env.server.wait_for(proto::PacketId::ConnectPrivate, 1000));
 }
 
+/**
+ * @brief ConnectPrivate fails with the timeout result when the server never
+ *        answers.
+ */
 TEST(a_private_connect_that_does_not_answer_times_out) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1401,6 +1869,10 @@ TEST(a_private_connect_that_does_not_answer_times_out) {
 // Rejecting a node
 // =============================================================================
 
+/**
+ * @brief Reject sends a RejectRequest with the node id and the Rejected reason
+ * and succeeds on the server's RejectReply.
+ */
 TEST(rejecting_a_node_succeeds_when_the_server_acknowledges) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1415,6 +1887,10 @@ TEST(rejecting_a_node_succeeds_when_the_server_acknowledges) {
         static_cast<std::uint32_t>(lm::DisconnectReason::Rejected));
 }
 
+/**
+ * @brief A NetworkError received before Reject is still stored when the
+ * RejectReply arrives, so Reject reports it as an error.
+ */
 TEST(rejecting_a_node_reports_a_server_error) {
     Env env;
     env.server.set_handler([](FakeServer& server,
@@ -1441,6 +1917,10 @@ TEST(rejecting_a_node_reports_a_server_error) {
     ASSERT_EQ(env->Reject(1).GetValue(), RC_HANDSHAKE_OR_REJECT);
 }
 
+/**
+ * @brief Reject without any server answer fails with the not-connected result
+ * when the wait ends.
+ */
 TEST(rejecting_a_node_times_out_when_the_server_stays_silent) {
     Env env;
     env.server.set_handler([](FakeServer& server,
@@ -1462,6 +1942,10 @@ TEST(rejecting_a_node_times_out_when_the_server_stays_silent) {
 // Packets pushed by the server
 // =============================================================================
 
+/**
+ * @brief A Disconnect from the server is consumed by the client layer and never
+ *        reaches the service: the disconnect reason stays None.
+ */
 TEST(a_server_disconnect_is_consumed_by_the_client_layer) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -1476,6 +1960,9 @@ TEST(a_server_disconnect_is_consumed_by_the_client_layer) {
     ASSERT_EQ(reason, static_cast<std::uint32_t>(lm::DisconnectReason::None));
 }
 
+/**
+ * @brief A Reject pushed by the server stores the disconnect reason it carries.
+ */
 TEST(a_server_reject_records_the_reason_it_carries) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1492,6 +1979,10 @@ TEST(a_server_reject_records_the_reason_it_carries) {
     }));
 }
 
+/**
+ * @brief A payload-less Reject from the server is recorded as the Rejected
+ * reason.
+ */
 TEST(a_server_reject_without_a_payload_means_rejected) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1504,6 +1995,10 @@ TEST(a_server_reject_without_a_payload_means_rejected) {
     }));
 }
 
+/**
+ * @brief A server ping that asks for an echo (requester 0) is echoed back with
+ * the same id.
+ */
 TEST(a_server_ping_is_echoed_back) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1518,6 +2013,10 @@ TEST(a_server_ping_is_echoed_back) {
     ASSERT_EQ(echoed[1], 77);
 }
 
+/**
+ * @brief The server's answer to a ping the client sent (requester 1) and a too-
+ *        short ping are not echoed: only the later real ping is.
+ */
 TEST(a_ping_the_client_asked_for_is_not_answered) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1537,6 +2036,10 @@ TEST(a_ping_the_client_asked_for_is_not_answered) {
         sizeof(proto::PingMessage));
 }
 
+/**
+ * @brief NetworkErrors (port unreachable, other codes, and an empty one) turn
+ * the P2P path off but do not break the service: it still answers a Scan.
+ */
 TEST(a_port_unreachable_error_turns_the_p2p_path_off_without_failing_requests) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
@@ -1553,6 +2056,11 @@ TEST(a_port_unreachable_error_turns_the_p2p_path_off_without_failing_requests) {
         [&] { return run_scan(env, results, 2, make_filter(), count) == 0u; }));
 }
 
+/**
+ * @brief Truncated Connected, SyncNetwork, ScanReply, ProxyConfig,
+ * ExternalProxy*, ProxyData, ProxyConnectReply and SetAdvertiseData packets are
+ * ignored: the state and the network info stay unchanged.
+ */
 TEST(a_short_connected_packet_is_ignored) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1586,6 +2094,10 @@ TEST(a_short_connected_packet_is_ignored) {
     ASSERT_EQ(info.ldn.nodeCount, 0);
 }
 
+/**
+ * @brief A ProxyConfig pushed by the server changes the virtual address
+ *        GetIpv4Address reports.
+ */
 TEST(a_proxy_config_updates_the_virtual_address) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1603,6 +2115,11 @@ TEST(a_proxy_config_updates_the_virtual_address) {
     }));
 }
 
+/**
+ * @brief ProxyData with no bound socket is buffered (UDP and TCP) and malformed
+ *        data (declared length too long, unknown protocol) is dropped, without
+ *        harming the receive thread.
+ */
 TEST(proxy_data_nobody_listens_for_is_buffered_and_malformed_data_is_dropped) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -1645,12 +2162,15 @@ TEST(proxy_data_nobody_listens_for_is_buffered_and_malformed_data_is_dropped) {
 
 namespace {
 
+/// Virtual address of a joining station (10.114.0.2).
 constexpr std::uint32_t JOINER_VIP = 0x0A720002;
+/// 127.0.0.1 as the 4 bytes ExternalProxyConfig/Token carry.
 constexpr std::uint8_t LOOPBACK_IP[4] = {127, 0, 0, 1};
 
 /// A P2P host as seen by a joiner: a loopback listener the test plays by hand.
 class P2pHost {
 public:
+    /// Bind a loopback listener on an OS-assigned port.
     P2pHost() {
         m_listen = ::socket(AF_INET, SOCK_STREAM, 0);
         sockaddr_in addr{};
@@ -1663,14 +2183,22 @@ public:
         m_port = ntohs(addr.sin_port);
     }
 
+    /// Close the peer connection and the listener.
     ~P2pHost() {
         close_peer();
         close_listener();
     }
 
+    /// Not copyable: owns sockets.
     P2pHost(const P2pHost&) = delete;
+    /// Not assignable: owns sockets.
+    /// @return Never returns (deleted).
     P2pHost& operator=(const P2pHost&) = delete;
 
+    /**
+     * @brief Port the listener is bound to.
+     * @return TCP port on 127.0.0.1.
+     */
     std::uint16_t port() const {
         return m_port;
     }
@@ -1683,6 +2211,7 @@ public:
         }
     }
 
+    /// Close the accepted connection with an orderly FIN.
     void close_peer() {
         if (m_peer >= 0) {
             ::close(m_peer);
@@ -1704,6 +2233,11 @@ public:
         }
     }
 
+    /**
+     * @brief Wait for the service's P2P client to connect, then accept it.
+     * @param timeout_ms Longest wait, in milliseconds.
+     * @return true when a peer was accepted.
+     */
     bool accept_peer(int timeout_ms = 3000) {
         pollfd p{m_listen, POLLIN, 0};
         if (::poll(&p, 1, timeout_ms) <= 0) {
@@ -1713,6 +2247,12 @@ public:
         return m_peer >= 0;
     }
 
+    /**
+     * @brief Read one whole packet from the peer.
+     * @param[out] id Type of the packet read.
+     * @param[out] body Payload of the packet read.
+     * @return false on EOF, error or a 3 s silence.
+     */
     bool read_packet(proto::PacketId& id, std::vector<std::uint8_t>& body) {
         std::uint8_t raw[sizeof(proto::LdnHeader)];
         if (!read_full(raw, sizeof(raw))) {
@@ -1725,6 +2265,13 @@ public:
         return body.empty() || read_full(body.data(), body.size());
     }
 
+    /**
+     * @brief Send one packet to the peer.
+     * @param id Packet type to put in the LdnHeader.
+     * @param payload Packet body.
+     * @param size Size of payload in bytes.
+     * @return true when the packet was written.
+     */
     bool send(proto::PacketId id, const void* payload, std::size_t size) {
         std::vector<std::uint8_t> buf(sizeof(proto::LdnHeader) + size);
         std::size_t written = 0;
@@ -1743,11 +2290,25 @@ public:
     }
 
     template <class T>
+    /**
+     * @brief Send a packet whose body is the object representation of
+     * `payload`.
+     * @tparam T Trivially copyable payload type.
+     * @param id Packet type to put in the LdnHeader.
+     * @param payload Body to send (sizeof(T) bytes).
+     * @return true when the packet was written.
+     */
     bool send(proto::PacketId id, const T& payload) {
         return send(id, &payload, sizeof(payload));
     }
 
 private:
+    /**
+     * @brief Read exactly `size` bytes from the peer.
+     * @param[out] out Buffer receiving the bytes.
+     * @param size Number of bytes to read.
+     * @return false on EOF, error or when no data came for 3 s.
+     */
     bool read_full(std::uint8_t* out, std::size_t size) {
         std::size_t got = 0;
         while (got < size) {
@@ -1764,11 +2325,21 @@ private:
         return true;
     }
 
+    /// Listening socket, or -1 once close_listener ran.
     int m_listen = -1;
+    /// Accepted connection, or -1.
     int m_peer = -1;
+    /// Port the listener is bound to.
     std::uint16_t m_port = 0;
 };
 
+/**
+ * @brief Build the ExternalProxyConfig the master sends to a station.
+ * @param port Port of the P2P host (127.0.0.1).
+ * @param family Address family; 2 is IPv4, other values are unsupported.
+ * @param token_fill Byte the authentication token is filled with.
+ * @return The config.
+ */
 proto::ExternalProxyConfig external_proxy(
     std::uint16_t port,
     std::uint32_t family = 2,
@@ -1781,6 +2352,11 @@ proto::ExternalProxyConfig external_proxy(
     return config;
 }
 
+/**
+ * @brief Build a ProxyConfig on the virtual network.
+ * @param vip Virtual address assigned to the receiver.
+ * @return The config (mask VIP_MASK).
+ */
 proto::ProxyConfig proxy_config(std::uint32_t vip) {
     proto::ProxyConfig config{};
     config.proxy_ip = vip;
@@ -1788,6 +2364,11 @@ proto::ProxyConfig proxy_config(std::uint32_t vip) {
     return config;
 }
 
+/**
+ * @brief Read the service's virtual address through GetIpv4Address.
+ * @param env Service under test.
+ * @return The address in Ryujinx format.
+ */
 std::uint32_t address_of(Env& env) {
     std::uint32_t address = 0;
     std::uint32_t mask = 0;
@@ -1797,8 +2378,16 @@ std::uint32_t address_of(Env& env) {
     return address;
 }
 
-/// The master points the station at `host`; the host authenticates it and
-/// answers with a ProxyConfig carrying `vip`. True once the service took `vip`.
+/**
+ * @brief The master points the station at `host`; the host authenticates it
+ *        and answers with a ProxyConfig carrying `vip`.
+ * @param env Service under test (P2P enabled, station open).
+ * @param host Hand-played P2P host the master names.
+ * @param vip Virtual address the host assigns to the station.
+ * @param token_fill Byte the authentication token is filled with; the host
+ *        checks the token it receives against it.
+ * @return true once the service took `vip` as its address.
+ */
 bool join_p2p_host(
     Env& env,
     P2pHost& host,
@@ -1826,6 +2415,18 @@ bool join_p2p_host(
            eventually([&] { return address_of(env) == vip; }, 5000);
 }
 
+/**
+ * @brief Build a ProxyData packet body: ProxyDataHeader then payload.
+ * @param src_ip Source virtual address.
+ * @param src_port Source port.
+ * @param dst_ip Destination virtual address.
+ * @param dst_port Destination port.
+ * @param protocol Transport protocol written in the header.
+ * @param declared data_length written in the header, which tests may make
+ *        differ from the real payload size.
+ * @param body Payload bytes appended after the header.
+ * @return The encoded body.
+ */
 std::vector<std::uint8_t> proxy_data(
     std::uint32_t src_ip,
     std::uint16_t src_port,
@@ -1849,8 +2450,14 @@ std::vector<std::uint8_t> proxy_data(
     return out;
 }
 
-/// A proxy socket of the BSD MITM bound to `ip:port` (what a game's UDP socket
-/// is).
+/**
+ * @brief A proxy socket of the BSD MITM bound to `ip:port` (what a game's UDP
+ *        socket is).
+ * @param fd Descriptor number the proxy socket is registered under.
+ * @param ip Virtual IPv4 address to bind, in Ryujinx format.
+ * @param port Port to bind, in host byte order.
+ * @return The bound socket, or nullptr when creation or bind failed.
+ */
 ams::mitm::bsd::ProxySocket* bound_udp_socket(
     int fd, std::uint32_t ip, std::uint16_t port) {
     auto& manager = ams::mitm::bsd::ProxySocketManager::GetInstance();
@@ -1867,6 +2474,17 @@ ams::mitm::bsd::ProxySocket* bound_udp_socket(
     return sock->Bind(addr).IsSuccess() ? sock : nullptr;
 }
 
+/**
+ * @brief Send proxy data the way a game's socket does, through the BSD
+ *        proxy socket manager.
+ * @param src_ip Source virtual address.
+ * @param src_port Source port.
+ * @param dst_ip Destination virtual address.
+ * @param dst_port Destination port.
+ * @param body Payload to send.
+ * @param protocol Transport protocol of the payload.
+ * @return true when the manager accepted and sent the payload.
+ */
 bool send_through_the_bsd_service(
     std::uint32_t src_ip,
     std::uint16_t src_port,
@@ -1880,8 +2498,12 @@ bool send_through_the_bsd_service(
 
 }  // namespace
 
-TEST(
-    a_station_follows_the_external_proxy_the_master_names_and_takes_the_hosts_address) {
+/**
+ * @brief On an ExternalProxy from the master the station dials the P2P host,
+ *        authenticates with the token, and takes the virtual address from the
+ *        host's ProxyConfig (also in the proxy socket manager).
+ */
+TEST(a_station_follows_the_master_named_proxy_and_takes_the_host_address) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
     P2pHost host;
@@ -1899,8 +2521,12 @@ TEST(
         0x0A720009u);
 }
 
-TEST(
-    data_from_the_p2p_host_is_routed_to_the_bound_socket_and_bad_data_is_dropped) {
+/**
+ * @brief ProxyData from the P2P host is delivered to the bound socket; unknown
+ *        protocol, over-long declared length, a too-short packet and TCP
+ * towards a datagram socket are dropped.
+ */
+TEST(p2p_host_data_reaches_the_bound_socket_and_bad_data_is_dropped) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
     P2pHost host;
@@ -1959,6 +2585,10 @@ TEST(
     ams::mitm::bsd::ProxySocketManager::GetInstance().CloseProxySocket(900);
 }
 
+/**
+ * @brief While a P2P host is connected, a game's proxy data goes to the host
+ * with the right header and is not sent to the master.
+ */
 TEST(proxy_data_sent_by_a_game_goes_to_the_p2p_host_not_to_the_master) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
@@ -1981,6 +2611,10 @@ TEST(proxy_data_sent_by_a_game_goes_to_the_p2p_host_not_to_the_master) {
     ASSERT_EQ(env.server.count(proto::PacketId::ProxyData), via_master);
 }
 
+/**
+ * @brief When the P2P host connection is lost, proxy data falls back to the
+ * master.
+ */
 TEST(when_the_p2p_host_goes_away_proxy_data_falls_back_to_the_master) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
@@ -1996,6 +2630,11 @@ TEST(when_the_p2p_host_goes_away_proxy_data_falls_back_to_the_master) {
         5000));
 }
 
+/**
+ * @brief The BSD send path refuses an unsupported protocol, sends TCP/UDP
+ * through the master while connected, and refuses once the service is finalized
+ * or gone.
+ */
 TEST(a_game_cannot_send_unsupported_protocols_or_without_a_connected_service) {
     {
         Env env;
@@ -2018,8 +2657,12 @@ TEST(a_game_cannot_send_unsupported_protocols_or_without_a_connected_service) {
         send_through_the_bsd_service(0x0A720002, 1, 0x0A720001, 2, {1}));
 }
 
-TEST(
-    an_external_proxy_with_an_unsupported_family_or_a_refused_port_is_abandoned) {
+/**
+ * @brief An ExternalProxy with an unsupported address family, or whose port
+ * refuses the connection, is abandoned without changing the address, and the
+ * connect worker stays reusable.
+ */
+TEST(external_proxy_with_bad_family_or_refused_port_is_abandoned) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
     const std::uint32_t before = address_of(env);
@@ -2042,8 +2685,11 @@ TEST(
         eventually([&] { return join_p2p_host(env, host, 0x0A720009); }, 8000));
 }
 
-TEST(
-    a_host_that_never_answers_the_auth_makes_the_attempt_time_out_and_a_second_one_is_dropped) {
+/**
+ * @brief While an attempt waits on a host that never answers the auth, a second
+ *        ExternalProxy is dropped and the address is unchanged.
+ */
+TEST(silent_p2p_host_times_out_the_attempt_and_a_second_one_is_dropped) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
     const std::uint32_t before = address_of(env);
@@ -2060,6 +2706,10 @@ TEST(
     ASSERT_EQ(address_of(env), before);
 }
 
+/**
+ * @brief With P2P disabled an ExternalProxy is ignored: the service never dials
+ * the named host.
+ */
 TEST(an_external_proxy_is_ignored_when_p2p_is_disabled) {
     Env env(false);
     ASSERT_TRUE(open_station(env));
@@ -2070,6 +2720,10 @@ TEST(an_external_proxy_is_ignored_when_p2p_is_disabled) {
     ASSERT_TRUE(round_trip(env));
 }
 
+/**
+ * @brief ExternalProxyToken and ExternalProxyState packets are ignored when the
+ *        service hosts no P2P server.
+ */
 TEST(a_p2p_token_without_a_hosted_server_is_ignored) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
@@ -2083,7 +2737,13 @@ TEST(a_p2p_token_without_a_hosted_server_is_ignored) {
     ASSERT_TRUE(round_trip(env));
 }
 
-/// The port the hosted P2P server listens on, as announced to the master.
+/**
+ * @brief The port the hosted P2P server listens on, as announced to the
+ *        master.
+ * @param env Service under test, after CreateNetwork.
+ * @return internal_proxy_port of the last CreateAccessPoint the server
+ *         received; 0 when none was received or no P2P server runs.
+ */
 std::uint16_t announced_p2p_port(Env& env) {
     const auto body = env.server.last(proto::PacketId::CreateAccessPoint);
     if (body.size() < sizeof(proto::CreateAccessPointRequest)) {
@@ -2094,6 +2754,13 @@ std::uint16_t announced_p2p_port(Env& env) {
     return request.ryu_network_config.internal_proxy_port;
 }
 
+/**
+ * @brief A P2P host announces its server port to the master and serves a
+ * joiner: token authentication, joiner data delivered to the host's sockets
+ * (UDP and TCP, unsupported transport dropped), the host's sends going over P2P
+ *        instead of the master, and ExternalProxy and ExternalProxyState
+ * handling.
+ */
 TEST(hosting_with_p2p_announces_the_server_and_serves_joiners_through_it) {
     Env env(true);
     ASSERT_TRUE(host_a_network(env));
@@ -2167,6 +2834,10 @@ TEST(hosting_with_p2p_announces_the_server_and_serves_joiners_through_it) {
     ASSERT_TRUE(env->Finalize().IsSuccess());
 }
 
+/**
+ * @brief With a hosted P2P server and nobody joined, proxy data is not sent to
+ * the master.
+ */
 TEST(a_hosted_p2p_server_with_nobody_joined_swallows_proxy_data) {
     Env env(true);
     ASSERT_TRUE(host_a_network(env));
@@ -2176,6 +2847,10 @@ TEST(a_hosted_p2p_server_with_nobody_joined_swallows_proxy_data) {
     ASSERT_EQ(env.server.count(proto::PacketId::ProxyData), via_master);
 }
 
+/**
+ * @brief A game's TCP payload is sent to the master in a ProxyData marked as
+ * TCP.
+ */
 TEST(a_game_tcp_payload_is_sent_to_the_master_as_tcp) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2189,8 +2864,11 @@ TEST(a_game_tcp_payload_is_sent_to_the_master_as_tcp) {
     ASSERT_TRUE(header.info.protocol == proto::ProtocolType::Tcp);
 }
 
-TEST(
-    a_game_payload_that_cannot_be_written_to_the_master_is_reported_as_not_sent) {
+/**
+ * @brief When the write to the master fails, the BSD send path reports the
+ * payload as not sent.
+ */
+TEST(unwritable_game_payload_is_reported_as_not_sent) {
     Env env;
     ASSERT_TRUE(open_station(env));
     ASSERT_TRUE(cut_the_client_write_side(env));
@@ -2198,6 +2876,10 @@ TEST(
         send_through_the_bsd_service(0x0A720002, 1, 0x0A720001, 2, {1}));
 }
 
+/**
+ * @brief A service finalized between the manager's lock and the service lookup
+ *        makes the send fail instead of using a dead service.
+ */
 TEST(a_service_finalized_while_a_game_send_is_in_flight_refuses_the_send) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2213,6 +2895,10 @@ TEST(a_service_finalized_while_a_game_send_is_in_flight_refuses_the_send) {
         send_through_the_bsd_service(0x0A720002, 1, 0x0A720001, 2, {1}));
 }
 
+/**
+ * @brief A server connection that died while the station was closed is replaced
+ * by a new one on OpenStation, so a Scan works again.
+ */
 TEST(
     a_connection_that_died_while_the_station_was_closed_is_replaced_on_reopen) {
     Env env;
@@ -2236,6 +2922,10 @@ TEST(
 // Send failures: the connection looks up, the write side is gone
 // =============================================================================
 
+/**
+ * @brief With the write side cut, Scan returns the send-failed result and zero
+ *        networks.
+ */
 TEST(scan_reports_a_failed_send) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2246,6 +2936,10 @@ TEST(scan_reports_a_failed_send) {
     ASSERT_EQ(count, 0u);
 }
 
+/**
+ * @brief With the write side cut, CreateNetwork returns the send-failed result
+ * and the state goes back to AccessPoint.
+ */
 TEST(creating_a_network_reports_a_failed_send_and_rolls_back) {
     Env env(true);
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
@@ -2257,6 +2951,10 @@ TEST(creating_a_network_reports_a_failed_send_and_rolls_back) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::AccessPoint));
 }
 
+/**
+ * @brief With the write side cut, SetAdvertiseData and SetStationAcceptPolicy
+ *        return the send-failed result while hosting.
+ */
 TEST(advertise_data_and_accept_policy_report_a_failed_send_while_hosting) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -2269,6 +2967,10 @@ TEST(advertise_data_and_accept_policy_report_a_failed_send_while_hosting) {
     ASSERT_EQ(env->SetStationAcceptPolicy(1).GetValue(), RC_SEND_FAILED);
 }
 
+/**
+ * @brief With the write side cut, Connect fails (timeout result) and the
+ * service stays in Station.
+ */
 TEST(connecting_reports_a_failed_send_and_stays_a_station) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2278,6 +2980,10 @@ TEST(connecting_reports_a_failed_send_and_stays_a_station) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Station));
 }
 
+/**
+ * @brief With the write side cut, ConnectPrivate returns the send-failed result
+ * and the service stays in Station.
+ */
 TEST(a_private_connect_reports_a_failed_send_and_stays_a_station) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2288,6 +2994,10 @@ TEST(a_private_connect_reports_a_failed_send_and_stays_a_station) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Station));
 }
 
+/**
+ * @brief With the write side cut, CreateNetworkPrivate returns the send-failed
+ *        result and the state goes back to AccessPoint.
+ */
 TEST(a_private_network_reports_a_failed_send_and_rolls_back) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
@@ -2304,6 +3014,9 @@ TEST(a_private_network_reports_a_failed_send_and_rolls_back) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::AccessPoint));
 }
 
+/**
+ * @brief With the write side cut, Reject returns the send-failed result.
+ */
 TEST(rejecting_reports_a_failed_send) {
     Env env;
     ASSERT_TRUE(host_a_network(env));
@@ -2311,8 +3024,11 @@ TEST(rejecting_reports_a_failed_send) {
     ASSERT_EQ(env->Reject(1).GetValue(), RC_SEND_FAILED);
 }
 
-TEST(
-    disconnecting_still_leaves_the_network_when_the_notification_cannot_be_sent) {
+/**
+ * @brief Disconnect returns to Station even when the server notification cannot
+ * be written.
+ */
+TEST(disconnect_leaves_the_network_even_if_the_notice_cannot_be_sent) {
     Env env;
     env.server.set_handler(join_script);
     ASSERT_TRUE(open_station(env));
@@ -2327,8 +3043,11 @@ TEST(
 // Handshake and WaitForResponse windows (scripted with the stand-in hooks)
 // =============================================================================
 
-TEST(
-    pings_that_arrive_before_the_handshake_ends_reach_the_service_but_are_not_echoed) {
+/**
+ * @brief Pings the server sends during the handshake reach the service but are
+ * not echoed (the client is not Ready yet); a later ping is echoed.
+ */
+TEST(pings_before_the_handshake_ends_are_not_echoed) {
     Env env;
     env.server.answer_handshake(false);
     env.server.set_handler([](FakeServer& server,
@@ -2357,6 +3076,10 @@ TEST(
     ASSERT_EQ(env.server.last(proto::PacketId::Ping)[1], 0xB0);
 }
 
+/**
+ * @brief After the server dropped the connection, CloseStation then OpenStation
+ *        reconnects and a Scan works again.
+ */
 TEST(a_station_reopened_after_a_server_drop_reconnects) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2372,6 +3095,10 @@ TEST(a_station_reopened_after_a_server_drop_reconnects) {
         [&] { return run_scan(env, results, 2, make_filter(), count) == 0u; }));
 }
 
+/**
+ * @brief The handshake is accepted when the server answers before the service
+ *        clears its handshake event (lost wake-up): the client is Ready anyway.
+ */
 TEST(a_handshake_that_finishes_before_the_wait_starts_is_still_accepted) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
@@ -2383,6 +3110,10 @@ TEST(a_handshake_that_finishes_before_the_wait_starts_is_still_accepted) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Station));
 }
 
+/**
+ * @brief A connection lost right after the handshake answer makes OpenStation
+ * fail on the handshake.
+ */
 TEST(a_connection_lost_right_after_the_handshake_fails_the_open) {
     Env env;
     env.server.set_handler([](FakeServer& server,
@@ -2402,6 +3133,10 @@ TEST(a_connection_lost_right_after_the_handshake_fails_the_open) {
     ASSERT_EQ(env->OpenStation().GetValue(), RC_HANDSHAKE_OR_REJECT);
 }
 
+/**
+ * @brief Finalize during the handshake wait ends it (error event) and
+ * OpenStation fails on the handshake.
+ */
 TEST(finalizing_during_the_handshake_wait_fails_the_open) {
     Env env;
     env.server.answer_handshake(false);
@@ -2412,6 +3147,10 @@ TEST(finalizing_during_the_handshake_wait_fails_the_open) {
     ASSERT_EQ(env->OpenStation().GetValue(), RC_HANDSHAKE_OR_REJECT);
 }
 
+/**
+ * @brief A NetworkError answering a CreateAccessPoint makes CreateNetwork fail
+ * and roll back to AccessPoint.
+ */
 TEST(a_network_error_answers_a_create_request_as_a_failure) {
     Env env;
     env.server.set_handler([](FakeServer& server,
@@ -2431,6 +3170,10 @@ TEST(a_network_error_answers_a_create_request_as_a_failure) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::AccessPoint));
 }
 
+/**
+ * @brief A ScanReplyEnd arriving before the Connected does not end the wait for
+ * the create answer.
+ */
 TEST(scan_results_interleaved_with_the_create_answer_do_not_end_the_wait) {
     Env env;
     env.server.set_handler(
@@ -2443,8 +3186,12 @@ TEST(scan_results_interleaved_with_the_create_answer_do_not_end_the_wait) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::AccessPointCreated));
 }
 
-TEST(
-    an_answer_that_is_not_the_awaited_one_cannot_stretch_the_wait_past_its_deadline) {
+/**
+ * @brief An answer that is not the awaited one does not extend the wait: once
+ * the deadline has passed (clock skewed past it) the wait times out even though
+ *        Connected follows.
+ */
+TEST(unrelated_answer_cannot_stretch_the_wait_past_its_deadline) {
     Env env;
     env.server.set_handler(
         delayed_host_script(30, {proto::PacketId::ScanReplyEnd}, 0));
@@ -2464,6 +3211,10 @@ TEST(
     ASSERT_EQ(result, RC_TIMEOUT);
 }
 
+/**
+ * @brief Finalize during a pending create wakes the wait at once (error event)
+ *        instead of letting the timeout run out.
+ */
 TEST(finalizing_while_a_create_is_pending_ends_the_wait_as_a_lost_connection) {
     Env env;
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
@@ -2488,6 +3239,10 @@ TEST(finalizing_while_a_create_is_pending_ends_the_wait_as_a_lost_connection) {
 // Query and state edge cases
 // =============================================================================
 
+/**
+ * @brief In error-state mode a pending disconnect reason is reported by
+ * GetState as an error carrying that reason.
+ */
 TEST(a_pending_disconnect_reason_is_reported_through_get_state_in_error_state) {
     Env env;
     ASSERT_TRUE(env->InitializeSystem2(1, process(1)).IsSuccess());
@@ -2506,6 +3261,10 @@ TEST(a_pending_disconnect_reason_is_reported_through_get_state_in_error_state) {
     }));
 }
 
+/**
+ * @brief CreateNetworkPrivate in the Station state returns the bad-state result
+ * and keeps the state.
+ */
 TEST(a_private_network_cannot_be_created_from_the_station_state) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2520,6 +3279,10 @@ TEST(a_private_network_cannot_be_created_from_the_station_state) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Station));
 }
 
+/**
+ * @brief A P2P host whose server sent no ProxyConfig still ends with the
+ * predicted host address and mask.
+ */
 TEST(a_p2p_host_without_a_proxy_config_predicts_its_virtual_address) {
     Env env(true);
     env.server.set_handler([](FakeServer& server,
@@ -2545,6 +3308,10 @@ TEST(a_p2p_host_without_a_proxy_config_predicts_its_virtual_address) {
     ASSERT_EQ(mask, VIP_MASK);
 }
 
+/**
+ * @brief The scene id the game asked for at CreateNetwork is kept after
+ * Connected and after a SyncNetwork carrying another one.
+ */
 TEST(
     the_scene_id_the_game_asked_for_is_restored_on_connected_and_sync_network) {
     Env env;
@@ -2575,8 +3342,11 @@ TEST(
 // Waiting for answers: the windows between "request sent" and "wait started"
 // =============================================================================
 
-TEST(
-    a_network_error_answering_a_reject_ends_the_wait_without_an_acknowledgement) {
+/**
+ * @brief A NetworkError answering a Reject ends the wait at once (error event)
+ * with the not-connected result, without running the whole timeout.
+ */
+TEST(network_error_to_a_reject_ends_the_wait_without_an_ack) {
     Env env;
     env.server.set_handler([](FakeServer& server,
                               proto::PacketId id,
@@ -2603,6 +3373,9 @@ TEST(
         std::chrono::milliseconds(300));
 }
 
+/**
+ * @brief A Connected processed before Connect is accepted as its answer.
+ */
 TEST(a_connected_that_was_already_processed_satisfies_the_next_connect) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2615,8 +3388,11 @@ TEST(a_connected_that_was_already_processed_satisfies_the_next_connect) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::StationConnected));
 }
 
-TEST(
-    a_connected_followed_by_an_error_before_the_wait_returns_still_counts_as_joined) {
+/**
+ * @brief A Connected followed by a NetworkError before the wait returns still
+ *        counts as joined (the final re-check under the mutex accepts it).
+ */
+TEST(connected_then_error_before_the_wait_returns_still_counts_as_joined) {
     Env env;
     ASSERT_TRUE(open_station(env));
     // Armed after the open: the handshake wait also goes through TimedWaitAny.
@@ -2636,8 +3412,11 @@ TEST(
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::StationConnected));
 }
 
-TEST(
-    a_p2p_host_whose_proxy_is_refused_while_it_creates_falls_back_to_the_relay) {
+/**
+ * @brief When a port-unreachable error turns P2P off while a network is being
+ *        created, the create still succeeds through the relay.
+ */
+TEST(p2p_host_whose_proxy_is_refused_while_creating_uses_the_relay) {
     Env env(true);
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
     ASSERT_TRUE(env->OpenAccessPoint().IsSuccess());
@@ -2658,6 +3437,10 @@ TEST(
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::AccessPointCreated));
 }
 
+/**
+ * @brief The Connected of an earlier join is not taken for the answer to a
+ * later Connect: it times out.
+ */
 TEST(connecting_again_after_a_disconnect_waits_for_the_new_answer) {
     Env env;
     env.server.set_handler(join_script);
@@ -2677,15 +3460,29 @@ TEST(connecting_again_after_a_disconnect_waits_for_the_new_answer) {
 // Failure injection around hosting and the P2P connect worker
 // =============================================================================
 
-/// Allocation failure injection for the `new (std::nothrow)` the service uses
-/// for its P2P objects (the console heap returns nullptr under pressure and its
-/// `new` never throws): an allocation of exactly this size fails once armed.
+/**
+ * @brief Allocation failure injection for the `new (std::nothrow)` the
+ *        service uses for its P2P objects.
+ *
+ * The console heap returns nullptr under pressure and its `new` never throws:
+ * an allocation of exactly the armed size fails once armed.
+ */
 namespace {
+/// Allocation size that fails; 0 when no failure is armed.
 std::atomic<std::size_t> g_fail_nothrow_size{0};
+/// Number of allocations failed since the last arming.
 std::atomic<int> g_fail_nothrow_hits{0};
 
-/// Goes through the replaceable throwing forms so that the matching default
-/// operator delete (whatever allocator the build uses) still releases it.
+/**
+ * @brief Decide whether a nothrow allocation must fail.
+ *
+ * The operator new overloads below go through the replaceable throwing forms
+ * so that the matching default operator delete (whatever allocator the build
+ * uses) still releases the memory.
+ * @param size Requested allocation size in bytes.
+ * @return true (and the hit counter is incremented) when `size` equals the
+ *         armed size.
+ */
 bool nothrow_must_fail(std::size_t size) noexcept {
     if (size == g_fail_nothrow_size.load()) {
         g_fail_nothrow_hits.fetch_add(1);
@@ -2694,17 +3491,30 @@ bool nothrow_must_fail(std::size_t size) noexcept {
     return false;
 }
 
+/// Arms the allocation failure for its lifetime.
 class ScopedAllocationFailure {
 public:
+    /**
+     * @brief Arm the failure and reset the hit counter.
+     * @param size Allocation size that must fail.
+     */
     explicit ScopedAllocationFailure(std::size_t size) {
         g_fail_nothrow_hits = 0;
         g_fail_nothrow_size = size;
     }
+    /// Disarm the failure.
     ~ScopedAllocationFailure() {
         g_fail_nothrow_size = 0;
     }
+    /// Not copyable: owns the arming.
     ScopedAllocationFailure(const ScopedAllocationFailure&) = delete;
+    /// Not assignable: owns the arming.
+    /// @return Never returns (deleted).
     ScopedAllocationFailure& operator=(const ScopedAllocationFailure&) = delete;
+    /**
+     * @brief Tell whether an allocation failed since the arming.
+     * @return true when at least one allocation was failed.
+     */
     static bool hit() {
         return g_fail_nothrow_hits.load() > 0;
     }
@@ -2713,6 +3523,10 @@ public:
 /// Holds a TCP port so the service cannot bind it.
 class PortHog {
 public:
+    /**
+     * @brief Bind and listen on `port` on all interfaces, if possible.
+     * @param port TCP port to hold.
+     */
     explicit PortHog(std::uint16_t port) {
         m_fd = ::socket(AF_INET, SOCK_STREAM, 0);
         const int on = 1;
@@ -2726,20 +3540,32 @@ public:
             ::listen(m_fd, 1);
         }
     }
+    /// Release the port.
     ~PortHog() {
         ::close(m_fd);
     }
+    /// Not copyable: owns a socket.
     PortHog(const PortHog&) = delete;
+    /// Not assignable: owns a socket.
+    /// @return Never returns (deleted).
     PortHog& operator=(const PortHog&) = delete;
 
 private:
+    /// Socket holding the port.
     int m_fd = -1;
 };
 
+/// First port the P2P server tries (also the public mapping).
 constexpr std::uint16_t P2P_PORT_FIRST =
     39990;  // first port the P2P server tries
+/// Number of ports the P2P server tries.
 constexpr int P2P_PORT_COUNT = 10;
 
+/**
+ * @brief Issue a CreateNetwork with a zeroed config.
+ * @param env Service under test, in the AccessPoint state.
+ * @return true when CreateNetwork succeeded.
+ */
 bool create_the_network(Env& env) {
     lm::CreateNetworkConfig config{};
     std::memset(&config, 0, sizeof(config));
@@ -2747,6 +3573,12 @@ bool create_the_network(Env& env) {
 }
 }  // namespace
 
+/**
+ * @brief Nothrow new that fails once for the armed allocation size.
+ * @param size Requested size in bytes.
+ * @return The allocation, or nullptr when failure was injected or the
+ *         allocation failed.
+ */
 void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
     if (nothrow_must_fail(size)) {
         return nullptr;
@@ -2758,6 +3590,13 @@ void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
     }
 }
 
+/**
+ * @brief Aligned nothrow new that fails once for the armed allocation size.
+ * @param size Requested size in bytes.
+ * @param alignment Requested alignment.
+ * @return The allocation, or nullptr when failure was injected or the
+ *         allocation failed.
+ */
 void* operator new(
     std::size_t size,
     std::align_val_t alignment,
@@ -2772,8 +3611,12 @@ void* operator new(
     }
 }
 
-TEST(
-    an_external_proxy_pointing_at_the_private_port_of_the_hosted_server_is_not_dialed) {
+/**
+ * @brief An ExternalProxy naming the hosted server's own private port is not
+ * dialed (the connect worker is not made busy), so a later real host is still
+ *        joined.
+ */
+TEST(external_proxy_at_the_hosted_servers_private_port_is_not_dialed) {
     // The public mapping is always the first port of the range; with that port
     // unavailable the server listens on another one, and the master may name
     // either. The port is either held here or still in TIME_WAIT from an
@@ -2795,6 +3638,10 @@ TEST(
         eventually([&] { return join_p2p_host(env, host, 0x0A720009); }, 2500));
 }
 
+/**
+ * @brief When no port of the P2P range can be bound the network is created
+ * through the relay and the announced P2P port is 0.
+ */
 TEST(a_host_without_a_free_p2p_port_creates_the_network_through_the_relay) {
     // Every port of the range is held here or still in TIME_WAIT from an
     // earlier test (which blocks the server's plain bind just the same).
@@ -2810,8 +3657,11 @@ TEST(a_host_without_a_free_p2p_port_creates_the_network_through_the_relay) {
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::AccessPointCreated));
 }
 
-TEST(
-    a_host_whose_p2p_server_cannot_be_allocated_creates_the_network_through_the_relay) {
+/**
+ * @brief When the P2P server object cannot be allocated, the network is created
+ *        through the relay and the announced P2P port is 0.
+ */
+TEST(host_without_p2p_server_memory_creates_the_network_via_the_relay) {
     Env env(true);
     ScopedAllocationFailure fail(sizeof(ams::mitm::p2p::P2pProxyServer));
     ASSERT_TRUE(host_a_network(env));
@@ -2820,8 +3670,11 @@ TEST(
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::AccessPointCreated));
 }
 
-TEST(
-    a_p2p_client_that_cannot_be_allocated_abandons_the_attempt_and_frees_the_worker) {
+/**
+ * @brief When the P2P client cannot be allocated, the attempt is abandoned
+ * without dialing and the connect worker is free for the next one.
+ */
+TEST(unallocatable_p2p_client_abandons_the_attempt_and_frees_the_worker) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
     const std::uint32_t before = address_of(env);
@@ -2839,8 +3692,11 @@ TEST(
         eventually([&] { return join_p2p_host(env, host, 0x0A720009); }, 2500));
 }
 
-TEST(
-    a_connect_worker_that_cannot_be_started_drops_the_external_proxy_and_stays_available) {
+/**
+ * @brief When the connect worker thread cannot be started, the ExternalProxy is
+ *        dropped and the worker is not left marked busy.
+ */
+TEST(unstartable_connect_worker_drops_the_external_proxy_and_stays_free) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
     P2pHost host;
@@ -2855,8 +3711,11 @@ TEST(
     ASSERT_TRUE(join_p2p_host(env, host, 0x0A720009));
 }
 
-TEST(
-    a_p2p_host_that_resets_the_connection_before_the_auth_is_abandoned_at_once) {
+/**
+ * @brief A host that resets the connection before the auth makes the attempt
+ * end at the authentication, within 2.5 s instead of the 4 s ProxyConfig wait.
+ */
+TEST(p2p_host_reset_before_the_auth_abandons_the_attempt_at_once) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
     P2pHost host;
@@ -2885,6 +3744,10 @@ TEST(
         eventually([&] { return join_p2p_host(env, next, 0x0A720009); }, 2500));
 }
 
+/**
+ * @brief Finalize while the connect worker waits for the host's ProxyConfig
+ * closes the P2P connection at once.
+ */
 TEST(
     finalizing_while_the_connect_worker_waits_for_the_host_aborts_the_attempt) {
     Env env(true);
@@ -2908,6 +3771,9 @@ TEST(
         std::chrono::milliseconds(2000));
 }
 
+/**
+ * @brief When the P2P client cannot write, proxy data falls back to the master.
+ */
 TEST(proxy_data_that_the_p2p_client_cannot_write_goes_to_the_master_instead) {
     Env env(true);
     ASSERT_TRUE(open_station(env));
@@ -2921,6 +3787,10 @@ TEST(proxy_data_that_the_p2p_client_cannot_write_goes_to_the_master_instead) {
         env.server.wait_for(proto::PacketId::ProxyData, 2000, via_master + 1));
 }
 
+/**
+ * @brief While the master connection is down and cannot be re-established, the
+ * BSD send path refuses payloads.
+ */
 TEST(a_game_cannot_send_while_the_connection_to_the_master_is_down) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2933,6 +3803,10 @@ TEST(a_game_cannot_send_while_the_connection_to_the_master_is_down) {
     }));
 }
 
+/**
+ * @brief ProxyData relayed by the master is delivered to the proxy socket bound
+ * to the destination address and port.
+ */
 TEST(proxy_data_from_the_master_reaches_the_socket_bound_to_the_destination) {
     Env env;
     ASSERT_TRUE(open_station(env));
@@ -2951,6 +3825,10 @@ TEST(proxy_data_from_the_master_reaches_the_socket_bound_to_the_destination) {
     ams::mitm::bsd::ProxySocketManager::GetInstance().CloseProxySocket(902);
 }
 
+/**
+ * @brief ProxyData nobody listens for is queued up to the fallback limit (16
+ *        packets) and the rest is dropped, without harm to the service.
+ */
 TEST(
     proxy_data_nobody_can_receive_is_dropped_once_the_fallback_buffer_is_full) {
     Env env;
@@ -2972,11 +3850,16 @@ TEST(
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Station));
 }
 
-/// Shorten every timed wait of the service (handshake 5 s, scan 1 s, ...);
-/// loopback answers in well under a millisecond. TEST() bodies run from static
-/// initializers, i.e. before main(), so this must be a prioritized constructor.
-/// The hooks are installed here too, once: they only dispatch to the slot a
-/// test armed, so the function objects themselves never change under a thread.
+/**
+ * @brief Shorten every timed wait of the service (handshake 5 s, scan 1 s,
+ *        ...) by a factor of 10; loopback answers in well under a
+ *        millisecond.
+ *
+ * TEST() bodies run from static initializers, i.e. before main(), so this
+ * must be a prioritized constructor. The hooks are installed here too, once:
+ * they only dispatch to the slot a test armed, so the function objects
+ * themselves never change under a thread. Also ignores SIGPIPE.
+ */
 __attribute__((constructor(101))) static void shorten_the_service_waits() {
     ams::os::g_host_wait_divisor = 10;
     ams::os::g_host_before_event_clear = [] { run_hook(g_clear_hook); };
@@ -2992,6 +3875,10 @@ __attribute__((constructor(101))) static void shorten_the_service_waits() {
     std::signal(SIGPIPE, SIG_IGN);
 }
 
+/**
+ * @brief Run every registered test.
+ * @return 0 when all tests passed, 1 otherwise.
+ */
 int main() {
     return test_report("ICommunicationService Tests");
 }

@@ -88,12 +88,16 @@ constexpr size_t MAX_ABANDONED_SERVICES =
  * we need to know the socket type and protocol to create the ProxySocket.
  */
 struct SocketInfo {
+    /// Socket type (stream or datagram) requested in Socket().
     ryu_ldn::bsd::SocketType type;
+    /// Protocol (TCP or UDP) requested in Socket().
     ryu_ldn::bsd::ProtocolType protocol;
-    bool is_proxy;   // True if this socket is an LDN proxy socket
-    bool broadcast;  // SO_BROADCAST option (tracked before proxy creation)
-    u32 session_id;  // Session ID that owns this socket (for cleanup on session
-                     // close)
+    /// True if this socket is an LDN proxy socket.
+    bool is_proxy;
+    /// SO_BROADCAST option (tracked before proxy creation).
+    bool broadcast;
+    /// Session ID that owns this socket (for cleanup on session close).
+    u32 session_id;
 };
 
 /**
@@ -110,8 +114,11 @@ struct SocketInfo {
  * forwards to a different real service session.
  */
 struct SocketInfoEntry {
+    /// File descriptor key, -1 when the slot is free.
     s32 fd = -1;
+    /// Tracked type/protocol/proxy state of the fd.
     SocketInfo info{};
+    /// True when the slot is in use.
     bool valid = false;
 };
 /**
@@ -142,6 +149,8 @@ static os::Mutex g_socket_info_mutex{false};
 
 /**
  * @brief Find a socket info entry by fd (caller must hold g_socket_info_mutex)
+ * @param fd File descriptor to look up.
+ * @return The valid entry for @p fd, or nullptr if none is tracked.
  */
 static SocketInfoEntry* FindSocketInfoEntry(s32 fd) {
     for (auto& entry : g_socket_info) {
@@ -156,6 +165,10 @@ static SocketInfoEntry* FindSocketInfoEntry(s32 fd) {
  * @brief Find an existing socket info entry or allocate a new one.
  *
  * Caller must hold g_socket_info_mutex. Returns nullptr if the table is full.
+ *
+ * @param fd File descriptor to look up or register.
+ * @return The entry for @p fd (a new entry has default-initialized info), or
+ *         nullptr when the table is full.
  */
 static SocketInfoEntry* FindOrCreateSocketInfoEntry(s32 fd) {
     if (SocketInfoEntry* existing = FindSocketInfoEntry(fd)) {
@@ -177,7 +190,8 @@ static SocketInfoEntry* FindOrCreateSocketInfoEntry(s32 fd) {
  * Marks the entry as free so it can be reused by a future
  * FindOrCreateSocketInfoEntry. Does NOT compact the array — entries are
  * slot-reused, not shifted.
- * @p entry must be non-null (both callers pass a live table slot).
+ * @param entry Table slot to free; must be non-null (both callers pass a
+ *              live table slot).
  */
 static void EraseSocketInfoEntry(SocketInfoEntry* entry) {
     entry->fd = -1;
@@ -194,8 +208,11 @@ static void EraseSocketInfoEntry(SocketInfoEntry* entry) {
  * Value: number of BSD sessions intercepted for this PID.
  */
 struct MitmPidEntry {
+    /// Process id key.
     u64 pid = 0;
+    /// Number of BSD sessions intercepted for this pid.
     u32 count = 0;
+    /// True when the slot is in use.
     bool valid = false;
 };
 /**
@@ -222,6 +239,8 @@ static os::Mutex g_mitm_pids_mutex{false};
 
 /**
  * @brief Find a mitm pid entry by pid (caller must hold g_mitm_pids_mutex)
+ * @param pid Process id to look up.
+ * @return The valid entry for @p pid, or nullptr if none exists.
  */
 static MitmPidEntry* FindMitmPidEntry(u64 pid) {
     for (auto& entry : g_mitm_pid_count) {
@@ -234,6 +253,11 @@ static MitmPidEntry* FindMitmPidEntry(u64 pid) {
 
 /**
  * @brief Find or create a mitm pid entry (caller must hold g_mitm_pids_mutex)
+ *
+ * A new entry starts with a session count of 0.
+ *
+ * @param pid Process id to look up or register.
+ * @return The entry for @p pid, or nullptr when the table is full.
  */
 static MitmPidEntry* FindOrCreateMitmPidEntry(u64 pid) {
     if (MitmPidEntry* existing = FindMitmPidEntry(pid)) {
@@ -262,7 +286,9 @@ static MitmPidEntry* FindOrCreateMitmPidEntry(u64 pid) {
  * we explicitly clean them (e.g., on LDN disconnect).
  */
 struct AbandonedServiceEntry {
+    /// Kept-alive forward service of the abandoned session.
     std::shared_ptr<::Service> service;
+    /// True when the slot is in use.
     bool valid = false;
 };
 /**
@@ -315,8 +341,6 @@ static os::Mutex g_abandoned_services_mutex{false};
  * Each client process gets its own BsdMitmService instance with its own
  * forward service session.
  *
- * @param s Shared pointer to the original bsd:u service session
- * @param c Process information for the client (PID, program ID, etc.)
  */
 // rvalue reference is forwarded to the MitmServiceImplBase constructor
 // ( Atmosphere mitm pattern) — the check cannot see the move through
@@ -562,7 +586,6 @@ BsdMitmService::~BsdMitmService() {
  * We intercept BSD sessions from applications that are in the LDN
  * game whitelist (fetched from Ryujinx server at startup).
  *
- * @param client_info Process information (PID, program ID, etc.)
  * @return true For games in the whitelist, false otherwise
  */
 bool BsdMitmService::ShouldMitm(const sm::MitmProcessInfo& client_info) {
@@ -724,11 +747,6 @@ void BsdMitmService::CleanupAbandonedServices() {
  * The transfer_memory handle is a shared memory region used for socket
  * buffers. We must forward it to the real service as a copy handle.
  *
- * @param[out] out_errno BSD errno on failure (0 on success)
- * @param[in] config_size Size of config buffer (0x20 for LibraryConfigData)
- * @param[in] config LibraryConfigData with socket buffer settings
- * @param[in] client_pid Client's process ID
- * @param[in] transfer_memory Handle to transfer memory for buffers
  *
  * @return Result code from forwarding to real service
  */
@@ -738,8 +756,8 @@ Result BsdMitmService::RegisterClient(
     const sf::ClientProcessId& client_pid,
     u64 tmem_size,
     sf::CopyHandle&&
-        transfer_memory)  // NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved)
-                          // — forwarded to real bsd:u below
+        // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
+        transfer_memory)  // forwarded to real bsd:u below
 {
     m_command_count++;
 
@@ -840,8 +858,6 @@ Result BsdMitmService::RegisterClient(
  *   [4] s32 errno
  * ```
  *
- * @param[out] out_errno BSD errno on failure
- * @param[in] pid Process ID to monitor
  *
  * @return Result code from forwarding
  */
@@ -895,11 +911,6 @@ Result BsdMitmService::StartMonitoring(sf::Out<s32> out_errno, u64 pid) {
  * The socket is initially marked as "normal" and only becomes an
  * LDN proxy socket when it binds/connects to 10.114.x.x.
  *
- * @param[out] out_errno BSD errno on failure (0 on success)
- * @param[out] out_fd File descriptor for the new socket
- * @param[in] domain Address family (AF_INET=2, AF_INET6=28)
- * @param[in] type Socket type (SOCK_STREAM=1, SOCK_DGRAM=2)
- * @param[in] protocol Protocol (0=default, TCP=6, UDP=17)
  *
  * @return Result code from forwarding
  */
@@ -991,11 +1002,6 @@ Result BsdMitmService::Socket(
  *
  * Same as Socket (Command 2)
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_fd File descriptor
- * @param[in] domain Address family
- * @param[in] type Socket type
- * @param[in] protocol Protocol
  *
  * @return Result code from forwarding
  */
@@ -1086,9 +1092,6 @@ Result BsdMitmService::SocketExempt(
  *   [4] s32 fd
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_fd File descriptor
- * @param[in] path Device path
  *
  * @return Result code from forwarding
  */
@@ -1143,8 +1146,6 @@ Result BsdMitmService::Open(
  * When socket tracking is implemented, we'll remove the socket
  * from our tracking table before forwarding the close.
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd File descriptor to close
  *
  * @return Result code from forwarding
  */
@@ -1199,10 +1200,6 @@ Result BsdMitmService::Close(sf::Out<s32> out_errno, s32 fd) {
  *   [4] s32 new_fd
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_fd New file descriptor
- * @param[in] fd Socket to duplicate
- * @param[in] target_pid Target process ID
  *
  * @return Result code from forwarding
  */
@@ -1246,10 +1243,6 @@ Result BsdMitmService::DuplicateSocket(
  * Same input/output as RegisterClient except this doesn't take an input handle.
  * Output: s32 bsd_errno (0 on success)
  *
- * @param[out] out_errno BSD errno on failure (0 on success)
- * @param[in] config LibraryConfigData with socket buffer settings
- * @param[in] client_pid Client's process ID
- * @param[in] tmem_size Size for work buffer
  *
  * @return Result code from forwarding to real service
  */
@@ -1461,10 +1454,9 @@ Result BsdMitmService::SendMMsg(
         // const_cast: the Atmosphere sf C API takes void* for ALL buffers
         // (In and Out alike) — the const-ness is expressed by SfBufferAttr_In.
         .buffers =
-            {{const_cast<void*>(static_cast<const void*>(in_data.GetPointer())),
-              in_data
-                  .GetSize()}},  // NOLINT(cppcoreguidelines-pro-type-const-cast)
-    );
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+        {{const_cast<void*>(static_cast<const void*>(in_data.GetPointer())),
+          in_data.GetSize()}}, );
 
     out_errno.SetValue(out.errno_val);
     out_count.SetValue(out.count);
@@ -1508,9 +1500,9 @@ Result BsdMitmService::RegisterResourceStatisticsName(
         // const_cast: the Atmosphere sf C API takes void* for ALL buffers
         // (In and Out alike) — the const-ness is expressed by SfBufferAttr_In.
         .buffers =
-            {{const_cast<void*>(static_cast<const void*>(name.GetPointer())),
-              name.GetSize()}},  // NOLINT(cppcoreguidelines-pro-type-const-cast)
-    );
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+        {{const_cast<void*>(static_cast<const void*>(name.GetPointer())),
+          name.GetSize()}}, );
 
     out_errno.SetValue(errno_out);
     R_RETURN(rc);
@@ -1543,9 +1535,6 @@ Result BsdMitmService::RegisterResourceStatisticsName(
  * - Store local address for later use
  * - Return success WITHOUT calling real bind (virtual binding)
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd Socket file descriptor
- * @param[in] addr Address to bind (SockAddrIn for IPv4)
  *
  * @return Result code from forwarding
  */
@@ -1804,9 +1793,6 @@ Result BsdMitmService::Bind(
  * - Store peer address for ProxyData packets
  * - Return success WITHOUT calling real connect (virtual connection)
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd Socket file descriptor
- * @param[in] addr Remote address to connect to
  *
  * @return Result code from forwarding
  */
@@ -1986,10 +1972,6 @@ Result BsdMitmService::Connect(
  *   [0x22] Type-0x22 buffer (sockaddr, auto-select)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_fd New socket for accepted connection
- * @param[in] fd Listening socket
- * @param[out] addr_out Remote address of connector
  *
  * @return Result code from forwarding
  */
@@ -2044,9 +2026,6 @@ Result BsdMitmService::Accept(
  *   [0x22] Type-0x22 buffer (sockaddr, auto-select)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd Socket file descriptor
- * @param[out] addr_out Peer address buffer
  *
  * @return Result code from forwarding
  */
@@ -2118,9 +2097,6 @@ Result BsdMitmService::GetPeerName(
  *
  * Same as GetPeerName
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd Socket file descriptor
- * @param[out] addr_out Local address buffer
  *
  * @return Result code from forwarding
  */
@@ -2205,11 +2181,6 @@ Result BsdMitmService::GetSockName(
  * 2. Send via RyuLdn server connection
  * 3. Return data size as if sent
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_size Bytes sent
- * @param[in] fd Socket file descriptor
- * @param[in] flags Send flags (MSG_DONTWAIT, etc.)
- * @param[in] buffer Data to send
  *
  * @return Result code from forwarding
  */
@@ -2316,12 +2287,6 @@ Result BsdMitmService::Send(
  * - Send via RyuLdn server
  * - Return data size as if sent
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_size Bytes sent
- * @param[in] fd Socket file descriptor
- * @param[in] flags Send flags
- * @param[in] buffer Data to send
- * @param[in] addr Destination address
  *
  * @return Result code from forwarding
  */
@@ -2510,11 +2475,6 @@ Result BsdMitmService::SendTo(
  * - If non-blocking and no data: errno=EAGAIN
  * - If blocking: wait for data
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_size Bytes received
- * @param[in] fd Socket file descriptor
- * @param[in] flags Recv flags
- * @param[out] buffer Buffer to receive into
  *
  * @return Result code from forwarding
  */
@@ -2614,12 +2574,6 @@ Result BsdMitmService::Recv(
  *   [0x22] Type-0x22 buffer (sockaddr, auto-select)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_size Bytes received
- * @param[in] fd Socket file descriptor
- * @param[in] flags Recv flags
- * @param[out] buffer Data buffer
- * @param[out] addr_out Source address
  *
  * @return Result code from forwarding
  */
@@ -2745,10 +2699,6 @@ Result BsdMitmService::RecvFrom(
  *   [4] s32 size
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_size Bytes written
- * @param[in] fd Socket file descriptor
- * @param[in] buffer Data to write
  *
  * @return Result code from forwarding
  */
@@ -2838,10 +2788,6 @@ Result BsdMitmService::Write(
  *   [0x22] Type-0x22 buffer (data, auto-select)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_size Bytes read
- * @param[in] fd Socket file descriptor
- * @param[out] buffer Buffer to read into
  *
  * @return Result code from forwarding
  */
@@ -2941,16 +2887,6 @@ Result BsdMitmService::Read(
  *   [0x22] Type-0x22 buffer (errorfds, auto-select)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_count Number of ready sockets
- * @param[in] nfds Highest fd + 1
- * @param[in] readfds_in Sockets to check for reading
- * @param[in] writefds_in Sockets to check for writing
- * @param[in] errorfds_in Sockets to check for errors
- * @param[in] timeout Timeout
- * @param[out] readfds_out Ready for reading
- * @param[out] writefds_out Ready for writing
- * @param[out] errorfds_out Have errors
  *
  * @return Result code from forwarding
  */
@@ -3205,12 +3141,6 @@ Result BsdMitmService::Select(
  *   [0x22] Type-0x22 buffer (pollfd array with revents, auto-select)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_count Number of ready sockets
- * @param[in] fds_in Array of PollFd structures
- * @param[out] fds_out Updated PollFd array with revents
- * @param[in] nfds Number of file descriptors
- * @param[in] timeout Timeout in milliseconds
  *
  * @return Result code from forwarding
  */
@@ -3378,11 +3308,6 @@ Result BsdMitmService::Poll(
  *   [0x6] Type-B buffer (old_val)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[in] name Sysctl name
- * @param[in] old_val_in Old value buffer
- * @param[out] old_val_out Current value
- * @param[in] new_val New value to set
  *
  * @return Result code from forwarding
  */
@@ -3436,13 +3361,6 @@ Result BsdMitmService::Sysctl(
  *   [0x22] Type-0x22 buffer (auto-select)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_result Ioctl result
- * @param[in] fd Socket file descriptor
- * @param[in] request Ioctl request code
- * @param[in] bufcount Number of buffers
- * @param[in] buf_in Input buffer
- * @param[out] buf_out Output buffer
  *
  * @return Result code from forwarding
  */
@@ -3536,11 +3454,6 @@ Result BsdMitmService::Ioctl(
  *   [4] s32 result
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[out] out_result Fcntl result
- * @param[in] fd Socket file descriptor
- * @param[in] cmd Fcntl command
- * @param[in] arg Argument
  *
  * @return Result code from forwarding
  */
@@ -3622,11 +3535,6 @@ Result BsdMitmService::Fcntl(
  *   [0x22] Type-0x22 buffer (optval, auto-select)
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd Socket file descriptor
- * @param[in] level Option level
- * @param[in] optname Option name
- * @param[out] optval Option value
  *
  * @return Result code from forwarding
  */
@@ -3708,11 +3616,6 @@ Result BsdMitmService::GetSockOpt(
  *   [4] s32 errno
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd Socket file descriptor
- * @param[in] level Option level
- * @param[in] optname Option name
- * @param[in] optval Option value
  *
  * @return Result code from forwarding
  */
@@ -3808,9 +3711,6 @@ Result BsdMitmService::SetSockOpt(
  *   [4] s32 errno
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd Socket file descriptor
- * @param[in] backlog Connection queue size
  *
  * @return Result code from forwarding
  */
@@ -3850,9 +3750,6 @@ Result BsdMitmService::Listen(sf::Out<s32> out_errno, s32 fd, s32 backlog) {
  *   [4] s32 errno
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[in] fd Socket file descriptor
- * @param[in] how Shutdown direction
  *
  * @return Result code from forwarding
  */
@@ -3892,9 +3789,6 @@ Result BsdMitmService::Shutdown(sf::Out<s32> out_errno, s32 fd, s32 how) {
  *   [4] s32 errno
  * ```
  *
- * @param[out] out_errno BSD errno
- * @param[in] pid Process ID
- * @param[in] how Shutdown direction
  *
  * @return Result code from forwarding
  */

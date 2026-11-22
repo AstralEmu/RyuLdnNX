@@ -40,6 +40,10 @@ namespace {
 
 /**
  * @brief Copy string with length limit
+ *
+ * @param dest Destination buffer (at least max_len + 1 bytes)
+ * @param src Null-terminated source
+ * @param max_len Maximum number of characters copied
  */
 void safe_strcpy(char* dest, const char* src, size_t max_len) {
     size_t i = 0;
@@ -52,6 +56,9 @@ void safe_strcpy(char* dest, const char* src, size_t max_len) {
 
 /**
  * @brief Get a simple timestamp string
+ *
+ * @param buffer Output buffer
+ * @param buffer_size Size of the output buffer in bytes
  */
 void get_timestamp(char* buffer, size_t buffer_size) {
     static uint32_t s_log_counter = 0;

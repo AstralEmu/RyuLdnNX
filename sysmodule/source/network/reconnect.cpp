@@ -80,7 +80,6 @@ ReconnectManager::ReconnectManager() : m_retry_count(0), m_current_delay_ms(0) {
  * - 10s max delay
  * - 1.5x multiplier
  *
- * @param config Custom configuration parameters
  */
 ReconnectManager::ReconnectManager(const ReconnectConfig& config)
     : m_config(config), m_retry_count(0), m_current_delay_ms(0) {
@@ -165,7 +164,6 @@ uint32_t ReconnectManager::get_next_delay_ms() const {
  * - Minimum: 900ms (1000 * 0.9)
  * - Maximum: 1100ms (1000 * 1.1)
  *
- * @param seed Random seed (e.g., system tick count, time)
  * @return Delay in milliseconds with jitter applied
  */
 uint32_t ReconnectManager::get_next_delay_ms_with_jitter(uint32_t seed) const {
@@ -264,7 +262,6 @@ void ReconnectManager::reset() {
  * manager instance. The retry count is preserved, but the delay
  * is recalculated with the new parameters.
  *
- * @param config New configuration to use
  */
 void ReconnectManager::set_config(const ReconnectConfig& config) {
     m_config = config;

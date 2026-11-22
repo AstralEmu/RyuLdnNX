@@ -16,7 +16,12 @@
 using ams::mitm::ldn::CommState;
 using ams::mitm::ldn::SharedState;
 
-/// The state is a process-wide singleton: every test starts from a clean slate.
+/**
+ * @brief The state is a process-wide singleton: every test starts from a clean
+ * slate.
+ *
+ * @return the SharedState singleton, reset with pid 0 and an empty whitelist
+ */
 static SharedState& fresh() {
     SharedState& s = SharedState::GetInstance();
     s.Reset();
@@ -25,10 +30,18 @@ static SharedState& fresh() {
     return s;
 }
 
+/**
+ * @brief GetInstance always returns the same object, so every IPC service
+ * and the overlay see one shared state.
+ */
 TEST(the_instance_is_a_singleton) {
     ASSERT_TRUE(&SharedState::GetInstance() == &SharedState::GetInstance());
 }
 
+/**
+ * @brief SetGameActive(true, pid) stores the pid; SetGameActive(false, ...)
+ * clears the flag and the active process id.
+ */
 TEST(game_active_records_the_pid_and_clears_it_when_inactive) {
     SharedState& s = fresh();
     ASSERT_FALSE(s.IsGameActive());
@@ -40,6 +53,10 @@ TEST(game_active_records_the_pid_and_clears_it_when_inactive) {
     ASSERT_EQ(s.GetActiveProcessId(), static_cast<u64>(0));
 }
 
+/**
+ * @brief Deactivating the game resets LDN state, session info and RTT but
+ * keeps the registered ldn:u pid, which outlives a game session.
+ */
 TEST(deactivating_the_game_resets_the_runtime_state_but_not_the_ldn_pid) {
     SharedState& s = fresh();
     s.SetGameActive(true, 7);
@@ -61,6 +78,10 @@ TEST(deactivating_the_game_resets_the_runtime_state_but_not_the_ldn_pid) {
     ASSERT_EQ(s.GetLdnPid(), static_cast<u64>(7));
 }
 
+/**
+ * @brief Reset clears the game flag, LDN state, RTT, session info and any
+ * pending reconnect request.
+ */
 TEST(reset_clears_runtime_state_and_the_reconnect_flag) {
     SharedState& s = SharedState::GetInstance();
     s.SetGameActive(true, 9);
@@ -78,6 +99,10 @@ TEST(reset_clears_runtime_state_and_the_reconnect_flag) {
     ASSERT_EQ(info.is_host, 0);
 }
 
+/**
+ * @brief IsLdnPid matches only the registered pid, and pid 0 (unset) never
+ * matches, even when asked about 0.
+ */
 TEST(only_a_non_zero_registered_pid_is_an_ldn_pid) {
     SharedState& s = fresh();
     ASSERT_FALSE(s.IsLdnPid(0));
@@ -90,6 +115,10 @@ TEST(only_a_non_zero_registered_pid_is_an_ldn_pid) {
     ASSERT_FALSE(s.IsLdnPid(0));
 }
 
+/**
+ * @brief LoadLdnWhitelist replaces the old list and de-duplicates entries,
+ * so the size counts distinct title ids.
+ */
 TEST(loading_the_whitelist_replaces_the_previous_one) {
     SharedState& s = fresh();
     ASSERT_EQ(s.GetWhitelistSize(), static_cast<size_t>(0));
@@ -102,12 +131,17 @@ TEST(loading_the_whitelist_replaces_the_previous_one) {
     ASSERT_TRUE(s.IsLdnGame(0x300));
 }
 
+/// @brief SetLdnState/GetLdnState round-trip the CommState unchanged.
 TEST(ldn_state_is_stored_as_given) {
     SharedState& s = fresh();
     s.SetLdnState(CommState::Station);
     ASSERT_TRUE(s.GetLdnState() == CommState::Station);
 }
 
+/**
+ * @brief SetSessionInfo is readable through GetSessionInfo and through the
+ * IPC struct (is_host as 0/1, reserved bytes zeroed).
+ */
 TEST(session_info_round_trips_through_both_accessors) {
     SharedState& s = fresh();
     s.SetSessionInfo(5, 8, 3, true);
@@ -130,12 +164,17 @@ TEST(session_info_round_trips_through_both_accessors) {
     ASSERT_EQ(s.GetSessionInfoStruct().is_host, 0);
 }
 
+/// @brief SetLastRtt/GetLastRtt round-trip the round-trip time value.
 TEST(rtt_is_stored) {
     SharedState& s = fresh();
     s.SetLastRtt(123);
     ASSERT_EQ(s.GetLastRtt(), static_cast<u32>(123));
 }
 
+/**
+ * @brief RequestReconnect sets a one-shot flag: the first
+ * ConsumeReconnectRequest returns true and clears it, the next returns false.
+ */
 TEST(a_reconnect_request_is_consumed_exactly_once) {
     SharedState& s = fresh();
     ASSERT_FALSE(s.ConsumeReconnectRequest());
@@ -144,6 +183,10 @@ TEST(a_reconnect_request_is_consumed_exactly_once) {
     ASSERT_FALSE(s.ConsumeReconnectRequest());
 }
 
+/**
+ * @brief IncrementSessionCount raises the active session count, and
+ * DecrementSessionCount returns the value after decrementing.
+ */
 TEST(the_session_counter_returns_the_new_value_on_decrement) {
     SharedState& s = fresh();
     const u32 base = s.GetActiveSessionCount();
@@ -154,6 +197,10 @@ TEST(the_session_counter_returns_the_new_value_on_decrement) {
     ASSERT_EQ(s.DecrementSessionCount(), base);
 }
 
+/**
+ * @brief Print the test totals (the tests ran during static initialization).
+ * @return Non-zero when at least one assertion failed.
+ */
 int main() {
     return test_report("SharedState (real) Tests");
 }

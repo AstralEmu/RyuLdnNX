@@ -21,10 +21,11 @@ namespace ryu_ldn::config {
 
 namespace {
 
+/// SD card path of the game whitelist, one title ID per line
 constexpr const char* WHITELIST_PATH = "sdmc:/config/ryu_ldn_nx/gamelist.txt";
 
-// Average bytes per line in gamelist.txt (e.g., "0x0100152000022000\n" = ~19
-// bytes)
+/// Average bytes per line in gamelist.txt (e.g., "0x0100152000022000\n" =
+/// ~19 bytes); used to size the entry array from the file size
 constexpr size_t BYTES_PER_ENTRY = 18;
 
 // Dynamically allocated whitelist (sized based on file).
@@ -87,6 +88,10 @@ bool g_whitelist_loaded = false;
 
 /**
  * @brief Parse a hex string like "0x0100152000022000" to u64
+ *
+ * @param str Characters to parse (not null-terminated)
+ * @param len Number of characters in str
+ * @return Parsed program ID, or 0 when the text is not valid hex
  */
 u64 ParseHexId(const char* str, size_t len) {
     // Only called with line_buf and line_len > 0: no null/empty guard needed.
@@ -229,6 +234,9 @@ void LoadWhitelist() {
     LOG_INFO("GameWhitelist: loaded %zu games", g_whitelist_count);
 }
 
+/**
+ * @brief Check whether a program ID is in the loaded whitelist
+ */
 bool IsGameInWhitelist(u64 program_id) {
     if (!g_whitelist_loaded) {
         LOG_WARN("GameWhitelist: not loaded yet!");

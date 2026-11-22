@@ -179,6 +179,9 @@ public:
      * @brief Move constructor
      */
     ProxySocket(ProxySocket&&) = default;
+    /// Move assignment (defaulted); same ownership transfer as the move
+    /// constructor.
+    /// @return This socket.
     ProxySocket& operator=(ProxySocket&&) = default;
 
     // =========================================================================
@@ -549,16 +552,19 @@ private:
     // Accept queue ring buffer helpers (caller must hold m_queue_mutex)
     // =========================================================================
 
+    /// @return True when no accepted socket is queued.
     bool IsAcceptQueueEmpty() const {
         return m_accept_queue_count == 0;
     }
 
+    /// @return True when the accept ring holds MAX_ACCEPT_QUEUE sockets.
     bool IsAcceptQueueFull() const {
         return m_accept_queue_count >= MAX_ACCEPT_QUEUE;
     }
 
     /// Push a new accepted socket at the tail. Caller must hold m_queue_mutex
     /// and must have checked !IsAcceptQueueFull() first (the only caller does).
+    /// @param socket Accepted socket; ownership moves into the ring.
     void AcceptQueuePushBack(std::unique_ptr<ProxySocket> socket) {
         m_accept_queue[m_accept_queue_tail] = std::move(socket);
         m_accept_queue_tail = (m_accept_queue_tail + 1) % MAX_ACCEPT_QUEUE;
@@ -567,6 +573,7 @@ private:
 
     /// Pop the front accepted socket. Caller must hold m_queue_mutex and
     /// must have checked !IsAcceptQueueEmpty() first (both callers do).
+    /// @return The oldest queued socket (ownership transferred to caller).
     std::unique_ptr<ProxySocket> AcceptQueuePopFront() {
         std::unique_ptr<ProxySocket> result =
             std::move(m_accept_queue[m_accept_queue_head]);
@@ -582,6 +589,8 @@ private:
 
     /// Find a socket option by key. Returns pointer to the value or nullptr.
     /// Linear scan is fine: ≤ MAX_SOCKET_OPTIONS entries.
+    /// @param key Option key, see MakeOptionKey().
+    /// @return Pointer to the stored value, or nullptr if the key is absent.
     s32* FindSocketOption(uint32_t key) {
         for (auto& entry : m_socket_options) {
             if (entry.valid && entry.key == key) {
@@ -592,6 +601,8 @@ private:
     }
 
     /// Const overload.
+    /// @param key Option key, see MakeOptionKey().
+    /// @return Pointer to the stored value, or nullptr if the key is absent.
     const s32* FindSocketOption(uint32_t key) const {
         for (const auto& entry : m_socket_options) {
             if (entry.valid && entry.key == key) {
@@ -602,7 +613,9 @@ private:
     }
 
     /// Set a socket option: update existing key, or insert in first free slot.
-    /// Returns false if no free slot.
+    /// @param key Option key, see MakeOptionKey().
+    /// @param value Integer value to store.
+    /// @return True if stored, false if no free slot.
     bool SetSocketOption(uint32_t key, s32 value) {
         if (s32* existing = FindSocketOption(key)) {
             *existing = value;
@@ -643,6 +656,7 @@ private:
      * @brief Shutdown flags
      */
     bool m_shutdown_read{false};
+    /// Write side shut down (see m_shutdown_read).
     bool m_shutdown_write{false};
 
     /**
@@ -731,14 +745,21 @@ private:
      * are stored (most common case). Linear search is fine: ≤32 entries.
      */
     struct SocketOptionEntry {
+        /// (level << 16 | optname), see MakeOptionKey().
         uint32_t key;
+        /// Stored integer option value.
         s32 value;
+        /// True when the slot is in use.
         bool valid;
     };
+    /// Fixed table of stored socket options (no heap).
     std::array<SocketOptionEntry, MAX_SOCKET_OPTIONS> m_socket_options{};
 
     /**
      * @brief Helper to get option key from level and optname
+     * @param level Option level (e.g. SOL_SOCKET), stored in the high 16 bits.
+     * @param optname Option name; only its low 16 bits are kept.
+     * @return Combined 32-bit key `(level << 16) | (optname & 0xFFFF)`.
      */
     static constexpr uint32_t MakeOptionKey(s32 level, s32 optname) {
         return (static_cast<uint32_t>(level) << 16) |

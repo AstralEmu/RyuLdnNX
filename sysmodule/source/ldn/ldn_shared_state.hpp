@@ -41,7 +41,7 @@ namespace ams::mitm::ldn {
  *
  * All methods are thread-safe and use a mutex for synchronization.
  *
- * @example
+ * Example:
  * @code
  * // In MITM service (ICommunicationService)
  * auto& state = SharedState::GetInstance();
@@ -294,8 +294,9 @@ public:
      * @brief Decrement the active IPC session count
      *
      * Called in the destructor of each MITM session.
-     * Returns the new count after decrement.
      * When it reaches 0, no more sessions exist — the game has exited.
+     *
+     * @return The new count after the decrement
      */
     /// @gdb{tag="LDN:STATE", msg="DecrementSessionCount"}
     u32 DecrementSessionCount();
@@ -314,16 +315,26 @@ private:
     SharedState(const SharedState&) = delete;
     SharedState& operator=(const SharedState&) = delete;
 
+    /// Guards every non-atomic field below
     mutable ams::os::SdkMutex m_mutex{};
+    /// True while a game is using LDN
     bool m_game_active = false;
+    /// Process ID of the active game (0 if none)
     u64 m_process_id = 0;
     u64 m_ldn_pid = 0;  ///< PID that opened ldn:u (set before Initialize)
-    CommState m_ldn_state = static_cast<CommState>(0);  // CommState::None
+    /// Current LDN state (CommState::None initially)
+    CommState m_ldn_state = static_cast<CommState>(0);
+    /// Current number of nodes in the session
     u8 m_node_count = 0;
+    /// Maximum number of nodes in the session
     u8 m_max_nodes = 0;
+    /// Local node ID in the session
     u8 m_local_node_id = 0;
+    /// True if this console hosts the session
     bool m_is_host = false;
+    /// Last measured round-trip time in milliseconds
     u32 m_last_rtt_ms = 0;
+    /// Set by the overlay, consumed by the MITM service to force a reconnect
     bool m_reconnect_requested = false;
     std::atomic<u32> m_active_sessions{
         0};  ///< Active IPC session count (ldn:u + bsd:u)

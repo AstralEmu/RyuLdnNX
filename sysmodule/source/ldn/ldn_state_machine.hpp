@@ -63,6 +63,12 @@ enum class StateTransitionResult {
  */
 class LdnStateMachine {
 public:
+    /**
+     * @brief State change callback.
+     * @param old_state State being left.
+     * @param new_state State being entered.
+     * @param user_data Opaque pointer given at registration.
+     */
     using StateCallback =
         void (*)(CommState old_state, CommState new_state, void* user_data);
 

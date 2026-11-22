@@ -27,12 +27,21 @@
 #include "test_harness.hpp"
 
 extern "C" {
+/**
+ * @brief Resolver entry point under test (linker --wrap of getaddrinfo)
+ */
 int __wrap_getaddrinfo(
     const char* node,
     const char* service,
     const struct addrinfo* hints,
     struct addrinfo** res);
+/**
+ * @brief Frees a list built by __wrap_getaddrinfo
+ */
 void __wrap_freeaddrinfo(struct addrinfo* res);
+/**
+ * @brief Numeric reverse lookup under test
+ */
 int __wrap_getnameinfo(
     const struct sockaddr* sa,
     socklen_t salen,
@@ -41,8 +50,17 @@ int __wrap_getnameinfo(
     char* serv,
     socklen_t servlen,
     int flags);
+/**
+ * @brief Error text of the wrapper
+ */
 const char* __wrap_gai_strerror(int ecode);
 
+/**
+ * @brief The real malloc, reached through --wrap=malloc
+ *
+ * @param size bytes to allocate
+ * @return the allocation, or null on failure
+ */
 void* __real_malloc(size_t size);
 }
 
@@ -50,13 +68,25 @@ void* __real_malloc(size_t size);
 // Allocation failure injection (only the resolver's AddrinfoStorage blocks)
 // ---------------------------------------------------------------------------
 namespace {
+/**
+ * @brief Size of one resolver result block (addrinfo plus sockaddr_in), used to
+ *        recognize the allocations whose failure is injected
+ */
 constexpr size_t kStorageSize =
     sizeof(struct addrinfo) + sizeof(struct sockaddr_in);
+/// Number of result block allocations seen since the test reset it
 int g_storage_allocs = 0;
-int g_storage_fail_at =
-    0;  ///< 1-based index of the storage allocation to fail; 0 = never
+/// 1-based index of the storage allocation to fail; 0 = never
+int g_storage_fail_at = 0;
 }  // namespace
 
+/**
+ * @brief Allocator hook: fails the allocation of a result block when its index
+ *        equals g_storage_fail_at, otherwise forwards to the real malloc
+ *
+ * @param size bytes requested
+ * @return the allocation, or null for the injected failure
+ */
 extern "C" void* __wrap_malloc(size_t size) {
     if (size == kStorageSize && ++g_storage_allocs == g_storage_fail_at) {
         return nullptr;
@@ -68,23 +98,38 @@ extern "C" void* __wrap_malloc(size_t size) {
 // Scripted DNS server
 // ---------------------------------------------------------------------------
 namespace {
+/// State and script of the fake network under the resolver
 struct FakeNet {
+    /// When true, socket() fails with EMFILE
     bool socket_fails = false;
+    /// When true, sendto() fails with ENETUNREACH
     bool sendto_fails = false;
-    ssize_t recv_result =
-        -2;  ///< -2: return the scripted response; otherwise returned as is
+    /// -2: return the scripted response; otherwise returned as is
+    ssize_t recv_result = -2;
+    /// Bytes returned by recvfrom() when recv_result is -2
     std::vector<uint8_t> response;
+    /// Payload of the last query sent
     std::vector<uint8_t> last_query;
+    /// Address (network order) the last query was sent to
     uint32_t last_server = 0;
+    /// Number of sockets opened
     int sockets_opened = 0;
 };
+/// The fake network shared by the stubs and the tests
 FakeNet g_net;
 
+/// Restores g_net to its default (everything works, no response)
 void reset_net() {
     g_net = FakeNet{};
 }
 }  // namespace
 
+/**
+ * @brief Fake socket(): hands out a real descriptor (/dev/null) so the code can
+ *        close() it, or fails when g_net.socket_fails
+ *
+ * @return the descriptor, or -1 with errno EMFILE
+ */
 extern "C" int socket(int, int, int) {
     if (g_net.socket_fails) {
         errno = EMFILE;
@@ -95,10 +140,24 @@ extern "C" int socket(int, int, int) {
         "/dev/null", O_RDONLY);  // a real descriptor the code can close()
 }
 
+/**
+ * @brief Fake setsockopt() that accepts every option
+ *
+ * @return 0
+ */
 extern "C" int setsockopt(int, int, int, const void*, socklen_t) {
     return 0;
 }
 
+/**
+ * @brief Fake sendto(): records the query and its target in g_net, or fails
+ *        when g_net.sendto_fails
+ *
+ * @param buf query payload
+ * @param len payload size
+ * @param to destination, a sockaddr_in
+ * @return len, or -1 with errno ENETUNREACH
+ */
 extern "C" ssize_t sendto(
     int,
     const void* buf,
@@ -117,6 +176,14 @@ extern "C" ssize_t sendto(
     return static_cast<ssize_t>(len);
 }
 
+/**
+ * @brief Fake recvfrom(): returns g_net.recv_result unless it is -2, in which
+ *        case it copies the scripted response
+ *
+ * @param buf receives the response
+ * @param len capacity of buf
+ * @return bytes copied, or the scripted value
+ */
 extern "C" ssize_t recvfrom(
     int, void* buf, size_t len, int, struct sockaddr*, socklen_t*) {
     if (g_net.recv_result != -2) {
@@ -131,13 +198,29 @@ extern "C" ssize_t recvfrom(
 // DNS message builders
 // ---------------------------------------------------------------------------
 namespace {
+/// Raw bytes of a DNS message or part of one
 using Bytes = std::vector<uint8_t>;
 
+/**
+ * @brief Appends a 16-bit value in network byte order
+ *
+ * @param b message being built
+ * @param v value
+ */
 void put16(Bytes& b, uint16_t v) {
     b.push_back(static_cast<uint8_t>(v >> 8));
     b.push_back(static_cast<uint8_t>(v & 0xFF));
 }
 
+/**
+ * @brief Builds a DNS header with id 0x1234 and no authority or additional
+ *        records
+ *
+ * @param flags header flags word
+ * @param qd question count
+ * @param an answer count
+ * @return the 12-byte header
+ */
 Bytes header(uint16_t flags, uint16_t qd, uint16_t an) {
     Bytes b;
     put16(b, 0x1234);
@@ -149,16 +232,33 @@ Bytes header(uint16_t flags, uint16_t qd, uint16_t an) {
     return b;
 }
 
+/**
+ * @brief Appends bytes to a message
+ *
+ * @param b message being built
+ * @param more bytes to add
+ */
 void append(Bytes& b, const Bytes& more) {
     b.insert(b.end(), more.begin(), more.end());
 }
 
-/// The question "www." + QTYPE A + QCLASS IN.
+/**
+ * @brief The question "www." + QTYPE A + QCLASS IN
+ *
+ * @return the encoded question section
+ */
 Bytes question() {
     return Bytes{3, 'w', 'w', 'w', 0, 0, 1, 0, 1};
 }
 
-/// A resource record named by a compression pointer to the question.
+/**
+ * @brief A resource record whose name is a compression pointer to the question
+ *
+ * @param type record type
+ * @param cls record class
+ * @param rdata record data
+ * @return the encoded record (TTL 60)
+ */
 Bytes rr(uint16_t type, uint16_t cls, const Bytes& rdata) {
     Bytes b{0xC0, 0x0C};
     put16(b, type);
@@ -169,11 +269,27 @@ Bytes rr(uint16_t type, uint16_t cls, const Bytes& rdata) {
     return b;
 }
 
+/**
+ * @brief Builds an A record (type 1, class IN)
+ *
+ * @param a first address byte
+ * @param b second address byte
+ * @param c third address byte
+ * @param d fourth address byte
+ * @return the record
+ */
 Bytes a_record(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
     return rr(1, 1, Bytes{a, b, c, d});
 }
 
-/// Standard successful answer holding the given records.
+/**
+ * @brief Standard successful answer holding the given records
+ *
+ * @param records answer records, in order
+ * @param flags header flags (default 0x8180: response, recursion available, no
+ *        error)
+ * @return the whole DNS message
+ */
 Bytes answer(const std::vector<Bytes>& records, uint16_t flags = 0x8180) {
     Bytes m = header(flags, 1, static_cast<uint16_t>(records.size()));
     append(m, question());
@@ -183,14 +299,26 @@ Bytes answer(const std::vector<Bytes>& records, uint16_t flags = 0x8180) {
     return m;
 }
 
+/// Outcome of one resolve() call
 struct Resolved {
+    /// Return code of __wrap_getaddrinfo
     int rc;
+    /// Dotted addresses of the returned list, in order
     std::vector<std::string> ips;
+    /// ai_socktype of each returned entry
     std::vector<int> socktypes;
+    /// Port (host order) of the last returned entry
     uint16_t port;
 };
 
-/// Resolve "host" through the wrapper against the scripted response.
+/**
+ * @brief Resolves a host through the wrapper against the scripted response
+ *
+ * @param host name to resolve
+ * @param response message the fake server returns
+ * @param service service passed to getaddrinfo (default "80")
+ * @return return code and the returned entries
+ */
 Resolved resolve(
     const char* host, const Bytes& response, const char* service = "80") {
     g_net.response = response;
@@ -218,6 +346,7 @@ Resolved resolve(
 // Entry-point validation and literals
 // ---------------------------------------------------------------------------
 
+/// Verifies a null result pointer gives EAI_SYSTEM with errno EINVAL.
 TEST(a_null_result_pointer_is_a_system_error) {
     reset_net();
     errno = 0;
@@ -226,6 +355,10 @@ TEST(a_null_result_pointer_is_a_system_error) {
     ASSERT_EQ(errno, EINVAL);
 }
 
+/**
+ * @brief Verifies that neither node nor service gives EAI_NONAME and leaves the
+ *        result pointer null.
+ */
 TEST(a_call_without_node_and_service_is_refused) {
     reset_net();
     struct addrinfo* res = reinterpret_cast<struct addrinfo*>(0x1);
@@ -233,6 +366,7 @@ TEST(a_call_without_node_and_service_is_refused) {
     ASSERT_TRUE(res == nullptr);
 }
 
+/// Verifies AF_INET6 hints give EAI_FAMILY while AF_UNSPEC is accepted.
 TEST(only_ipv4_or_unspecified_families_are_accepted) {
     reset_net();
     struct addrinfo hints{};
@@ -244,6 +378,10 @@ TEST(only_ipv4_or_unspecified_families_are_accepted) {
     __wrap_freeaddrinfo(res);
 }
 
+/**
+ * @brief Verifies an IPv4 literal yields one entry with the hinted type,
+ *        protocol and port and opens no socket.
+ */
 TEST(an_ipv4_literal_is_returned_without_touching_the_network) {
     reset_net();
     struct addrinfo hints{};
@@ -269,6 +407,10 @@ TEST(an_ipv4_literal_is_returned_without_touching_the_network) {
     ASSERT_EQ(g_net.sockets_opened, 0);
 }
 
+/**
+ * @brief Verifies that without hints or service the entry has socket type 0,
+ *        protocol 0 and port 0.
+ */
 TEST(a_literal_without_hints_or_service_gets_zero_defaults) {
     reset_net();
     struct addrinfo* res = nullptr;
@@ -281,6 +423,10 @@ TEST(a_literal_without_hints_or_service_gets_zero_defaults) {
     __wrap_freeaddrinfo(res);
 }
 
+/**
+ * @brief Verifies a null node resolves to loopback, or to the wildcard address
+ *        when AI_PASSIVE is set.
+ */
 TEST(without_a_node_the_loopback_or_the_wildcard_address_is_used) {
     reset_net();
     struct addrinfo* res = nullptr;
@@ -310,6 +456,10 @@ TEST(without_a_node_the_loopback_or_the_wildcard_address_is_used) {
     __wrap_freeaddrinfo(res);
 }
 
+/**
+ * @brief Verifies a failed allocation of the single literal result gives
+ *        EAI_MEMORY and a null list.
+ */
 TEST(an_allocation_failure_on_the_single_result_is_reported) {
     reset_net();
     struct addrinfo* res = nullptr;
@@ -325,6 +475,10 @@ TEST(an_allocation_failure_on_the_single_result_is_reported) {
 // Hostname resolution through the scripted DNS server
 // ---------------------------------------------------------------------------
 
+/**
+ * @brief Verifies a host name yields every A record of the answer in order,
+ *        with the hinted socket type and the port.
+ */
 TEST(a_hostname_is_resolved_to_every_a_record_in_order) {
     reset_net();
     Resolved r = resolve(
@@ -342,8 +496,12 @@ TEST(a_hostname_is_resolved_to_every_a_record_in_order) {
     ASSERT_EQ(r.port, static_cast<uint16_t>(80));
 }
 
-TEST(
-    the_query_is_a_recursive_a_question_for_the_encoded_name_sent_to_port_53_of_the_fallback_server) {
+/**
+ * @brief Verifies the query sent: recursion desired, one question, the
+ *        length-prefixed name, type A, class IN, sent to 8.8.8.8, and a query
+ *        id that advances by one per query.
+ */
+TEST(the_query_is_a_recursive_a_question_for_the_encoded_name) {
     reset_net();
     resolve("www.example.com", answer({a_record(1, 2, 3, 4)}));
     const Bytes& q = g_net.last_query;
@@ -385,6 +543,7 @@ TEST(
     ASSERT_EQ(static_cast<uint16_t>(second - first), static_cast<uint16_t>(1));
 }
 
+/// Verifies a fully qualified name with a trailing dot resolves.
 TEST(a_trailing_dot_is_accepted) {
     reset_net();
     Resolved r = resolve("example.com.", answer({a_record(1, 2, 3, 4)}));
@@ -392,6 +551,7 @@ TEST(a_trailing_dot_is_accepted) {
     ASSERT_EQ(r.ips.size(), static_cast<size_t>(1));
 }
 
+/// Verifies that 9 A records give only the first 8 entries.
 TEST(at_most_eight_addresses_are_returned) {
     reset_net();
     std::vector<Bytes> records;
@@ -404,6 +564,10 @@ TEST(at_most_eight_addresses_are_returned) {
     ASSERT_TRUE(r.ips[7] == "10.0.0.8");
 }
 
+/**
+ * @brief Verifies a CNAME, an A record of the wrong length and one of another
+ *        class are skipped, leaving the real address.
+ */
 TEST(records_that_are_not_ipv4_internet_addresses_are_skipped) {
     reset_net();
     // CNAME (5), an A record of the wrong length, an A record of another class,
@@ -420,6 +584,7 @@ TEST(records_that_are_not_ipv4_internet_addresses_are_skipped) {
     ASSERT_TRUE(r.ips[0] == "7.7.7.7");
 }
 
+/// Verifies an answer holding only unusable records gives EAI_NONAME.
 TEST(an_answer_without_any_usable_record_is_a_name_error) {
     reset_net();
     ASSERT_EQ(
@@ -427,6 +592,10 @@ TEST(an_answer_without_any_usable_record_is_a_name_error) {
         EAI_NONAME);
 }
 
+/**
+ * @brief Verifies the parser skips several questions and accepts an answer
+ *        named by the root label instead of a pointer.
+ */
 TEST(several_questions_and_a_root_named_answer_are_walked) {
     reset_net();
     Bytes m = header(0x8180, 2, 1);
@@ -439,6 +608,7 @@ TEST(several_questions_and_a_root_named_answer_are_walked) {
     ASSERT_TRUE(r.ips[0] == "4.3.2.1");
 }
 
+/// Verifies a 63-byte label, the longest allowed, is accepted.
 TEST(a_hostname_with_a_long_but_valid_label_is_resolved) {
     reset_net();
     const std::string host = std::string(63, 'a') + ".com";
@@ -449,6 +619,11 @@ TEST(a_hostname_with_a_long_but_valid_label_is_resolved) {
 // Error mapping
 // ---------------------------------------------------------------------------
 
+/**
+ * @brief Verifies NXDOMAIN and an empty answer give EAI_NONAME, SERVFAIL,
+ *        REFUSED and FORMERR give EAI_FAIL, and a truncated response gives
+ *        EAI_AGAIN.
+ */
 TEST(response_codes_map_to_the_matching_getaddrinfo_errors) {
     reset_net();
     ASSERT_EQ(
@@ -471,6 +646,7 @@ TEST(response_codes_map_to_the_matching_getaddrinfo_errors) {
         EAI_NONAME);  // no answer
 }
 
+/// Verifies a message without the response bit gives EAI_AGAIN.
 TEST(a_message_that_is_not_a_response_is_retryable) {
     reset_net();
     ASSERT_EQ(
@@ -478,6 +654,11 @@ TEST(a_message_that_is_not_a_response_is_retryable) {
         EAI_AGAIN);
 }
 
+/**
+ * @brief Verifies a failed socket gives EAI_FAIL, while a failed send, a
+ *        receive error, an empty receive and a message shorter than a header
+ *        give EAI_AGAIN.
+ */
 TEST(transport_failures_are_retryable) {
     reset_net();
     g_net.socket_fails = true;
@@ -503,6 +684,10 @@ TEST(transport_failures_are_retryable) {
         EAI_AGAIN);  // shorter than a header
 }
 
+/**
+ * @brief Verifies empty names, empty labels, a label over 63 bytes and an
+ *        over-long name give EAI_FAIL without opening a socket.
+ */
 TEST(names_that_cannot_be_encoded_never_reach_the_network) {
     reset_net();
     const Bytes ok = answer({a_record(1, 2, 3, 4)});
@@ -519,6 +704,11 @@ TEST(names_that_cannot_be_encoded_never_reach_the_network) {
     ASSERT_EQ(g_net.sockets_opened, 0);
 }
 
+/**
+ * @brief Verifies truncated or unterminated names, trailers, record headers,
+ *        record data and a cut second answer give EAI_AGAIN instead of reading
+ *        out of bounds.
+ */
 TEST(malformed_responses_are_rejected_as_retryable) {
     reset_net();
     // question name whose label runs past the end
@@ -559,6 +749,10 @@ TEST(malformed_responses_are_rejected_as_retryable) {
     ASSERT_EQ(resolve("www.example.com", m).rc, EAI_AGAIN);
 }
 
+/**
+ * @brief Verifies that failing the first or second result block allocation
+ *        gives EAI_MEMORY and a null list (what was built is freed).
+ */
 TEST(an_allocation_failure_while_building_the_list_frees_what_was_built) {
     reset_net();
     const Bytes three = answer(
@@ -580,6 +774,12 @@ TEST(an_allocation_failure_while_building_the_list_frees_what_was_built) {
 // ---------------------------------------------------------------------------
 
 namespace {
+/**
+ * @brief Builds an IPv4 socket address 192.168.1.20:port
+ *
+ * @param port port, host order
+ * @return the address
+ */
 struct sockaddr_in make_sin(uint16_t port) {
     struct sockaddr_in sa{};
     sa.sin_family = AF_INET;
@@ -589,6 +789,7 @@ struct sockaddr_in make_sin(uint16_t port) {
 }
 }  // namespace
 
+/// Verifies __wrap_getnameinfo writes the dotted address and the port as text.
 TEST(getnameinfo_formats_the_numeric_host_and_service) {
     struct sockaddr_in sa = make_sin(1900);
     char host[32];
@@ -607,6 +808,10 @@ TEST(getnameinfo_formats_the_numeric_host_and_service) {
     ASSERT_TRUE(std::strcmp(serv, "1900") == 0);
 }
 
+/**
+ * @brief Verifies a null buffer or a zero length leaves that output untouched
+ *        while the call succeeds.
+ */
 TEST(getnameinfo_fills_only_the_outputs_it_is_given) {
     struct sockaddr_in sa = make_sin(80);
     char buf[32] = "untouched";
@@ -634,6 +839,10 @@ TEST(getnameinfo_fills_only_the_outputs_it_is_given) {
     ASSERT_TRUE(std::strcmp(buf, "untouched") == 0);
 }
 
+/**
+ * @brief Verifies a null address, a too short length and a non-IPv4 family give
+ *        EAI_FAMILY, and a 4-byte host buffer gives EAI_OVERFLOW.
+ */
 TEST(getnameinfo_refuses_bad_addresses_and_small_buffers) {
     struct sockaddr_in sa = make_sin(80);
     char host[32];
@@ -675,12 +884,21 @@ TEST(getnameinfo_refuses_bad_addresses_and_small_buffers) {
         EAI_OVERFLOW);
 }
 
+/**
+ * @brief Verifies freeaddrinfo(nullptr) is harmless and gai_strerror always
+ *        returns "dns error".
+ */
 TEST(freeing_a_null_list_is_harmless_and_the_error_string_is_constant) {
     __wrap_freeaddrinfo(nullptr);
     ASSERT_TRUE(std::strcmp(__wrap_gai_strerror(EAI_NONAME), "dns error") == 0);
     ASSERT_TRUE(std::strcmp(__wrap_gai_strerror(0), "dns error") == 0);
 }
 
+/**
+ * @brief Runs every registered test of this suite
+ *
+ * @return 1 if at least one test failed, 0 otherwise
+ */
 int main() {
     return test_report("DnsWrap Tests");
 }

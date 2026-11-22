@@ -120,8 +120,8 @@ RyuLdnClientConfig::RyuLdnClientConfig()
  * @brief Constructor from application Config
  *
  * Translates application-level configuration to client configuration.
- *
- * @param cfg Application configuration from INI file
+ * The source is the application Config parsed from the INI file (@p cfg is
+ * documented on the declaration).
  */
 RyuLdnClientConfig::RyuLdnClientConfig(const config::Config& cfg)
     : port(cfg.server.port),
@@ -197,7 +197,8 @@ RyuLdnClient::RyuLdnClient()
 /**
  * @brief Constructor with custom configuration
  *
- * @param config Client configuration including server address
+ * The configuration includes the server address; @p config is documented on
+ * the declaration.
  */
 RyuLdnClient::RyuLdnClient(const RyuLdnClientConfig& config)
     : m_config(config),
@@ -350,7 +351,7 @@ RyuLdnClient& RyuLdnClient::operator=(RyuLdnClient&& other) noexcept {
 /**
  * @brief Update client configuration
  *
- * @param config New configuration to use
+ * Also forwards the reconnect settings to the reconnect manager.
  */
 void RyuLdnClient::set_config(const RyuLdnClientConfig& config) {
     m_config = config;
@@ -364,7 +365,8 @@ void RyuLdnClient::set_config(const RyuLdnClientConfig& config) {
 /**
  * @brief Set callback for state changes
  *
- * @param callback Function to call when state changes
+ * @param user_data Opaque pointer handed back to the callback on every
+ *                  state change (null by default).
  */
 void RyuLdnClient::set_state_callback(
     ClientStateCallback callback, void* user_data) {
@@ -375,8 +377,8 @@ void RyuLdnClient::set_state_callback(
 /**
  * @brief Set callback for received packets
  *
- * @param callback Function to call for each received packet
- * @param user_data User-provided context pointer passed to callback
+ * The callback is invoked for each received packet; the context pointer is
+ * stored and passed back with every call.
  */
 void RyuLdnClient::set_packet_callback(
     ClientPacketCallback callback, void* user_data) {
@@ -404,8 +406,6 @@ ClientOpResult RyuLdnClient::connect() {
  *
  * Updates configuration and starts connection process.
  *
- * @param host Server hostname or IP address
- * @param port Server port number
  * @return ClientOpResult indicating success or failure
  */
 ClientOpResult RyuLdnClient::connect(const char* host, uint16_t port) {
@@ -508,9 +508,8 @@ void RyuLdnClient::disconnect() {
 /**
  * @brief Update client - must be called regularly
  *
- * Handles all client maintenance tasks.
- *
- * @param current_time_ms Current time in milliseconds
+ * Handles all client maintenance tasks, driven by the monotonic clock value
+ * passed as @p current_time_ms (documented on the declaration).
  */
 void RyuLdnClient::update(uint64_t current_time_ms) {
     m_last_update_time_ms = current_time_ms;
@@ -781,7 +780,6 @@ uint64_t RyuLdnClient::get_last_rtt_ms() const {
 /**
  * @brief Send scan request
  *
- * @param filter Scan filter parameters
  * @return ClientOpResult indicating success or failure
  */
 ClientOpResult RyuLdnClient::send_scan(const protocol::ScanFilterFull& filter) {
@@ -799,7 +797,9 @@ ClientOpResult RyuLdnClient::send_scan(const protocol::ScanFilterFull& filter) {
 /**
  * @brief Send create access point request
  *
- * @param request Access point parameters
+ * @param advertise_data Advertise data blob sent with the request; may be
+ *                       null when @p advertise_size is 0.
+ * @param advertise_size Size of @p advertise_data in bytes.
  * @return ClientOpResult indicating success or failure
  */
 ClientOpResult RyuLdnClient::send_create_access_point(
@@ -823,7 +823,6 @@ ClientOpResult RyuLdnClient::send_create_access_point(
 /**
  * @brief Send connect request
  *
- * @param request Connection parameters
  * @return ClientOpResult indicating success or failure
  */
 ClientOpResult RyuLdnClient::send_connect(
@@ -886,9 +885,6 @@ ClientOpResult RyuLdnClient::send_connect_private(
 /**
  * @brief Send proxy data
  *
- * @param header Proxy header
- * @param data Data to send
- * @param size Size of data
  * @return ClientOpResult indicating success or failure
  */
 ClientOpResult RyuLdnClient::send_proxy_data(
@@ -1268,7 +1264,6 @@ void RyuLdnClient::start_backoff() {
 /**
  * @brief Check if backoff has expired
  *
- * @param current_time_ms Current time in milliseconds
  * @return true if backoff period has elapsed
  */
 bool RyuLdnClient::is_backoff_expired(uint64_t current_time_ms) {
@@ -1348,7 +1343,6 @@ ClientOpResult RyuLdnClient::handle_send_result(ClientResult send_result) {
 /**
  * @brief Check if handshake has timed out
  *
- * @param current_time_ms Current time in milliseconds
  * @return true if handshake timeout has elapsed
  */
 bool RyuLdnClient::is_handshake_timeout(uint64_t current_time_ms) const {
@@ -1370,9 +1364,6 @@ bool RyuLdnClient::is_handshake_timeout(uint64_t current_time_ms) const {
  *
  * This matches the official Ryujinx client behavior.
  *
- * @param id Packet ID received
- * @param data Packet data
- * @param size Packet size
  * @return true if handshake completed (success or failure)
  */
 bool RyuLdnClient::process_handshake_response(

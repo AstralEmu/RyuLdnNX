@@ -22,9 +22,20 @@
 // Test Framework (minimal standalone)
 // ============================================================================
 
+/** Count of tests that ran to completion (incremented by the TEST registrar).
+ */
 static int g_tests_passed = 0;
+/** Count of failed assertions; main() returns non-zero when above 0. */
 static int g_tests_failed = 0;
 
+/**
+ * @brief Declare a test and run it from a static initializer.
+ *
+ * Defines `test_<name>()` plus a static registrar object whose constructor
+ * prints the name, runs the body before main() and bumps g_tests_passed.
+ *
+ * @param name Identifier of the test (token-pasted into the function name).
+ */
 #define TEST(name)                            \
     static void test_##name();                \
     static struct TestRegistrar_##name {      \
@@ -38,6 +49,11 @@ static int g_tests_failed = 0;
     } g_registrar_##name;                     \
     static void test_##name()
 
+/**
+ * @brief Fail the current test (print and return) if cond is false.
+ *
+ * @param cond Expression expected to be true.
+ */
 #define ASSERT_TRUE(cond)                                                   \
     do {                                                                    \
         if (!(cond)) {                                                      \
@@ -50,6 +66,11 @@ static int g_tests_failed = 0;
         }                                                                   \
     } while (0)
 
+/**
+ * @brief Fail the current test (print and return) if cond is true.
+ *
+ * @param cond Expression expected to be false.
+ */
 #define ASSERT_FALSE(cond)                                                   \
     do {                                                                     \
         if (cond) {                                                          \
@@ -62,6 +83,12 @@ static int g_tests_failed = 0;
         }                                                                    \
     } while (0)
 
+/**
+ * @brief Fail the current test (print and return) if a != b.
+ *
+ * @param a Actual value.
+ * @param b Expected value.
+ */
 #define ASSERT_EQ(a, b)                                                 \
     do {                                                                \
         if ((a) != (b)) {                                               \
@@ -74,6 +101,12 @@ static int g_tests_failed = 0;
         }                                                               \
     } while (0)
 
+/**
+ * @brief Fail the current test (print and return) if a == b.
+ *
+ * @param a Actual value.
+ * @param b Value that a must differ from.
+ */
 #define ASSERT_NE(a, b)                                                 \
     do {                                                                \
         if ((a) == (b)) {                                               \
@@ -140,7 +173,9 @@ enum class LdnErrorCode : uint32_t {
  */
 class TestErrorHandler {
 public:
+    /** Callback fired when an error is signalled to the game. */
     using ErrorCallback = std::function<void(LdnErrorCode, DisconnectReason)>;
+    /** Callback fired on every state change made through SetState(). */
     using StateCallback = std::function<void(CommState)>;
 
     TestErrorHandler()
@@ -157,12 +192,27 @@ public:
     // Configuration
     // ========================================================================
 
+    /**
+     * @brief Set how many connection losses are retried in setup states.
+     *
+     * @param max Retry budget before the handler goes to the Error state.
+     */
     void SetMaxRetries(uint32_t max) {
         m_max_retries = max;
     }
+    /**
+     * @brief Register the error observer (may be nullptr).
+     *
+     * @param cb Called with the error code and disconnect reason.
+     */
     void SetErrorCallback(ErrorCallback cb) {
         m_error_callback = cb;
     }
+    /**
+     * @brief Register the state-change observer (may be nullptr).
+     *
+     * @param cb Called with the new state on every SetState().
+     */
     void SetStateCallback(StateCallback cb) {
         m_state_callback = cb;
     }
@@ -171,22 +221,32 @@ public:
     // State Management
     // ========================================================================
 
+    /** @return Current communication state. */
     CommState GetState() const {
         return m_current_state;
     }
+    /** @return Reason recorded by the last error, None when clean. */
     DisconnectReason GetDisconnectReason() const {
         return m_disconnect_reason;
     }
+    /** @return Last error code recorded, Success when clean. */
     LdnErrorCode GetLastError() const {
         return m_last_error;
     }
+    /** @return Number of retries consumed since the last ResetError(). */
     uint32_t GetRetryCount() const {
         return m_retry_count;
     }
+    /** @return true once HandleConnectionLoss() has been called. */
     bool IsConnectionLost() const {
         return m_connection_lost;
     }
 
+    /**
+     * @brief Move to a new state and notify the state callback.
+     *
+     * @param state New state to enter.
+     */
     void SetState(CommState state) {
         m_current_state = state;
         if (m_state_callback) {
@@ -326,19 +386,33 @@ public:
     }
 
 private:
+    /**
+     * @brief Invoke the error callback if one is registered.
+     *
+     * @param error Error code to report.
+     * @param reason Disconnect reason to report.
+     */
     void NotifyError(LdnErrorCode error, DisconnectReason reason) {
         if (m_error_callback) {
             m_error_callback(error, reason);
         }
     }
 
+    /** Current communication state. */
     CommState m_current_state;
+    /** Reason of the last disconnect. */
     DisconnectReason m_disconnect_reason;
+    /** Last error code recorded. */
     LdnErrorCode m_last_error;
+    /** Retries consumed so far. */
     uint32_t m_retry_count;
+    /** Maximum retries allowed in setup states. */
     uint32_t m_max_retries;
+    /** Set by HandleConnectionLoss(), cleared by ResetError(). */
     bool m_connection_lost;
+    /** Observer notified on errors, may be empty. */
     ErrorCallback m_error_callback;
+    /** Observer notified on state changes, may be empty. */
     StateCallback m_state_callback;
 };
 
@@ -346,6 +420,8 @@ private:
 // Initial State Tests
 // ============================================================================
 
+/** A fresh handler is in None state with no error, no reason and zero retries,
+ * so later tests start from a known baseline. */
 TEST(error_handler_initial_state) {
     TestErrorHandler handler;
     ASSERT_EQ(handler.GetState(), CommState::None);
@@ -359,6 +435,8 @@ TEST(error_handler_initial_state) {
 // Connection Loss Tests
 // ============================================================================
 
+/** A connection loss while in None is not an active session: no retry, no state
+ * change and no disconnect reason. */
 TEST(connection_loss_from_none_no_error) {
     TestErrorHandler handler;
     handler.SetState(CommState::None);
@@ -370,6 +448,7 @@ TEST(connection_loss_from_none_no_error) {
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::None);
 }
 
+/** A connection loss in Initialized neither retries nor changes state. */
 TEST(connection_loss_from_initialized_no_error) {
     TestErrorHandler handler;
     handler.SetState(CommState::Initialized);
@@ -380,6 +459,8 @@ TEST(connection_loss_from_initialized_no_error) {
     ASSERT_EQ(handler.GetState(), CommState::Initialized);
 }
 
+/** A first loss in the AccessPoint setup phase asks for a retry, bumps the
+ * retry count to 1 and keeps the state. */
 TEST(connection_loss_from_access_point_retry) {
     TestErrorHandler handler;
     handler.SetState(CommState::AccessPoint);
@@ -392,6 +473,8 @@ TEST(connection_loss_from_access_point_retry) {
     ASSERT_EQ(handler.GetState(), CommState::AccessPoint);  // State unchanged
 }
 
+/** Once the retry budget (2) is spent, the next loss goes to Error with
+ * ConnectionFailed and no further retry. */
 TEST(connection_loss_max_retries_exceeded) {
     TestErrorHandler handler;
     handler.SetState(CommState::AccessPoint);
@@ -408,6 +491,8 @@ TEST(connection_loss_max_retries_exceeded) {
         handler.GetDisconnectReason(), DisconnectReason::ConnectionFailed);
 }
 
+/** A loss while StationConnected is unrecoverable by retry: Error state,
+ * SignalLost reason and NetworkError code. */
 TEST(connection_loss_during_active_session) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -420,6 +505,8 @@ TEST(connection_loss_during_active_session) {
     ASSERT_EQ(handler.GetLastError(), LdnErrorCode::NetworkError);
 }
 
+/** A loss while hosting (AccessPointCreated) also goes straight to Error with
+ * SignalLost. */
 TEST(connection_loss_during_host_session) {
     TestErrorHandler handler;
     handler.SetState(CommState::AccessPointCreated);
@@ -431,6 +518,8 @@ TEST(connection_loss_during_host_session) {
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::SignalLost);
 }
 
+/** The error callback receives NetworkError and SignalLost when an active
+ * session loses its connection. */
 TEST(connection_loss_callback_invoked) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -456,6 +545,8 @@ TEST(connection_loss_callback_invoked) {
 // Timeout Tests
 // ============================================================================
 
+/** HandleTimeout returns Timeout and records it as last error, also outside an
+ * active session. */
 TEST(timeout_returns_error_code) {
     TestErrorHandler handler;
     handler.SetState(CommState::Station);
@@ -466,6 +557,8 @@ TEST(timeout_returns_error_code) {
     ASSERT_EQ(handler.GetLastError(), LdnErrorCode::Timeout);
 }
 
+/** A timeout during an active session is treated as lost signal: Error state
+ * with SignalLost. */
 TEST(timeout_during_session_triggers_error_state) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -476,6 +569,8 @@ TEST(timeout_during_session_triggers_error_state) {
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::SignalLost);
 }
 
+/** A timeout during setup (AccessPoint) records Timeout but leaves the state
+ * alone so the caller can retry. */
 TEST(timeout_during_setup_no_state_change) {
     TestErrorHandler handler;
     handler.SetState(CommState::AccessPoint);
@@ -490,6 +585,8 @@ TEST(timeout_during_setup_no_state_change) {
 // Server Error Tests
 // ============================================================================
 
+/** Server error code 1 maps to the Rejected disconnect reason and ServerError
+ * result. */
 TEST(server_error_rejected) {
     TestErrorHandler handler;
     handler.SetState(CommState::Station);
@@ -500,6 +597,8 @@ TEST(server_error_rejected) {
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::Rejected);
 }
 
+/** Server error code 2 in an active session maps to DestroyedBySystem and moves
+ * to Error. */
 TEST(server_error_network_destroyed) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -511,6 +610,8 @@ TEST(server_error_network_destroyed) {
         handler.GetDisconnectReason(), DisconnectReason::DestroyedBySystem);
 }
 
+/** Unknown server error codes fall back to the SystemRequest disconnect reason.
+ */
 TEST(server_error_unknown_maps_to_system_request) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -524,6 +625,8 @@ TEST(server_error_unknown_maps_to_system_request) {
 // Recovery Tests
 // ============================================================================
 
+/** ResetError clears error, reason, retry count and the connection-lost flag
+ * after an exhausted-retry failure. */
 TEST(reset_error_clears_state) {
     TestErrorHandler handler;
     handler.SetState(CommState::AccessPoint);
@@ -542,6 +645,7 @@ TEST(reset_error_clears_state) {
     ASSERT_FALSE(handler.IsConnectionLost());
 }
 
+/** Error with ConnectionFailed (retries disabled) is recoverable. */
 TEST(can_recover_from_connection_failed) {
     TestErrorHandler handler;
     handler.SetState(CommState::Station);
@@ -555,6 +659,7 @@ TEST(can_recover_from_connection_failed) {
     ASSERT_TRUE(handler.CanRecover());
 }
 
+/** Error with SignalLost is recoverable. */
 TEST(can_recover_from_signal_lost) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -565,6 +670,7 @@ TEST(can_recover_from_signal_lost) {
     ASSERT_TRUE(handler.CanRecover());
 }
 
+/** Error with Rejected is final: CanRecover must be false. */
 TEST(cannot_recover_from_rejected) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -575,6 +681,7 @@ TEST(cannot_recover_from_rejected) {
     ASSERT_FALSE(handler.CanRecover());
 }
 
+/** CanRecover is false outside the Error state. */
 TEST(cannot_recover_when_not_in_error) {
     TestErrorHandler handler;
     handler.SetState(CommState::Initialized);
@@ -586,6 +693,8 @@ TEST(cannot_recover_when_not_in_error) {
 // State Callback Tests
 // ============================================================================
 
+/** The state callback sees the Error state when a connection loss forces the
+ * transition. */
 TEST(state_callback_on_error_transition) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -602,6 +711,8 @@ TEST(state_callback_on_error_transition) {
 // Edge Cases
 // ============================================================================
 
+/** Successive losses in Station accumulate in the retry count while the budget
+ * (5) lasts, without leaving the state. */
 TEST(multiple_connection_losses_accumulate_retries) {
     TestErrorHandler handler;
     handler.SetState(CommState::Station);
@@ -615,6 +726,7 @@ TEST(multiple_connection_losses_accumulate_retries) {
     ASSERT_EQ(handler.GetState(), CommState::Station);  // Still trying
 }
 
+/** A second loss while already in Error changes nothing (state stays Error). */
 TEST(error_from_error_state_no_change) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -627,6 +739,8 @@ TEST(error_from_error_state_no_change) {
     ASSERT_EQ(handler.GetState(), CommState::Error);
 }
 
+/** Clearing both callbacks with nullptr must not crash when an error is
+ * signalled. */
 TEST(null_callbacks_safe) {
     TestErrorHandler handler;
     handler.SetState(CommState::StationConnected);
@@ -643,6 +757,8 @@ TEST(null_callbacks_safe) {
 // Disconnect Reason Values
 // ============================================================================
 
+/** Pins the numeric values of DisconnectReason (0-7) to the LDN protocol
+ * values. */
 TEST(disconnect_reason_values) {
     // Verify enum values match Nintendo's LDN protocol
     ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::None), 0u);
@@ -659,6 +775,13 @@ TEST(disconnect_reason_values) {
 // Main
 // ============================================================================
 
+/**
+ * @brief Test entry point.
+ *
+ * Tests already ran from static initializers; this only prints the summary.
+ *
+ * @return 1 if any assertion failed, 0 otherwise.
+ */
 int main() {
     printf("\n========================================\n");
     printf("  LDN Error Handling Tests - ryu_ldn_nx\n");

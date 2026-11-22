@@ -76,6 +76,7 @@ class ConfigManager {
 public:
     /**
      * @brief Get the singleton instance
+     * @return The process-wide manager (function-local static).
      */
     /// @gdb{tag="CONFIG:MGR", msg="Getting manager instance"}
     static ConfigManager& Instance();
@@ -94,6 +95,7 @@ public:
 
     /**
      * @brief Check if initialized
+     * @return true once Initialize() has been called.
      */
     bool IsInitialized() const {
         return m_initialized;
@@ -101,6 +103,8 @@ public:
 
     /**
      * @brief Get current configuration (read-only)
+     * @return Reference to the in-memory config, valid for the singleton's
+     *         lifetime.
      */
     const Config& GetConfig() const {
         return m_config;
@@ -130,6 +134,7 @@ public:
 
     /**
      * @brief Get server host
+     * @return NUL-terminated host name, owned by the manager.
      */
     const char* GetServerHost() const {
         return m_config.server.host;
@@ -145,6 +150,7 @@ public:
 
     /**
      * @brief Get server port
+     * @return TCP port of the Ryujinx LDN server.
      */
     uint16_t GetServerPort() const {
         return m_config.server.port;
@@ -152,6 +158,7 @@ public:
 
     /**
      * @brief Set server port
+     * @param port TCP port; stored as is, marks config dirty.
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting server port"}
     void SetServerPort(uint16_t port);
@@ -162,6 +169,7 @@ public:
 
     /**
      * @brief Get LDN enabled state
+     * @return true when LDN interception is enabled.
      */
     bool GetLdnEnabled() const {
         return m_config.ldn.enabled;
@@ -169,12 +177,15 @@ public:
 
     /**
      * @brief Set LDN enabled state
+     * @param enabled New value; marks config dirty and notifies "ldn".
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting LDN enabled"}
     void SetLdnEnabled(bool enabled);
 
     /**
      * @brief Get passphrase
+     * @return NUL-terminated passphrase, empty when none is set; owned by
+     *         the manager.
      */
     const char* GetPassphrase() const {
         return m_config.ldn.passphrase;
@@ -194,6 +205,7 @@ public:
 
     /**
      * @brief Get use_passphrase state
+     * @return true when rooms are filtered by passphrase.
      */
     bool GetUsePassphrase() const {
         return m_config.ldn.use_passphrase;
@@ -216,6 +228,7 @@ public:
 
     /**
      * @brief Get debug enabled state
+     * @return true when debug logging is enabled.
      */
     bool GetDebugEnabled() const {
         return m_config.debug.enabled;
@@ -223,12 +236,14 @@ public:
 
     /**
      * @brief Set debug enabled state
+     * @param enabled New value; marks config dirty and notifies "debug".
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting debug enabled"}
     void SetDebugEnabled(bool enabled);
 
     /**
      * @brief Get debug log level
+     * @return Log level, 0 to 3.
      */
     uint32_t GetDebugLevel() const {
         return m_config.debug.level;
@@ -236,6 +251,7 @@ public:
 
     /**
      * @brief Set debug log level (0-3)
+     * @param level Requested level; values above 3 are clamped to 3.
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting debug level"}
     void SetDebugLevel(uint32_t level);
@@ -254,6 +270,7 @@ public:
 
     /**
      * @brief Check if config has unsaved changes
+     * @return true when a setter ran since the last Save() or Reload().
      */
     bool HasUnsavedChanges() const {
         return m_dirty;
@@ -267,13 +284,22 @@ private:
     ConfigManager(const ConfigManager&) = delete;
     ConfigManager& operator=(const ConfigManager&) = delete;
 
+    /**
+     * @brief Invoke the change callback if one is registered.
+     * @param section Name of the changed section ("server", "ldn", ...).
+     */
     /// @gdb{tag="CONFIG:MGR", msg="Config change notified"}
     void NotifyChange(const char* section);
 
+    /// Current in-memory configuration.
     Config m_config{};
+    /// NUL-terminated path of the INI file used by load/save.
     char m_config_path[256]{};
+    /// True once the manager has been initialized.
     bool m_initialized = false;
+    /// True when a setter changed the config since the last save.
     bool m_dirty = false;
+    /// Change callback, nullptr when none is registered.
     ConfigChangeCallback m_callback = nullptr;
 };
 

@@ -227,3 +227,5 @@ build-logs/
 
 # Local Claude Code permissions (per-developer)
 .claude/settings.local.json
+
+__pycache__/

@@ -2,12 +2,12 @@
  * @file main_tests.cpp
  * @brief Host tests of the sysmodule boot code (sysmodule/source/main.cpp)
  *
- * main.cpp is #included (unity build): its server managers, heap and socket
- * configuration are file-local. The services it registers are the real ones;
- * the libnx boot calls and the SF server are the host stand-ins of
- * tests/stubs, which record what the boot code gave them. That includes the
- * global operator new/delete of main.cpp: every allocation of this test binary
- * goes through the sysmodule heap wrappers.
+ * main.cpp is pulled in with an include directive (unity build): its server
+ * managers, heap and socket configuration are file-local. The services it
+ * registers are the real ones; the libnx boot calls and the SF server are the
+ * host stand-ins of tests/stubs, which record what the boot code gave them.
+ * That includes the global operator new/delete of main.cpp: every allocation of
+ * this test binary goes through the sysmodule heap wrappers.
  */
 
 #include "test_harness.hpp"
@@ -45,11 +45,20 @@ public:
     SdCardDir& operator=(const SdCardDir&) = delete;
 
 private:
+    /// Test fixture value: root.
     fsys::path m_root;
+    /// Test fixture value: previous.
     fsys::path m_previous;
 };
 
 template <class Fn>
+/**
+ * @brief Runs fn and reports whether it aborted.
+ *
+ * @param fn callable run under test
+ * @return true when fn threw ams::HostAbort (the host build of an abort), false
+ * when it returned
+ */
 bool aborts(Fn&& fn) {
     try {
         fn();
@@ -59,14 +68,30 @@ bool aborts(Fn&& fn) {
     return false;
 }
 
+/// Test fixture value: started threads.
 std::vector<std::string> g_started_threads;
+/**
+ * @brief Thread-start stub that records the thread name.
+ *
+ * @param name name of the started thread, appended to g_started_threads
+ */
 void record_started_thread(const char* name) {
     g_started_threads.emplace_back(name);
 }
 
+/// Test fixture value: sleeps.
 std::atomic<int> g_sleeps{0};
+/// Test fixture value: last sleep ns.
 std::int64_t g_last_sleep_ns = 0;
+/// Test fixture value: sleeps before exit.
 int g_sleeps_before_exit = 1;
+/**
+ * @brief Sleep stub that ends the log thread (throws HostThreadExit) once
+ * g_sleeps_before_exit sleeps happened.
+ *
+ * @param ns requested sleep duration in nanoseconds, recorded in
+ * g_last_sleep_ns
+ */
 void leave_log_thread_after_n_sleeps(std::int64_t ns) {
     g_last_sleep_ns = ns;
     if (++g_sleeps >= g_sleeps_before_exit) {
@@ -76,6 +101,10 @@ void leave_log_thread_after_n_sleeps(std::int64_t ns) {
 
 }  // namespace
 
+/**
+ * @brief Test case: the malloc buffer is handed to the global allocator at
+ *   startup.
+ */
 TEST(the_malloc_buffer_is_handed_to_the_global_allocator_at_startup) {
     g_host_boot_calls.clear();
     boot::init::Startup();
@@ -88,8 +117,8 @@ TEST(the_malloc_buffer_is_handed_to_the_global_allocator_at_startup) {
         boot::init::g_host_allocator_size, static_cast<size_t>(1024 * 1024));
 }
 
-TEST(
-    the_socket_buffers_are_the_documented_sizes_and_the_bsd_config_mirrors_them) {
+/** @brief Test case: socket buffers match documented sizes and bsd config. */
+TEST(socket_buffers_match_documented_sizes_and_bsd_config) {
     const auto& socket = boot::LibnxSocketInitConfig;
     ASSERT_EQ(socket.tcp_tx_buf_size, 0x800u);
     ASSERT_EQ(socket.tcp_rx_buf_size, 0x1000u);
@@ -119,6 +148,10 @@ TEST(
     ASSERT_EQ(bsd.sb_efficiency, socket.sb_efficiency);
 }
 
+/**
+ * @brief Test case: every operator new and delete goes through the sysmodule
+ *   heap.
+ */
 TEST(every_operator_new_and_delete_goes_through_the_sysmodule_heap) {
     const std::align_val_t align{16};
     const std::nothrow_t& no = std::nothrow;
@@ -152,6 +185,10 @@ TEST(every_operator_new_and_delete_goes_through_the_sysmodule_heap) {
     ASSERT_EQ(frees, 8);
 }
 
+/**
+ * @brief Test case: the heap is created once on the static buffer and thread
+ *   safe.
+ */
 TEST(the_heap_is_created_once_on_the_static_buffer_and_thread_safe) {
     ASSERT_EQ(lm::g_host_heaps_created, 1);
     ASSERT_TRUE(
@@ -162,6 +199,10 @@ TEST(the_heap_is_created_once_on_the_static_buffer_and_thread_safe) {
     ASSERT_EQ(lm::g_host_heaps_created, 1);
 }
 
+/**
+ * @brief Test case: boot initializes services in order with the documented
+ *   socket setup.
+ */
 TEST(boot_initializes_services_in_order_with_the_documented_socket_setup) {
     SdCardDir sd;
     g_host_boot_calls.clear();
@@ -192,6 +233,8 @@ TEST(boot_initializes_services_in_order_with_the_documented_socket_setup) {
     ASSERT_TRUE(fsys::exists("sdmc:/config/ryu_ldn_nx/config.ini"));
 }
 
+/** @brief Test case: teardown runs in the reverse order of the boot. */
+/** @brief Test case: teardown runs in the reverse order of the boot. */
 TEST(teardown_runs_in_the_reverse_order_of_the_boot) {
     SdCardDir sd;
     g_host_boot_calls.clear();
@@ -201,10 +244,16 @@ TEST(teardown_runs_in_the_reverse_order_of_the_boot) {
     ASSERT_TRUE(g_host_boot_calls == expected);
 }
 
+/** @brief Test case: exit aborts because the sysmodule is immortal. */
+/** @brief Test case: exit aborts because the sysmodule is immortal. */
 TEST(exit_aborts_because_the_sysmodule_is_immortal) {
     ASSERT_TRUE(aborts([] { boot::Exit(0); }));
 }
 
+/**
+ * @brief Test case: an accepted ldn session gets the ldn service and a new
+ *   session id.
+ */
 TEST(an_accepted_ldn_session_gets_the_ldn_service_and_a_new_session_id) {
     auto& manager = boot::mitm::g_server_manager;
     manager.accepted.clear();
@@ -230,6 +279,10 @@ TEST(an_accepted_ldn_session_gets_the_ldn_service_and_a_new_session_id) {
     manager.accepted.clear();
 }
 
+/**
+ * @brief Test case: an accepted bsd session gets the bsd service and a new
+ *   session id.
+ */
 TEST(an_accepted_bsd_session_gets_the_bsd_service_and_a_new_session_id) {
     auto& manager = boot::mitm::g_server_manager;
     manager.accepted.clear();
@@ -253,12 +306,18 @@ TEST(an_accepted_bsd_session_gets_the_bsd_service_and_a_new_session_id) {
     manager.accepted.clear();
 }
 
+/** @brief Test case: a session on an unknown port aborts. */
+/** @brief Test case: a session on an unknown port aborts. */
 TEST(a_session_on_an_unknown_port_aborts) {
     ams::sf::hipc::Server server;
     ASSERT_TRUE(
         aborts([&] { boot::mitm::g_server_manager.HostAccept(7, &server); }));
 }
 
+/**
+ * @brief Test case: the log maintenance thread sleeps two seconds between idle
+ *   checks.
+ */
 TEST(the_log_maintenance_thread_sleeps_two_seconds_between_idle_checks) {
     g_sleeps = 0;
     g_sleeps_before_exit = 3;
@@ -275,6 +334,10 @@ TEST(the_log_maintenance_thread_sleeps_two_seconds_between_idle_checks) {
     ASSERT_EQ(g_last_sleep_ns, static_cast<std::int64_t>(2'000'000'000));
 }
 
+/**
+ * @brief Test case: main registers the three services and starts the four
+ *   threads.
+ */
 TEST(main_registers_the_three_services_and_starts_the_four_threads) {
     g_started_threads.clear();
     g_sleeps = 0;
@@ -316,6 +379,11 @@ TEST(main_registers_the_three_services_and_starts_the_four_threads) {
     ASSERT_EQ(g_sleeps.load(), 1);
 }
 
+/**
+ * @brief Runs the whole suite; the exit code is non-zero if any test failed.
+ *
+ * @return 0 when every test passed, non-zero otherwise
+ */
 int main() {
     return test_report("main");
 }

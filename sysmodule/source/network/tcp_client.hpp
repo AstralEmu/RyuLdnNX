@@ -293,6 +293,9 @@ public:
      * Request to create a new network session (host mode).
      *
      * @param request Access point configuration
+     * @param advertise_data Advertise data appended to the request (may be
+     *        nullptr)
+     * @param advertise_size Size of advertise_data in bytes
      * @return ClientResult indicating success or error
      */
     /// @gdb{tag="NETWORK:TCP", msg="send_create_access_point"}
@@ -491,7 +494,9 @@ private:
     // poll() on recv does not block sends — mirrors NetCoreServer's design
     // (used by Ryujinx) where async send and async receive do not contend
     // with each other.
+    /// Guards m_send_buffer and socket send calls (non-recursive)
     mutable ::ams::os::Mutex m_send_mutex{false};
+    /// Guards the receive buffer and socket recv calls (non-recursive)
     mutable ::ams::os::Mutex m_recv_mutex{false};
 
     /**
@@ -500,6 +505,9 @@ private:
      * The caller holds m_send_mutex. Fitting the buffer is proven at compile
      * time (static_assert), so there is no runtime failure to report.
      *
+     * @tparam T Payload struct type
+     * @param type Packet ID written in the header
+     * @param payload Payload copied after the header
      * @return Number of bytes written (header + payload)
      */
     template <typename T>

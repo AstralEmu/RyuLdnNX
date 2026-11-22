@@ -20,7 +20,11 @@
 
 namespace ryu_ldn::overlay {
 
-/** @brief Convert a RyuLdnConnectionStatus to a human-readable string. */
+/**
+ * @brief Convert a RyuLdnConnectionStatus to a human-readable string.
+ * @param status Connection status reported by the sysmodule.
+ * @return Static string, "Unknown" for an unrecognised value.
+ */
 inline const char* ConnectionStatusToString(RyuLdnConnectionStatus status) {
     switch (status) {
         case RyuLdnStatus_Disconnected:
@@ -38,7 +42,12 @@ inline const char* ConnectionStatusToString(RyuLdnConnectionStatus status) {
     }
 }
 
-/** @brief Return a color for a given RyuLdnConnectionStatus. */
+/**
+ * @brief Return a color for a given RyuLdnConnectionStatus.
+ * @param status Connection status reported by the sysmodule.
+ * @return Green for Ready/Connected, yellow for Connecting, grey for
+ *         Disconnected, red for Error, white otherwise.
+ */
 inline tsl::Color StatusColor(RyuLdnConnectionStatus status) {
     switch (status) {
         case RyuLdnStatus_Ready:
@@ -56,7 +65,12 @@ inline tsl::Color StatusColor(RyuLdnConnectionStatus status) {
     }
 }
 
-/** @brief Return a color for a given RyuLdnState. */
+/**
+ * @brief Return a color for a given RyuLdnState.
+ * @param state LDN communication state reported by the sysmodule.
+ * @return Green when a network is created or joined, yellow while an access
+ *         point or station is being set up, red for Error, grey otherwise.
+ */
 inline tsl::Color LdnStateColor(RyuLdnState state) {
     switch (state) {
         case RyuLdnState_AccessPointCreated:
@@ -78,6 +92,10 @@ inline tsl::Color LdnStateColor(RyuLdnState state) {
  * If the passphrase is a valid Ryujinx passphrase (16 chars starting with
  * "Ryujinx-"), display only the hex portion after the prefix. Otherwise show
  * "(invalid)" or "---".
+ *
+ * @param passphrase NUL-terminated passphrase; nullptr or empty gives "---".
+ * @param[out] buf Destination buffer, always NUL-terminated by snprintf.
+ * @param bufSize Size of @p buf in bytes.
  */
 inline void FormatPassphraseDisplay(
     const char* passphrase, char* buf, size_t bufSize) {
@@ -91,7 +109,16 @@ inline void FormatPassphraseDisplay(
     }
 }
 
-/** @brief Generate a random passphrase in the format "Ryujinx-XXXXXXXX". */
+/**
+ * @brief Generate a random passphrase in the format "Ryujinx-XXXXXXXX".
+ *
+ * X is a lowercase hex digit from rand(), seeded once from the clock. The
+ * output is not cryptographically secure. Needs at least 17 bytes; on a
+ * smaller buffer it writes an empty string.
+ *
+ * @param[out] out Destination buffer; may be nullptr (nothing is written).
+ * @param out_size Size of @p out in bytes.
+ */
 inline void GenerateRandomPassphraseOverlay(char* out, size_t out_size) {
     if (out == nullptr || out_size < 17) {
         if (out != nullptr && out_size > 0)

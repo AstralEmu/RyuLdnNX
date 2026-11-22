@@ -75,9 +75,20 @@ constexpr s32 LOG_THREAD_PRIORITY_OFFSET = 5;
 /// NOTE: Switch sysmodules share ~10MB total, keep this small!
 /// 1 MB is sufficient for TlsHeapCentral and gameplay traffic
 constexpr size_t MallocBufferSize = 1_MB;
+
+/// Backing store of the libc malloc heap, page aligned, zero-initialized at
+/// load time (constinit).
 alignas(os::MemoryPageSize) constinit u8 g_malloc_buffer[MallocBufferSize];
 
-/// Socket buffer configuration
+/**
+ * @brief Compute, at compile time, the transfer memory libnx needs for BSD.
+ *
+ * Mirrors libnx's own sizing: the TCP max sizes (falling back to the plain
+ * sizes when 0) plus the UDP sizes, page aligned, times sb_efficiency.
+ *
+ * @param config Socket buffer configuration; must be a constant expression.
+ * @return Transfer memory size in bytes.
+ */
 // codeql[cpp/unused-static-function] — consteval, used at compile-time below
 consteval size_t GetLibnxBsdTransferMemorySize(
     const ::SocketInitConfig* config) {
@@ -165,6 +176,8 @@ const s32 ThreadPriority = 6;
 
 /// Total number of threads for request processing
 const size_t TotalThreads = 2;
+/// Worker threads started in addition to the main thread, which also runs
+/// the server loop.
 const size_t NumExtraThreads = TotalThreads - 1;
 
 /// Thread stack size
@@ -176,6 +189,7 @@ const size_t ThreadStackSize = 0x8000;
 
 /// Thread stack
 alignas(os::MemoryPageSize) u8 g_thread_stack[ThreadStackSize];
+/// Thread object of the main MITM server thread (uses g_thread_stack).
 os::ThreadType g_thread;
 
 // Heap for dynamic allocations
@@ -184,8 +198,11 @@ os::ThreadType g_thread;
 // buffer, ExpHeap overhead/fragmentation, and transient std::vector/std::deque
 // allocations. 96KB saturated under real gameplay traffic and caused DABRT
 // 0x101 on allocation failure.
+/// Backing memory of the 384 KB expanded heap used by new/delete.
 alignas(HEAP_ALIGNMENT) constinit u8 g_heap_memory[384_KB];
+/// Handle of the expanded heap; valid once g_heap_initialized is true.
 constinit lmem::HeapHandle g_heap_handle;
+/// Set under g_heap_init_mutex when the heap has been created (lazy init).
 constinit bool g_heap_initialized;
 // Heap init mutex. `os::SdkMutex` provides a constexpr constructor that
 // constant-initializes the underlying critical section on Horizon (the
@@ -196,8 +213,18 @@ constinit bool g_heap_initialized;
 // paths (pthread/windows) where the constexpr initializer may not fully
 // seed the critical section. `InitializeSdkMutex` is idempotent on an
 // already-initialized mutex — it just re-seeds the storage.
+
+/// Guards the one-time creation of the expanded heap in GetHeapHandle().
 constinit os::SdkMutex g_heap_init_mutex;
 
+/**
+ * @brief Returns the expanded heap handle, creating the heap on first use.
+ *
+ * Double-checked locking on g_heap_initialized; the heap is thread safe
+ * (CreateOption_ThreadSafe).
+ *
+ * @return Handle of the 384 KB expanded heap.
+ */
 lmem::HeapHandle GetHeapHandle() {
     if (AMS_UNLIKELY(!g_heap_initialized)) {
         std::scoped_lock lk(g_heap_init_mutex);
@@ -214,10 +241,22 @@ lmem::HeapHandle GetHeapHandle() {
     return g_heap_handle;
 }
 
+/**
+ * @brief Allocates from the expanded heap (target of the new operators).
+ *
+ * @param size Number of bytes to allocate.
+ * @return Pointer to the block, or nullptr if the heap is exhausted.
+ */
 void* Allocate(size_t size) {
     return lmem::AllocateFromExpHeap(GetHeapHandle(), size);
 }
 
+/**
+ * @brief Returns a block to the expanded heap.
+ *
+ * @param p Block obtained from Allocate().
+ * @param size Ignored; the heap tracks block sizes itself.
+ */
 void Deallocate(void* p, size_t size) {
     AMS_UNUSED(size);
     lmem::FreeToExpHeap(GetHeapHandle(), p);
@@ -227,10 +266,15 @@ namespace {
 
 /// Server manager options
 struct LdnMitmManagerOptions {
+    /// Size of the per-session IPC pointer buffer (bytes).
     static constexpr size_t PointerBufferSize = 0x1000;
+    /// Maximum number of HIPC domains.
     static constexpr size_t MaxDomains = 0x10;
+    /// Maximum number of objects across all domains.
     static constexpr size_t MaxDomainObjects = 0x100;
+    /// Deferred IPC requests are not used.
     static constexpr bool CanDeferInvokeRequest = false;
+    /// Required: this manager hosts MITM ports.
     static constexpr bool CanManageMitmServers = true;
 };
 
@@ -240,6 +284,7 @@ constexpr size_t MaxSessions = 16;
 
 /// Port indices for MITM services
 constexpr int PortIndex_LdnMitm = 0;
+/// Port index of the bsd:u MITM (second port registered).
 constexpr int PortIndex_BsdMitm = 1;
 
 /// Custom server manager for MITM (ldn:u + bsd:u)
@@ -247,6 +292,15 @@ class ServerManager final
     : public sf::hipc::
           ServerManager<MITM_PORT_COUNT, LdnMitmManagerOptions, MaxSessions> {
 private:
+    /**
+     * @brief Accepts a MITM session on the given port and creates its
+     *        service object.
+     *
+     * @param port_index PortIndex_LdnMitm or PortIndex_BsdMitm.
+     * @param server Server that owns the pending session.
+     * @return Result of AcceptMitmImpl; an unknown port index aborts
+     *         (AMS_ABORT).
+     */
     ams::Result OnNeedsToAccept(int port_index, Server* server) override;
 };
 
@@ -365,14 +419,28 @@ Result ServerManager::OnNeedsToAccept(int port_index, Server* server) {
 }
 
 // Extra threads for parallel request handling
+
+/// One page-aligned stack per extra worker thread.
 alignas(os::MemoryPageSize) u8
     g_extra_thread_stacks[NumExtraThreads][ThreadStackSize];
+/// Thread objects of the extra MITM worker threads.
 os::ThreadType g_extra_threads[NumExtraThreads];
 
+/**
+ * @brief Thread body: serves MITM IPC requests until the manager stops.
+ *
+ * The thread argument is not used.
+ */
 void LoopServerThread(void* /*unused*/) {
     g_server_manager.LoopProcess();
 }
 
+/**
+ * @brief Entry of the main MITM thread: starts the extra workers, serves
+ *        requests itself, then joins the workers.
+ *
+ * The thread argument is not used.
+ */
 void ProcessForServerOnAllThreads(void* /*unused*/) {
     // Initialize extra threads
     if constexpr (NumExtraThreads > 0) {
@@ -427,14 +495,20 @@ const size_t ThreadStackSize = 0x2000;
 
 /// Thread stack
 alignas(os::MemoryPageSize) u8 g_thread_stack[ThreadStackSize];
+/// Thread object of the ryu:cfg server thread (uses g_thread_stack).
 os::ThreadType g_thread;
 
 /// Server manager options for config service
 struct ConfigServerManagerOptions {
+    /// Size of the per-session IPC pointer buffer (bytes).
     static constexpr size_t PointerBufferSize = 0x100;
+    /// No HIPC domains are used.
     static constexpr size_t MaxDomains = 0;
+    /// No domain objects are used.
     static constexpr size_t MaxDomainObjects = 0;
+    /// Deferred IPC requests are not used.
     static constexpr bool CanDeferInvokeRequest = false;
+    /// ryu:cfg is a regular service, not a MITM.
     static constexpr bool CanManageMitmServers = false;
 };
 
@@ -468,6 +542,7 @@ void LoopConfigServerThread(void* /*unused*/) {
 
 /// Log maintenance thread stack
 alignas(os::MemoryPageSize) u8 g_log_thread_stack[LOG_THREAD_STACK_SIZE];
+/// Thread object of the log maintenance thread.
 os::ThreadType g_log_thread;
 
 /// Log maintenance thread entry point (checks file idle timeout)
@@ -492,6 +567,13 @@ void LoopLogMaintenanceThread(void* /*unused*/) {
 // ========================================================================
 namespace init {
 
+/**
+ * @brief Boot-time initialization: sm, filesystem and SD mount, config and
+ *        logger, game whitelist, then nifm, bsd and socket services.
+ *
+ * Any failure aborts (R_ABORT_UNLESS); config load problems fall back to
+ * defaults.
+ */
 void InitializeSystemModule() {
     // Initialize service manager connection
     R_ABORT_UNLESS(sm::Initialize());
@@ -540,6 +622,8 @@ void InitializeSystemModule() {
     R_ABORT_UNLESS(socketInitialize(&LibnxSocketInitConfig));
 }
 
+/// Flushes logs and shuts down socket, bsd, nifm and the SD mount, in
+/// reverse initialization order.
 void FinalizeSystemModule() {
     LOG_INFO("ryu_ldn_nx sysmodule shutting down");
 
@@ -554,6 +638,7 @@ void FinalizeSystemModule() {
     fs::Unmount("sdmc");
 }
 
+/// Early boot hook: sets up the malloc allocator on g_malloc_buffer.
 void Startup() {
     // Initialize the global malloc allocator
     init::InitializeAllocator(g_malloc_buffer, sizeof(g_malloc_buffer));
@@ -565,6 +650,12 @@ void Startup() {
 // Exit Handler (should never be called)
 // ========================================================================
 
+/**
+ * @brief Process exit hook; must never run for this immortal sysmodule.
+ *
+ * @param rc Exit code (unused); the function aborts.
+ * @return Never returns.
+ */
 void NORETURN Exit(int rc) {
     AMS_UNUSED(rc);
     AMS_ABORT("Exit called by immortal process");
@@ -574,6 +665,11 @@ void NORETURN Exit(int rc) {
 // Main Entry Point
 // ========================================================================
 
+/**
+ * @brief Sysmodule main: registers ryu:cfg, ldn:u and bsd:u, starts the
+ *        config, log-maintenance and MITM threads, then blocks forever on
+ *        the MITM thread.
+ */
 void Main() {
     // Initialize global configuration for IPC service
     ryu_ldn::ipc::InitializeConfig();
@@ -677,34 +773,83 @@ void Main() {
 // clang-tidy flags it, and an exception escaping a delete would terminate
 // mid-heap-operation.
 
+/**
+ * @brief Global operator new, served by the 384 KB expanded heap.
+ *
+ * Returns nullptr on exhaustion instead of throwing (exceptions are not used
+ * in this sysmodule).
+ *
+ * @param size Number of bytes requested.
+ * @return Block address, or nullptr if the heap is exhausted.
+ */
 void* operator new(size_t size) {
     return ams::mitm::Allocate(size);
 }
 
+/**
+ * @brief Nothrow operator new, served by the expanded heap.
+ *
+ * @param size Number of bytes requested.
+ * @return Block address, or nullptr if the heap is exhausted.
+ */
 void* operator new(size_t size, const std::nothrow_t& /*tag*/) noexcept {
     return ams::mitm::Allocate(size);
 }
 
+/**
+ * @brief Global operator delete; returns the block to the expanded heap.
+ *
+ * @param p Block from operator new (must not come from another allocator).
+ */
 void operator delete(void* p) noexcept {
     ams::mitm::Deallocate(p, 0);
 }
 
+/**
+ * @brief Sized operator delete; the size is ignored by the heap.
+ *
+ * @param p Block from operator new.
+ * @param size Size of the block (unused).
+ */
 void operator delete(void* p, size_t size) noexcept {
     ams::mitm::Deallocate(p, size);
 }
 
+/**
+ * @brief Array operator new, served by the expanded heap.
+ *
+ * @param size Number of bytes requested.
+ * @return Block address, or nullptr if the heap is exhausted.
+ */
 void* operator new[](size_t size) {
     return ams::mitm::Allocate(size);
 }
 
+/**
+ * @brief Nothrow array operator new, served by the expanded heap.
+ *
+ * @param size Number of bytes requested.
+ * @return Block address, or nullptr if the heap is exhausted.
+ */
 void* operator new[](size_t size, const std::nothrow_t& /*tag*/) noexcept {
     return ams::mitm::Allocate(size);
 }
 
+/**
+ * @brief Array operator delete; returns the block to the expanded heap.
+ *
+ * @param p Block from operator new[].
+ */
 void operator delete[](void* p) noexcept {
     ams::mitm::Deallocate(p, 0);
 }
 
+/**
+ * @brief Sized array operator delete; the size is ignored by the heap.
+ *
+ * @param p Block from operator new[].
+ * @param size Size of the block (unused).
+ */
 void operator delete[](void* p, size_t size) noexcept {
     ams::mitm::Deallocate(p, size);
 }
@@ -722,10 +867,22 @@ void operator delete[](void* p, size_t size) noexcept {
 // symbols on toolchains that define them (devkitPro/gcc 8.1+), causing a
 // build error whenever std::aligned_alloc or an over-aligned type is used.
 
+/**
+ * @brief Aligned operator new; the requested alignment is ignored.
+ *
+ * @param size Number of bytes requested.
+ * @return Block address, or nullptr if the heap is exhausted.
+ */
 void* operator new(size_t size, std::align_val_t /*alignment*/) {
     return ams::mitm::Allocate(size);
 }
 
+/**
+ * @brief Aligned nothrow operator new; the requested alignment is ignored.
+ *
+ * @param size Number of bytes requested.
+ * @return Block address, or nullptr if the heap is exhausted.
+ */
 void* operator new(
     size_t size,
     std::align_val_t /*alignment*/,
@@ -733,19 +890,42 @@ void* operator new(
     return ams::mitm::Allocate(size);
 }
 
+/**
+ * @brief Aligned operator delete.
+ *
+ * @param p Block from an aligned operator new.
+ */
 void operator delete(void* p, std::align_val_t /*alignment*/) noexcept {
     ams::mitm::Deallocate(p, 0);
 }
 
+/**
+ * @brief Aligned sized operator delete; the size is ignored.
+ *
+ * @param p Block from an aligned operator new.
+ * @param size Size of the block (unused).
+ */
 void operator delete(
     void* p, size_t size, std::align_val_t /*alignment*/) noexcept {
     ams::mitm::Deallocate(p, size);
 }
 
+/**
+ * @brief Aligned array operator new; the requested alignment is ignored.
+ *
+ * @param size Number of bytes requested.
+ * @return Block address, or nullptr if the heap is exhausted.
+ */
 void* operator new[](size_t size, std::align_val_t /*alignment*/) {
     return ams::mitm::Allocate(size);
 }
 
+/**
+ * @brief Aligned nothrow array operator new; alignment is ignored.
+ *
+ * @param size Number of bytes requested.
+ * @return Block address, or nullptr if the heap is exhausted.
+ */
 void* operator new[](
     size_t size,
     std::align_val_t /*alignment*/,
@@ -753,10 +933,21 @@ void* operator new[](
     return ams::mitm::Allocate(size);
 }
 
+/**
+ * @brief Aligned array operator delete.
+ *
+ * @param p Block from an aligned operator new[].
+ */
 void operator delete[](void* p, std::align_val_t /*alignment*/) noexcept {
     ams::mitm::Deallocate(p, 0);
 }
 
+/**
+ * @brief Aligned sized array operator delete; the size is ignored.
+ *
+ * @param p Block from an aligned operator new[].
+ * @param size Size of the block (unused).
+ */
 void operator delete[](
     void* p, size_t size, std::align_val_t /*alignment*/) noexcept {
     ams::mitm::Deallocate(p, size);

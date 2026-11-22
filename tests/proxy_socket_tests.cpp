@@ -25,6 +25,7 @@
 using namespace ams::mitm::bsd;
 namespace bsdt = ryu_ldn::bsd;
 namespace proto = ryu_ldn::protocol;
+/// Test fixture value: Errno.
 using Errno = bsdt::BsdErrno;
 
 namespace {
@@ -32,29 +33,62 @@ namespace {
 // ---------------------------------------------------------------------------
 // Scripted manager callbacks
 // ---------------------------------------------------------------------------
+/// Test double: Call.
 struct Call {
+    /// Test fixture value: src ip.
     uint32_t src_ip = 0;
+    /// Test fixture value: src port.
     uint16_t src_port = 0;
+    /// Test fixture value: dst ip.
     uint32_t dst_ip = 0;
+    /// Test fixture value: dst port.
     uint16_t dst_port = 0;
+    /// Test fixture value: protocol.
     bsdt::ProtocolType protocol = bsdt::ProtocolType::Unspecified;
+    /// Test fixture value: len.
     size_t len = 0;
 };
 
+/// Test double: Script.
 struct Script {
+    /// Test fixture value: data result.
     bool data_result = true;
+    /// Test fixture value: connect result.
     bool connect_result = true;
+    /// Test fixture value: reply result.
     bool reply_result = true;
+    /// Test fixture value: disconnect result.
     bool disconnect_result = true;
-    std::vector<Call> data, connect, reply, disconnect;
+    /// Calls received by the data callback.
+    std::vector<Call> data;
+    /// Calls received by the connect callback.
+    std::vector<Call> connect;
+    /// Calls received by the reply callback.
+    std::vector<Call> reply;
+    /// Calls received by the disconnect callback.
+    std::vector<Call> disconnect;
 
     // When set, the connect callback answers the pending connect on the spot
     // (what the receive thread does when the server's ProxyConnectReply lands).
+    /// Test fixture value: answer to.
     ProxySocket* answer_to = nullptr;
+    /// Test fixture value: answer protocol.
     proto::ProtocolType answer_protocol = proto::ProtocolType::Unspecified;
 };
+/// Test fixture value: g.
 Script g;
 
+/**
+ * @brief Data callback: records the call and returns the scripted result.
+ *
+ * @param sip source IPv4 address
+ * @param sp source port
+ * @param dip destination IPv4 address
+ * @param dp destination port
+ * @param p transport protocol
+ * @param len payload size in bytes, recorded
+ * @return g.data_result, the scripted outcome
+ */
 bool on_data(
     uint32_t sip,
     uint16_t sp,
@@ -67,6 +101,16 @@ bool on_data(
     return g.data_result;
 }
 
+/**
+ * @brief Test helper: on connect.
+ *
+ * @param sip source IPv4 address
+ * @param sp source port
+ * @param dip destination IPv4 address
+ * @param dp destination port
+ * @param p transport protocol
+ * @return g.connect_result, the scripted outcome
+ */
 bool on_connect(
     uint32_t sip,
     uint16_t sp,
@@ -82,6 +126,16 @@ bool on_connect(
     return g.connect_result;
 }
 
+/**
+ * @brief Test helper: on reply.
+ *
+ * @param sip source IPv4 address
+ * @param sp source port
+ * @param dip destination IPv4 address
+ * @param dp destination port
+ * @param p transport protocol
+ * @return g.reply_result, the scripted outcome
+ */
 bool on_reply(
     uint32_t sip,
     uint16_t sp,
@@ -92,6 +146,16 @@ bool on_reply(
     return g.reply_result;
 }
 
+/**
+ * @brief Test helper: on disconnect.
+ *
+ * @param sip source IPv4 address
+ * @param sp source port
+ * @param dip destination IPv4 address
+ * @param dp destination port
+ * @param p transport protocol
+ * @return g.disconnect_result, the scripted outcome
+ */
 bool on_disconnect(
     uint32_t sip,
     uint16_t sp,
@@ -102,6 +166,7 @@ bool on_disconnect(
     return g.disconnect_result;
 }
 
+/// Test helper: reset world.
 void reset_world() {
     ProxySocketManager::GetInstance().Reset();
     g = Script{};
@@ -117,7 +182,14 @@ void reset_world() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Address as the game hands it over / as Bind stores it.
+/**
+ * @brief Address as the game hands it over / as Bind stores it.
+ *
+ * @param addr_field value stored verbatim in sin_addr
+ * @param port host-order port, stored byte-swapped
+ * @param family address family, 2 (AF_INET) by default
+ * @return the filled SockAddrIn
+ */
 bsdt::SockAddrIn addr_with(
     uint32_t addr_field, uint16_t port, uint8_t family = 2) {
     bsdt::SockAddrIn a{};
@@ -128,36 +200,83 @@ bsdt::SockAddrIn addr_with(
     return a;
 }
 
-/// Local (Ryujinx-format) address, as stored by Bind.
+/**
+ * @brief Local (Ryujinx-format) address, as stored by Bind.
+ *
+ * @param ryu_ip IPv4 address in Ryujinx format
+ * @param port host-order port
+ * @return address as Bind() stores it
+ */
 bsdt::SockAddrIn local(uint32_t ryu_ip, uint16_t port) {
     return addr_with(ryu_ip, port);
 }
 
-/// Peer address in network byte order, as sent by the game.
+/**
+ * @brief Peer address in network byte order, as sent by the game.
+ *
+ * @param ryu_ip IPv4 address in Ryujinx format
+ * @param port host-order port
+ * @return address with the IP byte-swapped to network order, as a game sends it
+ */
 bsdt::SockAddrIn peer(uint32_t ryu_ip, uint16_t port) {
     return addr_with(__builtin_bswap32(ryu_ip), port);
 }
 
+/**
+ * @brief Test helper: errval.
+ *
+ * @param r result to inspect
+ * @return the raw result value
+ */
 uint32_t errval(ams::Result r) {
     return r.GetValue();
 }
+/**
+ * @brief Test helper: errno of.
+ *
+ * @param e BSD errno
+ * @return e as an unsigned value, the form stored in a Result
+ */
 uint32_t errno_of(Errno e) {
     return static_cast<uint32_t>(e);
 }
+/**
+ * @brief Test helper: neg.
+ *
+ * @param e BSD errno
+ * @return the negated errno, as the socket calls return it
+ */
 s32 neg(Errno e) {
     return -static_cast<s32>(e);
 }
 
+/// Test fixture value: IP A.
 constexpr uint32_t IP_A = 0x0A720001;
+/// Test fixture value: IP B.
 constexpr uint32_t IP_B = 0x0A720002;
 
+/**
+ * @brief Test helper: make udp.
+ *
+ * @return a new, unbound UDP proxy socket
+ */
 ProxySocket make_udp() {
     return ProxySocket(bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
 }
+/**
+ * @brief Test helper: make tcp.
+ *
+ * @return a new, unbound TCP proxy socket
+ */
 ProxySocket make_tcp() {
     return ProxySocket(bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
 }
 
+/**
+ * @brief Test helper: sleep ms.
+ *
+ * @param ms duration in milliseconds
+ */
 void sleep_ms(int ms) {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
@@ -168,6 +287,10 @@ void sleep_ms(int ms) {
 // State, bind, names
 // ---------------------------------------------------------------------------
 
+/**
+ * @brief Test case: a new socket is unbound blocking and remembers its type and
+ *   flags.
+ */
 TEST(a_new_socket_is_unbound_blocking_and_remembers_its_type_and_flags) {
     reset_world();
     ProxySocket s = make_udp();
@@ -186,6 +309,8 @@ TEST(a_new_socket_is_unbound_blocking_and_remembers_its_type_and_flags) {
     ASSERT_EQ(s.GetPendingDataSize(), static_cast<size_t>(0));
 }
 
+/** @brief Test case: bind stores the address once and only for inet. */
+/** @brief Test case: bind stores the address once and only for inet. */
 TEST(bind_stores_the_address_once_and_only_for_inet) {
     reset_world();
     ProxySocket s = make_udp();
@@ -201,6 +326,10 @@ TEST(bind_stores_the_address_once_and_only_for_inet) {
     ASSERT_EQ(s.GetLocalAddr().GetPort(), static_cast<uint16_t>(5000));
 }
 
+/**
+ * @brief Test case: the local name is zeroed until bound and a null output is a
+ *   fault.
+ */
 TEST(the_local_name_is_zeroed_until_bound_and_a_null_output_is_a_fault) {
     reset_world();
     ProxySocket s = make_udp();
@@ -219,6 +348,8 @@ TEST(the_local_name_is_zeroed_until_bound_and_a_null_output_is_a_fault) {
     ASSERT_EQ(out.GetPort(), static_cast<uint16_t>(5000));
 }
 
+/** @brief Test case: the peer name needs a connected socket. */
+/** @brief Test case: the peer name needs a connected socket. */
 TEST(the_peer_name_needs_a_connected_socket) {
     reset_world();
     ProxySocket s = make_udp();
@@ -237,6 +368,8 @@ TEST(the_peer_name_needs_a_connected_socket) {
 // Connect
 // ---------------------------------------------------------------------------
 
+/** @brief Test case: a udp connect only records the default destination. */
+/** @brief Test case: a udp connect only records the default destination. */
 TEST(a_udp_connect_only_records_the_default_destination) {
     reset_world();
     ProxySocket s = make_udp();
@@ -248,6 +381,8 @@ TEST(a_udp_connect_only_records_the_default_destination) {
     ASSERT_TRUE(g.connect.empty());
 }
 
+/** @brief Test case: connecting a closed socket is a bad descriptor. */
+/** @brief Test case: connecting a closed socket is a bad descriptor. */
 TEST(connecting_a_closed_socket_is_a_bad_descriptor) {
     reset_world();
     ProxySocket s = make_udp();
@@ -255,6 +390,10 @@ TEST(connecting_a_closed_socket_is_a_bad_descriptor) {
     ASSERT_EQ(errval(s.Connect(peer(IP_B, 6000))), errno_of(Errno::BadF));
 }
 
+/**
+ * @brief Test case: a tcp connect is unreachable when the proxy connect cannot
+ *   be sent.
+ */
 TEST(a_tcp_connect_is_unreachable_when_the_proxy_connect_cannot_be_sent) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -265,6 +404,9 @@ TEST(a_tcp_connect_is_unreachable_when_the_proxy_connect_cannot_be_sent) {
     ASSERT_EQ(g.connect.size(), static_cast<size_t>(1));
 }
 
+/**
+ * @brief Test case: a blocking tcp connect completes when the server answers.
+ */
 TEST(a_blocking_tcp_connect_completes_when_the_server_answers) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -279,6 +421,8 @@ TEST(a_blocking_tcp_connect_completes_when_the_server_answers) {
     ASSERT_TRUE(g.connect[0].protocol == bsdt::ProtocolType::Tcp);
 }
 
+/** @brief Test case: a blocking tcp connect times out without an answer. */
+/** @brief Test case: a blocking tcp connect times out without an answer. */
 TEST(a_blocking_tcp_connect_times_out_without_an_answer) {
     reset_world();
     ams::os::g_host_wait_divisor = 1000;  // the 4 s wait lasts 4 ms here
@@ -288,6 +432,10 @@ TEST(a_blocking_tcp_connect_times_out_without_an_answer) {
     ASSERT_TRUE(s.GetState() == ProxySocketState::Bound);
 }
 
+/**
+ * @brief Test case: a blocking tcp connect is refused when the answer carries a
+ *   protocol.
+ */
 TEST(a_blocking_tcp_connect_is_refused_when_the_answer_carries_a_protocol) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -299,6 +447,10 @@ TEST(a_blocking_tcp_connect_is_refused_when_the_answer_carries_a_protocol) {
     ASSERT_TRUE(s.GetState() == ProxySocketState::Bound);
 }
 
+/**
+ * @brief Test case: a non blocking tcp connect returns in progress and stays
+ *   connecting.
+ */
 TEST(a_non_blocking_tcp_connect_returns_in_progress_and_stays_connecting) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -312,6 +464,10 @@ TEST(a_non_blocking_tcp_connect_returns_in_progress_and_stays_connecting) {
 // Send
 // ---------------------------------------------------------------------------
 
+/**
+ * @brief Test case: send needs a connected socket and uses the remembered
+ *   destination.
+ */
 TEST(send_needs_a_connected_socket_and_uses_the_remembered_destination) {
     reset_world();
     ProxySocket s = make_udp();
@@ -326,6 +482,8 @@ TEST(send_needs_a_connected_socket_and_uses_the_remembered_destination) {
     ASSERT_EQ(g.data[0].dst_port, static_cast<uint16_t>(6000));
 }
 
+/** @brief Test case: sendto refuses a shut down closed or unbound socket. */
+/** @brief Test case: sendto refuses a shut down closed or unbound socket. */
 TEST(sendto_refuses_a_shut_down_closed_or_unbound_socket) {
     reset_world();
     const char msg[] = "abc";
@@ -346,6 +504,8 @@ TEST(sendto_refuses_a_shut_down_closed_or_unbound_socket) {
     ASSERT_TRUE(g.data.empty());
 }
 
+/** @brief Test case: sendto validates the payload before routing it. */
+/** @brief Test case: sendto validates the payload before routing it. */
 TEST(sendto_validates_the_payload_before_routing_it) {
     reset_world();
     ProxySocket s = make_udp();
@@ -366,6 +526,8 @@ TEST(sendto_validates_the_payload_before_routing_it) {
     ASSERT_EQ(g.data.size(), static_cast<size_t>(2));
 }
 
+/** @brief Test case: sendto hands the manager the ryujinx format addresses. */
+/** @brief Test case: sendto hands the manager the ryujinx format addresses. */
 TEST(sendto_hands_the_manager_the_ryujinx_format_addresses) {
     reset_world();
     ProxySocket s = make_udp();
@@ -381,6 +543,8 @@ TEST(sendto_hands_the_manager_the_ryujinx_format_addresses) {
     ASSERT_TRUE(g.data[0].protocol == bsdt::ProtocolType::Udp);
 }
 
+/** @brief Test case: sendto is unreachable when the manager cannot send. */
+/** @brief Test case: sendto is unreachable when the manager cannot send. */
 TEST(sendto_is_unreachable_when_the_manager_cannot_send) {
     reset_world();
     ProxySocket s = make_udp();
@@ -396,8 +560,10 @@ TEST(sendto_is_unreachable_when_the_manager_cannot_send) {
 // Receive
 // ---------------------------------------------------------------------------
 
-TEST(
-    recv_on_an_unconnected_socket_is_not_connected_and_on_a_connected_one_reads) {
+/**
+ * @brief Test case: recv not connected when unconnected reads when connected.
+ */
+TEST(recv_not_connected_when_unconnected_reads_when_connected) {
     reset_world();
     ProxySocket s = make_udp();
     uint8_t buf[8];
@@ -411,6 +577,10 @@ TEST(
     ASSERT_EQ(buf[2], static_cast<uint8_t>(3));
 }
 
+/**
+ * @brief Test case: recvfrom returns eof after a read shutdown and faults on a
+ *   null buffer.
+ */
 TEST(recvfrom_returns_eof_after_a_read_shutdown_and_faults_on_a_null_buffer) {
     reset_world();
     ProxySocket s = make_udp();
@@ -420,6 +590,10 @@ TEST(recvfrom_returns_eof_after_a_read_shutdown_and_faults_on_a_null_buffer) {
     ASSERT_EQ(s.RecvFrom(buf, sizeof(buf), 0, nullptr), 0);
 }
 
+/**
+ * @brief Test case: a non blocking or dontwait read of an empty queue would
+ *   block.
+ */
 TEST(a_non_blocking_or_dontwait_read_of_an_empty_queue_would_block) {
     reset_world();
     ProxySocket s = make_udp();
@@ -430,6 +604,10 @@ TEST(a_non_blocking_or_dontwait_read_of_an_empty_queue_would_block) {
     ASSERT_EQ(s.RecvFrom(buf, sizeof(buf), 0, nullptr), neg(Errno::Again));
 }
 
+/**
+ * @brief Test case: recvfrom copies truncates reports the sender and pops
+ *   unless peeking.
+ */
 TEST(recvfrom_copies_truncates_reports_the_sender_and_pops_unless_peeking) {
     reset_world();
     ProxySocket s = make_udp();
@@ -454,6 +632,9 @@ TEST(recvfrom_copies_truncates_reports_the_sender_and_pops_unless_peeking) {
     ASSERT_EQ(s.RecvFrom(buf, sizeof(buf), 0x80, nullptr), neg(Errno::Again));
 }
 
+/**
+ * @brief Test case: an empty destination buffer still consumes the datagram.
+ */
 TEST(an_empty_destination_buffer_still_consumes_the_datagram) {
     reset_world();
     ProxySocket s = make_udp();
@@ -463,6 +644,8 @@ TEST(an_empty_destination_buffer_still_consumes_the_datagram) {
     ASSERT_FALSE(s.HasPendingData());
 }
 
+/** @brief Test case: a blocking read waits for the next datagram. */
+/** @brief Test case: a blocking read waits for the next datagram. */
 TEST(a_blocking_read_waits_for_the_next_datagram) {
     reset_world();
     ProxySocket s = make_udp();
@@ -478,6 +661,10 @@ TEST(a_blocking_read_waits_for_the_next_datagram) {
     ASSERT_EQ(result.load(), 2);
 }
 
+/**
+ * @brief Test case: a shutdown wakes a blocked reader which then reports would
+ *   block.
+ */
 TEST(a_shutdown_wakes_a_blocked_reader_which_then_reports_would_block) {
     reset_world();
     ProxySocket s = make_udp();
@@ -496,6 +683,8 @@ TEST(a_shutdown_wakes_a_blocked_reader_which_then_reports_would_block) {
 // IncomingData
 // ---------------------------------------------------------------------------
 
+/** @brief Test case: incoming data is clamped to the payload limit. */
+/** @brief Test case: incoming data is clamped to the payload limit. */
 TEST(incoming_data_is_clamped_to_the_payload_limit) {
     reset_world();
     ProxySocket s = make_udp();
@@ -504,6 +693,8 @@ TEST(incoming_data_is_clamped_to_the_payload_limit) {
     ASSERT_EQ(s.GetPendingDataSize(), PROXY_SOCKET_MAX_PAYLOAD);
 }
 
+/** @brief Test case: a full receive queue drops the oldest datagram. */
+/** @brief Test case: a full receive queue drops the oldest datagram. */
 TEST(a_full_receive_queue_drops_the_oldest_datagram) {
     reset_world();
     ProxySocket s = make_udp();
@@ -517,6 +708,8 @@ TEST(a_full_receive_queue_drops_the_oldest_datagram) {
     ASSERT_EQ(buf[0], static_cast<uint8_t>(1));  // datagram 0 was dropped
 }
 
+/** @brief Test case: a wrapped queue is still summed and read in order. */
+/** @brief Test case: a wrapped queue is still summed and read in order. */
 TEST(a_wrapped_queue_is_still_summed_and_read_in_order) {
     reset_world();
     ProxySocket s = make_udp();
@@ -535,6 +728,9 @@ TEST(a_wrapped_queue_is_still_summed_and_read_in_order) {
     ASSERT_EQ(s.GetPendingDataSize(), static_cast<size_t>(2));
 }
 
+/**
+ * @brief Test case: an empty or null payload is queued as an empty datagram.
+ */
 TEST(an_empty_or_null_payload_is_queued_as_an_empty_datagram) {
     reset_world();
     ProxySocket s = make_udp();
@@ -544,6 +740,8 @@ TEST(an_empty_or_null_payload_is_queued_as_an_empty_datagram) {
     ASSERT_EQ(s.GetPendingDataSize(), static_cast<size_t>(5));
 }
 
+/** @brief Test case: a verbose logger gets a hex dump of the first bytes. */
+/** @brief Test case: a verbose logger gets a hex dump of the first bytes. */
 TEST(a_verbose_logger_gets_a_hex_dump_of_the_first_bytes) {
     reset_world();
     const std::string path =
@@ -571,6 +769,10 @@ TEST(a_verbose_logger_gets_a_hex_dump_of_the_first_bytes) {
 // Options
 // ---------------------------------------------------------------------------
 
+/**
+ * @brief Test case: setsockopt toggles broadcast and accepts the common
+ *   options.
+ */
 TEST(setsockopt_toggles_broadcast_and_accepts_the_common_options) {
     reset_world();
     ProxySocket s = make_udp();
@@ -613,6 +815,10 @@ TEST(setsockopt_toggles_broadcast_and_accepts_the_common_options) {
             .IsSuccess());
 }
 
+/**
+ * @brief Test case: getsockopt reports type error and broadcast and refuses the
+ *   rest.
+ */
 TEST(getsockopt_reports_type_error_and_broadcast_and_refuses_the_rest) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -684,6 +890,13 @@ TEST(getsockopt_reports_type_error_and_broadcast_and_refuses_the_rest) {
 // ---------------------------------------------------------------------------
 
 namespace {
+/**
+ * @brief Test helper: request from.
+ *
+ * @param ryu_ip source IPv4 address in Ryujinx format
+ * @param port source port
+ * @return ProxyConnectRequest with only the source address set
+ */
 proto::ProxyConnectRequest request_from(uint32_t ryu_ip, uint16_t port) {
     proto::ProxyConnectRequest r{};
     r.info.source_ipv4 = ryu_ip;
@@ -692,6 +905,8 @@ proto::ProxyConnectRequest request_from(uint32_t ryu_ip, uint16_t port) {
 }
 }  // namespace
 
+/** @brief Test case: listen needs a bound tcp socket. */
+/** @brief Test case: listen needs a bound tcp socket. */
 TEST(listen_needs_a_bound_tcp_socket) {
     reset_world();
     ProxySocket udp = make_udp();
@@ -705,8 +920,11 @@ TEST(listen_needs_a_bound_tcp_socket) {
     ASSERT_TRUE(tcp.GetState() == ProxySocketState::Listening);
 }
 
-TEST(
-    accept_only_works_on_a_listening_socket_and_never_blocks_when_non_blocking) {
+/**
+ * @brief Test case: accept needs listening socket and never blocks non
+ *   blocking.
+ */
+TEST(accept_needs_listening_socket_and_never_blocks_non_blocking) {
     reset_world();
     ProxySocket s = make_tcp();
     ASSERT_TRUE(s.Accept(nullptr) == nullptr);
@@ -716,6 +934,9 @@ TEST(
     ASSERT_TRUE(s.Accept(nullptr) == nullptr);
 }
 
+/**
+ * @brief Test case: a connection request on a non listening socket is ignored.
+ */
 TEST(a_connection_request_on_a_non_listening_socket_is_ignored) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -725,6 +946,9 @@ TEST(a_connection_request_on_a_non_listening_socket_is_ignored) {
     ASSERT_TRUE(g.reply.empty());
 }
 
+/**
+ * @brief Test case: an incoming connection is queued confirmed and accepted.
+ */
 TEST(an_incoming_connection_is_queued_confirmed_and_accepted) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -752,6 +976,10 @@ TEST(an_incoming_connection_is_queued_confirmed_and_accepted) {
     ASSERT_TRUE(s.Accept(nullptr) != nullptr);  // no address wanted
 }
 
+/**
+ * @brief Test case: a full accept queue drops new connections but still answers
+ *   the peer.
+ */
 TEST(a_full_accept_queue_drops_new_connections_but_still_answers_the_peer) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -774,6 +1002,8 @@ TEST(a_full_accept_queue_drops_new_connections_but_still_answers_the_peer) {
     ASSERT_EQ(accepted, MAX_ACCEPT_QUEUE);
 }
 
+/** @brief Test case: a blocking accept waits for a connection. */
+/** @brief Test case: a blocking accept waits for a connection. */
 TEST(a_blocking_accept_waits_for_a_connection) {
     reset_world();
     ProxySocket s = make_tcp();
@@ -790,8 +1020,8 @@ TEST(a_blocking_accept_waits_for_a_connection) {
     ASSERT_EQ(from.GetPort(), static_cast<uint16_t>(6000));
 }
 
-TEST(
-    of_two_blocked_acceptors_woken_by_one_connection_one_gets_it_and_one_gets_nothing) {
+/** @brief Test case: two blocked acceptors one connection only one wins. */
+TEST(two_blocked_acceptors_one_connection_only_one_wins) {
     reset_world();
     ProxySocket s = make_tcp();
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
@@ -811,6 +1041,10 @@ TEST(
 // Shutdown / Close / WaitForData
 // ---------------------------------------------------------------------------
 
+/**
+ * @brief Test case: shutdown sets the requested directions and refuses unknown
+ *   ones.
+ */
 TEST(shutdown_sets_the_requested_directions_and_refuses_unknown_ones) {
     reset_world();
     ProxySocket s = make_udp();
@@ -827,6 +1061,10 @@ TEST(shutdown_sets_the_requested_directions_and_refuses_unknown_ones) {
     ASSERT_EQ(s.RecvFrom(buf, 2, 0, nullptr), 0);
 }
 
+/**
+ * @brief Test case: close drops queued data and only announces a connected tcp
+ *   peer.
+ */
 TEST(close_drops_queued_data_and_only_announces_a_connected_tcp_peer) {
     reset_world();
     ProxySocket udp = make_udp();
@@ -854,8 +1092,8 @@ TEST(close_drops_queued_data_and_only_announces_a_connected_tcp_peer) {
     ASSERT_EQ(g.disconnect[0].src_port, static_cast<uint16_t>(5002));
 }
 
-TEST(
-    waiting_for_data_returns_at_once_when_data_is_queued_and_times_out_otherwise) {
+/** @brief Test case: wait for data returns at once if queued else times out. */
+TEST(wait_for_data_returns_at_once_if_queued_else_times_out) {
     reset_world();
     ams::os::g_host_wait_divisor = 1000;
     ProxySocket s = make_udp();
@@ -866,6 +1104,8 @@ TEST(
         0));  // data already there: no wait even without a timeout
 }
 
+/** @brief Test case: waiting without a timeout blocks until data arrives. */
+/** @brief Test case: waiting without a timeout blocks until data arrives. */
 TEST(waiting_without_a_timeout_blocks_until_data_arrives) {
     reset_world();
     ProxySocket s = make_udp();
@@ -878,6 +1118,8 @@ TEST(waiting_without_a_timeout_blocks_until_data_arrives) {
     ASSERT_TRUE(done.load());
 }
 
+/** @brief Test case: the receive event is the one the queue signals. */
+/** @brief Test case: the receive event is the one the queue signals. */
 TEST(the_receive_event_is_the_one_the_queue_signals) {
     reset_world();
     ProxySocket s = make_udp();
@@ -892,11 +1134,23 @@ TEST(the_receive_event_is_the_one_the_queue_signals) {
 
 namespace {
 
+/**
+ * @brief Shorthand for the ProxySocketManager singleton.
+ *
+ * @return the ProxySocketManager singleton
+ */
 ProxySocketManager& mgr() {
     return ProxySocketManager::GetInstance();
 }
 
-/// A manager-owned UDP socket bound to `port` on `sin_addr` (0 = any).
+/**
+ * @brief A manager-owned UDP socket bound to `port` on `sin_addr` (0 = any).
+ *
+ * @param fd descriptor the manager registers the socket under
+ * @param port host-order port to bind
+ * @param sin_addr address stored by Bind(), 0 for any
+ * @return the created socket, or null when the manager refused it
+ */
 ProxySocket* bound_udp(s32 fd, uint16_t port, uint32_t sin_addr = 0) {
     ProxySocket* s = mgr().CreateProxySocket(
         fd, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
@@ -906,6 +1160,18 @@ ProxySocket* bound_udp(s32 fd, uint16_t port, uint32_t sin_addr = 0) {
     return s;
 }
 
+/**
+ * @brief Delivers a datagram to the manager as if it came from the server.
+ *
+ * @param src_ip source IPv4 address
+ * @param src_port source port
+ * @param dst_ip destination IPv4 address
+ * @param dst_port destination port
+ * @param data datagram payload
+ * @param len payload size in bytes
+ * @param p transport protocol
+ * @return result of RouteIncomingData(): true when a socket received the data
+ */
 bool route(
     uint32_t src_ip,
     uint16_t src_port,
@@ -918,6 +1184,14 @@ bool route(
         src_ip, src_port, dst_ip, dst_port, p, data, len);
 }
 
+/**
+ * @brief Test helper: read one.
+ *
+ * @param s socket to read from
+ * @param from receives the sender address, may be null
+ * @return RecvFrom() result: bytes read, or a negative errno (non-blocking
+ * read)
+ */
 int read_one(ProxySocket* s, bsdt::SockAddrIn* from = nullptr) {
     uint8_t buf[2048];
     return s->RecvFrom(buf, sizeof(buf), 0x80, from);
@@ -925,6 +1199,9 @@ int read_one(ProxySocket* s, bsdt::SockAddrIn* from = nullptr) {
 
 }  // namespace
 
+/**
+ * @brief Test case: the manager creates finds and closes sockets by descriptor.
+ */
 TEST(the_manager_creates_finds_and_closes_sockets_by_descriptor) {
     reset_world();
     ASSERT_FALSE(mgr().IsProxySocket(10));
@@ -945,6 +1222,10 @@ TEST(the_manager_creates_finds_and_closes_sockets_by_descriptor) {
     ASSERT_EQ(mgr().GetActiveSocketCount(), static_cast<size_t>(0));
 }
 
+/**
+ * @brief Test case: the manager holds at most max proxy sockets and reuses
+ *   freed slots.
+ */
 TEST(the_manager_holds_at_most_max_proxy_sockets_and_reuses_freed_slots) {
     reset_world();
     for (s32 fd = 0; fd < static_cast<s32>(MAX_PROXY_SOCKETS); fd++) {
@@ -963,6 +1244,8 @@ TEST(the_manager_holds_at_most_max_proxy_sockets_and_reuses_freed_slots) {
     ASSERT_EQ(mgr().GetActiveSocketCount(), MAX_PROXY_SOCKETS);
 }
 
+/** @brief Test case: closing a socket gives its port back to the pool. */
+/** @brief Test case: closing a socket gives its port back to the pool. */
 TEST(closing_a_socket_gives_its_port_back_to_the_pool) {
     reset_world();
     const size_t before = mgr().GetAvailablePortCount(bsdt::ProtocolType::Udp);
@@ -982,6 +1265,8 @@ TEST(closing_a_socket_gives_its_port_back_to_the_pool) {
     ASSERT_EQ(mgr().GetAvailablePortCount(bsdt::ProtocolType::Udp), before);
 }
 
+/** @brief Test case: ports can be reserved once and released. */
+/** @brief Test case: ports can be reserved once and released. */
 TEST(ports_can_be_reserved_once_and_released) {
     reset_world();
     ASSERT_TRUE(mgr().ReservePort(50000, bsdt::ProtocolType::Udp));
@@ -990,6 +1275,10 @@ TEST(ports_can_be_reserved_once_and_released) {
     ASSERT_TRUE(mgr().ReservePort(50000, bsdt::ProtocolType::Udp));
 }
 
+/**
+ * @brief Test case: close all and reset drop every socket and reset clears the
+ *   rest.
+ */
 TEST(close_all_and_reset_drop_every_socket_and_reset_clears_the_rest) {
     reset_world();
     ASSERT_TRUE(bound_udp(1, 5000) != nullptr);
@@ -1014,14 +1303,18 @@ TEST(close_all_and_reset_drop_every_socket_and_reset_clears_the_rest) {
     ASSERT_FALSE(late->HasPendingData());  // ring emptied
 }
 
+/** @brief Test case: the local ip is stored. */
+/** @brief Test case: the local ip is stored. */
 TEST(the_local_ip_is_stored) {
     reset_world();
     mgr().SetLocalIp(IP_A);
     ASSERT_EQ(mgr().GetLocalIp(), IP_A);
 }
 
-TEST(
-    send_helpers_report_false_without_a_callback_and_forward_the_callback_result) {
+/**
+ * @brief Test case: send helpers false without callback else forward result.
+ */
+TEST(send_helpers_false_without_callback_else_forward_result) {
     reset_world();
     auto& m = mgr();
     m.SetSendCallback(nullptr);
@@ -1052,6 +1345,10 @@ TEST(
     ASSERT_FALSE(m.SendProxyDisconnect(1, 2, 3, 4, u));
 }
 
+/**
+ * @brief Test case: a connect response reaches the connecting socket it
+ *   answers.
+ */
 TEST(a_connect_response_reaches_the_connecting_socket_it_answers) {
     reset_world();
     ProxySocket* waiting = mgr().CreateProxySocket(
@@ -1089,6 +1386,8 @@ TEST(a_connect_response_reaches_the_connecting_socket_it_answers) {
     ASSERT_FALSE(mgr().RouteConnectResponse(response));
 }
 
+/** @brief Test case: a connect request reaches the matching tcp listener. */
+/** @brief Test case: a connect request reaches the matching tcp listener. */
 TEST(a_connect_request_reaches_the_matching_tcp_listener) {
     reset_world();
     auto listener = [](s32 fd, uint16_t port, uint32_t sin_addr) {
@@ -1125,6 +1424,10 @@ TEST(a_connect_request_reaches_the_matching_tcp_listener) {
     ASSERT_FALSE(mgr().RouteConnectRequest(request));
 }
 
+/**
+ * @brief Test case: incoming unicast data goes to the socket bound to that
+ *   address and port.
+ */
 TEST(incoming_unicast_data_goes_to_the_socket_bound_to_that_address_and_port) {
     reset_world();
     ProxySocket* a = bound_udp(1, 5000, IP_A);
@@ -1144,8 +1447,10 @@ TEST(incoming_unicast_data_goes_to_the_socket_bound_to_that_address_and_port) {
     ASSERT_EQ(from.sin_len, static_cast<uint8_t>(sizeof(from)));
 }
 
-TEST(
-    a_wildcard_socket_gets_data_for_any_address_but_only_for_its_own_protocol_and_port) {
+/**
+ * @brief Test case: wildcard socket gets any address for its protocol and port.
+ */
+TEST(wildcard_socket_gets_any_address_for_its_protocol_and_port) {
     reset_world();
     ProxySocket* any = bound_udp(1, 5000, 0);
     ProxySocket* tcp = mgr().CreateProxySocket(
@@ -1156,6 +1461,9 @@ TEST(
     ASSERT_FALSE(tcp->HasPendingData());
 }
 
+/**
+ * @brief Test case: broadcast reaches every socket of the subnet on that port.
+ */
 TEST(broadcast_reaches_every_socket_of_the_subnet_on_that_port) {
     reset_world();
     ProxySocket* same_subnet_1 = bound_udp(1, 5000, 0x0A720005);
@@ -1174,6 +1482,8 @@ TEST(broadcast_reaches_every_socket_of_the_subnet_on_that_port) {
     ASSERT_EQ(read_one(same_subnet_1), 2);
 }
 
+/** @brief Test case: a delivery is capped at eight sockets. */
+/** @brief Test case: a delivery is capped at eight sockets. */
 TEST(a_delivery_is_capped_at_eight_sockets) {
     reset_world();
     std::vector<ProxySocket*> sockets;
@@ -1188,8 +1498,11 @@ TEST(a_delivery_is_capped_at_eight_sockets) {
     ASSERT_EQ(delivered, static_cast<size_t>(8));
 }
 
-TEST(
-    data_without_a_listener_is_buffered_then_delivered_on_bind_in_arrival_order) {
+/**
+ * @brief Test case: data without listener buffered then delivered on bind in
+ *   order.
+ */
+TEST(data_without_listener_buffered_then_delivered_on_bind_in_order) {
     reset_world();
     ASSERT_FALSE(route(IP_B, 6000, IP_A, 7000, "A", 1));
     ASSERT_FALSE(route(IP_B, 6001, IP_A, 7001, "B", 1));
@@ -1224,6 +1537,8 @@ TEST(
     ASSERT_FALSE(first->HasPendingData());
 }
 
+/** @brief Test case: delivering with an empty ring does nothing. */
+/** @brief Test case: delivering with an empty ring does nothing. */
 TEST(delivering_with_an_empty_ring_does_nothing) {
     reset_world();
     ProxySocket* s = bound_udp(1, 7000);
@@ -1231,6 +1546,10 @@ TEST(delivering_with_an_empty_ring_does_nothing) {
     ASSERT_FALSE(s->HasPendingData());
 }
 
+/**
+ * @brief Test case: the pending ring keeps the newest sixteen and clamps the
+ *   payload.
+ */
 TEST(the_pending_ring_keeps_the_newest_sixteen_and_clamps_the_payload) {
     reset_world();
     for (uint8_t i = 0; i < 20; i++) {
@@ -1255,6 +1574,11 @@ TEST(the_pending_ring_keeps_the_newest_sixteen_and_clamps_the_payload) {
     ASSERT_FALSE(s->HasPendingData());
 }
 
+/**
+ * @brief Runs the whole suite; the exit code is non-zero if any test failed.
+ *
+ * @return 0 when every test passed, non-zero otherwise
+ */
 int main() {
     return test_report("ProxySocket Tests");
 }

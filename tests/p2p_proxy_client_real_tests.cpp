@@ -42,28 +42,77 @@ namespace proto = ryu_ldn::protocol;
 // Fault injection through --wrap (pass-through while every mode is 0)
 // ---------------------------------------------------------------------------
 namespace {
-std::atomic<int> g_socket_mode{0};   // 1: EMFILE
+/// Fault mode of socket(): 0 pass through, 1 fail with EMFILE.
+std::atomic<int> g_socket_mode{0};  // 1: EMFILE
+/// Fault mode of setsockopt(TCP_NODELAY): 0 pass through, 1 fail.
 std::atomic<int> g_nodelay_mode{0};  // 1: TCP_NODELAY fails
-std::atomic<int> g_getfl_mode{0};    // 1: F_GETFL fails
+/// Fault mode of fcntl(F_GETFL): 0 pass through, 1 fail.
+std::atomic<int> g_getfl_mode{0};  // 1: F_GETFL fails
+/// Fault mode of connect(): 0 pass through, 1 ECONNREFUSED, 2 always
+/// EINPROGRESS.
 std::atomic<int> g_connect_mode{
     0};  // 1: ECONNREFUSED at once, 2: always EINPROGRESS
+/// Fault mode of select(): 0 pass through, 1 times out, 2 error.
 std::atomic<int> g_select_mode{0};  // 1: times out (0), 2: error (-1)
+/// Fault mode of getsockopt(SO_ERROR): 0 pass through, 1 fails, 2 reports
+/// ECONNREFUSED.
 std::atomic<int> g_soerror_mode{
     0};  // 1: getsockopt fails, 2: SO_ERROR = ECONNREFUSED
+/// Fault mode of send(): 0 pass through, 1 fails, 2 sends one byte less.
 std::atomic<int> g_send_mode{0};  // 1: fails, 2: sends one byte less
+/// Fault mode of recv(): 0 pass through, 1 ECONNRESET, 2 EINTR.
 std::atomic<int> g_recv_mode{0};  // 1: ECONNRESET, 2: EINTR
 }  // namespace
 
 extern "C" {
+/**
+ * @brief Real libc socket(), resolved by the linker's --wrap.
+ * @return The new descriptor or -1
+ */
 int __real_socket(int, int, int);
+/**
+ * @brief Real libc setsockopt(), resolved by the linker's --wrap.
+ * @return 0 or -1
+ */
 int __real_setsockopt(int, int, int, const void*, socklen_t);
+/**
+ * @brief Real libc fcntl(), resolved by the linker's --wrap.
+ * @return The fcntl result
+ */
 int __real_fcntl(int, int, ...);
+/**
+ * @brief Real libc connect(), resolved by the linker's --wrap.
+ * @return 0 or -1
+ */
 int __real_connect(int, const struct sockaddr*, socklen_t);
+/**
+ * @brief Real libc select(), resolved by the linker's --wrap.
+ * @return Ready count, 0 on timeout, -1 on error
+ */
 int __real_select(int, fd_set*, fd_set*, fd_set*, struct timeval*);
+/**
+ * @brief Real libc getsockopt(), resolved by the linker's --wrap.
+ * @return 0 or -1
+ */
 int __real_getsockopt(int, int, int, void*, socklen_t*);
+/**
+ * @brief Real libc send(), resolved by the linker's --wrap.
+ * @return Bytes sent or -1
+ */
 ssize_t __real_send(int, const void*, size_t, int);
+/**
+ * @brief Real libc recv(), resolved by the linker's --wrap.
+ * @return Bytes received or -1
+ */
 ssize_t __real_recv(int, void*, size_t, int);
 
+/**
+ * @brief socket() wrapper: fails with EMFILE when armed.
+ * @param domain Address family.
+ * @param type Socket type.
+ * @param protocol Protocol.
+ * @return The descriptor, or -1.
+ */
 int __wrap_socket(int domain, int type, int protocol) {
     if (g_socket_mode == 1) {
         errno = EMFILE;
@@ -72,6 +121,15 @@ int __wrap_socket(int domain, int type, int protocol) {
     return __real_socket(domain, type, protocol);
 }
 
+/**
+ * @brief setsockopt() wrapper: fails TCP_NODELAY when armed.
+ * @param fd Socket descriptor.
+ * @param level Option level.
+ * @param name Option name.
+ * @param value Option value.
+ * @param len Size of value.
+ * @return 0 or -1.
+ */
 int __wrap_setsockopt(
     int fd, int level, int name, const void* value, socklen_t len) {
     if (g_nodelay_mode == 1 && level == IPPROTO_TCP && name == TCP_NODELAY) {
@@ -81,6 +139,12 @@ int __wrap_setsockopt(
     return __real_setsockopt(fd, level, name, value, len);
 }
 
+/**
+ * @brief fcntl() wrapper: fails F_GETFL when armed.
+ * @param fd Descriptor.
+ * @param cmd fcntl command.
+ * @return The fcntl result.
+ */
 int __wrap_fcntl(int fd, int cmd, ...) {
     if (cmd == F_GETFL) {
         if (g_getfl_mode == 1) {
@@ -96,6 +160,13 @@ int __wrap_fcntl(int fd, int cmd, ...) {
     return __real_fcntl(fd, cmd, arg);
 }
 
+/**
+ * @brief connect() wrapper: refuses or stays pending when armed.
+ * @param fd Socket descriptor.
+ * @param addr Destination address.
+ * @param len Size of addr.
+ * @return 0 or -1 (errno set).
+ */
 int __wrap_connect(int fd, const struct sockaddr* addr, socklen_t len) {
     if (g_connect_mode == 1) {
         errno = ECONNREFUSED;
@@ -109,6 +180,15 @@ int __wrap_connect(int fd, const struct sockaddr* addr, socklen_t len) {
     return r;
 }
 
+/**
+ * @brief select() wrapper: times out or fails when armed.
+ * @param n Highest descriptor plus one.
+ * @param r Read set.
+ * @param w Write set.
+ * @param e Exception set.
+ * @param t Timeout.
+ * @return Ready count, 0 on timeout, -1 on error.
+ */
 int __wrap_select(int n, fd_set* r, fd_set* w, fd_set* e, struct timeval* t) {
     if (g_select_mode == 1) {
         return 0;
@@ -120,6 +200,15 @@ int __wrap_select(int n, fd_set* r, fd_set* w, fd_set* e, struct timeval* t) {
     return __real_select(n, r, w, e, t);
 }
 
+/**
+ * @brief getsockopt() wrapper: fails or fakes SO_ERROR when armed.
+ * @param fd Socket descriptor.
+ * @param level Option level.
+ * @param name Option name.
+ * @param[out] value Receives the option value.
+ * @param[in,out] len Size of value.
+ * @return 0 or -1.
+ */
 int __wrap_getsockopt(
     int fd, int level, int name, void* value, socklen_t* len) {
     if (level == SOL_SOCKET && name == SO_ERROR) {
@@ -135,6 +224,14 @@ int __wrap_getsockopt(
     return __real_getsockopt(fd, level, name, value, len);
 }
 
+/**
+ * @brief send() wrapper: fails or truncates by one byte when armed.
+ * @param fd Socket descriptor.
+ * @param data Bytes to send.
+ * @param size Number of bytes.
+ * @param flags send() flags.
+ * @return Bytes sent or -1.
+ */
 ssize_t __wrap_send(int fd, const void* data, size_t size, int flags) {
     if (g_send_mode == 1) {
         errno = EPIPE;
@@ -146,6 +243,14 @@ ssize_t __wrap_send(int fd, const void* data, size_t size, int flags) {
     return __real_send(fd, data, size, flags);
 }
 
+/**
+ * @brief recv() wrapper: fails with ECONNRESET or EINTR when armed.
+ * @param fd Socket descriptor.
+ * @param[out] buf Receives the bytes.
+ * @param size Capacity of buf.
+ * @param flags recv() flags.
+ * @return Bytes received or -1.
+ */
 ssize_t __wrap_recv(int fd, void* buf, size_t size, int flags) {
     if (g_recv_mode == 1) {
         errno = ECONNRESET;
@@ -164,9 +269,13 @@ namespace {
 // ---------------------------------------------------------------------------
 // The "host": a loopback listener plus the accepted connection
 // ---------------------------------------------------------------------------
+/// Loopback listener and its accepted connection, playing the P2P host.
 struct Host {
+    /// Listening socket, or -1.
     int listen_fd = -1;
+    /// Accepted connection to the client, or -1.
     int peer_fd = -1;
+    /// Port the listener is bound to (host byte order).
     uint16_t port = 0;
 
     Host() {
@@ -186,6 +295,10 @@ struct Host {
         ::close(listen_fd);
     }
 
+    /**
+     * @brief Accept the client connection (3 s timeout).
+     * @return true when a peer was accepted.
+     */
     bool accept_peer() {
         pollfd p{listen_fd, POLLIN, 0};
         if (::poll(&p, 1, 3000) <= 0) {
@@ -195,6 +308,7 @@ struct Host {
         return peer_fd >= 0;
     }
 
+    /// @brief Close the accepted connection, if any.
     void close_peer() {
         if (peer_fd >= 0) {
             ::close(peer_fd);
@@ -202,11 +316,20 @@ struct Host {
         }
     }
 
+    /**
+     * @brief Send bytes to the client.
+     * @param bytes Data to write.
+     */
     void write_all(const std::vector<uint8_t>& bytes) const {
         ::write(peer_fd, bytes.data(), bytes.size());
     }
 
     /// Read exactly `n` bytes (what the client sent), or fewer on timeout.
+    /**
+     * @brief Read exactly n bytes (what the client sent), or fewer on timeout.
+     * @param n Number of bytes expected.
+     * @return The bytes read.
+     */
     std::vector<uint8_t> read_n(size_t n) const {
         std::vector<uint8_t> out;
         while (out.size() < n) {
@@ -229,15 +352,27 @@ struct Host {
 // ---------------------------------------------------------------------------
 // What the client forwarded through its packet callback
 // ---------------------------------------------------------------------------
+/// One packet forwarded through the client's packet callback.
 struct Recorded {
+    /// Packet type reported by the callback.
     proto::PacketId type;
+    /// Payload bytes reported by the callback.
     std::vector<uint8_t> bytes;
 };
 
+/// Guards g_rec.
 std::mutex g_rec_mutex;
+/// Signalled whenever a packet is appended to g_rec.
 std::condition_variable g_rec_cv;
+/// Packets forwarded so far, in arrival order.
 std::vector<Recorded> g_rec;
 
+/**
+ * @brief Packet callback handed to the client; records the packet.
+ * @param type Packet type.
+ * @param data Payload.
+ * @param size Payload size in bytes.
+ */
 void on_packet(proto::PacketId type, const void* data, size_t size) {
     std::lock_guard<std::mutex> lock(g_rec_mutex);
     const auto* p = static_cast<const uint8_t*>(data);
@@ -245,6 +380,12 @@ void on_packet(proto::PacketId type, const void* data, size_t size) {
     g_rec_cv.notify_all();
 }
 
+/**
+ * @brief Wait until at least count packets were recorded.
+ * @param count Number of packets to wait for.
+ * @param ms Timeout in milliseconds.
+ * @return true when count was reached in time.
+ */
 bool wait_recorded(size_t count, int ms = 3000) {
     std::unique_lock<std::mutex> lock(g_rec_mutex);
     return g_rec_cv.wait_for(lock, std::chrono::milliseconds(ms), [&] {
@@ -252,12 +393,23 @@ bool wait_recorded(size_t count, int ms = 3000) {
     });
 }
 
+/**
+ * @brief Count the recorded packets.
+ * @return Number of entries in g_rec.
+ */
 size_t recorded_count() {
     std::lock_guard<std::mutex> lock(g_rec_mutex);
     return g_rec.size();
 }
 
 template <class Pred>
+/**
+ * @brief Poll a predicate until it holds or the timeout expires.
+ * @tparam Pred Callable returning bool.
+ * @param pred Condition to wait for.
+ * @param ms Timeout in milliseconds.
+ * @return true when pred held in time.
+ */
 bool wait_until(Pred pred, int ms = 3000) {
     const auto end =
         std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
@@ -276,6 +428,7 @@ void settle() {
     std::this_thread::sleep_for(std::chrono::milliseconds(120));
 }
 
+/// @brief Disarm every fault mode and clear the recorded packets.
 void reset_world() {
     g_socket_mode = g_nodelay_mode = g_getfl_mode = g_connect_mode = 0;
     g_select_mode = g_soerror_mode = g_send_mode = g_recv_mode = 0;
@@ -284,6 +437,13 @@ void reset_world() {
     g_rec.clear();
 }
 
+/**
+ * @brief Encode a framed packet.
+ * @param id Packet type.
+ * @param payload Payload bytes.
+ * @param size Payload size.
+ * @return Header plus payload.
+ */
 std::vector<uint8_t> packet(
     proto::PacketId id, const void* payload, size_t size) {
     std::vector<uint8_t> out(sizeof(proto::LdnHeader) + size);
@@ -299,19 +459,42 @@ std::vector<uint8_t> packet(
     return out;
 }
 
+/**
+ * @brief Build a constant-filled buffer.
+ * @param size Number of bytes.
+ * @param fill Byte value.
+ * @return The buffer.
+ */
 std::vector<uint8_t> blob(size_t size, uint8_t fill) {
     return std::vector<uint8_t>(size, fill);
 }
 
+/**
+ * @brief Append one buffer to another.
+ * @param[in,out] to Destination.
+ * @param from Bytes to append.
+ */
 void append(std::vector<uint8_t>& to, const std::vector<uint8_t>& from) {
     to.insert(to.end(), from.begin(), from.end());
 }
 
-/// Client connected to `host` with its peer accepted; null on failure.
+/**
+ * @brief Connects `client` to `host` and accepts the peer on the host side.
+ *
+ * @param client client under test, connected to 127.0.0.1
+ * @param host local test host that accepts the connection
+ * @return true when Connect() succeeded and the host accepted the peer
+ */
 bool connect_pair(P2pProxyClient& client, Host& host) {
     return client.Connect("127.0.0.1", host.port) && host.accept_peer();
 }
 
+/**
+ * @brief Build a ProxyConfig.
+ * @param ip Virtual IP assigned to the client.
+ * @param mask Subnet mask.
+ * @return The config.
+ */
 proto::ProxyConfig make_config(uint32_t ip, uint32_t mask) {
     proto::ProxyConfig c{};
     c.proxy_ip = ip;
@@ -325,6 +508,7 @@ proto::ProxyConfig make_config(uint32_t ip, uint32_t mask) {
 // Connect
 // ---------------------------------------------------------------------------
 
+/// @test Verify connect refuses a null or malformed address.
 TEST(connect_refuses_a_null_or_malformed_address) {
     reset_world();
     P2pProxyClient client;
@@ -337,6 +521,7 @@ TEST(connect_refuses_a_null_or_malformed_address) {
     ASSERT_FALSE(client.IsConnected());
 }
 
+/// @test Verify connect by string and by bytes reaches the listener.
 TEST(connect_by_string_and_by_bytes_reaches_the_listener) {
     reset_world();
     Host host;
@@ -355,6 +540,7 @@ TEST(connect_by_string_and_by_bytes_reaches_the_listener) {
     ASSERT_TRUE(by_bytes.IsConnected());
 }
 
+/// @test Verify connecting twice keeps the first connection.
 TEST(connecting_twice_keeps_the_first_connection) {
     reset_world();
     Host host;
@@ -364,6 +550,7 @@ TEST(connecting_twice_keeps_the_first_connection) {
     ASSERT_TRUE(client.IsConnected());
 }
 
+/// @test Verify disconnect is a no op when nothing is connected.
 TEST(disconnect_is_a_no_op_when_nothing_is_connected) {
     reset_world();
     P2pProxyClient client;
@@ -373,6 +560,7 @@ TEST(disconnect_is_a_no_op_when_nothing_is_connected) {
     ASSERT_FALSE(client.IsReady());
 }
 
+/// @test Verify a failing socket creation fails the connect and a retry works.
 TEST(a_failing_socket_creation_fails_the_connect_and_a_retry_works) {
     reset_world();
     Host host;
@@ -384,6 +572,7 @@ TEST(a_failing_socket_creation_fails_the_connect_and_a_retry_works) {
     ASSERT_TRUE(connect_pair(client, host));
 }
 
+/// @test Verify connect still succeeds when nodelay or the flags cannot be set.
 TEST(connect_still_succeeds_when_nodelay_or_the_flags_cannot_be_set) {
     reset_world();
     Host host;
@@ -398,6 +587,7 @@ TEST(connect_still_succeeds_when_nodelay_or_the_flags_cannot_be_set) {
     ASSERT_TRUE(connect_pair(client, host));
 }
 
+/// @test Verify a refused connect fails at once.
 TEST(a_refused_connect_fails_at_once) {
     reset_world();
     Host host;
@@ -407,6 +597,7 @@ TEST(a_refused_connect_fails_at_once) {
     ASSERT_FALSE(client.IsConnected());
 }
 
+/// @test Verify a pending connect that completes is accepted.
 TEST(a_pending_connect_that_completes_is_accepted) {
     reset_world();
     Host host;
@@ -416,6 +607,8 @@ TEST(a_pending_connect_that_completes_is_accepted) {
     ASSERT_TRUE(client.IsConnected());
 }
 
+/// @test Verify a pending connect fails on select timeout select error or
+/// socket error.
 TEST(a_pending_connect_fails_on_select_timeout_select_error_or_socket_error) {
     reset_world();
     Host host;
@@ -435,6 +628,7 @@ TEST(a_pending_connect_fails_on_select_timeout_select_error_or_socket_error) {
     ASSERT_FALSE(client.IsConnected());
 }
 
+/// @test Verify a failing receive thread creation fails the connect.
 TEST(a_failing_receive_thread_creation_fails_the_connect) {
     reset_world();
     Host host;
@@ -450,6 +644,8 @@ TEST(a_failing_receive_thread_creation_fails_the_connect) {
 // Authentication and readiness
 // ---------------------------------------------------------------------------
 
+/// @test Verify authentication needs a connection and sends the external proxy
+/// packet.
 TEST(authentication_needs_a_connection_and_sends_the_external_proxy_packet) {
     reset_world();
     Host host;
@@ -475,6 +671,7 @@ TEST(authentication_needs_a_connection_and_sends_the_external_proxy_packet) {
         std::memcmp(got.data() + sizeof(header), &config, sizeof(config)), 0);
 }
 
+/// @test Verify authentication reports a failed or short send.
 TEST(authentication_reports_a_failed_or_short_send) {
     reset_world();
     Host host;
@@ -487,6 +684,8 @@ TEST(authentication_reports_a_failed_or_short_send) {
     ASSERT_FALSE(client.PerformAuth(config));
 }
 
+/// @test Verify ensure ready fails when not connected and times out without a
+/// config.
 TEST(ensure_ready_fails_when_not_connected_and_times_out_without_a_config) {
     reset_world();
     Host host;
@@ -497,6 +696,7 @@ TEST(ensure_ready_fails_when_not_connected_and_times_out_without_a_config) {
     ASSERT_FALSE(client.IsReady());
 }
 
+/// @test Verify ensure ready waits for the proxy config the host sends.
 TEST(ensure_ready_waits_for_the_proxy_config_the_host_sends) {
     reset_world();
     Host host;
@@ -519,6 +719,7 @@ TEST(ensure_ready_waits_for_the_proxy_config_the_host_sends) {
     ASSERT_EQ(recorded_count(), 0u);
 }
 
+/// @test Verify disconnecting wakes a thread waiting for readiness.
 TEST(disconnecting_wakes_a_thread_waiting_for_readiness) {
     reset_world();
     Host host;
@@ -536,6 +737,7 @@ TEST(disconnecting_wakes_a_thread_waiting_for_readiness) {
 // Sending
 // ---------------------------------------------------------------------------
 
+/// @test Verify sending without a connection fails.
 TEST(sending_without_a_connection_fails) {
     reset_world();
     P2pProxyClient client;
@@ -548,6 +750,7 @@ TEST(sending_without_a_connection_fails) {
     ASSERT_FALSE(client.SendProxyDisconnect(proto::ProxyDisconnectMessage{}));
 }
 
+/// @test Verify every proxy message is encoded with its packet type.
 TEST(every_proxy_message_is_encoded_with_its_packet_type) {
     reset_world();
     Host host;
@@ -595,6 +798,7 @@ TEST(every_proxy_message_is_encoded_with_its_packet_type) {
         sizeof(proto::ProxyDisconnectMessage)));
 }
 
+/// @test Verify a failed send is reported.
 TEST(a_failed_send_is_reported) {
     reset_world();
     Host host;
@@ -611,6 +815,7 @@ TEST(a_failed_send_is_reported) {
 // Receiving
 // ---------------------------------------------------------------------------
 
+/// @test Verify every packet type is dispatched in order from one stream.
 TEST(every_packet_type_is_dispatched_in_order_from_one_stream) {
     reset_world();
     Host host;
@@ -658,6 +863,7 @@ TEST(every_packet_type_is_dispatched_in_order_from_one_stream) {
     ASSERT_EQ(g_rec[3].bytes, bye);
 }
 
+/// @test Verify a client without a callback still handles the stream.
 TEST(a_client_without_a_callback_still_handles_the_stream) {
     reset_world();
     Host host;
@@ -689,6 +895,8 @@ TEST(a_client_without_a_callback_still_handles_the_stream) {
     ASSERT_EQ(client.GetVirtualIp(), 0x0A720004u);
 }
 
+/// @test Verify a payload smaller than its struct is ignored but parsing goes
+/// on.
 TEST(a_payload_smaller_than_its_struct_is_ignored_but_parsing_goes_on) {
     reset_world();
     Host host;
@@ -725,6 +933,7 @@ TEST(a_payload_smaller_than_its_struct_is_ignored_but_parsing_goes_on) {
     ASSERT_FALSE(client.IsReady());
 }
 
+/// @test Verify an unknown packet type is skipped.
 TEST(an_unknown_packet_type_is_skipped) {
     reset_world();
     Host host;
@@ -746,6 +955,8 @@ TEST(an_unknown_packet_type_is_skipped) {
     ASSERT_TRUE(g_rec[0].type == proto::PacketId::ProxyConnect);
 }
 
+/// @test Verify a truncated header a bad magic or a truncated packet stop the
+/// parsing.
 TEST(a_truncated_header_a_bad_magic_or_a_truncated_packet_stop_the_parsing) {
     reset_world();
     Host host;
@@ -784,6 +995,7 @@ TEST(a_truncated_header_a_bad_magic_or_a_truncated_packet_stop_the_parsing) {
 // The receive thread ending
 // ---------------------------------------------------------------------------
 
+/// @test Verify the host closing the connection marks the client disconnected.
 TEST(the_host_closing_the_connection_marks_the_client_disconnected) {
     reset_world();
     Host host;
@@ -800,6 +1012,7 @@ TEST(the_host_closing_the_connection_marks_the_client_disconnected) {
     ASSERT_TRUE(client.IsConnected());
 }
 
+/// @test Verify a receive error ends the thread and an interruption does too.
 TEST(a_receive_error_ends_the_thread_and_an_interruption_does_too) {
     reset_world();
     Host host;
@@ -818,6 +1031,7 @@ TEST(a_receive_error_ends_the_thread_and_an_interruption_does_too) {
     client.Disconnect();
 }
 
+/// @test Verify destroying a connected client closes its connection.
 TEST(destroying_a_connected_client_closes_its_connection) {
     reset_world();
     Host host;
@@ -828,6 +1042,10 @@ TEST(destroying_a_connected_client_closes_its_connection) {
     ASSERT_EQ(got.size(), 0u);
 }
 
+/**
+ * @brief Run the registered tests.
+ * @return The harness exit status.
+ */
 int main() {
     return test_report("P2pProxyClient Tests");
 }

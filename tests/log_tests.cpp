@@ -22,10 +22,14 @@ using namespace ryu_ldn::config;
 // Test Framework (minimal, no external dependencies)
 // ============================================================================
 
+/// Number of test cases started so far.
 static int g_tests_run = 0;
+/// Number of test cases that finished without a failed assertion.
 static int g_tests_passed = 0;
+/// Number of test cases that hit a failed assertion.
 static int g_tests_failed = 0;
 
+/// Defines a test function and registers it in the test table.
 #define TEST(name)                             \
     static void test_##name();                 \
     static struct TestRegister_##name {        \
@@ -35,6 +39,7 @@ static int g_tests_failed = 0;
     } g_test_register_##name;                  \
     static void test_##name()
 
+/// Fails the current test when the expression is false.
 #define ASSERT_TRUE(cond)                                      \
     do {                                                       \
         if (!(cond)) {                                         \
@@ -43,8 +48,10 @@ static int g_tests_failed = 0;
         }                                                      \
     } while (0)
 
+/// Fails the current test when the expression is true.
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
+/// Fails the current test when the two values differ.
 #define ASSERT_EQ(a, b)                                                      \
     do {                                                                     \
         auto _a = (a);                                                       \
@@ -56,6 +63,7 @@ static int g_tests_failed = 0;
         }                                                                    \
     } while (0)
 
+/// Fails the current test when the two C strings differ.
 #define ASSERT_STREQ(a, b)                                            \
     do {                                                              \
         const char* _a = (a);                                         \
@@ -67,14 +75,25 @@ static int g_tests_failed = 0;
         }                                                             \
     } while (0)
 
+/// One registered test case (name and body).
 struct TestEntry {
+    /// Test name printed by main().
     const char* name;
+    /// Test body; throws on a failed assertion.
     void (*func)();
 };
 
+/// Table of registered test cases.
 static TestEntry g_tests[128];
+/// Number of entries used in the test table.
 static int g_test_count = 0;
 
+/**
+ * @brief Appends a test case to the test table.
+ *
+ * @param name test name printed by main()
+ * @param func test body; throws on a failed assertion
+ */
 static void register_test(const char* name, void (*func)()) {
     if (g_test_count < 128) {
         g_tests[g_test_count++] = {name, func};
@@ -85,6 +104,7 @@ static void register_test(const char* name, void (*func)()) {
 // Log Level Tests
 // ============================================================================
 
+/** @brief Test case: log level to string. */
 TEST(log_level_to_string) {
     ASSERT_STREQ(log_level_to_string(LogLevel::Error), "ERROR");
     ASSERT_STREQ(log_level_to_string(LogLevel::Warning), "WARN");
@@ -92,6 +112,7 @@ TEST(log_level_to_string) {
     ASSERT_STREQ(log_level_to_string(LogLevel::Verbose), "VERBOSE");
 }
 
+/** @brief Test case: log level from config. */
 TEST(log_level_from_config) {
     ASSERT_EQ(static_cast<uint32_t>(LogLevel::Error), 0u);
     ASSERT_EQ(static_cast<uint32_t>(LogLevel::Warning), 1u);
@@ -103,6 +124,7 @@ TEST(log_level_from_config) {
 // Logger Initialization Tests
 // ============================================================================
 
+/** @brief Test case: logger init disabled. */
 TEST(logger_init_disabled) {
     DebugConfig config{};
     config.enabled = false;
@@ -114,6 +136,7 @@ TEST(logger_init_disabled) {
     ASSERT_FALSE(logger.is_enabled());
 }
 
+/** @brief Test case: logger init enabled. */
 TEST(logger_init_enabled) {
     DebugConfig config{};
     config.enabled = true;
@@ -126,6 +149,7 @@ TEST(logger_init_enabled) {
     ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2u);
 }
 
+/** @brief Test case: logger should log level filtering. */
 TEST(logger_should_log_level_filtering) {
     DebugConfig config{};
     config.enabled = true;
@@ -142,6 +166,7 @@ TEST(logger_should_log_level_filtering) {
     ASSERT_FALSE(logger.should_log(LogLevel::Verbose));
 }
 
+/** @brief Test case: logger should log all levels. */
 TEST(logger_should_log_all_levels) {
     DebugConfig config{};
     config.enabled = true;
@@ -156,6 +181,7 @@ TEST(logger_should_log_all_levels) {
     ASSERT_TRUE(logger.should_log(LogLevel::Verbose));
 }
 
+/** @brief Test case: logger disabled never logs. */
 TEST(logger_disabled_never_logs) {
     DebugConfig config{};
     config.enabled = false;
@@ -174,6 +200,7 @@ TEST(logger_disabled_never_logs) {
 // Log Message Formatting Tests
 // ============================================================================
 
+/** @brief Test case: format log message basic. */
 TEST(format_log_message_basic) {
     char buffer[256];
     format_log_message(buffer, sizeof(buffer), LogLevel::Info, "Test message");
@@ -183,6 +210,7 @@ TEST(format_log_message_basic) {
     ASSERT_TRUE(strstr(buffer, "Test message") != nullptr);
 }
 
+/** @brief Test case: format log message with args. */
 TEST(format_log_message_with_args) {
     char buffer[256];
     format_log_message(
@@ -192,6 +220,7 @@ TEST(format_log_message_with_args) {
     ASSERT_TRUE(strstr(buffer, "Error code: 42") != nullptr);
 }
 
+/** @brief Test case: format log message truncation. */
 TEST(format_log_message_truncation) {
     char buffer[32];
     format_log_message(
@@ -210,6 +239,7 @@ TEST(format_log_message_truncation) {
 // File Logging Tests
 // ============================================================================
 
+/** @brief Test case: logger file output enabled. */
 TEST(logger_file_output_enabled) {
     char log_path[256];
     snprintf(log_path, sizeof(log_path), "/tmp/test_log_%d.log", rand());
@@ -241,6 +271,7 @@ TEST(logger_file_output_enabled) {
     std::remove(log_path);
 }
 
+/** @brief Test case: logger file output disabled. */
 TEST(logger_file_output_disabled) {
     char log_path[256];
     snprintf(
@@ -269,6 +300,7 @@ TEST(logger_file_output_disabled) {
 // Log Buffer Tests
 // ============================================================================
 
+/** @brief Test case: log buffer stores messages. */
 TEST(log_buffer_stores_messages) {
     LogBuffer buffer;
     buffer.init(5);  // Capacity of 5 messages
@@ -280,6 +312,7 @@ TEST(log_buffer_stores_messages) {
     ASSERT_EQ(buffer.count(), 3u);
 }
 
+/** @brief Test case: log buffer circular. */
 TEST(log_buffer_circular) {
     LogBuffer buffer;
     buffer.init(3);  // Small capacity
@@ -297,6 +330,7 @@ TEST(log_buffer_circular) {
     ASSERT_TRUE(strstr(first, "Message 2") != nullptr);
 }
 
+/** @brief Test case: log buffer get all. */
 TEST(log_buffer_get_all) {
     LogBuffer buffer;
     buffer.init(10);
@@ -313,6 +347,7 @@ TEST(log_buffer_get_all) {
     ASSERT_TRUE(strstr(output, "Line 3") != nullptr);
 }
 
+/** @brief Test case: log buffer clear. */
 TEST(log_buffer_clear) {
     LogBuffer buffer;
     buffer.init(5);
@@ -329,6 +364,7 @@ TEST(log_buffer_clear) {
 // Integration with Config Tests
 // ============================================================================
 
+/** @brief Test case: logger from full config. */
 TEST(logger_from_full_config) {
     Config config = get_default_config();
     config.debug.enabled = true;
@@ -345,6 +381,7 @@ TEST(logger_from_full_config) {
     ASSERT_FALSE(logger.should_log(LogLevel::Verbose));
 }
 
+/** @brief Test case: logger default config disabled. */
 TEST(logger_default_config_disabled) {
     Config config = get_default_config();
     // Default should have debug disabled
@@ -359,6 +396,7 @@ TEST(logger_default_config_disabled) {
 // Log Buffer — Additional Coverage
 // ============================================================================
 
+/** @brief Test case: log buffer init capacity clamp. */
 TEST(log_buffer_init_capacity_clamp) {
     LogBuffer buffer;
     buffer.init(MAX_LOG_BUFFER_ENTRIES + 100);  // Exceeds max
@@ -367,6 +405,7 @@ TEST(log_buffer_init_capacity_clamp) {
     ASSERT_EQ(buffer.count(), 0u);
 }
 
+/** @brief Test case: log buffer init small capacity. */
 TEST(log_buffer_init_small_capacity) {
     LogBuffer buffer;
     buffer.init(2);
@@ -378,6 +417,7 @@ TEST(log_buffer_init_small_capacity) {
     ASSERT_EQ(buffer.count(), 2u);
 }
 
+/** @brief Test case: log buffer get by index. */
 TEST(log_buffer_get_by_index) {
     LogBuffer buffer;
     buffer.init(10);
@@ -400,6 +440,7 @@ TEST(log_buffer_get_by_index) {
     ASSERT_TRUE(msg_invalid == nullptr);
 }
 
+/** @brief Test case: log buffer get empty. */
 TEST(log_buffer_get_empty) {
     LogBuffer buffer;
     buffer.init(10);
@@ -408,6 +449,7 @@ TEST(log_buffer_get_empty) {
     ASSERT_TRUE(msg == nullptr);
 }
 
+/** @brief Test case: log buffer add null ignored. */
 TEST(log_buffer_add_null_ignored) {
     LogBuffer buffer;
     buffer.init(10);
@@ -420,6 +462,7 @@ TEST(log_buffer_add_null_ignored) {
 // Logger — Additional Coverage
 // ============================================================================
 
+/** @brief Test case: logger flush without file. */
 TEST(logger_flush_without_file) {
     Logger logger;
     DebugConfig cfg;
@@ -432,6 +475,7 @@ TEST(logger_flush_without_file) {
     logger.flush();
 }
 
+/** @brief Test case: logger flush with file. */
 TEST(logger_flush_with_file) {
     Logger logger;
     DebugConfig cfg;
@@ -449,6 +493,7 @@ TEST(logger_flush_with_file) {
     std::remove(path);
 }
 
+/** @brief Test case: logger check idle timeout no file. */
 TEST(logger_check_idle_timeout_no_file) {
     Logger logger;
     DebugConfig cfg;
@@ -461,6 +506,7 @@ TEST(logger_check_idle_timeout_no_file) {
     logger.check_idle_timeout();
 }
 
+/** @brief Test case: logger check idle timeout with file. */
 TEST(logger_check_idle_timeout_with_file) {
     Logger logger;
     DebugConfig cfg;
@@ -479,12 +525,16 @@ TEST(logger_check_idle_timeout_with_file) {
     std::remove(path);
 }
 
+/** @brief Test case: log level to string unknown. */
 TEST(log_level_to_string_unknown) {
     ASSERT_TRUE(
         std::strcmp(
             log_level_to_string(static_cast<LogLevel>(99)), "UNKNOWN") == 0);
 }
 
+/**
+ * @brief Test case: logger init with explicit null path uses the default path.
+ */
 TEST(logger_init_with_explicit_null_path_uses_the_default_path) {
     DebugConfig config{};
     config.enabled = false;  // disabled: init must not touch the SD-card path
@@ -497,6 +547,9 @@ TEST(logger_init_with_explicit_null_path_uses_the_default_path) {
     ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2u);
 }
 
+/**
+ * @brief Test case: format log message truncates when the prefix does not fit.
+ */
 TEST(format_log_message_truncates_when_the_prefix_does_not_fit) {
     char tiny[4];
     std::memset(tiny, 'x', sizeof(tiny));
@@ -509,6 +562,11 @@ TEST(format_log_message_truncates_when_the_prefix_does_not_fit) {
 // Main
 // ============================================================================
 
+/**
+ * @brief Runs the whole suite; the exit code is non-zero if any test failed.
+ *
+ * @return 0 when every test passed, non-zero otherwise
+ */
 int main() {
     printf("=== ryu_ldn_nx Logging Unit Tests ===\n\n");
     printf("Running %d tests...\n\n", g_test_count);

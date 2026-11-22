@@ -10,9 +10,20 @@
 
 #include <cstdio>
 
+/// Number of tests that ran (incremented by TEST before assertions fail).
 inline int g_tests_passed = 0;
+/// Number of tests aborted by a failed assertion; non-zero fails the run.
 inline int g_tests_failed = 0;
 
+/**
+ * @brief Define and auto-run a test.
+ *
+ * Declares test_<name>() and a static object whose constructor prints the
+ * name, runs the body during static initialization and counts it as passed.
+ * The body follows the macro like a function body.
+ *
+ * @param name Identifier of the test (also printed, stringified).
+ */
 #define TEST(name)                            \
     static void test_##name();                \
     static struct test_##name##_register {    \
@@ -26,6 +37,14 @@ inline int g_tests_failed = 0;
     } test_##name##_instance;                 \
     static void test_##name()
 
+/**
+ * @brief Fail the current test when cond is false.
+ *
+ * Prints the expression with file and line, counts a failure and returns
+ * from the enclosing void test body.
+ *
+ * @param cond Expression expected to be true.
+ */
 #define ASSERT_TRUE(cond)                                         \
     do {                                                          \
         if (!(cond)) {                                            \
@@ -39,8 +58,20 @@ inline int g_tests_failed = 0;
         }                                                         \
     } while (0)
 
+/// @brief Fail the current test when cond is true (see ASSERT_TRUE).
+///
+/// @param cond Expression expected to be false.
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
+/**
+ * @brief Fail the current test when a == b is false.
+ *
+ * Prints both expressions with file and line, counts a failure and returns
+ * from the enclosing void test body.
+ *
+ * @param a Left operand.
+ * @param b Right operand.
+ */
 #define ASSERT_EQ(a, b)                                         \
     do {                                                        \
         if (!((a) == (b))) {                                    \
@@ -55,7 +86,11 @@ inline int g_tests_failed = 0;
         }                                                       \
     } while (0)
 
-/// Print the totals and return the process exit code.
+/**
+ * @brief Print the totals and return the process exit code.
+ * @param[in] suite Suite title printed in the banner.
+ * @return 1 when at least one test failed, otherwise 0.
+ */
 inline int test_report(const char* suite) {
     printf("\n========================================\n");
     printf("  %s\n", suite);

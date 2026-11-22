@@ -85,9 +85,6 @@ bool ConnectionStateMachine::is_transitioning() const {
  * a defined set of valid events that can trigger transitions to
  * specific target states.
  *
- * @param from Current state
- * @param event Event being processed
- * @param[out] to Target state if transition is valid
  * @return true if the transition is valid, false otherwise
  */
 bool ConnectionStateMachine::is_valid_transition(
@@ -288,8 +285,6 @@ bool ConnectionStateMachine::is_valid_transition(
  * Connecting from Backoff/Retrying states. It is reset to zero
  * when reaching the Ready state.
  *
- * @param new_state Target state to transition to
- * @param event Event that triggered this transition
  */
 void ConnectionStateMachine::transition_to(
     ConnectionState new_state, ConnectionEvent event) {
@@ -345,7 +340,6 @@ void ConnectionStateMachine::transition_to(
  * are validated against the current state, and if a valid transition
  * exists, it is executed.
  *
- * @param event Event to process
  * @return TransitionResult indicating success or failure reason
  */
 TransitionResult ConnectionStateMachine::process_event(ConnectionEvent event) {
@@ -377,7 +371,6 @@ TransitionResult ConnectionStateMachine::process_event(ConnectionEvent event) {
  * The callback will be invoked after each successful state transition
  * with the old state, new state, and triggering event.
  *
- * @param callback Function pointer to callback, or nullptr to disable
  */
 void ConnectionStateMachine::set_state_change_callback(
     StateChangeCallback callback) {
@@ -394,7 +387,6 @@ void ConnectionStateMachine::set_state_change_callback(
  * @warning Does not invoke the state change callback
  * @warning Does not update retry count
  *
- * @param state State to force
  */
 void ConnectionStateMachine::force_state(ConnectionState state) {
     // LOG_WARN on every call: this bypasses the state machine's transition
@@ -418,7 +410,6 @@ void ConnectionStateMachine::force_state(ConnectionState state) {
 /**
  * @brief Convert ConnectionState enum to human-readable string
  *
- * @param state State to convert
  * @return Null-terminated string representation
  */
 const char* ConnectionStateMachine::state_to_string(ConnectionState state) {
@@ -449,7 +440,6 @@ const char* ConnectionStateMachine::state_to_string(ConnectionState state) {
 /**
  * @brief Convert ConnectionEvent enum to human-readable string
  *
- * @param event Event to convert
  * @return Null-terminated string representation
  */
 const char* ConnectionStateMachine::event_to_string(ConnectionEvent event) {

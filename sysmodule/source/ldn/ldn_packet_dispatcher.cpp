@@ -361,9 +361,6 @@ void PacketDispatcher::dispatch_typed(
  * | RejectReply      | EmptyHandler    | (none)                     |
  * | SetAcceptPolicy  | PacketHandler   | SetAcceptPolicyRequest (4B)|
  *
- * @param header The packet header (already parsed from wire format)
- * @param data Pointer to payload data following header
- * @param data_size Size of payload data in bytes
  *
  * @note Unknown packet types are silently ignored
  * @note Packets with insufficient data are silently ignored

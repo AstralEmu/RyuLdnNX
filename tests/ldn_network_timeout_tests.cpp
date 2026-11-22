@@ -15,15 +15,23 @@
 
 using ams::mitm::ldn::NetworkTimeout;
 
+/// Test fixture value: fired.
 static int g_fired = 0;
+/// Test helper: on timeout.
 static void on_timeout() {
     g_fired++;
 }
 
+/**
+ * @brief Test helper: set now.
+ *
+ * @param ms value of the host tick clock in milliseconds
+ */
 static void set_now(uint64_t ms) {
     ams::os::g_host_tick_ms = ms;
 }
 
+/** @brief Test case: a new timeout is inactive and never fires. */
 TEST(a_new_timeout_is_inactive_and_never_fires) {
     g_fired = 0;
     NetworkTimeout t(1000, on_timeout);
@@ -32,6 +40,7 @@ TEST(a_new_timeout_is_inactive_and_never_fires) {
     ASSERT_EQ(g_fired, 0);
 }
 
+/** @brief Test case: refresh activates and always returns true. */
 TEST(refresh_activates_and_always_returns_true) {
     g_fired = 0;
     set_now(100);
@@ -40,6 +49,7 @@ TEST(refresh_activates_and_always_returns_true) {
     ASSERT_TRUE(t.IsActive());
 }
 
+/** @brief Test case: it fires exactly when the idle time has elapsed. */
 TEST(it_fires_exactly_when_the_idle_time_has_elapsed) {
     g_fired = 0;
     set_now(100);
@@ -53,6 +63,7 @@ TEST(it_fires_exactly_when_the_idle_time_has_elapsed) {
     ASSERT_FALSE(t.IsActive());
 }
 
+/** @brief Test case: it fires only once until refreshed again. */
 TEST(it_fires_only_once_until_refreshed_again) {
     g_fired = 0;
     set_now(0);
@@ -68,6 +79,7 @@ TEST(it_fires_only_once_until_refreshed_again) {
     ASSERT_EQ(g_fired, 2);
 }
 
+/** @brief Test case: refreshing restarts the countdown. */
 TEST(refreshing_restarts_the_countdown) {
     g_fired = 0;
     set_now(0);
@@ -79,6 +91,7 @@ TEST(refreshing_restarts_the_countdown) {
     ASSERT_TRUE(t.CheckTimeout(190));
 }
 
+/** @brief Test case: disable cancels a pending timeout. */
 TEST(disable_cancels_a_pending_timeout) {
     g_fired = 0;
     set_now(0);
@@ -90,6 +103,7 @@ TEST(disable_cancels_a_pending_timeout) {
     ASSERT_EQ(g_fired, 0);
 }
 
+/** @brief Test case: a null callback never fires and stays active. */
 TEST(a_null_callback_never_fires_and_stays_active) {
     set_now(0);
     NetworkTimeout t(10, nullptr);
@@ -98,11 +112,17 @@ TEST(a_null_callback_never_fires_and_stays_active) {
     ASSERT_TRUE(t.IsActive());
 }
 
+/** @brief Test case: the default idle timeout matches the reference client. */
 TEST(the_default_idle_timeout_matches_the_reference_client) {
     ASSERT_EQ(
         NetworkTimeout::DEFAULT_IDLE_TIMEOUT_MS, static_cast<uint64_t>(6000));
 }
 
+/**
+ * @brief Runs the whole suite; the exit code is non-zero if any test failed.
+ *
+ * @return 0 when every test passed, non-zero otherwise
+ */
 int main() {
     return test_report("NetworkTimeout Tests");
 }

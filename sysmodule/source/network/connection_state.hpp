@@ -183,8 +183,11 @@ public:
     static const char* event_to_string(ConnectionEvent event);
 
 private:
+    /// Current connection state
     ConnectionState m_state;
+    /// Optional callback invoked on every state change
     StateChangeCallback m_callback;
+    /// Retry attempts made since the last successful connection
     uint32_t m_retry_count;
 
     /**

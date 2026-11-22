@@ -108,7 +108,7 @@ typedef struct {
  * @brief Configuration service handle
  */
 typedef struct {
-    Service s;
+    Service s;  ///< libnx service session to the ryu:cfg port
 } RyuLdnConfigService;
 
 /**

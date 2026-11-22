@@ -52,10 +52,6 @@ LdnProxyBuffer::LdnProxyBuffer()
  * 4. Store packet metadata
  * 5. Update write indices
  *
- * @param header Proxy data header (8 bytes)
- * @param data Packet payload
- * @param size Payload size (must be <= MaxPacketDataSize)
- * @return true if packet was queued successfully
  */
 bool LdnProxyBuffer::Write(
     const ryu_ldn::protocol::ProxyDataHeader& header,
@@ -128,11 +124,6 @@ bool LdnProxyBuffer::Write(
  * 4. Copy data to output (respecting max_size)
  * 5. Update read indices
  *
- * @param header Output: packet header
- * @param data Output: payload buffer
- * @param size Output: actual payload size copied
- * @param max_size Maximum bytes to copy to data buffer
- * @return true if packet was read, false if queue empty
  */
 bool LdnProxyBuffer::Read(
     ryu_ldn::protocol::ProxyDataHeader& header,
@@ -183,9 +174,6 @@ bool LdnProxyBuffer::Read(
  * Allows inspection of the next packet's metadata without
  * consuming it from the queue.
  *
- * @param header Output: packet header
- * @param size Output: payload size
- * @return true if packet available
  */
 bool LdnProxyBuffer::Peek(
     ryu_ldn::protocol::ProxyDataHeader& header, size_t& size) const {

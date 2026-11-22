@@ -26,10 +26,14 @@ using namespace ryu_ldn::protocol;
 // Test Framework (minimal, no external dependencies)
 // ============================================================================
 
+/// Number of test cases started so far.
 static int g_tests_run = 0;
+/// Number of test cases that finished without a failed assertion.
 static int g_tests_passed = 0;
+/// Number of test cases that hit a failed assertion.
 static int g_tests_failed = 0;
 
+/// Defines a test function and registers it in the test table.
 #define TEST(name)                             \
     static void test_##name();                 \
     static struct TestRegister_##name {        \
@@ -39,6 +43,7 @@ static int g_tests_failed = 0;
     } g_register_##name;                       \
     static void test_##name()
 
+/// Fails the current test when the expression is false.
 #define ASSERT_TRUE(expr)                                      \
     do {                                                       \
         if (!(expr)) {                                         \
@@ -47,8 +52,10 @@ static int g_tests_failed = 0;
         }                                                      \
     } while (0)
 
+/// Fails the current test when the expression is true.
 #define ASSERT_FALSE(expr) ASSERT_TRUE(!(expr))
 
+/// Fails the current test when the two values differ.
 #define ASSERT_EQ(a, b)                                               \
     do {                                                              \
         auto _a = static_cast<long long>(a);                          \
@@ -60,6 +67,7 @@ static int g_tests_failed = 0;
         }                                                             \
     } while (0)
 
+/// Fails the current test when the two values are equal.
 #define ASSERT_NE(a, b)                                               \
     do {                                                              \
         if ((a) == (b)) {                                             \
@@ -68,20 +76,32 @@ static int g_tests_failed = 0;
         }                                                             \
     } while (0)
 
+/// One registered test case (name and body).
 struct TestEntry {
+    /// Test name printed by main().
     const char* name;
+    /// Test body; throws on a failed assertion.
     void (*func)();
 };
 
+/// Table of registered test cases.
 static TestEntry g_tests[256];
+/// Number of entries used in the test table.
 static int g_test_count = 0;
 
+/**
+ * @brief Appends a test case to the test table.
+ *
+ * @param name test name printed by main()
+ * @param func test body; throws on a failed assertion
+ */
 void register_test(const char* name, void (*func)()) {
     if (g_test_count < 256) {
         g_tests[g_test_count++] = {name, func};
     }
 }
 
+/// Runs every registered test case and counts the outcomes.
 void run_all_tests() {
     printf("Running %d tests...\n\n", g_test_count);
 
@@ -118,6 +138,7 @@ void run_all_tests() {
 // These tests verify at runtime that sizes match expected values
 // ============================================================================
 
+/** @brief Test case: structure sizes. */
 TEST(structure_sizes) {
     // Core structures
     ASSERT_EQ(
@@ -161,6 +182,7 @@ TEST(structure_sizes) {
         sizeof(ProxyDisconnectMessage), 0x14);  // 20 bytes (ProxyInfo + reason)
 }
 
+/** @brief Test case: protocol constants. */
 TEST(protocol_constants) {
     // PROTOCOL_MAGIC = 'R' | ('L' << 8) | ('D' << 16) | ('N' << 24) =
     // 0x4E444C52
@@ -172,6 +194,7 @@ TEST(protocol_constants) {
 // Encode Tests
 // ============================================================================
 
+/** @brief Test case: encode header only packet. */
 TEST(encode_header_only_packet) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -190,6 +213,7 @@ TEST(encode_header_only_packet) {
     ASSERT_EQ(header->data_size, 0);
 }
 
+/** @brief Test case: encode ping packet. */
 TEST(encode_ping_packet) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -215,6 +239,7 @@ TEST(encode_ping_packet) {
     ASSERT_EQ(msg->id, id);
 }
 
+/** @brief Test case: encode initialize packet. */
 TEST(encode_initialize_packet) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -249,6 +274,7 @@ TEST(encode_initialize_packet) {
     ASSERT_EQ(msg->mac_address.data[5], 0x66);
 }
 
+/** @brief Test case: encode buffer too small. */
 TEST(encode_buffer_too_small) {
     uint8_t buffer[4];  // Too small for header
     size_t out_size = 0;
@@ -260,6 +286,7 @@ TEST(encode_buffer_too_small) {
     ASSERT_EQ(out_size, 0);
 }
 
+/** @brief Test case: encode disconnect packet. */
 TEST(encode_disconnect_packet) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -280,6 +307,7 @@ TEST(encode_disconnect_packet) {
 // Decode Tests
 // ============================================================================
 
+/** @brief Test case: decode valid header. */
 TEST(decode_valid_header) {
     uint8_t buffer[sizeof(LdnHeader)];
     LdnHeader* header_in = reinterpret_cast<LdnHeader*>(buffer);
@@ -297,6 +325,7 @@ TEST(decode_valid_header) {
     ASSERT_EQ(header_out.data_size, 8);
 }
 
+/** @brief Test case: decode invalid magic. */
 TEST(decode_invalid_magic) {
     uint8_t buffer[sizeof(LdnHeader)];
     LdnHeader* header_in = reinterpret_cast<LdnHeader*>(buffer);
@@ -311,6 +340,7 @@ TEST(decode_invalid_magic) {
     ASSERT_EQ(result, DecodeResult::InvalidMagic);
 }
 
+/** @brief Test case: decode invalid version. */
 TEST(decode_invalid_version) {
     uint8_t buffer[sizeof(LdnHeader)];
     LdnHeader* header_in = reinterpret_cast<LdnHeader*>(buffer);
@@ -325,6 +355,7 @@ TEST(decode_invalid_version) {
     ASSERT_EQ(result, DecodeResult::InvalidVersion);
 }
 
+/** @brief Test case: decode packet too large. */
 TEST(decode_packet_too_large) {
     uint8_t buffer[sizeof(LdnHeader)];
     LdnHeader* header_in = reinterpret_cast<LdnHeader*>(buffer);
@@ -340,6 +371,7 @@ TEST(decode_packet_too_large) {
     ASSERT_EQ(result, DecodeResult::PacketTooLarge);
 }
 
+/** @brief Test case: decode buffer too small. */
 TEST(decode_buffer_too_small) {
     uint8_t buffer[4] = {0};  // Less than header size, initialized
 
@@ -349,6 +381,7 @@ TEST(decode_buffer_too_small) {
     ASSERT_EQ(result, DecodeResult::BufferTooSmall);
 }
 
+/** @brief Test case: decode ping packet. */
 TEST(decode_ping_packet) {
     uint8_t buffer[sizeof(LdnHeader) + sizeof(PingMessage)];
 
@@ -375,6 +408,7 @@ TEST(decode_ping_packet) {
     ASSERT_EQ(msg_out.id, 99);
 }
 
+/** @brief Test case: check complete packet success. */
 TEST(check_complete_packet_success) {
     uint8_t buffer[sizeof(LdnHeader) + 8];
 
@@ -392,6 +426,7 @@ TEST(check_complete_packet_success) {
     ASSERT_EQ(packet_size, sizeof(LdnHeader) + 8);
 }
 
+/** @brief Test case: check complete packet incomplete. */
 TEST(check_complete_packet_incomplete) {
     uint8_t buffer[sizeof(LdnHeader) + 4];  // Only 4 bytes of payload
 
@@ -412,6 +447,7 @@ TEST(check_complete_packet_incomplete) {
 // Round-Trip Tests (Encode then Decode)
 // ============================================================================
 
+/** @brief Test case: roundtrip ping. */
 TEST(roundtrip_ping) {
     uint8_t buffer[64];
     size_t encoded_size = 0;
@@ -433,6 +469,7 @@ TEST(roundtrip_ping) {
     ASSERT_EQ(msg.id, original_id);
 }
 
+/** @brief Test case: roundtrip disconnect. */
 TEST(roundtrip_disconnect) {
     uint8_t buffer[64];
     size_t encoded_size = 0;
@@ -453,6 +490,7 @@ TEST(roundtrip_disconnect) {
     ASSERT_EQ(msg.disconnect_ip, disconnect_ip);
 }
 
+/** @brief Test case: roundtrip initialize. */
 TEST(roundtrip_initialize) {
     uint8_t buffer[64];
     size_t encoded_size = 0;
@@ -489,6 +527,7 @@ TEST(roundtrip_initialize) {
 // PacketBuffer Tests
 // ============================================================================
 
+/** @brief Test case: buffer empty initially. */
 TEST(buffer_empty_initially) {
     PacketBuffer<1024> buffer;
 
@@ -497,6 +536,7 @@ TEST(buffer_empty_initially) {
     ASSERT_FALSE(buffer.has_complete_packet());
 }
 
+/** @brief Test case: buffer append data. */
 TEST(buffer_append_data) {
     PacketBuffer<1024> buffer;
     uint8_t data[] = {1, 2, 3, 4, 5};
@@ -508,6 +548,7 @@ TEST(buffer_append_data) {
     ASSERT_FALSE(buffer.empty());
 }
 
+/** @brief Test case: buffer complete packet single append. */
 TEST(buffer_complete_packet_single_append) {
     PacketBuffer<1024> buffer;
 
@@ -527,6 +568,7 @@ TEST(buffer_complete_packet_single_append) {
     ASSERT_EQ(peek_size, packet_size);
 }
 
+/** @brief Test case: buffer fragmented packet 2 parts. */
 TEST(buffer_fragmented_packet_2_parts) {
     PacketBuffer<1024> buffer;
 
@@ -546,6 +588,7 @@ TEST(buffer_fragmented_packet_2_parts) {
     ASSERT_TRUE(buffer.has_complete_packet());
 }
 
+/** @brief Test case: buffer fragmented packet n parts. */
 TEST(buffer_fragmented_packet_n_parts) {
     PacketBuffer<1024> buffer;
 
@@ -565,6 +608,7 @@ TEST(buffer_fragmented_packet_n_parts) {
     ASSERT_TRUE(buffer.has_complete_packet());
 }
 
+/** @brief Test case: buffer multiple packets. */
 TEST(buffer_multiple_packets) {
     PacketBuffer<1024> buffer;
 
@@ -600,6 +644,7 @@ TEST(buffer_multiple_packets) {
     ASSERT_TRUE(buffer.empty());
 }
 
+/** @brief Test case: buffer extract packet. */
 TEST(buffer_extract_packet) {
     PacketBuffer<1024> buffer;
 
@@ -625,6 +670,7 @@ TEST(buffer_extract_packet) {
     ASSERT_EQ(msg.id, 77);
 }
 
+/** @brief Test case: buffer overflow protection. */
 TEST(buffer_overflow_protection) {
     PacketBuffer<64> buffer;  // Small buffer
 
@@ -636,6 +682,7 @@ TEST(buffer_overflow_protection) {
     ASSERT_EQ(result, BufferResult::BufferFull);
 }
 
+/** @brief Test case: buffer reset. */
 TEST(buffer_reset) {
     PacketBuffer<1024> buffer;
 
@@ -653,6 +700,7 @@ TEST(buffer_reset) {
 // Utility Function Tests
 // ============================================================================
 
+/** @brief Test case: result to string. */
 TEST(result_to_string) {
     ASSERT_TRUE(
         std::strcmp(
@@ -684,6 +732,7 @@ TEST(result_to_string) {
 // Additional Encode/Decode Tests (Full Coverage)
 // ============================================================================
 
+/** @brief Test case: encode passphrase packet. */
 TEST(encode_passphrase_packet) {
     uint8_t buffer[256];
     size_t out_size = 0;
@@ -712,6 +761,7 @@ TEST(encode_passphrase_packet) {
         std::memcmp(msg->passphrase, passphrase, std::strlen(passphrase)) == 0);
 }
 
+/** @brief Test case: roundtrip passphrase. */
 TEST(roundtrip_passphrase) {
     uint8_t buffer[256];
     size_t encoded_size = 0;
@@ -737,6 +787,7 @@ TEST(roundtrip_passphrase) {
         std::memcmp(msg.passphrase, original, std::strlen(original)) == 0);
 }
 
+/** @brief Test case: encode scan packet. */
 TEST(encode_scan_packet) {
     uint8_t buffer[256];
     size_t out_size = 0;
@@ -754,6 +805,7 @@ TEST(encode_scan_packet) {
     ASSERT_EQ(header->type, static_cast<uint8_t>(PacketId::Scan));
 }
 
+/** @brief Test case: roundtrip scan. */
 TEST(roundtrip_scan) {
     uint8_t buffer[256];
     size_t encoded_size = 0;
@@ -782,6 +834,7 @@ TEST(roundtrip_scan) {
         original.network_id.intent_id.local_communication_id);
 }
 
+/** @brief Test case: encode connect packet. */
 TEST(encode_connect_packet) {
     uint8_t buffer[2048];
     size_t out_size = 0;
@@ -804,6 +857,7 @@ TEST(encode_connect_packet) {
     ASSERT_EQ(out_size, sizeof(LdnHeader) + sizeof(ConnectRequest));
 }
 
+/** @brief Test case: roundtrip connect. */
 TEST(roundtrip_connect) {
     uint8_t buffer[2048];
     size_t encoded_size = 0;
@@ -835,6 +889,7 @@ TEST(roundtrip_connect) {
     ASSERT_EQ(decoded.option_unknown, original.option_unknown);
 }
 
+/** @brief Test case: encode create access point packet. */
 TEST(encode_create_access_point_packet) {
     uint8_t buffer[512];
     size_t out_size = 0;
@@ -865,6 +920,7 @@ TEST(encode_create_access_point_packet) {
     ASSERT_EQ(header->type, static_cast<uint8_t>(PacketId::CreateAccessPoint));
 }
 
+/** @brief Test case: roundtrip create access point. */
 TEST(roundtrip_create_access_point) {
     uint8_t buffer[512];
     size_t encoded_size = 0;
@@ -906,6 +962,7 @@ TEST(roundtrip_create_access_point) {
     ASSERT_TRUE(std::memcmp(decoded_data, original_data, decoded_size) == 0);
 }
 
+/** @brief Test case: encode set accept policy packet. */
 TEST(encode_set_accept_policy_packet) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -920,6 +977,7 @@ TEST(encode_set_accept_policy_packet) {
     ASSERT_EQ(header->type, static_cast<uint8_t>(PacketId::SetAcceptPolicy));
 }
 
+/** @brief Test case: roundtrip set accept policy. */
 TEST(roundtrip_set_accept_policy) {
     uint8_t buffer[64];
     size_t encoded_size = 0;
@@ -940,6 +998,7 @@ TEST(roundtrip_set_accept_policy) {
         decoded.accept_policy, static_cast<uint8_t>(AcceptPolicy::BlackList));
 }
 
+/** @brief Test case: encode set advertise data packet. */
 TEST(encode_set_advertise_data_packet) {
     uint8_t buffer[512];
     size_t out_size = 0;
@@ -957,6 +1016,7 @@ TEST(encode_set_advertise_data_packet) {
     ASSERT_EQ(header->data_size, static_cast<int32_t>(sizeof(data)));
 }
 
+/** @brief Test case: roundtrip set advertise data. */
 TEST(roundtrip_set_advertise_data) {
     uint8_t buffer[512];
     size_t encoded_size = 0;
@@ -984,6 +1044,7 @@ TEST(roundtrip_set_advertise_data) {
     ASSERT_TRUE(std::memcmp(decoded_data, original_data, decoded_size) == 0);
 }
 
+/** @brief Test case: encode proxy data packet. */
 TEST(encode_proxy_data_packet) {
     uint8_t buffer[512];
     size_t out_size = 0;
@@ -1009,6 +1070,7 @@ TEST(encode_proxy_data_packet) {
     ASSERT_EQ(header->type, static_cast<uint8_t>(PacketId::ProxyData));
 }
 
+/** @brief Test case: roundtrip proxy data. */
 TEST(roundtrip_proxy_data) {
     uint8_t buffer[512];
     size_t encoded_size = 0;
@@ -1053,6 +1115,7 @@ TEST(roundtrip_proxy_data) {
     ASSERT_TRUE(std::memcmp(decoded_data, original_payload, decoded_size) == 0);
 }
 
+/** @brief Test case: decode proxy connect packet. */
 TEST(decode_proxy_connect_packet) {
     uint8_t buffer[64];
 
@@ -1086,6 +1149,7 @@ TEST(decode_proxy_connect_packet) {
     ASSERT_EQ(decoded_req.info.dest_port, 5678u);
 }
 
+/** @brief Test case: decode proxy connect reply packet. */
 TEST(decode_proxy_connect_reply_packet) {
     uint8_t buffer[64];
 
@@ -1117,6 +1181,7 @@ TEST(decode_proxy_connect_reply_packet) {
     ASSERT_EQ(decoded_resp.info.dest_ipv4, 0x0A000001u);
 }
 
+/** @brief Test case: decode proxy disconnect packet. */
 TEST(decode_proxy_disconnect_packet) {
     uint8_t buffer[64];
 
@@ -1150,6 +1215,7 @@ TEST(decode_proxy_disconnect_packet) {
         static_cast<int>(DisconnectReason::User));
 }
 
+/** @brief Test case: decode reject packet. */
 TEST(decode_reject_packet) {
     uint8_t buffer[64];
 
@@ -1181,6 +1247,7 @@ TEST(decode_reject_packet) {
         static_cast<int>(DisconnectReason::Rejected));
 }
 
+/** @brief Test case: encode network info packet. */
 TEST(encode_network_info_packet) {
     uint8_t buffer[2048];
     size_t out_size = 0;
@@ -1202,6 +1269,7 @@ TEST(encode_network_info_packet) {
     ASSERT_EQ(header->type, static_cast<uint8_t>(PacketId::Connected));
 }
 
+/** @brief Test case: roundtrip network info. */
 TEST(roundtrip_network_info) {
     uint8_t buffer[2048];
     size_t encoded_size = 0;
@@ -1239,6 +1307,7 @@ TEST(roundtrip_network_info) {
     ASSERT_EQ(decoded.common.channel, original.common.channel);
 }
 
+/** @brief Test case: encode scan reply end packet. */
 TEST(encode_scan_reply_end_packet) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -1254,6 +1323,7 @@ TEST(encode_scan_reply_end_packet) {
     ASSERT_EQ(header->data_size, 0);
 }
 
+/** @brief Test case: encode reject reply packet. */
 TEST(encode_reject_reply_packet) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -1268,6 +1338,7 @@ TEST(encode_reject_reply_packet) {
     ASSERT_EQ(header->data_size, 0);
 }
 
+/** @brief Test case: encode raw packet. */
 TEST(encode_raw_packet) {
     uint8_t buffer[128];
     size_t out_size = 0;
@@ -1294,6 +1365,7 @@ TEST(encode_raw_packet) {
         0);
 }
 
+/** @brief Test case: roundtrip raw. */
 TEST(roundtrip_raw) {
     uint8_t buffer[128];
     size_t encoded_size = 0;
@@ -1322,6 +1394,7 @@ TEST(roundtrip_raw) {
     ASSERT_TRUE(std::memcmp(decoded_data, original_data, decoded_size) == 0);
 }
 
+/** @brief Test case: encode header function. */
 TEST(encode_header_function) {
     uint8_t buffer[32];
 
@@ -1336,6 +1409,7 @@ TEST(encode_header_function) {
     ASSERT_EQ(header->data_size, 100);
 }
 
+/** @brief Test case: get packet size functions. */
 TEST(get_packet_size_functions) {
     ASSERT_EQ(get_packet_size(0), sizeof(LdnHeader));
     ASSERT_EQ(get_packet_size(100), sizeof(LdnHeader) + 100);
@@ -1347,6 +1421,7 @@ TEST(get_packet_size_functions) {
         sizeof(LdnHeader) + sizeof(NetworkInfo));
 }
 
+/** @brief Test case: has header function. */
 TEST(has_header_function) {
     ASSERT_FALSE(has_header(0));
     ASSERT_FALSE(has_header(5));
@@ -1355,6 +1430,7 @@ TEST(has_header_function) {
     ASSERT_TRUE(has_header(sizeof(LdnHeader) + 100));
 }
 
+/** @brief Test case: get packet type function. */
 TEST(get_packet_type_function) {
     uint8_t buffer[32];
     LdnHeader* header = reinterpret_cast<LdnHeader*>(buffer);
@@ -1367,6 +1443,7 @@ TEST(get_packet_type_function) {
     ASSERT_EQ(type, PacketId::ProxyData);
 }
 
+/** @brief Test case: get payload size function. */
 TEST(get_payload_size_function) {
     uint8_t buffer[32];
     LdnHeader* header = reinterpret_cast<LdnHeader*>(buffer);
@@ -1379,6 +1456,7 @@ TEST(get_payload_size_function) {
     ASSERT_EQ(size, 42);
 }
 
+/** @brief Test case: get payload ptr function. */
 TEST(get_payload_ptr_function) {
     uint8_t buffer[64];
     std::memset(buffer, 0, sizeof(buffer));
@@ -1392,6 +1470,7 @@ TEST(get_payload_ptr_function) {
     ASSERT_EQ(payload[1], 0xAD);
 }
 
+/** @brief Test case: decode raw empty payload. */
 TEST(decode_raw_empty_payload) {
     uint8_t buffer[32];
 
@@ -1413,6 +1492,7 @@ TEST(decode_raw_empty_payload) {
     ASSERT_TRUE(data == nullptr);
 }
 
+/** @brief Test case: encode with data template. */
 TEST(encode_with_data_template) {
     uint8_t buffer[256];
     size_t out_size = 0;
@@ -1441,6 +1521,7 @@ TEST(encode_with_data_template) {
         static_cast<int32_t>(sizeof(ProxyInfo) + sizeof(extra)));
 }
 
+/** @brief Test case: decode with data template. */
 TEST(decode_with_data_template) {
     uint8_t buffer[256];
     size_t encoded_size = 0;
@@ -1483,6 +1564,7 @@ TEST(decode_with_data_template) {
         std::memcmp(decoded_extra, original_extra, decoded_extra_size) == 0);
 }
 
+/** @brief Test case: all packet id to string. */
 TEST(all_packet_id_to_string) {
     // Test all PacketId values have valid strings
     ASSERT_TRUE(
@@ -1569,6 +1651,7 @@ TEST(all_packet_id_to_string) {
             packet_id_to_string(PacketId::NetworkError), "NetworkError") == 0);
 }
 
+/** @brief Test case: all decode result to string. */
 TEST(all_decode_result_to_string) {
     ASSERT_TRUE(
         std::strcmp(
@@ -1595,6 +1678,7 @@ TEST(all_decode_result_to_string) {
             "IncompletePacket") == 0);
 }
 
+/** @brief Test case: all encode result to string. */
 TEST(all_encode_result_to_string) {
     ASSERT_TRUE(
         std::strcmp(
@@ -1613,6 +1697,7 @@ TEST(all_encode_result_to_string) {
 // Additional Structure Size Tests
 // ============================================================================
 
+/** @brief Test case: additional structure sizes. */
 TEST(additional_structure_sizes) {
     // Verify all structure sizes match RyuLDN protocol
     ASSERT_EQ(
@@ -1628,6 +1713,7 @@ TEST(additional_structure_sizes) {
 // Error Handling Tests
 // ============================================================================
 
+/** @brief Test case: encode buffer too small for payload. */
 TEST(encode_buffer_too_small_for_payload) {
     uint8_t buffer[16];  // Too small for NetworkInfo
     size_t out_size = 0;
@@ -1640,6 +1726,7 @@ TEST(encode_buffer_too_small_for_payload) {
     ASSERT_EQ(out_size, 0u);
 }
 
+/** @brief Test case: decode incomplete packet data. */
 TEST(decode_incomplete_packet_data) {
     uint8_t buffer[32];
 
@@ -1660,6 +1747,7 @@ TEST(decode_incomplete_packet_data) {
     ASSERT_EQ(result, DecodeResult::IncompletePacket);
 }
 
+/** @brief Test case: decode with data no extra. */
 TEST(decode_with_data_no_extra) {
     uint8_t buffer[128];
     size_t encoded_size = 0;
@@ -1695,6 +1783,7 @@ TEST(decode_with_data_no_extra) {
 // PacketBuffer Additional Coverage
 // ============================================================================
 
+/** @brief Test case: buffer initial state. */
 TEST(buffer_initial_state) {
     PacketBuffer<256> buf;
     ASSERT_TRUE(buf.empty());
@@ -1702,6 +1791,7 @@ TEST(buffer_initial_state) {
     ASSERT_EQ(buf.available(), 256u);
 }
 
+/** @brief Test case: buffer size and available after append. */
 TEST(buffer_size_and_available_after_append) {
     PacketBuffer<256> buf;
     uint8_t data[10] = {};
@@ -1711,6 +1801,7 @@ TEST(buffer_size_and_available_after_append) {
     ASSERT_TRUE(!buf.empty());
 }
 
+/** @brief Test case: buffer data ptr. */
 TEST(buffer_data_ptr) {
     PacketBuffer<256> buf;
     ASSERT_TRUE(buf.data() != nullptr);
@@ -1720,6 +1811,7 @@ TEST(buffer_data_ptr) {
     ASSERT_EQ(buf.data()[4], 5);
 }
 
+/** @brief Test case: buffer append zero size. */
 TEST(buffer_append_zero_size) {
     PacketBuffer<256> buf;
     BufferResult r = buf.append(nullptr, 0);
@@ -1727,6 +1819,7 @@ TEST(buffer_append_zero_size) {
     ASSERT_EQ(buf.size(), 0u);
 }
 
+/** @brief Test case: buffer append overflow. */
 TEST(buffer_append_overflow) {
     PacketBuffer<16> buf;
     uint8_t data[20] = {};
@@ -1734,6 +1827,7 @@ TEST(buffer_append_overflow) {
     ASSERT_EQ(r, BufferResult::BufferFull);
 }
 
+/** @brief Test case: buffer has complete packet too small. */
 TEST(buffer_has_complete_packet_too_small) {
     PacketBuffer<256> buf;
     uint8_t hdr[4] = {};  // Only 4 bytes, need 12 for header
@@ -1741,6 +1835,7 @@ TEST(buffer_has_complete_packet_too_small) {
     ASSERT_TRUE(!buf.has_complete_packet());
 }
 
+/** @brief Test case: buffer peek packet info incomplete. */
 TEST(buffer_peek_packet_info_incomplete) {
     PacketBuffer<256> buf;
     size_t pkt_size = 0;
@@ -1749,6 +1844,7 @@ TEST(buffer_peek_packet_info_incomplete) {
     ASSERT_EQ(pkt_size, 0u);
 }
 
+/** @brief Test case: buffer peek packet info invalid magic. */
 TEST(buffer_peek_packet_info_invalid_magic) {
     PacketBuffer<256> buf;
     uint8_t garbage[12] = {};
@@ -1758,6 +1854,7 @@ TEST(buffer_peek_packet_info_invalid_magic) {
     ASSERT_EQ(r, BufferResult::InvalidPacket);
 }
 
+/** @brief Test case: buffer peek packet info valid. */
 TEST(buffer_peek_packet_info_valid) {
     PacketBuffer<256> buf;
     LdnHeader hdr{};
@@ -1774,6 +1871,7 @@ TEST(buffer_peek_packet_info_valid) {
     ASSERT_EQ(pkt_size, sizeof(LdnHeader) + sizeof(PingMessage));
 }
 
+/** @brief Test case: buffer peek packet nullptr. */
 TEST(buffer_peek_packet_nullptr) {
     PacketBuffer<256> buf;
     size_t pkt_size = 0;
@@ -1782,6 +1880,7 @@ TEST(buffer_peek_packet_nullptr) {
     ASSERT_EQ(pkt_size, 0u);
 }
 
+/** @brief Test case: buffer peek packet valid. */
 TEST(buffer_peek_packet_valid) {
     PacketBuffer<256> buf;
     LdnHeader hdr{};
@@ -1796,6 +1895,7 @@ TEST(buffer_peek_packet_valid) {
     ASSERT_EQ(pkt_size, sizeof(LdnHeader));
 }
 
+/** @brief Test case: buffer peek packet type. */
 TEST(buffer_peek_packet_type) {
     PacketBuffer<256> buf;
     LdnHeader hdr{};
@@ -1808,12 +1908,14 @@ TEST(buffer_peek_packet_type) {
     ASSERT_EQ(t, PacketId::Scan);
 }
 
+/** @brief Test case: buffer peek packet type empty. */
 TEST(buffer_peek_packet_type_empty) {
     PacketBuffer<256> buf;
     PacketId t = buf.peek_packet_type();
     ASSERT_EQ(t, PacketId::Initialize);
 }
 
+/** @brief Test case: buffer consume zero. */
 TEST(buffer_consume_zero) {
     PacketBuffer<256> buf;
     uint8_t data[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -1822,6 +1924,7 @@ TEST(buffer_consume_zero) {
     ASSERT_EQ(buf.size(), 10u);
 }
 
+/** @brief Test case: buffer consume all. */
 TEST(buffer_consume_all) {
     PacketBuffer<256> buf;
     uint8_t data[10] = {};
@@ -1831,6 +1934,7 @@ TEST(buffer_consume_all) {
     ASSERT_TRUE(buf.empty());
 }
 
+/** @brief Test case: buffer consume partial shift. */
 TEST(buffer_consume_partial_shift) {
     PacketBuffer<256> buf;
     uint8_t data[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -1841,6 +1945,7 @@ TEST(buffer_consume_partial_shift) {
     ASSERT_EQ(buf.data()[6], 10);
 }
 
+/** @brief Test case: buffer extract packet success. */
 TEST(buffer_extract_packet_success) {
     PacketBuffer<256> buf;
     LdnHeader hdr{};
@@ -1858,6 +1963,7 @@ TEST(buffer_extract_packet_success) {
     ASSERT_TRUE(buf.empty());
 }
 
+/** @brief Test case: buffer extract packet too small. */
 TEST(buffer_extract_packet_too_small) {
     PacketBuffer<256> buf;
     LdnHeader hdr{};
@@ -1873,6 +1979,7 @@ TEST(buffer_extract_packet_too_small) {
     ASSERT_EQ(r, BufferResult::BufferFull);
 }
 
+/** @brief Test case: buffer discard until valid. */
 TEST(buffer_discard_until_valid) {
     PacketBuffer<256> buf;
     // 3 garbage bytes + valid header
@@ -1891,12 +1998,14 @@ TEST(buffer_discard_until_valid) {
     ASSERT_TRUE(buf.has_complete_packet());
 }
 
+/** @brief Test case: buffer discard until valid empty. */
 TEST(buffer_discard_until_valid_empty) {
     PacketBuffer<256> buf;
     size_t discarded = buf.discard_until_valid();
     ASSERT_EQ(discarded, 0u);
 }
 
+/** @brief Test case: buffer write ptr and advance. */
 TEST(buffer_write_ptr_and_advance) {
     PacketBuffer<256> buf;
     uint8_t* wptr = buf.write_ptr();
@@ -1913,17 +2022,20 @@ TEST(buffer_write_ptr_and_advance) {
     ASSERT_TRUE(buf.has_complete_packet());
 }
 
+/** @brief Test case: buffer advance write overflow. */
 TEST(buffer_advance_write_overflow) {
     PacketBuffer<16> buf;
     buf.advance_write(20);      // exceeds capacity
     ASSERT_EQ(buf.size(), 0u);  // should not advance
 }
 
+/** @brief Test case: buffer capacity. */
 TEST(buffer_capacity) {
     ASSERT_EQ(PacketBuffer<256>::capacity(), 256u);
     ASSERT_EQ(PacketBuffer<512>::capacity(), 512u);
 }
 
+/** @brief Test case: buffer packet too large. */
 TEST(buffer_packet_too_large) {
     PacketBuffer<256> buf;
     // Create a header with data_size that exceeds buffer
@@ -1942,6 +2054,7 @@ TEST(buffer_packet_too_large) {
 // Protocol Encode/Decode Additional Coverage
 // ============================================================================
 
+/** @brief Test case: encode header only packet types. */
 TEST(encode_header_only_packet_types) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -1960,6 +2073,7 @@ TEST(encode_header_only_packet_types) {
     ASSERT_EQ(r, EncodeResult::Success);
 }
 
+/** @brief Test case: encode header too small. */
 TEST(encode_header_too_small) {
     uint8_t buffer[4];
     size_t out_size = 99;
@@ -1968,6 +2082,7 @@ TEST(encode_header_too_small) {
     ASSERT_EQ(out_size, 0u);
 }
 
+/** @brief Test case: encode with data buffer too small. */
 TEST(encode_with_data_buffer_too_small) {
     uint8_t buffer[8];
     PingMessage msg{};
@@ -1978,6 +2093,7 @@ TEST(encode_with_data_buffer_too_small) {
     ASSERT_EQ(out_size, 0u);
 }
 
+/** @brief Test case: encode with data with extra. */
 TEST(encode_with_data_with_extra) {
     uint8_t buffer[256];
     PingMessage msg{};
@@ -1996,6 +2112,7 @@ TEST(encode_with_data_with_extra) {
         out_size, sizeof(LdnHeader) + sizeof(PingMessage) + sizeof(extra));
 }
 
+/** @brief Test case: encode with data null extra. */
 TEST(encode_with_data_null_extra) {
     uint8_t buffer[256];
     PingMessage msg{};
@@ -2005,6 +2122,7 @@ TEST(encode_with_data_null_extra) {
     ASSERT_EQ(r, EncodeResult::Success);
 }
 
+/** @brief Test case: encode raw null data zero size. */
 TEST(encode_raw_null_data_zero_size) {
     uint8_t buffer[64];
     size_t out_size = 0;
@@ -2019,6 +2137,7 @@ TEST(encode_raw_null_data_zero_size) {
     ASSERT_EQ(out_size, sizeof(LdnHeader));
 }
 
+/** @brief Test case: encode raw buffer too small. */
 TEST(encode_raw_buffer_too_small) {
     uint8_t buffer[4];
     uint8_t data[10] = {};
@@ -2034,6 +2153,7 @@ TEST(encode_raw_buffer_too_small) {
     ASSERT_EQ(out_size, 0u);
 }
 
+/** @brief Test case: encode raw with data. */
 TEST(encode_raw_with_data) {
     uint8_t buffer[256];
     uint8_t data[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -2052,6 +2172,7 @@ TEST(encode_raw_with_data) {
     ASSERT_EQ(std::memcmp(buffer + sizeof(LdnHeader), data, sizeof(data)), 0);
 }
 
+/** @brief Test case: encode convenience functions. */
 TEST(encode_convenience_functions) {
     uint8_t buffer[2048];
     size_t out_size = 0;
@@ -2112,6 +2233,7 @@ TEST(encode_convenience_functions) {
     ASSERT_EQ(r, EncodeResult::Success);
 }
 
+/** @brief Test case: decode header buffer too small. */
 TEST(decode_header_buffer_too_small) {
     uint8_t buffer[4] = {};
     LdnHeader hdr;
@@ -2119,6 +2241,7 @@ TEST(decode_header_buffer_too_small) {
     ASSERT_EQ(r, DecodeResult::BufferTooSmall);
 }
 
+/** @brief Test case: decode header invalid magic. */
 TEST(decode_header_invalid_magic) {
     uint8_t buffer[12] = {};
     LdnHeader hdr{};
@@ -2132,6 +2255,7 @@ TEST(decode_header_invalid_magic) {
     ASSERT_EQ(r, DecodeResult::InvalidMagic);
 }
 
+/** @brief Test case: decode header invalid version. */
 TEST(decode_header_invalid_version) {
     uint8_t buffer[12] = {};
     LdnHeader hdr{};
@@ -2145,6 +2269,7 @@ TEST(decode_header_invalid_version) {
     ASSERT_EQ(r, DecodeResult::InvalidVersion);
 }
 
+/** @brief Test case: decode header negative data size. */
 TEST(decode_header_negative_data_size) {
     uint8_t buffer[12] = {};
     LdnHeader hdr{};
@@ -2158,6 +2283,7 @@ TEST(decode_header_negative_data_size) {
     ASSERT_EQ(r, DecodeResult::PacketTooLarge);
 }
 
+/** @brief Test case: check complete packet buffer too small. */
 TEST(check_complete_packet_buffer_too_small) {
     uint8_t buffer[4] = {};
     size_t pkt_size = 0;
@@ -2165,6 +2291,7 @@ TEST(check_complete_packet_buffer_too_small) {
     ASSERT_EQ(r, DecodeResult::BufferTooSmall);
 }
 
+/** @brief Test case: get packet type from buffer. */
 TEST(get_packet_type_from_buffer) {
     uint8_t buffer[64];
     LdnHeader hdr{};
@@ -2177,6 +2304,7 @@ TEST(get_packet_type_from_buffer) {
     ASSERT_EQ(t, PacketId::Connected);
 }
 
+/** @brief Test case: get payload size from buffer. */
 TEST(get_payload_size_from_buffer) {
     uint8_t buffer[64];
     LdnHeader hdr{};
@@ -2189,12 +2317,14 @@ TEST(get_payload_size_from_buffer) {
     ASSERT_EQ(sz, 42);
 }
 
+/** @brief Test case: get payload ptr offset. */
 TEST(get_payload_ptr_offset) {
     uint8_t buffer[64] = {};
     const uint8_t* p = get_payload_ptr(buffer);
     ASSERT_TRUE(p == buffer + sizeof(LdnHeader));
 }
 
+/** @brief Test case: decode convenience functions. */
 TEST(decode_convenience_functions) {
     uint8_t buffer[2048];
     size_t out_size = 0;
@@ -2337,6 +2467,7 @@ TEST(decode_convenience_functions) {
     ASSERT_EQ(r, DecodeResult::Success);
 }
 
+/** @brief Test case: decode with data buffer too small. */
 TEST(decode_with_data_buffer_too_small) {
     // Use ConnectRequest (0x274 bytes) so that sizeof(LdnHeader) +
     // sizeof(ConnectRequest) exceeds a small buffer
@@ -2361,6 +2492,7 @@ TEST(decode_with_data_buffer_too_small) {
     ASSERT_EQ(extra_size, 0u);
 }
 
+/** @brief Test case: decode with data incomplete extra. */
 TEST(decode_with_data_incomplete_extra) {
     uint8_t buffer[256] = {};
     LdnHeader hdr{};
@@ -2389,6 +2521,7 @@ TEST(decode_with_data_incomplete_extra) {
     ASSERT_EQ(extra_size, 0u);
 }
 
+/** @brief Test case: decode with data invalid header. */
 TEST(decode_with_data_invalid_header) {
     uint8_t buffer[256] = {};
     LdnHeader dec_hdr;
@@ -2402,6 +2535,7 @@ TEST(decode_with_data_invalid_header) {
     ASSERT_EQ(extra_size, 0u);
 }
 
+/** @brief Test case: decode raw zero payload. */
 TEST(decode_raw_zero_payload) {
     uint8_t buffer[64] = {};
     LdnHeader hdr{};
@@ -2419,6 +2553,7 @@ TEST(decode_raw_zero_payload) {
     ASSERT_EQ(data_size, 0u);
 }
 
+/** @brief Test case: decode raw invalid header. */
 TEST(decode_raw_invalid_header) {
     uint8_t buffer[64] = {};
     LdnHeader dec_hdr;
@@ -2431,6 +2566,7 @@ TEST(decode_raw_invalid_header) {
     ASSERT_EQ(data_size, 0u);
 }
 
+/** @brief Test case: decode raw incomplete. */
 TEST(decode_raw_incomplete) {
     uint8_t buffer[256] = {};
     LdnHeader hdr{};
@@ -2449,6 +2585,7 @@ TEST(decode_raw_incomplete) {
     ASSERT_EQ(data_size, 0u);
 }
 
+/** @brief Test case: decode struct buffer too small. */
 TEST(decode_struct_buffer_too_small) {
     // Use ConnectRequest (0x274 bytes) which exceeds small buffer
     uint8_t buffer[64] = {};
@@ -2465,6 +2602,7 @@ TEST(decode_struct_buffer_too_small) {
     ASSERT_EQ(r, DecodeResult::BufferTooSmall);
 }
 
+/** @brief Test case: result to string all values. */
 TEST(result_to_string_all_values) {
     // BufferResult
     ASSERT_TRUE(
@@ -2541,9 +2679,11 @@ TEST(result_to_string_all_values) {
 namespace {
 
 // Scratch buffer large enough for the biggest payload plus header and extras.
+/// Test fixture value: SCRATCH.
 constexpr size_t SCRATCH = 8192;
 
 template <typename T>
+/// Test helper: check encode too small.
 void check_encode_too_small() {
     T payload;
     std::memset(&payload, 0, sizeof(payload));
@@ -2561,6 +2701,7 @@ void check_encode_too_small() {
 }
 
 template <typename T>
+/// Test helper: check decode failures.
 void check_decode_failures() {
     uint8_t buf[SCRATCH];
     LdnHeader header;
@@ -2586,6 +2727,7 @@ void check_decode_failures() {
 }
 
 template <typename T>
+/// Test helper: check decode with data paths.
 void check_decode_with_data_paths() {
     uint8_t buf[SCRATCH];
     LdnHeader header;
@@ -2654,6 +2796,7 @@ void check_decode_with_data_paths() {
 }
 
 template <typename T>
+/// Test helper: check encode with data too small.
 void check_encode_with_data_too_small() {
     T payload;
     std::memset(&payload, 0, sizeof(payload));
@@ -2685,6 +2828,7 @@ void check_encode_with_data_too_small() {
 
 }  // namespace
 
+/** @brief Test case: encode payload rejects a buffer one byte too small. */
 TEST(encode_payload_rejects_a_buffer_one_byte_too_small) {
     check_encode_too_small<ConnectRequest>();
     check_encode_too_small<DisconnectMessage>();
@@ -2699,6 +2843,9 @@ TEST(encode_payload_rejects_a_buffer_one_byte_too_small) {
     check_encode_too_small<SetAcceptPolicyRequest>();
 }
 
+/**
+ * @brief Test case: decode payload rejects bad header and truncated payload.
+ */
 TEST(decode_payload_rejects_bad_header_and_truncated_payload) {
     check_decode_failures<ConnectRequest>();
     check_decode_failures<DisconnectMessage>();
@@ -2714,6 +2861,7 @@ TEST(decode_payload_rejects_bad_header_and_truncated_payload) {
     check_decode_failures<SetAcceptPolicyRequest>();
 }
 
+/** @brief Test case: decode with data covers every outcome. */
 TEST(decode_with_data_covers_every_outcome) {
     check_decode_with_data_paths<ConnectRequest>();
     check_decode_with_data_paths<CreateAccessPointRequest>();
@@ -2722,11 +2870,18 @@ TEST(decode_with_data_covers_every_outcome) {
     check_decode_with_data_paths<ProxyInfo>();
 }
 
+/**
+ * @brief Test case: encode with data rejects a buffer too small for the extra
+ *   bytes.
+ */
 TEST(encode_with_data_rejects_a_buffer_too_small_for_the_extra_bytes) {
     check_encode_with_data_too_small<CreateAccessPointRequest>();
     check_encode_with_data_too_small<ProxyInfo>();
 }
 
+/**
+ * @brief Test case: to string helpers report unknown for out of range values.
+ */
 TEST(to_string_helpers_report_unknown_for_out_of_range_values) {
     ASSERT_TRUE(
         strcmp(
@@ -2751,7 +2906,16 @@ TEST(to_string_helpers_report_unknown_for_out_of_range_values) {
 
 namespace {
 
-// Builds a header-only packet in `out`, returns its size.
+/**
+ * @brief Builds a header-only packet (plus optional payload) in `out`.
+ *
+ * @param out buffer receiving the header and payload
+ * @param type packet id
+ * @param data_size payload size written to the header; the payload is filled
+ * when positive
+ * @param fill byte value of every payload byte
+ * @return total packet size in bytes (header plus payload)
+ */
 size_t make_packet(
     uint8_t* out, PacketId type, int32_t data_size, uint8_t fill = 0xAB) {
     size_t n = encode_header(out, type, data_size);
@@ -2764,6 +2928,10 @@ size_t make_packet(
 
 }  // namespace
 
+/**
+ * @brief Test case: packet buffer append empty is a noop and overflow is
+ *   refused.
+ */
 TEST(packet_buffer_append_empty_is_a_noop_and_overflow_is_refused) {
     PacketBuffer<64> pb;
     const uint8_t b[1] = {0};
@@ -2778,6 +2946,10 @@ TEST(packet_buffer_append_empty_is_a_noop_and_overflow_is_refused) {
     ASSERT_TRUE(pb.append(b, 1) == BufferResult::BufferFull);
 }
 
+/**
+ * @brief Test case: packet buffer append overflow on small and large
+ *   capacities.
+ */
 TEST(packet_buffer_append_overflow_on_small_and_large_capacities) {
     uint8_t blob[300] = {0};
     PacketBuffer<16> p16;
@@ -2796,6 +2968,7 @@ TEST(packet_buffer_append_overflow_on_small_and_large_capacities) {
     ASSERT_TRUE(p64.append(blob, 65) == BufferResult::BufferFull);
 }
 
+/** @brief Test case: packet buffer peek info maps every header state. */
 TEST(packet_buffer_peek_info_maps_every_header_state) {
     uint8_t pkt[256];
     size_t size = 99;
@@ -2866,6 +3039,7 @@ TEST(packet_buffer_peek_info_maps_every_header_state) {
     ASSERT_TRUE(huge256.peek_packet_info(size) == BufferResult::PacketTooLarge);
 }
 
+/** @brief Test case: packet buffer consume partial and empty. */
 TEST(packet_buffer_consume_partial_and_empty) {
     PacketBuffer<8192> pb;
     const uint8_t data[6] = {1, 2, 3, 4, 5, 6};
@@ -2884,6 +3058,7 @@ TEST(packet_buffer_consume_partial_and_empty) {
     ASSERT_EQ(p1k.size(), 6);
 }
 
+/** @brief Test case: packet buffer extract reports failures. */
 TEST(packet_buffer_extract_reports_failures) {
     uint8_t pkt[64];
     uint8_t out[64];
@@ -2915,6 +3090,9 @@ TEST(packet_buffer_extract_reports_failures) {
         small.extract_packet(out, n - 1, size) == BufferResult::BufferFull);
 }
 
+/**
+ * @brief Test case: packet buffer write ptr and advance write respect capacity.
+ */
 TEST(packet_buffer_write_ptr_and_advance_write_respect_capacity) {
     PacketBuffer<16> pb;
     ASSERT_EQ(pb.capacity(), 16);
@@ -2928,6 +3106,7 @@ TEST(packet_buffer_write_ptr_and_advance_write_respect_capacity) {
     ASSERT_EQ(pb.available(), 0);
 }
 
+/** @brief Test case: packet buffer discard until valid skips garbage. */
 TEST(packet_buffer_discard_until_valid_skips_garbage) {
     uint8_t pkt[64];
     PacketBuffer<64> pb;
@@ -2950,6 +3129,7 @@ namespace {
 // Every public branch of PacketBuffer<N>; each size is a separate template
 // instantiation and is measured as such by the line-coverage gate.
 template <size_t N>
+/// Test helper: check packet buffer api.
 void check_packet_buffer_api() {
     uint8_t pkt[64];
     uint8_t out[64];
@@ -3046,6 +3226,10 @@ void check_packet_buffer_api() {
 
 }  // namespace
 
+/**
+ * @brief Test case: packet buffer api is exhaustive for every instantiated
+ *   size.
+ */
 TEST(packet_buffer_api_is_exhaustive_for_every_instantiated_size) {
     check_packet_buffer_api<16>();
     check_packet_buffer_api<64>();
@@ -3054,6 +3238,7 @@ TEST(packet_buffer_api_is_exhaustive_for_every_instantiated_size) {
     check_packet_buffer_api<8192>();
 }
 
+/** @brief Test case: has header threshold. */
 TEST(has_header_threshold) {
     ASSERT_TRUE(has_header(12));
     ASSERT_TRUE(has_header(100));
@@ -3061,6 +3246,10 @@ TEST(has_header_threshold) {
     ASSERT_TRUE(!has_header(0));
 }
 
+/**
+ * @brief Test case: encode refuses a buffer one byte too small for every
+ *   payload type.
+ */
 TEST(encode_refuses_a_buffer_one_byte_too_small_for_every_payload_type) {
     uint8_t buffer[512] = {};
     size_t out_size = 99;
@@ -3105,6 +3294,9 @@ TEST(encode_refuses_a_buffer_one_byte_too_small_for_every_payload_type) {
     ASSERT_EQ(out_size, 0u);
 }
 
+/**
+ * @brief Test case: encode writes header and payload for every payload type.
+ */
 TEST(encode_writes_header_and_payload_for_every_payload_type) {
     uint8_t buffer[512] = {};
     size_t out_size = 0;
@@ -3143,6 +3335,11 @@ TEST(encode_writes_header_and_payload_for_every_payload_type) {
 // Main
 // ============================================================================
 
+/**
+ * @brief Runs the whole suite; the exit code is non-zero if any test failed.
+ *
+ * @return 0 when every test passed, non-zero otherwise
+ */
 int main() {
     printf("=== ryu_ldn_nx Protocol Unit Tests ===\n\n");
     run_all_tests();

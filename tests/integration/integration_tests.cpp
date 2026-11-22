@@ -34,9 +34,15 @@ using namespace ryu_ldn::network;
 // Test framework
 // ============================================================================
 
+/// Number of tests that passed.
 static int g_tests_passed = 0;
+/// Number of tests that failed.
 static int g_tests_failed = 0;
 
+/**
+ * @brief Print the failure and return false from the test when cond is false.
+ * @param cond Expression expected to be true.
+ */
 #define ASSERT_TRUE(cond)                                               \
     do {                                                                \
         if (!(cond)) {                                                  \
@@ -45,8 +51,17 @@ static int g_tests_failed = 0;
         }                                                               \
     } while (0)
 
+/**
+ * @brief Assert that cond is false.
+ * @param cond Expression expected to be false.
+ */
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
+/**
+ * @brief Assert a == b, printing both as int on failure and returning false.
+ * @param a Actual value.
+ * @param b Expected value.
+ */
 #define ASSERT_EQ(a, b)                                              \
     do {                                                             \
         if ((a) != (b)) {                                            \
@@ -62,6 +77,12 @@ static int g_tests_failed = 0;
         }                                                            \
     } while (0)
 
+/**
+ * @brief Assert a != b, printing the value as int on failure and returning
+ *        false.
+ * @param a Actual value.
+ * @param b Value a must differ from.
+ */
 #define ASSERT_NE(a, b)                                  \
     do {                                                 \
         if ((a) == (b)) {                                \
@@ -76,6 +97,10 @@ static int g_tests_failed = 0;
         }                                                \
     } while (0)
 
+/**
+ * @brief Run a bool-returning test, print PASS and count the result.
+ * @param test_func Name of the test function.
+ */
 #define RUN_TEST(test_func)                    \
     do {                                       \
         printf("  [TEST] %s... ", #test_func); \
@@ -88,13 +113,19 @@ static int g_tests_failed = 0;
         }                                      \
     } while (0)
 
+/// Server host name, overridable by the first command-line argument.
 static const char* g_host = "localhost";
+/// Server port, overridable by the second command-line argument.
 static uint16_t g_port = 30456;
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
+/**
+ * @brief Read the monotonic clock.
+ * @return Milliseconds since the steady clock epoch.
+ */
 static uint64_t now_ms() {
     auto tp = std::chrono::steady_clock::now();
     return static_cast<uint64_t>(
@@ -103,6 +134,12 @@ static uint64_t now_ms() {
             .count());
 }
 
+/**
+ * @brief Poll the client until it is Ready or the timeout elapses.
+ * @param client Client to update.
+ * @param timeout_ms Maximum wait in milliseconds.
+ * @return true when the client became ready.
+ */
 static bool wait_until_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     auto start = std::chrono::steady_clock::now();
     while (true) {
@@ -120,6 +157,13 @@ static bool wait_until_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     }
 }
 
+/**
+ * @brief Poll the client until it reaches a state or the timeout elapses.
+ * @param client Client to update.
+ * @param target State to wait for.
+ * @param timeout_ms Maximum wait in milliseconds.
+ * @return true when the client reached target.
+ */
 static bool wait_for_state(
     RyuLdnClient& client, ConnectionState target, int timeout_ms = 5000) {
     auto start = std::chrono::steady_clock::now();
@@ -138,6 +182,11 @@ static bool wait_for_state(
     }
 }
 
+/**
+ * @brief Update the client for a fixed duration.
+ * @param client Client to update.
+ * @param ms Duration in milliseconds.
+ */
 static void poll_for(RyuLdnClient& client, int ms) {
     auto start = std::chrono::steady_clock::now();
     while (true) {
@@ -151,6 +200,11 @@ static void poll_for(RyuLdnClient& client, int ms) {
     }
 }
 
+/**
+ * @brief Build a client config pointing at the test server.
+ * @param auto_reconnect Whether automatic reconnection is enabled.
+ * @return Config with host g_host, port g_port and a 3000 ms connect timeout.
+ */
 static RyuLdnClientConfig make_config(bool auto_reconnect = false) {
     RyuLdnClientConfig cfg;
     std::strncpy(cfg.host, g_host, sizeof(cfg.host) - 1);
@@ -160,6 +214,11 @@ static RyuLdnClientConfig make_config(bool auto_reconnect = false) {
     return cfg;
 }
 
+/**
+ * @brief Build a valid open access point request for the test title.
+ * @param name User name of the host.
+ * @return Request for up to 8 nodes with game version "1.0".
+ */
 static protocol::CreateAccessPointRequest make_ap_request(
     const char* name = "TestHost") {
     protocol::CreateAccessPointRequest req{};
@@ -178,6 +237,10 @@ static protocol::CreateAccessPointRequest make_ap_request(
     return req;
 }
 
+/**
+ * @brief Build a scan filter that matches every network type.
+ * @return The filter.
+ */
 static protocol::ScanFilterFull make_scan_filter() {
     protocol::ScanFilterFull filter{};
     filter.network_type = static_cast<uint8_t>(protocol::NetworkType::All);
@@ -185,6 +248,12 @@ static protocol::ScanFilterFull make_scan_filter() {
 }
 
 // Helper: connect a client and wait for Ready
+/**
+ * @brief Connect a client to the test server and wait until it is Ready.
+ * @param client Client to connect.
+ * @param timeout_ms Maximum wait for the Ready state in milliseconds.
+ * @return true when connect() succeeded and the client became ready.
+ */
 static bool connect_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     ClientOpResult result = client.connect(g_host, g_port);
     if (result != ClientOpResult::Success)
@@ -196,6 +265,12 @@ static bool connect_ready(RyuLdnClient& client, int timeout_ms = 8000) {
 // SECTION 1: Construction & Configuration
 // ============================================================================
 
+/**
+ * @brief A default RyuLdnClientConfig holds the documented defaults
+ *        (127.0.0.1:30456, 5000 ms connect timeout, 20 ms receive timeout, no
+ *        ping, auto-reconnect, empty passphrase).
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_default_config_values() {
     RyuLdnClientConfig cfg;
     ASSERT_TRUE(std::strcmp(cfg.host, "127.0.0.1") == 0);
@@ -208,6 +283,10 @@ bool test_default_config_values() {
     return true;
 }
 
+/**
+ * @brief A default-constructed client exposes the default host and port.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_config_from_default_constructor() {
     RyuLdnClient client;
     const auto& cfg = client.get_config();
@@ -216,6 +295,11 @@ bool test_config_from_default_constructor() {
     return true;
 }
 
+/**
+ * @brief A client built from a config returns the configured port from
+ *        get_config().
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_config_from_custom_constructor() {
     RyuLdnClientConfig cfg = make_config();
     RyuLdnClient client(cfg);
@@ -225,6 +309,10 @@ bool test_config_from_custom_constructor() {
     return true;
 }
 
+/**
+ * @brief set_config() on a disconnected client is reflected by get_config().
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_set_config_while_disconnected() {
     RyuLdnClient client;
     RyuLdnClientConfig new_cfg;
@@ -241,6 +329,10 @@ bool test_set_config_while_disconnected() {
     return true;
 }
 
+/**
+ * @brief A client reconfigured with set_config() connects and reaches Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_config_change_then_connect() {
     socket_init();
     RyuLdnClient client;
@@ -256,6 +348,10 @@ bool test_config_change_then_connect() {
     return true;
 }
 
+/**
+ * @brief A passphrase set in the config is stored verbatim.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_passphrase_config() {
     RyuLdnClientConfig cfg;
     std::strncpy(cfg.host, g_host, sizeof(cfg.host) - 1);
@@ -274,6 +370,11 @@ bool test_passphrase_config() {
 // SECTION 2: Connection & Handshake
 // ============================================================================
 
+/**
+ * @brief connect() succeeds and the handshake leaves the client connected,
+ * ready and in the Ready state.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connect_handshake() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -288,6 +389,11 @@ bool test_connect_handshake() {
     return true;
 }
 
+/**
+ * @brief connect() without arguments uses the configured host and port and
+ *        reaches Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connect_parameterless() {
     socket_init();
     RyuLdnClient client;
@@ -304,6 +410,10 @@ bool test_connect_parameterless() {
     return true;
 }
 
+/**
+ * @brief connect() on a connected client returns AlreadyConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connect_already_connected() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -317,6 +427,11 @@ bool test_connect_already_connected() {
     return true;
 }
 
+/**
+ * @brief The state callback fires at least twice while connecting and again on
+ *        disconnect.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_state_transitions_connect() {
     socket_init();
     std::atomic<int> callback_count{0};
@@ -344,6 +459,11 @@ bool test_state_transitions_connect() {
     return true;
 }
 
+/**
+ * @brief A client can disconnect, reach Disconnected, then connect to Ready
+ *        again.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_disconnect_reconnect() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -364,6 +484,10 @@ bool test_disconnect_reconnect() {
     return true;
 }
 
+/**
+ * @brief Three connect/disconnect cycles on one client all succeed.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_sequential_connect_disconnect_cycles() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -383,6 +507,11 @@ bool test_sequential_connect_disconnect_cycles() {
     return true;
 }
 
+/**
+ * @brief A second disconnect() is a safe no-op and the state stays
+ * Disconnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_double_disconnect() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -398,6 +527,10 @@ bool test_double_disconnect() {
     return true;
 }
 
+/**
+ * @brief Three clients connect to the same server and are all Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_multiple_clients_same_server() {
     socket_init();
 
@@ -424,6 +557,11 @@ bool test_multiple_clients_same_server() {
 // SECTION 3: Getters & State Queries
 // ============================================================================
 
+/**
+ * @brief The getters report Ready, connected, not transitioning, no retries and
+ *        no error while connected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_getters_while_connected() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -441,6 +579,11 @@ bool test_getters_while_connected() {
     return true;
 }
 
+/**
+ * @brief The getters report Disconnected, no retries and a zero RTT on a fresh
+ *        client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_getters_while_disconnected() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -456,6 +599,11 @@ bool test_getters_while_disconnected() {
     return true;
 }
 
+/**
+ * @brief The last RTT is 0 before and after connecting, as no client ping is
+ *        sent.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_get_last_rtt_initial() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -474,6 +622,10 @@ bool test_get_last_rtt_initial() {
 // SECTION 4: All send_* methods while Ready
 // ============================================================================
 
+/**
+ * @brief send_scan() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_scan() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -488,6 +640,10 @@ bool test_send_scan() {
     return true;
 }
 
+/**
+ * @brief send_create_access_point() without advertise data succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_create_access_point() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -503,6 +659,10 @@ bool test_send_create_access_point() {
     return true;
 }
 
+/**
+ * @brief send_create_access_point() with advertise data succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_create_access_point_with_advertise() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -520,6 +680,11 @@ bool test_send_create_access_point_with_advertise() {
     return true;
 }
 
+/**
+ * @brief A station sends a connect request to a hosted network and the send
+ *        succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_connect() {
     socket_init();
 
@@ -553,6 +718,10 @@ bool test_send_connect() {
     return true;
 }
 
+/**
+ * @brief send_create_access_point_private() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_create_access_point_private() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -587,6 +756,10 @@ bool test_send_create_access_point_private() {
     return true;
 }
 
+/**
+ * @brief send_connect_private() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_connect_private() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -615,6 +788,10 @@ bool test_send_connect_private() {
     return true;
 }
 
+/**
+ * @brief send_proxy_data() with a header and 3 payload bytes succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_proxy_data() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -638,6 +815,10 @@ bool test_send_proxy_data() {
     return true;
 }
 
+/**
+ * @brief send_ping() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_ping() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -652,6 +833,10 @@ bool test_send_ping() {
     return true;
 }
 
+/**
+ * @brief send_ping_response() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_ping_response() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -666,6 +851,10 @@ bool test_send_ping_response() {
     return true;
 }
 
+/**
+ * @brief send_disconnect_network() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_disconnect_network() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -680,6 +869,11 @@ bool test_send_disconnect_network() {
     return true;
 }
 
+/**
+ * @brief send_set_accept_policy() succeeds for RejectAll then AcceptAll on a
+ *        hosting client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_set_accept_policy() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -702,6 +896,11 @@ bool test_send_set_accept_policy() {
     return true;
 }
 
+/**
+ * @brief send_set_advertise_data() succeeds with 3 bytes, the 384-byte maximum
+ *        and no data.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_set_advertise_data() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -732,6 +931,11 @@ bool test_send_set_advertise_data() {
     return true;
 }
 
+/**
+ * @brief send_reject() for an unknown node and for node 0 returns Success or
+ *        SendFailed.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_reject() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -756,6 +960,10 @@ bool test_send_reject() {
     return true;
 }
 
+/**
+ * @brief send_raw_packet() sends a hand-built Ping packet successfully.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_raw_packet() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -792,6 +1000,11 @@ bool test_send_raw_packet() {
 // SECTION 5: All send_* methods while Not Connected / Not Ready
 // ============================================================================
 
+/**
+ * @brief Every send_*() method returns NotReady on a client that is not
+ *        connected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_not_connected() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -834,6 +1047,11 @@ bool test_send_not_connected() {
 // SECTION 6: Callbacks
 // ============================================================================
 
+/**
+ * @brief The state callback fires at least twice up to Ready and again on
+ *        disconnect.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_state_callback_lifecycle() {
     socket_init();
     std::atomic<int> callback_count{0};
@@ -863,6 +1081,11 @@ bool test_state_callback_lifecycle() {
     return true;
 }
 
+/**
+ * @brief Null state and packet callbacks are accepted and the client still
+ *        connects.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_state_callback_null() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -877,6 +1100,10 @@ bool test_state_callback_null() {
     return true;
 }
 
+/**
+ * @brief The packet callback receives at least one packet after a scan.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_packet_callback_receives_data() {
     socket_init();
     struct PacketInfo {
@@ -907,6 +1134,10 @@ bool test_packet_callback_receives_data() {
     return true;
 }
 
+/**
+ * @brief Packets received without a packet callback are dropped silently.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_packet_callback_null_no_crash() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -925,6 +1156,10 @@ bool test_packet_callback_null_no_crash() {
 // SECTION 7: Packet Reception — handle_packet coverage
 // ============================================================================
 
+/**
+ * @brief A scan makes the server answer with at least a ScanReplyEnd packet.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_receive_scan_reply() {
     socket_init();
     struct ScanInfo {
@@ -955,6 +1190,11 @@ bool test_receive_scan_reply() {
     return true;
 }
 
+/**
+ * @brief Creating an access point with a packet callback installed runs the
+ *        callback path without failing; server replies are not asserted.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_receive_connected_sync_network() {
     socket_init();
     struct ServerInfo {
@@ -988,6 +1228,10 @@ bool test_receive_connected_sync_network() {
     return true;
 }
 
+/**
+ * @brief The client stays Ready while the server pings and the client echoes.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_server_ping_echo() {
     // The server sends Pings (requester=0), our client echoes them back
     // in handle_packet(). We verify this doesn't crash and the connection stays
@@ -1010,6 +1254,11 @@ bool test_server_ping_echo() {
 // SECTION 8: Multi-client scenarios
 // ============================================================================
 
+/**
+ * @brief A host creates a network, a station scans and connects, and both keep
+ *        running 3 s without failure.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_host_station_full_flow() {
     socket_init();
 
@@ -1061,6 +1310,10 @@ bool test_host_station_full_flow() {
     return true;
 }
 
+/**
+ * @brief A host and two scanning stations all stay Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_three_clients_scan() {
     socket_init();
 
@@ -1090,6 +1343,11 @@ bool test_three_clients_scan() {
     return true;
 }
 
+/**
+ * @brief Connecting with a passphrase ends in Ready, Error or Disconnected
+ *        without crashing.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_passphrase_connect() {
     socket_init();
     RyuLdnClientConfig cfg = make_config();
@@ -1113,6 +1371,11 @@ bool test_passphrase_connect() {
 // SECTION 9: Error & Edge Cases
 // ============================================================================
 
+/**
+ * @brief connect() to a port with no listener returns Success, ConnectionFailed
+ *        or InvalidState without crashing.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connect_to_invalid_port() {
     socket_init();
     RyuLdnClientConfig cfg;
@@ -1133,6 +1396,10 @@ bool test_connect_to_invalid_port() {
     return true;
 }
 
+/**
+ * @brief Five consecutive send_scan() calls all succeed.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_multiple_scan_requests() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -1149,6 +1416,11 @@ bool test_multiple_scan_requests() {
     return true;
 }
 
+/**
+ * @brief Move-constructing a connected client leaves a usable client that can
+ *        disconnect.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_move_constructor() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -1170,6 +1442,10 @@ bool test_move_constructor() {
     return true;
 }
 
+/**
+ * @brief Move-assigning a connected client to another leaves a usable target.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_move_assignment() {
     socket_init();
     RyuLdnClient client1(make_config());
@@ -1186,6 +1462,11 @@ bool test_move_assignment() {
     return true;
 }
 
+/**
+ * @brief client_op_result_to_string() returns a non-null label for every
+ *        ClientOpResult.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_client_op_result_to_string_all() {
     ASSERT_TRUE(client_op_result_to_string(ClientOpResult::Success) != nullptr);
     ASSERT_TRUE(
@@ -1215,6 +1496,11 @@ bool test_client_op_result_to_string_all() {
 // ============================================================================
 
 // Resolve docker-compose file path: env var takes priority, else relative path
+/**
+ * @brief Find the docker compose file that runs the server.
+ * @return INTEGRATION_COMPOSE_FILE when set and non-empty, otherwise
+ *         "docker-compose.yml".
+ */
 static std::string get_compose_file() {
     const char* env = std::getenv("INTEGRATION_COMPOSE_FILE");
     if (env && env[0] != '\0')
@@ -1223,6 +1509,11 @@ static std::string get_compose_file() {
 }
 
 // Execute a shell command, return its exit code (or -1 on signal)
+/**
+ * @brief Run a shell command.
+ * @param cmd Command line passed to std::system().
+ * @return Its exit code, or -1 when it did not exit normally.
+ */
 static int run_shell(const char* cmd) {
     int ret = std::system(cmd);
     if (WIFEXITED(ret))
@@ -1231,6 +1522,13 @@ static int run_shell(const char* cmd) {
 }
 
 // Check if a TCP port is reachable (python3)
+/**
+ * @brief Check with python3 whether a TCP port accepts connections.
+ * @param host Host to connect to.
+ * @param port Port to connect to.
+ * @param timeout_s Connection timeout in seconds.
+ * @return true when the connection succeeded.
+ */
 static bool tcp_check(const char* host, uint16_t port, int timeout_s = 5) {
     std::string cmd =
         "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(" +
@@ -1242,6 +1540,13 @@ static bool tcp_check(const char* host, uint16_t port, int timeout_s = 5) {
 
 // Kill the ldn-server container via docker compose (SIGKILL for immediate
 // termination)
+/**
+ * @brief SIGKILL the ldn-server container through docker compose.
+ *
+ * Falls back to the default compose file when the configured one fails.
+ *
+ * @return true when docker compose reported success.
+ */
 static bool kill_server() {
     std::string compose = get_compose_file();
     // Use kill (SIGKILL) for immediate process termination — stop (SIGTERM)
@@ -1260,6 +1565,14 @@ static bool kill_server() {
 }
 
 // Restart the ldn-server container, then verify it is accepting TCP connections
+/**
+ * @brief Start the ldn-server container and wait for its TCP port.
+ *
+ * Tries start, then start without -f, then up -d, then polls once per second.
+ *
+ * @param max_wait_s Maximum wait in seconds.
+ * @return true when the port accepted a connection in time.
+ */
 static bool restart_server(int max_wait_s = 30) {
     std::string compose = get_compose_file();
     std::string cmd =
@@ -1285,6 +1598,10 @@ static bool restart_server(int max_wait_s = 30) {
 }
 
 // Force-send a ping to trigger ConnectionLost detection on a dead connection
+/**
+ * @brief Send five pings so a dead connection is noticed.
+ * @param client Client whose connection is suspected lost.
+ */
 static void force_send_to_detect_loss(RyuLdnClient& client) {
     for (int i = 0; i < 5; i++) {
         client.send_ping();
@@ -1293,6 +1610,11 @@ static void force_send_to_detect_loss(RyuLdnClient& client) {
     }
 }
 
+/**
+ * @brief With auto-reconnect, killing the server makes the client leave Ready
+ * or report Backoff, Disconnected or Error.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connection_lost_during_ready() {
     // auto_reconnect: kill server, verify Backoff/Disconnected transition
     socket_init();
@@ -1344,6 +1666,11 @@ bool test_connection_lost_during_ready() {
     return true;
 }
 
+/**
+ * @brief Without auto-reconnect, killing the server makes the client leave
+ * Ready and never enter Retrying.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connection_lost_no_auto_reconnect() {
     // NO auto_reconnect: kill server, verify client stays in Backoff (no retry)
     // and never reaches Retrying state
@@ -1392,6 +1719,11 @@ bool test_connection_lost_no_auto_reconnect() {
     return true;
 }
 
+/**
+ * @brief After the server is killed, send_scan() fails or the client leaves
+ *        Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_fails_after_server_drop() {
     // Kill server, verify send_* returns SendFailed or client leaves Ready
     socket_init();
@@ -1425,6 +1757,11 @@ bool test_send_fails_after_server_drop() {
     return true;
 }
 
+/**
+ * @brief With the server down and auto-reconnect on, the client enters Backoff
+ * at least once and recovers after the restart.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_try_connect_failure_then_backoff() {
     // Kill server, try_connect() failure leads to Backoff
     socket_init();
@@ -1471,6 +1808,11 @@ bool test_try_connect_failure_then_backoff() {
     return true;
 }
 
+/**
+ * @brief With the server down, the client goes through Backoff then Retrying
+ * and recovers after the restart.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_backoff_expiry_and_retry() {
     // Kill server, verify Backoff -> Retrying -> try_connect cycle
     socket_init();
@@ -1536,6 +1878,11 @@ bool test_backoff_expiry_and_retry() {
     return true;
 }
 
+/**
+ * @brief After a SIGKILL of the server the client reports Disconnected or
+ * Error, or leaves Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_server_initiated_disconnect() {
     // Kill server with SIGKILL, verify client detects disconnect
     socket_init();
@@ -1587,6 +1934,10 @@ bool test_server_initiated_disconnect() {
 // SECTION: TcpClient Direct Tests
 // ============================================================================
 
+/**
+ * @brief A second TcpClient::connect() returns AlreadyConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_connect_already_connected() {
     socket_init();
     TcpClient tc;
@@ -1602,6 +1953,11 @@ bool test_tcpclient_connect_already_connected() {
     return true;
 }
 
+/**
+ * @brief Every TcpClient send method and set_nodelay() return NotConnected on
+ * an unconnected client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_send_not_connected() {
     TcpClient tc;
     ClientResult r = tc.send_packet(protocol::PacketId::Scan, nullptr, 0);
@@ -1671,6 +2027,10 @@ bool test_tcpclient_send_not_connected() {
     return true;
 }
 
+/**
+ * @brief A move-constructed TcpClient keeps the connection.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_move_constructor() {
     socket_init();
     TcpClient tc1;
@@ -1687,6 +2047,10 @@ bool test_tcpclient_move_constructor() {
     return true;
 }
 
+/**
+ * @brief A move-assigned TcpClient keeps the connection.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_move_assignment() {
     socket_init();
     TcpClient tc1;
@@ -1702,6 +2066,10 @@ bool test_tcpclient_move_assignment() {
     return true;
 }
 
+/**
+ * @brief receive_packet() on an unconnected TcpClient returns NotConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_receive_packet_not_connected() {
     TcpClient tc;
     protocol::PacketId type;
@@ -1713,6 +2081,10 @@ bool test_tcpclient_receive_packet_not_connected() {
     return true;
 }
 
+/**
+ * @brief has_packet_available() is false on an unconnected TcpClient.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_has_packet_available_not_connected() {
     TcpClient tc;
     // has_packet_available returns false when not connected
@@ -1721,6 +2093,10 @@ bool test_tcpclient_has_packet_available_not_connected() {
     return true;
 }
 
+/**
+ * @brief set_nodelay() succeeds for true and false on a connected TcpClient.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_set_nodelay_connected() {
     socket_init();
     TcpClient tc;
@@ -1739,6 +2115,11 @@ bool test_tcpclient_set_nodelay_connected() {
     return true;
 }
 
+/**
+ * @brief After a passphrase and initialize message, a received packet is
+ *        Connected or Initialize, or the wait times out.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_send_receive_roundtrip() {
     socket_init();
     TcpClient tc;
@@ -1784,6 +2165,11 @@ bool test_tcpclient_send_receive_roundtrip() {
 // SECTION: Socket Direct Tests
 // ============================================================================
 
+/**
+ * @brief socket_init() is idempotent and socket_exit() uninitialises, twice
+ *        safely.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_init_exit() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     // Double init is idempotent
@@ -1795,6 +2181,10 @@ bool test_socket_init_exit() {
     return true;
 }
 
+/**
+ * @brief Socket connects, becomes connected and valid, and close() resets both.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_disconnect() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1814,6 +2204,10 @@ bool test_socket_connect_disconnect() {
     return true;
 }
 
+/**
+ * @brief A second Socket::connect() returns AlreadyConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_already_connected() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1829,6 +2223,10 @@ bool test_socket_connect_already_connected() {
     return true;
 }
 
+/**
+ * @brief An empty and an unresolvable host name give InvalidAddress.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_invalid_host() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1844,6 +2242,10 @@ bool test_socket_connect_invalid_host() {
     return true;
 }
 
+/**
+ * @brief Socket::connect() returns NotInitialized after socket_exit().
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_not_initialized() {
     socket_exit();  // Ensure not initialized
     Socket sock;
@@ -1853,6 +2255,11 @@ bool test_socket_not_initialized() {
     return true;
 }
 
+/**
+ * @brief send(), send_all() and recv() on an unconnected Socket return
+ *        NotConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_send_recv_not_connected() {
     Socket sock;
     uint8_t data[] = {0x01, 0x02, 0x03};
@@ -1870,6 +2277,10 @@ bool test_socket_send_recv_not_connected() {
     return true;
 }
 
+/**
+ * @brief A move-constructed Socket stays connected and empties the source.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_move_constructor() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock1;
@@ -1888,6 +2299,10 @@ bool test_socket_move_constructor() {
     return true;
 }
 
+/**
+ * @brief A move-assigned Socket stays connected and empties the source.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_move_assignment() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock1;
@@ -1904,6 +2319,11 @@ bool test_socket_move_assignment() {
     return true;
 }
 
+/**
+ * @brief send_all() sends a Passphrase packet and recv() then succeeds or times
+ *        out.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_send_all_connected() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1938,6 +2358,10 @@ bool test_socket_send_all_connected() {
     return true;
 }
 
+/**
+ * @brief set_nodelay() succeeds for true and false on a connected Socket.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_set_nodelay_connected() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1955,6 +2379,11 @@ bool test_socket_set_nodelay_connected() {
     return true;
 }
 
+/**
+ * @brief set_recv_buffer_size() and set_send_buffer_size() succeed on a
+ * connected Socket.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_set_buffer_sizes_connected() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1972,6 +2401,11 @@ bool test_socket_set_buffer_sizes_connected() {
     return true;
 }
 
+/**
+ * @brief Socket option setters return SocketError on a Socket without a
+ *        descriptor.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_set_options_invalid_fd() {
     Socket sock;  // no fd
     ASSERT_FALSE(sock.is_valid());
@@ -1990,6 +2424,10 @@ bool test_socket_set_options_invalid_fd() {
     return true;
 }
 
+/**
+ * @brief A numeric IPv4 host connects.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_ipv4_connect() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2003,6 +2441,10 @@ bool test_socket_ipv4_connect() {
     return true;
 }
 
+/**
+ * @brief recv() with a 100 ms timeout returns Timeout or Success.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_timeout() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2021,6 +2463,10 @@ bool test_socket_recv_timeout() {
     return true;
 }
 
+/**
+ * @brief Calling close() twice is safe.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_double_close() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2040,6 +2486,10 @@ bool test_socket_double_close() {
     return true;
 }
 
+/**
+ * @brief recv() with a 0 ms timeout returns WouldBlock, Timeout or Success.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_nonblocking() {
     // recv(timeout_ms=0) exercises the non-blocking recv path
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2061,6 +2511,11 @@ bool test_socket_recv_nonblocking() {
     return true;
 }
 
+/**
+ * @brief After sending a Ping, a blocking recv() returns data, a timeout, a
+ * reset or Closed.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_blocking() {
     // recv(timeout_ms=-1) exercises the blocking recv path
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2100,6 +2555,10 @@ bool test_socket_recv_blocking() {
     return true;
 }
 
+/**
+ * @brief send_all() of zero bytes succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_send_zero_bytes() {
     // Exercise send_all with empty data — though this should succeed trivially
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2118,6 +2577,10 @@ bool test_socket_send_zero_bytes() {
     return true;
 }
 
+/**
+ * @brief is_valid() is false, true after connect and false after close.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_is_valid_after_connect() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2134,6 +2597,10 @@ bool test_socket_is_valid_after_connect() {
     return true;
 }
 
+/**
+ * @brief Socket::connect() with a null host returns InvalidAddress.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_null_host() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2143,6 +2610,10 @@ bool test_socket_connect_null_host() {
     return true;
 }
 
+/**
+ * @brief Socket::connect() with an empty host returns InvalidAddress.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_empty_host() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2152,6 +2623,11 @@ bool test_socket_connect_empty_host() {
     return true;
 }
 
+/**
+ * @brief Connecting to 127.0.0.1 port 1 does not crash; the result is not
+ *        asserted (the check is always true).
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_port_zero() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2167,6 +2643,11 @@ bool test_socket_connect_port_zero() {
     return true;
 }
 
+/**
+ * @brief A blocking connect to a closed local port returns ConnectionRefused,
+ *        Timeout or HostUnreachable.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_connection_refused() {
     // Connect to a port that nobody listens on — exercises
     // errno_to_result(ECONNREFUSED) and the immediate-failure path in
@@ -2185,6 +2666,10 @@ bool test_socket_connect_connection_refused() {
     return true;
 }
 
+/**
+ * @brief After sending a Ping, a blocking recv() returns data.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_blocking_with_data() {
     // Exercise recv(timeout_ms < 0) blocking path with actual data
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2219,6 +2704,11 @@ bool test_socket_recv_blocking_with_data() {
     return true;
 }
 
+/**
+ * @brief After a blocking recv(), a second Ping followed by recv() with 0 ms
+ * runs without failure; its result is not asserted.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_zero_timeout_with_data() {
     // Exercise recv(timeout_ms == 0) non-blocking path when data IS available
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2274,6 +2764,11 @@ bool test_socket_recv_zero_timeout_with_data() {
     return true;
 }
 
+/**
+ * @brief A second connect() on a connected Socket returns AlreadyConnected
+ *        instead of creating a new descriptor.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_create_twice() {
     // Exercise the m_fd >= 0 early return in create()
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2293,6 +2788,12 @@ bool test_socket_create_twice() {
 // Main
 // ============================================================================
 
+/**
+ * @brief Run every integration test against the server.
+ * @param argc Argument count.
+ * @param argv Optional host and port (both required to take effect).
+ * @return 0 when every test passed, 1 otherwise.
+ */
 int main(int argc, char* argv[]) {
     if (argc >= 3) {
         g_host = argv[1];

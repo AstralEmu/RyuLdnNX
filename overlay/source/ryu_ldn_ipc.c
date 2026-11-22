@@ -69,6 +69,7 @@ enum {
 
 /// Global service handle
 static RyuLdnConfigService g_ryuCfgService;
+/// True between a successful ryuLdnInitialize() and ryuLdnExit().
 static bool g_ryuCfgInitialized = false;
 
 /**

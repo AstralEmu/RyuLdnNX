@@ -94,13 +94,21 @@ public:
     // Constants (matching Ryujinx)
     // =========================================================================
 
+    /// First local port tried when listening
     static constexpr uint16_t PRIVATE_PORT_BASE = 39990;
+    /// Number of consecutive local ports tried from PRIVATE_PORT_BASE
     static constexpr int PRIVATE_PORT_RANGE = 10;
+    /// First external port tried for the UPnP mapping
     static constexpr uint16_t PUBLIC_PORT_BASE = 39990;
+    /// Number of consecutive external ports tried from PUBLIC_PORT_BASE
     static constexpr int PUBLIC_PORT_RANGE = 10;
-    static constexpr int PORT_LEASE_LENGTH = 60;  // seconds
-    static constexpr int PORT_LEASE_RENEW = 50;   // seconds
+    /// UPnP port mapping lease duration in seconds
+    static constexpr int PORT_LEASE_LENGTH = 60;
+    /// Interval in seconds between lease renewals (before it expires)
+    static constexpr int PORT_LEASE_RENEW = 50;
+    /// Seconds a new connection may wait for its token to be registered
     static constexpr int AUTH_WAIT_SECONDS = 1;
+    /// Maximum number of authenticated sessions (players)
     static constexpr int MAX_PLAYERS = 8;
 
     // =========================================================================
@@ -153,6 +161,7 @@ public:
 
     /**
      * @brief Get the private (local) port
+     * @return Local TCP port the server listens on
      */
     uint16_t GetPrivatePort() const {
         return m_private_port;
@@ -160,6 +169,7 @@ public:
 
     /**
      * @brief Get the public (UPnP) port
+     * @return Externally mapped port advertised to peers
      */
     uint16_t GetPublicPort() const {
         return m_public_port;
@@ -294,17 +304,42 @@ public:
         size_t data_len,
         void* user_data);
 
-    /// The host's own virtual IP — packets whose dest matches this value or
-    /// the configured broadcast address are dispatched to m_host_data_callback.
+    /**
+     * @brief Set the host's own virtual IP
+     *
+     * Packets whose dest matches this value or the configured broadcast
+     * address are dispatched to m_host_data_callback.
+     *
+     * @param virtual_ip Host virtual IP (same format as the session IPs)
+     */
     void SetHostVirtualIp(uint32_t virtual_ip);
 
-    /// Register the in-process inbound sink. Pass nullptr to detach.
+    /**
+     * @brief Register the in-process inbound sink
+     *
+     * Pass nullptr as callback to detach.
+     *
+     * @param callback Function invoked for host-bound proxy packets
+     * @param user_data Opaque pointer handed back to the callback
+     */
     void SetHostDataCallback(HostProxyDataCallback callback, void* user_data);
 
-    /// Broadcast a ProxyData packet from the host's local game out to every
-    /// authenticated P2P session. The header's source_ipv4 is filled in with
-    /// the host's virtual IP if the caller left it at 0 (mirrors the
-    /// "bound on 0.0.0.0" handling in RouteMessage).
+    /**
+     * @brief Broadcast a ProxyData packet from the host's local game
+     *
+     * Sent to every authenticated P2P session (or only the one whose
+     * virtual IP matches a unicast destination). The header's source_ipv4 is
+     * filled in with the host's virtual IP if the caller left it at 0
+     * (mirrors the "bound on 0.0.0.0" handling in RouteMessage); a source
+     * that differs from the host's virtual IP is refused.
+     *
+     * @param header Proxy header; source and destination may be rewritten
+     * @param data Payload bytes
+     * @param data_len Payload size in bytes
+     * @return true if at least one session was sent the packet; false if
+     *         the host IP is unset, the source is spoofed, the encoding
+     *         failed or no session matched
+     */
     bool BroadcastFromHost(
         ryu_ldn::protocol::ProxyDataHeader& header,
         const uint8_t* data,
@@ -316,6 +351,15 @@ public:
 
     /**
      * @brief Handle ProxyData message from a session
+     *
+     * Routes it to the matching joiner sessions and, when the packet is also
+     * addressed to the host, to the host data callback. A packet with a
+     * spoofed source is dropped entirely.
+     *
+     * @param sender Session that sent the packet
+     * @param header Proxy header; source and destination may be rewritten
+     * @param data Payload bytes
+     * @param data_len Payload size in bytes
      */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy data handled (server)"}
     void HandleProxyData(
@@ -350,6 +394,11 @@ public:
 
     /**
      * @brief Called when a session disconnects
+     *
+     * Removes the session from the live and player tables and queues it
+     * for deletion by ReapZombieSessions().
+     *
+     * @param session Session that disconnected
      */
     /// @gdb{tag="P2P:SESSION", msg="Session disconnected event"}
     void OnSessionDisconnected(P2pProxySession* session);
@@ -410,15 +459,21 @@ private:
     // Member Variables
     // =========================================================================
 
+    /// Guards the session tables, tokens and host callback state
     mutable os::Mutex m_mutex{false};
 
     // Server socket
+    /// Listening socket fd (negative when not listening)
     int m_listen_fd;
+    /// Local port the server listens on
     uint16_t m_private_port;
+    /// External port mapped through UPnP (0 if none)
     uint16_t m_public_port;
     // Atomic so the accept thread sees the Stop()-side flip without going
     // through m_mutex (we don't want to take m_mutex on every poll cycle).
+    /// True while the server is running
     std::atomic<bool> m_running;
+    /// True once the server has been stopped and cleaned up
     bool m_disposed;
 
     // Accept thread (stack lives in BSS — see g_p2p_accept_thread_stack in
@@ -427,14 +482,19 @@ private:
     // forced `new P2pProxyServer(...)` to call the unimplemented aligned
     // operator new and crashed the sysmodule (DABRT 0x101) the moment a
     // host pressed "create network".
+    /// Thread running AcceptLoop()
     os::ThreadType m_accept_thread{};
 
     // Lease renewal thread (stack: g_p2p_lease_thread_stack in BSS)
+    /// Thread running LeaseRenewalLoop()
     os::ThreadType m_lease_thread{};
+    /// True while the lease renewal thread is running
     bool m_lease_thread_running;
 
     // Sessions
+    /// Authenticated sessions (owning); empty slots are null
     std::unique_ptr<P2pProxySession> m_sessions[MAX_PLAYERS];
+    /// Number of authenticated sessions in m_sessions
     int m_session_count;
 
     /// Started sessions that are still connected, authenticated or not
@@ -443,7 +503,9 @@ private:
     /// hold. MAX_PLAYERS stack slots bound the started sessions; +1 is the
     /// one AcceptLoop registers just before starting it.
     static constexpr int MAX_LIVE_SESSIONS = MAX_PLAYERS + 1;
+    /// Live (started, still connected) sessions, non-owning
     P2pProxySession* m_live_sessions[MAX_LIVE_SESSIONS]{};
+    /// Number of used entries in m_live_sessions
     int m_live_session_count = 0;
 
     // Disconnected sessions waiting to be deleted by ReapZombieSessions().
@@ -453,31 +515,44 @@ private:
     // unwinding), so OnSessionDisconnected just queues the pointer here and
     // AcceptLoop / Stop() free it once m_thread_done is true and the
     // thread has joined.
+    /// Capacity of the zombie session queue (twice MAX_PLAYERS)
     static constexpr int MAX_ZOMBIE_SESSIONS = MAX_PLAYERS * 2;
 
     /// Upper bound (ms) Stop() waits for the receive threads of the sessions it
     /// disconnected; their sockets are shut down so they end almost at once.
     static constexpr int STOP_SESSION_WAIT_MS = 2000;
+    /// Disconnected sessions waiting to be freed (owning)
     std::unique_ptr<P2pProxySession> m_zombie_sessions[MAX_ZOMBIE_SESSIONS];
+    /// Number of queued entries in m_zombie_sessions
     int m_zombie_session_count;
 
     // Waiting tokens for auth
+    /// Capacity of the waiting token list
     static constexpr int MAX_WAITING_TOKENS = 16;
+    /// Tokens of joiners announced by the master but not yet connected
     ryu_ldn::protocol::ExternalProxyToken
         m_waiting_tokens[MAX_WAITING_TOKENS]{};
+    /// Number of used entries in m_waiting_tokens
     int m_waiting_token_count;
+    /// Signaled when a token is added, to wake authenticating sessions
     os::ConditionVariable m_token_cv;
 
     // Network config
+    /// Broadcast address of the LDN subnet (from Configure())
     uint32_t m_broadcast_address;
 
     // Master server callback
+    /// Callback used to send packets to the master server
     MasterSendCallback m_master_callback;
+    /// User data passed to m_master_callback
     void* m_callback_user_data;
 
     // In-process host self-routing — see SetHostDataCallback() above.
+    /// The host's own virtual IP (0 until SetHostVirtualIp is called)
     uint32_t m_host_virtual_ip;
+    /// Sink for packets addressed to the host (may be null)
     HostProxyDataCallback m_host_data_callback;
+    /// User data passed to m_host_data_callback
     void* m_host_data_user_data;
 };
 
@@ -512,6 +587,7 @@ public:
 
     /**
      * @brief Get assigned virtual IP
+     * @return Virtual IP assigned to this session (0 before auth)
      */
     uint32_t GetVirtualIpAddress() const {
         return m_virtual_ip;
@@ -519,6 +595,7 @@ public:
 
     /**
      * @brief Set virtual IP (called after auth)
+     * @param ip Virtual IP to assign to this session
      */
     void SetVirtualIp(uint32_t ip) {
         m_virtual_ip = ip;
@@ -526,6 +603,7 @@ public:
 
     /**
      * @brief Get remote (physical) IP
+     * @return Physical IP of the connected peer
      */
     uint32_t GetRemoteIp() const {
         return m_remote_ip;
@@ -533,6 +611,7 @@ public:
 
     /**
      * @brief Check if session is authenticated
+     * @return true once the peer has been authenticated
      */
     bool IsAuthenticated() const {
         return m_authenticated;
@@ -540,6 +619,7 @@ public:
 
     /**
      * @brief Mark as authenticated
+     * @param auth New authentication state
      */
     void SetAuthenticated(bool auth) {
         m_authenticated = auth;
@@ -571,6 +651,7 @@ public:
 
     /**
      * @brief Check if session is connected
+     * @return true while the peer connection is alive
      */
     bool IsConnected() const {
         return m_connected;
@@ -597,17 +678,35 @@ private:
     /// @gdb{tag="P2P:ROUTE", msg="External proxy configured"}
     void HandleExternalProxy(
         const ryu_ldn::protocol::ExternalProxyConfig& config);
+    /**
+     * @brief Handle a ProxyData packet received from this session
+     * @param header Proxy header
+     * @param data Payload bytes
+     * @param data_len Payload size in bytes
+     */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy data handled (session)"}
     void HandleProxyData(
         const ryu_ldn::protocol::ProxyDataHeader& header,
         const uint8_t* data,
         size_t data_len);
+    /**
+     * @brief Handle a ProxyConnect request received from this session
+     * @param request Connect request
+     */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy connect handled (session)"}
     void HandleProxyConnect(
         const ryu_ldn::protocol::ProxyConnectRequest& request);
+    /**
+     * @brief Handle a ProxyConnectReply received from this session
+     * @param response Connect reply
+     */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy connect reply handled (session)"}
     void HandleProxyConnectReply(
         const ryu_ldn::protocol::ProxyConnectResponse& response);
+    /**
+     * @brief Handle a ProxyDisconnect message received from this session
+     * @param message Disconnect message
+     */
     /// @gdb{tag="P2P:ROUTE", msg="Proxy disconnect handled (session)"}
     void HandleProxyDisconnect(
         const ryu_ldn::protocol::ProxyDisconnectMessage& message);
@@ -616,12 +715,19 @@ private:
     // Member Variables
     // =========================================================================
 
+    /// Parent server (not owned)
     P2pProxyServer* m_server;
+    /// Connected client socket fd
     int m_socket_fd;
+    /// Remote (physical) IP address of the client
     uint32_t m_remote_ip;
+    /// Virtual IP assigned after authentication
     uint32_t m_virtual_ip;
+    /// True while the connection is up
     bool m_connected;
+    /// True once the client passed token validation
     bool m_authenticated;
+    /// True if the disconnect was initiated by the master server
     bool m_master_closed;
 
     // Receive thread (stack lives in a BSS pool — see g_p2p_session_stacks
@@ -630,6 +736,7 @@ private:
     // `new P2pProxySession(...)` with DABRT 0x101 — same root cause we
     // fixed in P2pProxyServer earlier. Keep it as a slot index so that
     // ~P2pProxySession can return the slot to the pool.
+    /// Thread running ReceiveLoop()
     os::ThreadType m_recv_thread{};
     int m_stack_slot;  ///< Index in the global session-stack pool, -1 if
                        ///< unallocated
@@ -638,10 +745,13 @@ private:
     // so the server's reaper can spot a zombie session and free it without
     // doing `delete this` from the dying thread (which would free its own
     // stack mid-return and is UB).
+    /// True once the receive thread function is about to return
     std::atomic<bool> m_thread_done{false};
 
     // Receive buffer
+    /// Receive buffer size in bytes (64 KB)
     static constexpr size_t RECV_BUFFER_SIZE = 0x10000;
+    /// Accumulates the bytes received from the client
     uint8_t m_recv_buffer[RECV_BUFFER_SIZE]{};
 
     friend class P2pProxyServer;  // for the reaper path

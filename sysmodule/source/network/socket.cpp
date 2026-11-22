@@ -381,10 +381,8 @@ SocketResult Socket::create() {
  * 6. Verify connection succeeded
  * 7. Restore blocking mode
  *
- * @param host IP address (e.g., "ryuldnnx.ddns.net")
- * @param port TCP port number (e.g., 30456)
- * @param timeout_ms Connection timeout in milliseconds (0 = blocking/no
- * timeout)
+ * The host is an IP address or a hostname (resolved by the system). A
+ * timeout_ms of 0 means a blocking connect without timeout.
  *
  * @return SocketResult::Success on successful connection
  * @return SocketResult::NotInitialized if socket_init() wasn't called
@@ -536,9 +534,7 @@ SocketResult Socket::connect(
  * Attempts to send data. May not send all data in one call - check
  * the 'sent' parameter to see how much was actually sent.
  *
- * @param data Pointer to data buffer to send
- * @param size Number of bytes to send
- * @param[out] sent Number of bytes actually sent (may be less than size)
+ * The count written to 'sent' may be less than 'size'.
  *
  * @return SocketResult::Success if some data was sent
  * @return SocketResult::WouldBlock if socket is non-blocking and would block
@@ -585,9 +581,6 @@ SocketResult Socket::send(const uint8_t* data, size_t size, size_t& sent) {
  * Loops until all data is sent or an error occurs. Handles partial
  * sends and WouldBlock conditions automatically.
  *
- * @param data Pointer to data buffer to send
- * @param size Number of bytes to send
- *
  * @return SocketResult::Success if all data was sent
  * @return SocketResult::Timeout if waiting too long for socket to be writable
  * @return Other error codes on failure
@@ -630,10 +623,7 @@ SocketResult Socket::send_all(const uint8_t* data, size_t size) {
  * - timeout_ms == 0: Non-blocking, return immediately
  * - timeout_ms < 0: Blocking, wait indefinitely
  *
- * @param buffer Buffer to receive data into
- * @param buffer_size Maximum bytes to receive (size of buffer)
- * @param[out] received Number of bytes actually received
- * @param timeout_ms Receive timeout in milliseconds
+ * At most buffer_size bytes are stored; 'received' gets the byte count.
  *
  * @return SocketResult::Success if data was received
  * @return SocketResult::WouldBlock if non-blocking and no data available
@@ -763,7 +753,8 @@ bool Socket::is_valid() const {
 /**
  * @brief Set socket blocking mode
  *
- * @param non_blocking true to set non-blocking, false for blocking
+ * Pass non_blocking = true for non-blocking mode, false for blocking.
+ *
  * @return SocketResult::Success on success
  * @return SocketResult::SocketError if socket is invalid or fcntl fails
  *
@@ -800,7 +791,8 @@ SocketResult Socket::set_non_blocking(bool non_blocking) const {
  * overhead. For latency-sensitive protocols like gaming, disabling
  * this can reduce latency at the cost of more network packets.
  *
- * @param nodelay true to disable Nagle (lower latency), false to enable
+ * Pass nodelay = true to disable Nagle (lower latency), false to enable it.
+ *
  * @return SocketResult::Success on success
  * @return SocketResult::SocketError on failure
  *
@@ -823,9 +815,9 @@ SocketResult Socket::set_nodelay(bool nodelay) const {
  * @brief Set socket receive buffer size
  *
  * Adjusts the kernel receive buffer size. Larger buffers can help
- * with high-bandwidth transfers but consume more memory.
+ * with high-bandwidth transfers but consume more memory. The size is in
+ * bytes.
  *
- * @param size Buffer size in bytes
  * @return SocketResult::Success on success
  * @return SocketResult::SocketError on failure
  *
@@ -847,9 +839,9 @@ SocketResult Socket::set_recv_buffer_size(int size) const {
  * @brief Set socket send buffer size
  *
  * Adjusts the kernel send buffer size. Larger buffers can help
- * with high-bandwidth transfers but consume more memory.
+ * with high-bandwidth transfers but consume more memory. The size is in
+ * bytes.
  *
- * @param size Buffer size in bytes
  * @return SocketResult::Success on success
  * @return SocketResult::SocketError on failure
  *
@@ -873,8 +865,8 @@ SocketResult Socket::set_send_buffer_size(int size) const {
  * Uses poll() to wait for the socket to become readable or writable.
  * This is used internally for timeout support on connect and recv.
  *
- * @param timeout_ms Maximum time to wait in milliseconds
- * @param for_write true to wait for write-ready, false for read-ready
+ * The wait lasts at most timeout_ms milliseconds; for_write = true waits
+ * for write-ready, false for read-ready.
  *
  * @return SocketResult::Success if socket is ready
  * @return SocketResult::Timeout if timeout expired

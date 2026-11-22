@@ -20,6 +20,7 @@
 // Test Framework (simple macros)
 // =============================================================================
 
+/// Defines a test function and registers it in the test table.
 #define TEST(name)                             \
     static void test_##name();                 \
     static struct TestRegister_##name {        \
@@ -31,6 +32,7 @@
     } test_register_##name;                    \
     static void test_##name()
 
+/// Fails the current test when the expression is false.
 #define ASSERT_TRUE(x)                                     \
     do {                                                   \
         if (!(x)) {                                        \
@@ -39,6 +41,7 @@
         }                                                  \
     } while (0)
 
+/// Fails the current test when the expression is true.
 #define ASSERT_FALSE(x)                                     \
     do {                                                    \
         if (x) {                                            \
@@ -47,6 +50,7 @@
         }                                                   \
     } while (0)
 
+/// Fails the current test when the two values differ.
 #define ASSERT_EQ(a, b)                                         \
     do {                                                        \
         if ((a) != (b)) {                                       \
@@ -55,6 +59,7 @@
         }                                                       \
     } while (0)
 
+/// Fails the current test when the two values are equal.
 #define ASSERT_NE(a, b)                                         \
     do {                                                        \
         if ((a) == (b)) {                                       \
@@ -63,6 +68,7 @@
         }                                                       \
     } while (0)
 
+/// Fails the current test when the first value is below the second.
 #define ASSERT_GE(a, b)                                         \
     do {                                                        \
         if ((a) < (b)) {                                        \
@@ -71,6 +77,7 @@
         }                                                       \
     } while (0)
 
+/// Fails the current test when the first value is above the second.
 #define ASSERT_LE(a, b)                                         \
     do {                                                        \
         if ((a) > (b)) {                                        \
@@ -86,20 +93,31 @@
 namespace protocol {
 
 // P2P Proxy Server Constants (from p2p_proxy_server.hpp)
+/// Test fixture value: PRIVATE PORT BASE.
 constexpr uint16_t PRIVATE_PORT_BASE = 39990;
+/// Test fixture value: PRIVATE PORT RANGE.
 constexpr int PRIVATE_PORT_RANGE = 10;
+/// Test fixture value: PUBLIC PORT BASE.
 constexpr uint16_t PUBLIC_PORT_BASE = 39990;
+/// Test fixture value: PUBLIC PORT RANGE.
 constexpr int PUBLIC_PORT_RANGE = 10;
+/// Test fixture value: PORT LEASE LENGTH.
 constexpr int PORT_LEASE_LENGTH = 60;  // seconds
-constexpr int PORT_LEASE_RENEW = 50;   // seconds
+/// Test fixture value: PORT LEASE RENEW.
+constexpr int PORT_LEASE_RENEW = 50;  // seconds
+/// Test fixture value: AUTH WAIT SECONDS.
 constexpr int AUTH_WAIT_SECONDS = 1;
+/// Test fixture value: MAX PLAYERS.
 constexpr int MAX_PLAYERS = 8;
 
 // Address family constants
-constexpr uint32_t AF_INET_VALUE = 2;    // IPv4
+/// Test fixture value: AF INET VALUE.
+constexpr uint32_t AF_INET_VALUE = 2;  // IPv4
+/// Test fixture value: AF INET6 VALUE.
 constexpr uint32_t AF_INET6_VALUE = 10;  // IPv6
 
 // Packet IDs
+/// Test fixture value: Packet Id.
 enum class PacketId : uint8_t {
     CreateAccessPoint = 5,
     Connected = 6,
@@ -111,30 +129,45 @@ enum class PacketId : uint8_t {
 
 // RyuNetworkConfig structure (from protocol/types.hpp)
 #pragma pack(push, 1)
+/// Test double: Ryu Network Config.
 struct RyuNetworkConfig {
-    char game_version[16];         // Game version string
-    uint8_t private_ip[16];        // Local IP (IPv4 in first 4 bytes)
-    uint32_t address_family;       // 2 = IPv4, 10 = IPv6
+    /// Test fixture value: game version.
+    char game_version[16];  // Game version string
+    /// Test fixture value: private ip.
+    uint8_t private_ip[16];  // Local IP (IPv4 in first 4 bytes)
+    /// Test fixture value: address family.
+    uint32_t address_family;  // 2 = IPv4, 10 = IPv6
+    /// Test fixture value: external proxy port.
     uint16_t external_proxy_port;  // UPnP public port
+    /// Test fixture value: internal proxy port.
     uint16_t internal_proxy_port;  // Local TCP port
 };
 #pragma pack(pop)
 
 // ExternalProxyToken structure (from protocol/types.hpp)
 #pragma pack(push, 1)
+/// Test double: External Proxy Token.
 struct ExternalProxyToken {
-    uint32_t virtual_ip;      // Virtual IP for the joiner
+    /// Test fixture value: virtual ip.
+    uint32_t virtual_ip;  // Virtual IP for the joiner
+    /// Test fixture value: physical ip.
     uint8_t physical_ip[16];  // Physical IP of joiner
+    /// Test fixture value: address family.
     uint32_t address_family;  // 2 = IPv4, 10 = IPv6
-    uint8_t token[16];        // Authentication token
+    /// Test fixture value: token.
+    uint8_t token[16];  // Authentication token
 };
 #pragma pack(pop)
 
 // CreateAccessPointRequest structure (simplified)
 #pragma pack(push, 1)
+/// Test double: Create Access Point Request.
 struct CreateAccessPointRequest {
+    /// Test fixture value: network config.
     uint8_t network_config[0x64];  // NetworkConfig
-    uint8_t user_config[0x30];     // UserConfig
+    /// Test fixture value: user config.
+    uint8_t user_config[0x30];  // UserConfig
+    /// Test fixture value: ryu network config.
     RyuNetworkConfig ryu_network_config;
 };
 #pragma pack(pop)
@@ -145,33 +178,39 @@ struct CreateAccessPointRequest {
 // P2P Proxy Server Constants Tests
 // =============================================================================
 
+/** @brief Test case: p2p server port base is 39990. */
 TEST(p2p_server_port_base_is_39990) {
     // Ryujinx uses ports 39990-39999 for P2P
     ASSERT_EQ(protocol::PRIVATE_PORT_BASE, 39990);
     ASSERT_EQ(protocol::PUBLIC_PORT_BASE, 39990);
 }
 
+/** @brief Test case: p2p server port range is 10. */
 TEST(p2p_server_port_range_is_10) {
     // 10 ports available: 39990-39999
     ASSERT_EQ(protocol::PRIVATE_PORT_RANGE, 10);
     ASSERT_EQ(protocol::PUBLIC_PORT_RANGE, 10);
 }
 
+/** @brief Test case: p2p server lease duration is 60s. */
 TEST(p2p_server_lease_duration_is_60s) {
     // UPnP lease duration: 60 seconds
     ASSERT_EQ(protocol::PORT_LEASE_LENGTH, 60);
 }
 
+/** @brief Test case: p2p server lease renewal is 50s. */
 TEST(p2p_server_lease_renewal_is_50s) {
     // Renew 10 seconds before expiry
     ASSERT_EQ(protocol::PORT_LEASE_RENEW, 50);
 }
 
+/** @brief Test case: p2p server auth wait is 1s. */
 TEST(p2p_server_auth_wait_is_1s) {
     // Wait 1 second for client auth
     ASSERT_EQ(protocol::AUTH_WAIT_SECONDS, 1);
 }
 
+/** @brief Test case: p2p server max players is 8. */
 TEST(p2p_server_max_players_is_8) {
     // Maximum concurrent P2P sessions
     ASSERT_EQ(protocol::MAX_PLAYERS, 8);
@@ -181,11 +220,13 @@ TEST(p2p_server_max_players_is_8) {
 // RyuNetworkConfig Structure Tests
 // =============================================================================
 
+/** @brief Test case: ryu network config size. */
 TEST(ryu_network_config_size) {
     // RyuNetworkConfig: 16 + 16 + 4 + 2 + 2 = 40 bytes
     ASSERT_EQ(sizeof(protocol::RyuNetworkConfig), 40U);
 }
 
+/** @brief Test case: ryu network config game version offset. */
 TEST(ryu_network_config_game_version_offset) {
     protocol::RyuNetworkConfig config{};
     size_t offset = offsetof(protocol::RyuNetworkConfig, game_version);
@@ -193,6 +234,7 @@ TEST(ryu_network_config_game_version_offset) {
     ASSERT_EQ(sizeof(config.game_version), 16U);
 }
 
+/** @brief Test case: ryu network config private ip offset. */
 TEST(ryu_network_config_private_ip_offset) {
     protocol::RyuNetworkConfig config{};
     size_t offset = offsetof(protocol::RyuNetworkConfig, private_ip);
@@ -200,21 +242,25 @@ TEST(ryu_network_config_private_ip_offset) {
     ASSERT_EQ(sizeof(config.private_ip), 16U);
 }
 
+/** @brief Test case: ryu network config address family offset. */
 TEST(ryu_network_config_address_family_offset) {
     size_t offset = offsetof(protocol::RyuNetworkConfig, address_family);
     ASSERT_EQ(offset, 32U);
 }
 
+/** @brief Test case: ryu network config external proxy port offset. */
 TEST(ryu_network_config_external_proxy_port_offset) {
     size_t offset = offsetof(protocol::RyuNetworkConfig, external_proxy_port);
     ASSERT_EQ(offset, 36U);
 }
 
+/** @brief Test case: ryu network config internal proxy port offset. */
 TEST(ryu_network_config_internal_proxy_port_offset) {
     size_t offset = offsetof(protocol::RyuNetworkConfig, internal_proxy_port);
     ASSERT_EQ(offset, 38U);
 }
 
+/** @brief Test case: ryu network config ipv4 initialization. */
 TEST(ryu_network_config_ipv4_initialization) {
     protocol::RyuNetworkConfig config{};
 
@@ -236,6 +282,7 @@ TEST(ryu_network_config_ipv4_initialization) {
     ASSERT_EQ(config.internal_proxy_port, 39990);
 }
 
+/** @brief Test case: ryu network config p2p disabled. */
 TEST(ryu_network_config_p2p_disabled) {
     protocol::RyuNetworkConfig config{};
 
@@ -261,6 +308,7 @@ TEST(ryu_network_config_p2p_disabled) {
     ASSERT_TRUE(all_zeros);
 }
 
+/** @brief Test case: ryu network config game version copy. */
 TEST(ryu_network_config_game_version_copy) {
     protocol::RyuNetworkConfig config{};
     const char* version = "1.0.0";
@@ -276,16 +324,19 @@ TEST(ryu_network_config_game_version_copy) {
 // ExternalProxyToken Structure Tests
 // =============================================================================
 
+/** @brief Test case: external proxy token size. */
 TEST(external_proxy_token_size) {
     // ExternalProxyToken: 4 + 16 + 4 + 16 = 40 bytes (0x28)
     ASSERT_EQ(sizeof(protocol::ExternalProxyToken), 40U);
 }
 
+/** @brief Test case: external proxy token virtual ip offset. */
 TEST(external_proxy_token_virtual_ip_offset) {
     size_t offset = offsetof(protocol::ExternalProxyToken, virtual_ip);
     ASSERT_EQ(offset, 0U);
 }
 
+/** @brief Test case: external proxy token physical ip offset. */
 TEST(external_proxy_token_physical_ip_offset) {
     size_t offset = offsetof(protocol::ExternalProxyToken, physical_ip);
     ASSERT_EQ(offset, 4U);
@@ -294,11 +345,13 @@ TEST(external_proxy_token_physical_ip_offset) {
     ASSERT_EQ(sizeof(token.physical_ip), 16U);
 }
 
+/** @brief Test case: external proxy token address family offset. */
 TEST(external_proxy_token_address_family_offset) {
     size_t offset = offsetof(protocol::ExternalProxyToken, address_family);
     ASSERT_EQ(offset, 20U);
 }
 
+/** @brief Test case: external proxy token token offset. */
 TEST(external_proxy_token_token_offset) {
     size_t offset = offsetof(protocol::ExternalProxyToken, token);
     ASSERT_EQ(offset, 24U);
@@ -307,6 +360,7 @@ TEST(external_proxy_token_token_offset) {
     ASSERT_EQ(sizeof(token.token), 16U);
 }
 
+/** @brief Test case: external proxy token parsing. */
 TEST(external_proxy_token_parsing) {
     protocol::ExternalProxyToken token{};
 
@@ -334,6 +388,7 @@ TEST(external_proxy_token_parsing) {
 // P2P Server Lifecycle Tests
 // =============================================================================
 
+/** @brief Test case: p2p server port valid range. */
 TEST(p2p_server_port_valid_range) {
     // Verify port is in valid range 39990-39999
     for (int port = protocol::PRIVATE_PORT_BASE;
@@ -344,6 +399,7 @@ TEST(p2p_server_port_valid_range) {
     }
 }
 
+/** @brief Test case: p2p server upnp port calculation. */
 TEST(p2p_server_upnp_port_calculation) {
     // Test UPnP port selection logic
     uint16_t private_port = protocol::PRIVATE_PORT_BASE + 3;  // e.g., 39993
@@ -364,6 +420,7 @@ TEST(p2p_server_upnp_port_calculation) {
 // CreateNetwork P2P Configuration Tests
 // =============================================================================
 
+/** @brief Test case: create network p2p enabled config. */
 TEST(create_network_p2p_enabled_config) {
     // Simulate CreateNetwork with P2P enabled
     protocol::RyuNetworkConfig config{};
@@ -388,6 +445,7 @@ TEST(create_network_p2p_enabled_config) {
     ASSERT_EQ(stored_ip, 0x0A720064U);
 }
 
+/** @brief Test case: create network p2p disabled config. */
 TEST(create_network_p2p_disabled_config) {
     // Simulate CreateNetwork with P2P disabled
     protocol::RyuNetworkConfig config{};
@@ -404,6 +462,7 @@ TEST(create_network_p2p_disabled_config) {
     ASSERT_EQ(config.internal_proxy_port, 0);
 }
 
+/** @brief Test case: create network upnp failed config. */
 TEST(create_network_upnp_failed_config) {
     // Simulate CreateNetwork where UPnP failed but server started
     protocol::RyuNetworkConfig config{};
@@ -428,6 +487,7 @@ TEST(create_network_upnp_failed_config) {
 // Token Handling Tests
 // =============================================================================
 
+/** @brief Test case: token add waiting token flow. */
 TEST(token_add_waiting_token_flow) {
     // Simulate adding token to waiting list
     protocol::ExternalProxyToken tokens[protocol::MAX_PLAYERS]{};
@@ -443,6 +503,7 @@ TEST(token_add_waiting_token_flow) {
     ASSERT_EQ(tokens[0].virtual_ip, 0x0A720001U);
 }
 
+/** @brief Test case: token max waiting tokens. */
 TEST(token_max_waiting_tokens) {
     // Verify max waiting tokens constant
     // MAX_WAITING_TOKENS in implementation is 16
@@ -450,6 +511,7 @@ TEST(token_max_waiting_tokens) {
     ASSERT_EQ(MAX_WAITING_TOKENS, 16);
 }
 
+/** @brief Test case: token validation ipv4. */
 TEST(token_validation_ipv4) {
     protocol::ExternalProxyToken token{};
     token.address_family = protocol::AF_INET_VALUE;
@@ -458,6 +520,7 @@ TEST(token_validation_ipv4) {
     ASSERT_TRUE(is_ipv4);
 }
 
+/** @brief Test case: token validation ipv6. */
 TEST(token_validation_ipv6) {
     protocol::ExternalProxyToken token{};
     token.address_family = protocol::AF_INET6_VALUE;
@@ -470,6 +533,7 @@ TEST(token_validation_ipv6) {
 // Cleanup Tests
 // =============================================================================
 
+/** @brief Test case: cleanup on destroy network. */
 TEST(cleanup_on_destroy_network) {
     // Simulate DestroyNetwork cleanup
     bool p2p_server_running = true;
@@ -480,6 +544,7 @@ TEST(cleanup_on_destroy_network) {
     ASSERT_FALSE(p2p_server_running);
 }
 
+/** @brief Test case: cleanup on close access point. */
 TEST(cleanup_on_close_access_point) {
     // Simulate CloseAccessPoint cleanup
     bool p2p_server_running = true;
@@ -490,6 +555,7 @@ TEST(cleanup_on_close_access_point) {
     ASSERT_FALSE(p2p_server_running);
 }
 
+/** @brief Test case: cleanup release upnp port. */
 TEST(cleanup_release_upnp_port) {
     // Simulate UPnP port release on cleanup
     bool upnp_port_mapped = true;
@@ -504,6 +570,7 @@ TEST(cleanup_release_upnp_port) {
 // Master Send Callback Tests
 // =============================================================================
 
+/** @brief Test case: master send callback signature. */
 TEST(master_send_callback_signature) {
     // Test callback signature: void(*)(const void*, size_t, void*)
     // The callback should accept data, size, and user_data
@@ -526,6 +593,7 @@ TEST(master_send_callback_signature) {
     ASSERT_TRUE(callback_invoked);
 }
 
+/** @brief Test case: master send callback user data pattern. */
 TEST(master_send_callback_user_data_pattern) {
     // Test user_data pattern for passing context
     struct Context {
@@ -553,6 +621,7 @@ TEST(master_send_callback_user_data_pattern) {
 // Port Selection Logic Tests
 // =============================================================================
 
+/** @brief Test case: port selection first available. */
 TEST(port_selection_first_available) {
     // Simulate port selection logic - try ports until one works
     bool port_available[10] = {
@@ -570,6 +639,7 @@ TEST(port_selection_first_available) {
     ASSERT_EQ(selected_port, 39992);
 }
 
+/** @brief Test case: port selection all busy. */
 TEST(port_selection_all_busy) {
     // Simulate all ports busy
     bool port_available[10] = {
@@ -591,6 +661,7 @@ TEST(port_selection_all_busy) {
 // Integration Flow Tests
 // =============================================================================
 
+/** @brief Test case: create network full flow p2p success. */
 TEST(create_network_full_flow_p2p_success) {
     // Simulate full CreateNetwork flow with P2P success
 
@@ -620,6 +691,7 @@ TEST(create_network_full_flow_p2p_success) {
     ASSERT_EQ(config.internal_proxy_port, 39990);
 }
 
+/** @brief Test case: create network full flow p2p disabled. */
 TEST(create_network_full_flow_p2p_disabled) {
     // Simulate CreateNetwork with P2P disabled
 
@@ -640,6 +712,7 @@ TEST(create_network_full_flow_p2p_disabled) {
     ASSERT_EQ(config.address_family, 0U);
 }
 
+/** @brief Test case: external proxy token handling flow. */
 TEST(external_proxy_token_handling_flow) {
     // Simulate ExternalProxyToken handler flow
 
@@ -665,6 +738,11 @@ TEST(external_proxy_token_handling_flow) {
 // Main
 // =============================================================================
 
+/**
+ * @brief Runs the whole suite; the exit code is non-zero if any test failed.
+ *
+ * @return 0 when every test passed, non-zero otherwise
+ */
 int main() {
     printf("=== Story 9.8 CreateNetwork P2P Tests ===\n\n");
 
