@@ -720,10 +720,7 @@ ConfigResult save_config(const char* path, const Config& config) {
         mkdir(dir_path, 0755);
     }
 
-    // The Switch SD card uses FAT32/exFAT which has no POSIX permission
-    // model — fopen("w") creates with default FAT attributes and chmod is
-    // a no-op on this filesystem.  // codeql[cpp/world-writable-file-creation]
-    FILE* file = std::fopen(path, "w");
+    FILE* file = open_stream(path, O_WRONLY | O_CREAT | O_TRUNC, "w");
     if (!file) {
         return ConfigResult::IoError;
     }

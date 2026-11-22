@@ -2015,6 +2015,46 @@ Result ICommunicationService::ClearAcceptFilter() {
 // Packet Callback Handlers
 // ============================================================================
 
+/**
+ * @brief Apply the proxy configuration sent by the server
+ *
+ * Updates the proxy config, the local IP and subnet mask used by
+ * FindLocalNodeId(), and the ProxySocketManager local IP.
+ */
+void ICommunicationService::HandleProxyConfigPacket(
+    const uint8_t* data, size_t size) {
+    // Server sends proxy configuration (like Ryujinx HandleProxyConfig)
+    if (size >= sizeof(ryu_ldn::protocol::ProxyConfig)) {
+        const auto* config =
+            reinterpret_cast<const ryu_ldn::protocol::ProxyConfig*>(data);
+        m_proxy_config = *config;
+
+        // CRITICAL: Update m_ipv4_address and m_subnet_mask!
+        // These are used by FindLocalNodeId() to identify our node in
+        // NetworkInfo. Keep in Ryujinx format (big-endian uint32) -
+        // same format as:
+        // - GetIpv4Address() returns to the game
+        // - NetworkInfo.nodes[].ipv4Address (no longer bswapped)
+        // - ProxySocketManager local IP
+        m_ipv4_address = config->proxy_ip;
+        m_subnet_mask = config->proxy_subnet_mask;
+
+        LOG_INFO(
+            "Received ProxyConfig: ip=0x%08X, mask=0x%08X",
+            m_ipv4_address,
+            m_subnet_mask);
+
+        // Set local IP in ProxySocketManager for BSD MITM
+        // This is used when creating proxy sockets for INADDR_ANY binds
+        // Keep in Ryujinx format for ProxySocketManager (it expects
+        // Ryujinx format)
+        auto& socket_manager = mitm::bsd::ProxySocketManager::GetInstance();
+        socket_manager.SetLocalIp(config->proxy_ip);
+        LOG_INFO(
+            "ProxySocketManager: local IP set to 0x%08X", config->proxy_ip);
+    }
+}
+
 void ICommunicationService::HandleServerPacket(
     ryu_ldn::protocol::PacketId id, const uint8_t* data, size_t size) {
     LOG_VERBOSE(
@@ -2110,39 +2150,7 @@ void ICommunicationService::HandleServerPacket(
         }
 
         case ryu_ldn::protocol::PacketId::ProxyConfig: {
-            // Server sends proxy configuration (like Ryujinx HandleProxyConfig)
-            if (size >= sizeof(ryu_ldn::protocol::ProxyConfig)) {
-                const auto* config =
-                    reinterpret_cast<const ryu_ldn::protocol::ProxyConfig*>(
-                        data);
-                m_proxy_config = *config;
-
-                // CRITICAL: Update m_ipv4_address and m_subnet_mask!
-                // These are used by FindLocalNodeId() to identify our node in
-                // NetworkInfo. Keep in Ryujinx format (big-endian uint32) -
-                // same format as:
-                // - GetIpv4Address() returns to the game
-                // - NetworkInfo.nodes[].ipv4Address (no longer bswapped)
-                // - ProxySocketManager local IP
-                m_ipv4_address = config->proxy_ip;
-                m_subnet_mask = config->proxy_subnet_mask;
-
-                LOG_INFO(
-                    "Received ProxyConfig: ip=0x%08X, mask=0x%08X",
-                    m_ipv4_address,
-                    m_subnet_mask);
-
-                // Set local IP in ProxySocketManager for BSD MITM
-                // This is used when creating proxy sockets for INADDR_ANY binds
-                // Keep in Ryujinx format for ProxySocketManager (it expects
-                // Ryujinx format)
-                auto& socket_manager =
-                    mitm::bsd::ProxySocketManager::GetInstance();
-                socket_manager.SetLocalIp(config->proxy_ip);
-                LOG_INFO(
-                    "ProxySocketManager: local IP set to 0x%08X",
-                    config->proxy_ip);
-            }
+            HandleProxyConfigPacket(data, size);
             break;
         }
 

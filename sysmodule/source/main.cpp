@@ -80,6 +80,8 @@ constexpr size_t MallocBufferSize = 1_MB;
 /// load time (constinit).
 alignas(os::MemoryPageSize) constinit u8 g_malloc_buffer[MallocBufferSize];
 
+}  // namespace
+
 /**
  * @brief Compute, at compile time, the transfer memory libnx needs for BSD.
  *
@@ -89,7 +91,6 @@ alignas(os::MemoryPageSize) constinit u8 g_malloc_buffer[MallocBufferSize];
  * @param config Socket buffer configuration; must be a constant expression.
  * @return Transfer memory size in bytes.
  */
-// codeql[cpp/unused-static-function] — consteval, used at compile-time below
 consteval size_t GetLibnxBsdTransferMemorySize(
     const ::SocketInitConfig* config) {
     const u32 tcp_tx_buf_max_size = config->tcp_tx_buf_max_size != 0
@@ -104,6 +105,8 @@ consteval size_t GetLibnxBsdTransferMemorySize(
     return static_cast<size_t>(config->sb_efficiency) *
            util::AlignUp(sum, os::MemoryPageSize);
 }
+
+namespace {
 
 /// Socket initialization configuration
 constexpr const ::SocketInitConfig LibnxSocketInitConfig = {

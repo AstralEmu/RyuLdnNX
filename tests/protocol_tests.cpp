@@ -946,10 +946,10 @@ TEST(roundtrip_create_access_point) {
     // Decode
     LdnHeader header;
     CreateAccessPointRequest decoded;
-    const uint8_t* decoded_data;
+    size_t decoded_offset;
     size_t decoded_size;
     DecodeResult dec_result = decode_create_access_point(
-        buffer, encoded_size, header, decoded, decoded_data, decoded_size);
+        buffer, encoded_size, header, decoded, decoded_offset, decoded_size);
 
     ASSERT_EQ(dec_result, DecodeResult::Success);
     ASSERT_EQ(
@@ -959,7 +959,8 @@ TEST(roundtrip_create_access_point) {
         decoded.ryu_network_config.external_proxy_port,
         original.ryu_network_config.external_proxy_port);
     ASSERT_EQ(decoded_size, sizeof(original_data));
-    ASSERT_TRUE(std::memcmp(decoded_data, original_data, decoded_size) == 0);
+    ASSERT_TRUE(
+        std::memcmp(buffer + decoded_offset, original_data, decoded_size) == 0);
 }
 
 /** @brief Test case: encode set accept policy packet. */
@@ -1097,10 +1098,15 @@ TEST(roundtrip_proxy_data) {
     // Decode
     LdnHeader header;
     ProxyDataHeader proxy_header;
-    const uint8_t* decoded_data;
+    size_t decoded_offset;
     size_t decoded_size;
     DecodeResult dec_result = decode_proxy_data(
-        buffer, encoded_size, header, proxy_header, decoded_data, decoded_size);
+        buffer,
+        encoded_size,
+        header,
+        proxy_header,
+        decoded_offset,
+        decoded_size);
 
     ASSERT_EQ(dec_result, DecodeResult::Success);
     ASSERT_EQ(proxy_header.info.source_ipv4, original_info.source_ipv4);
@@ -1112,7 +1118,9 @@ TEST(roundtrip_proxy_data) {
         static_cast<int>(original_info.protocol));
     ASSERT_EQ(proxy_header.data_length, sizeof(original_payload));
     ASSERT_EQ(decoded_size, sizeof(original_payload));
-    ASSERT_TRUE(std::memcmp(decoded_data, original_payload, decoded_size) == 0);
+    ASSERT_TRUE(
+        std::memcmp(buffer + decoded_offset, original_payload, decoded_size) ==
+        0);
 }
 
 /** @brief Test case: decode proxy connect packet. */
@@ -1546,14 +1554,14 @@ TEST(decode_with_data_template) {
     // Decode
     LdnHeader header;
     ProxyInfo decoded_info;
-    const uint8_t* decoded_extra;
+    size_t decoded_extra_offset;
     size_t decoded_extra_size;
     DecodeResult dec_result = decode_with_data(
         buffer,
         encoded_size,
         header,
         decoded_info,
-        decoded_extra,
+        decoded_extra_offset,
         decoded_extra_size);
 
     ASSERT_EQ(dec_result, DecodeResult::Success);
@@ -1561,7 +1569,10 @@ TEST(decode_with_data_template) {
     ASSERT_EQ(decoded_info.dest_ipv4, original_info.dest_ipv4);
     ASSERT_EQ(decoded_extra_size, sizeof(original_extra));
     ASSERT_TRUE(
-        std::memcmp(decoded_extra, original_extra, decoded_extra_size) == 0);
+        std::memcmp(
+            buffer + decoded_extra_offset,
+            original_extra,
+            decoded_extra_size) == 0);
 }
 
 /** @brief Test case: all packet id to string. */
@@ -1769,13 +1780,13 @@ TEST(decode_with_data_no_extra) {
     // Decode
     LdnHeader header;
     ProxyInfo decoded_info;
-    const uint8_t* extra_data;
+    size_t extra_offset;
     size_t extra_size;
     DecodeResult dec_result = decode_with_data(
-        buffer, encoded_size, header, decoded_info, extra_data, extra_size);
+        buffer, encoded_size, header, decoded_info, extra_offset, extra_size);
 
     ASSERT_EQ(dec_result, DecodeResult::Success);
-    ASSERT_TRUE(extra_data == nullptr);
+    ASSERT_EQ(extra_offset, 0u);
     ASSERT_EQ(extra_size, 0u);
 }
 
@@ -2394,10 +2405,10 @@ TEST(decode_convenience_functions) {
     encode_create_access_point(
         buffer, sizeof(buffer), cap_req, adv, sizeof(adv), out_size);
     CreateAccessPointRequest dec_cap;
-    const uint8_t* dec_adv;
+    size_t dec_adv_offset;
     size_t dec_adv_size;
     r = decode_create_access_point(
-        buffer, out_size, hdr, dec_cap, dec_adv, dec_adv_size);
+        buffer, out_size, hdr, dec_cap, dec_adv_offset, dec_adv_size);
     ASSERT_EQ(r, DecodeResult::Success);
     ASSERT_EQ(dec_adv_size, sizeof(adv));
 
@@ -2426,14 +2437,14 @@ TEST(decode_convenience_functions) {
     encode_proxy_data(
         buffer, sizeof(buffer), proxy_hdr.info, adv, sizeof(adv), out_size);
     ProxyDataHeader dec_proxy_hdr;
-    const uint8_t* dec_proxy_data;
+    size_t dec_proxy_data_offset;
     size_t dec_proxy_data_size;
     r = decode_proxy_data(
         buffer,
         out_size,
         hdr,
         dec_proxy_hdr,
-        dec_proxy_data,
+        dec_proxy_data_offset,
         dec_proxy_data_size);
     ASSERT_EQ(r, DecodeResult::Success);
 
@@ -2481,14 +2492,14 @@ TEST(decode_with_data_buffer_too_small) {
 
     LdnHeader dec_hdr;
     ConnectRequest msg;
-    const uint8_t* extra;
+    size_t extra;
     size_t extra_size;
     // Buffer has 64 bytes but needs sizeof(LdnHeader) + sizeof(ConnectRequest)
     // = 12 + 636 = 648
     DecodeResult r = decode_with_data(
         buffer, sizeof(buffer), dec_hdr, msg, extra, extra_size);
     ASSERT_EQ(r, DecodeResult::BufferTooSmall);
-    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra, 0u);
     ASSERT_EQ(extra_size, 0u);
 }
 
@@ -2506,7 +2517,7 @@ TEST(decode_with_data_incomplete_extra) {
 
     LdnHeader dec_hdr;
     PingMessage dec_msg;
-    const uint8_t* extra;
+    size_t extra;
     size_t extra_size;
     // Buffer only has header+struct, not the extra data
     DecodeResult r = decode_with_data(
@@ -2517,7 +2528,7 @@ TEST(decode_with_data_incomplete_extra) {
         extra,
         extra_size);
     ASSERT_EQ(r, DecodeResult::IncompletePacket);
-    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra, 0u);
     ASSERT_EQ(extra_size, 0u);
 }
 
@@ -2526,12 +2537,12 @@ TEST(decode_with_data_invalid_header) {
     uint8_t buffer[256] = {};
     LdnHeader dec_hdr;
     PingMessage msg;
-    const uint8_t* extra;
+    size_t extra;
     size_t extra_size;
     DecodeResult r = decode_with_data(
         buffer, sizeof(buffer), dec_hdr, msg, extra, extra_size);
     ASSERT_TRUE(r != DecodeResult::Success);
-    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra, 0u);
     ASSERT_EQ(extra_size, 0u);
 }
 
@@ -2732,7 +2743,7 @@ void check_decode_with_data_paths() {
     uint8_t buf[SCRATCH];
     LdnHeader header;
     T payload;
-    const uint8_t* extra = buf;
+    size_t extra = 99;
     size_t extra_size = 77;
 
     // Invalid header.
@@ -2741,33 +2752,33 @@ void check_decode_with_data_paths() {
         decode_with_data(
             buf, sizeof(buf), header, payload, extra, extra_size) ==
         DecodeResult::InvalidMagic);
-    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra, 0u);
     ASSERT_EQ(extra_size, 0);
 
     // Header only, payload structure missing.
-    extra = buf;
+    extra = 99;
     extra_size = 77;
     encode_header(buf, PacketId::Ping, static_cast<int32_t>(sizeof(T)));
     ASSERT_TRUE(
         decode_with_data(
             buf, sizeof(LdnHeader), header, payload, extra, extra_size) ==
         DecodeResult::BufferTooSmall);
-    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra, 0u);
     ASSERT_EQ(extra_size, 0);
 
     // Structure only, no trailing data.
-    extra = buf;
+    extra = 99;
     extra_size = 77;
     ASSERT_TRUE(
         decode_with_data(
             buf, get_packet_size<T>(), header, payload, extra, extra_size) ==
         DecodeResult::Success);
-    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra, 0u);
     ASSERT_EQ(extra_size, 0);
 
     // Trailing data announced but only partly received.
     encode_header(buf, PacketId::Ping, static_cast<int32_t>(sizeof(T) + 10));
-    extra = buf;
+    extra = 99;
     extra_size = 77;
     ASSERT_TRUE(
         decode_with_data(
@@ -2777,11 +2788,11 @@ void check_decode_with_data_paths() {
             payload,
             extra,
             extra_size) == DecodeResult::IncompletePacket);
-    ASSERT_TRUE(extra == nullptr);
+    ASSERT_EQ(extra, 0u);
     ASSERT_EQ(extra_size, 0);
 
     // Trailing data complete.
-    extra = nullptr;
+    extra = 99;
     extra_size = 0;
     ASSERT_TRUE(
         decode_with_data(
@@ -2792,7 +2803,7 @@ void check_decode_with_data_paths() {
             extra,
             extra_size) == DecodeResult::Success);
     ASSERT_EQ(extra_size, 10);
-    ASSERT_TRUE(extra == buf + get_packet_size<T>());
+    ASSERT_EQ(extra, get_packet_size<T>());
 }
 
 template <typename T>

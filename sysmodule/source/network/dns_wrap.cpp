@@ -91,8 +91,6 @@ using StoragePtr = std::unique_ptr<AddrinfoStorage, void (*)(void*)>;
  * @return Owning pointer; null when the heap is exhausted.
  */
 inline StoragePtr AllocStorage() {
-    // codeql[cpp/suspicious-allocation-size] — AddrinfoStorage is a struct
-    // containing addrinfo + sockaddr_in, not an array of addrinfo.
     return {
         static_cast<AddrinfoStorage*>(std::malloc(sizeof(AddrinfoStorage))),
         &std::free};

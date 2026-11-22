@@ -506,6 +506,42 @@ void RyuLdnClient::disconnect() {
 }
 
 /**
+ * @brief Send the handshake once the TCP connection is up
+ *
+ * Moves to Handshaking on success; on failure reports HandshakeFailed and
+ * starts the backoff when auto-reconnect is enabled.
+ */
+void RyuLdnClient::handle_connected_state(uint64_t current_time_ms) {
+    if (!m_handshake_sent) {
+        if (send_initialize() == ClientOpResult::Success) {
+            m_handshake_sent = true;
+            m_handshake_start_time_ms = current_time_ms;
+            // Transition to Handshaking state to wait for response
+            m_state_machine.process_event(ConnectionEvent::HandshakeStarted);
+            if (m_state_callback != nullptr) {
+                m_state_callback(
+                    ConnectionState::Connected,
+                    ConnectionState::Handshaking,
+                    m_state_callback_user_data);
+            }
+        } else {
+            ConnectionState before_state = m_state_machine.get_state();
+            m_state_machine.process_event(ConnectionEvent::HandshakeFailed);
+            if (m_config.auto_reconnect) {
+                start_backoff();
+            }
+            if ((m_state_callback != nullptr) &&
+                before_state != m_state_machine.get_state()) {
+                m_state_callback(
+                    before_state,
+                    m_state_machine.get_state(),
+                    m_state_callback_user_data);
+            }
+        }
+    }
+}
+
+/**
  * @brief Update client - must be called regularly
  *
  * Handles all client maintenance tasks, driven by the monotonic clock value
@@ -527,35 +563,7 @@ void RyuLdnClient::update(uint64_t current_time_ms) {
 
         case ConnectionState::Connected:
             // TCP connected, send handshake if not done
-            if (!m_handshake_sent) {
-                if (send_initialize() == ClientOpResult::Success) {
-                    m_handshake_sent = true;
-                    m_handshake_start_time_ms = current_time_ms;
-                    // Transition to Handshaking state to wait for response
-                    m_state_machine.process_event(
-                        ConnectionEvent::HandshakeStarted);
-                    if (m_state_callback != nullptr) {
-                        m_state_callback(
-                            ConnectionState::Connected,
-                            ConnectionState::Handshaking,
-                            m_state_callback_user_data);
-                    }
-                } else {
-                    ConnectionState before_state = m_state_machine.get_state();
-                    m_state_machine.process_event(
-                        ConnectionEvent::HandshakeFailed);
-                    if (m_config.auto_reconnect) {
-                        start_backoff();
-                    }
-                    if ((m_state_callback != nullptr) &&
-                        before_state != m_state_machine.get_state()) {
-                        m_state_callback(
-                            before_state,
-                            m_state_machine.get_state(),
-                            m_state_callback_user_data);
-                    }
-                }
-            }
+            handle_connected_state(current_time_ms);
             break;
 
         case ConnectionState::Handshaking:
@@ -1355,6 +1363,98 @@ bool RyuLdnClient::is_handshake_timeout(uint64_t current_time_ms) const {
 }
 
 /**
+ * @brief Handle the server's Initialize reply to our handshake
+ *
+ * Stores the session ID and MAC address the server assigned, then moves the
+ * state machine to Ready and notifies the state callback.
+ */
+void RyuLdnClient::handle_handshake_initialize(
+    const uint8_t* data, size_t size) {
+    // Server responds with Initialize containing assigned ID and MAC
+    // This is the expected response from RyuLDN server
+    if (size >= sizeof(protocol::InitializeMessage)) {
+        const auto* init_msg =
+            reinterpret_cast<const protocol::InitializeMessage*>(data);
+
+        // Store assigned session ID and MAC address
+        std::memcpy(
+            m_session_id.data, init_msg->id.data, sizeof(m_session_id.data));
+        std::memcpy(
+            m_mac_address.data,
+            init_msg->mac_address.data,
+            sizeof(m_mac_address.data));
+
+        LOG_INFO(
+            "Handshake successful - assigned MAC: "
+            "%02X:%02X:%02X:%02X:%02X:%02X",
+            m_mac_address.data[0],
+            m_mac_address.data[1],
+            m_mac_address.data[2],
+            m_mac_address.data[3],
+            m_mac_address.data[4],
+            m_mac_address.data[5]);
+    }
+
+    m_last_error_code = protocol::NetworkErrorCode::None;
+    ConnectionState before_hs = m_state_machine.get_state();
+    m_state_machine.process_event(ConnectionEvent::HandshakeSuccess);
+    if (m_state_callback != nullptr) {
+        m_state_callback(
+            before_hs, m_state_machine.get_state(), m_state_callback_user_data);
+    }
+}
+
+/**
+ * @brief Handle a NetworkError the server sent during the handshake
+ *
+ * Records the error code; a version mismatch is fatal, any other error
+ * fails the handshake and starts the backoff when auto-reconnect is on.
+ */
+void RyuLdnClient::handle_handshake_network_error(
+    const uint8_t* data, size_t size) {
+    // Server rejected our handshake
+    if (size >= sizeof(protocol::NetworkErrorMessage)) {
+        const auto* error_msg =
+            reinterpret_cast<const protocol::NetworkErrorMessage*>(data);
+        m_last_error_code =
+            static_cast<protocol::NetworkErrorCode>(error_msg->error_code);
+    } else {
+        m_last_error_code = protocol::NetworkErrorCode::InternalError;
+    }
+
+    LOG_ERROR(
+        "Handshake rejected: error_code=%u",
+        static_cast<uint32_t>(m_last_error_code));
+
+    // Check for version mismatch specifically
+    if (m_last_error_code == protocol::NetworkErrorCode::VersionMismatch) {
+        // Version mismatch is a fatal error - no point retrying
+        LOG_ERROR("Version mismatch - fatal error");
+        ConnectionState before_err = m_state_machine.get_state();
+        m_state_machine.process_event(ConnectionEvent::FatalError);
+        if (m_state_callback != nullptr) {
+            m_state_callback(
+                before_err,
+                m_state_machine.get_state(),
+                m_state_callback_user_data);
+        }
+    } else {
+        // Other errors might be recoverable
+        ConnectionState before_err = m_state_machine.get_state();
+        m_state_machine.process_event(ConnectionEvent::HandshakeFailed);
+        if (m_config.auto_reconnect) {
+            start_backoff();
+        }
+        if (m_state_callback != nullptr) {
+            m_state_callback(
+                before_err,
+                m_state_machine.get_state(),
+                m_state_callback_user_data);
+        }
+    }
+}
+
+/**
  * @brief Process handshake response from server
  *
  * Handles the server's response to our Initialize message.
@@ -1371,91 +1471,14 @@ bool RyuLdnClient::process_handshake_response(
     LOG_VERBOSE(
         "Received handshake response: packet_id=%u", static_cast<uint32_t>(id));
 
-    switch (id) {  // codeql[cpp/long-switch] natural dispatch: 4 handshake
-                   // packet types
+    switch (id) {
         case protocol::PacketId::Initialize: {
-            // Server responds with Initialize containing assigned ID and MAC
-            // This is the expected response from RyuLDN server
-            if (size >= sizeof(protocol::InitializeMessage)) {
-                const auto* init_msg =
-                    reinterpret_cast<const protocol::InitializeMessage*>(data);
-
-                // Store assigned session ID and MAC address
-                std::memcpy(
-                    m_session_id.data,
-                    init_msg->id.data,
-                    sizeof(m_session_id.data));
-                std::memcpy(
-                    m_mac_address.data,
-                    init_msg->mac_address.data,
-                    sizeof(m_mac_address.data));
-
-                LOG_INFO(
-                    "Handshake successful - assigned MAC: "
-                    "%02X:%02X:%02X:%02X:%02X:%02X",
-                    m_mac_address.data[0],
-                    m_mac_address.data[1],
-                    m_mac_address.data[2],
-                    m_mac_address.data[3],
-                    m_mac_address.data[4],
-                    m_mac_address.data[5]);
-            }
-
-            m_last_error_code = protocol::NetworkErrorCode::None;
-            ConnectionState before_hs = m_state_machine.get_state();
-            m_state_machine.process_event(ConnectionEvent::HandshakeSuccess);
-            if (m_state_callback != nullptr) {
-                m_state_callback(
-                    before_hs,
-                    m_state_machine.get_state(),
-                    m_state_callback_user_data);
-            }
+            handle_handshake_initialize(data, size);
             return true;
         }
 
         case protocol::PacketId::NetworkError: {
-            // Server rejected our handshake
-            if (size >= sizeof(protocol::NetworkErrorMessage)) {
-                const auto* error_msg =
-                    reinterpret_cast<const protocol::NetworkErrorMessage*>(
-                        data);
-                m_last_error_code = static_cast<protocol::NetworkErrorCode>(
-                    error_msg->error_code);
-            } else {
-                m_last_error_code = protocol::NetworkErrorCode::InternalError;
-            }
-
-            LOG_ERROR(
-                "Handshake rejected: error_code=%u",
-                static_cast<uint32_t>(m_last_error_code));
-
-            // Check for version mismatch specifically
-            if (m_last_error_code ==
-                protocol::NetworkErrorCode::VersionMismatch) {
-                // Version mismatch is a fatal error - no point retrying
-                LOG_ERROR("Version mismatch - fatal error");
-                ConnectionState before_err = m_state_machine.get_state();
-                m_state_machine.process_event(ConnectionEvent::FatalError);
-                if (m_state_callback != nullptr) {
-                    m_state_callback(
-                        before_err,
-                        m_state_machine.get_state(),
-                        m_state_callback_user_data);
-                }
-            } else {
-                // Other errors might be recoverable
-                ConnectionState before_err = m_state_machine.get_state();
-                m_state_machine.process_event(ConnectionEvent::HandshakeFailed);
-                if (m_config.auto_reconnect) {
-                    start_backoff();
-                }
-                if (m_state_callback != nullptr) {
-                    m_state_callback(
-                        before_err,
-                        m_state_machine.get_state(),
-                        m_state_callback_user_data);
-                }
-            }
+            handle_handshake_network_error(data, size);
             return true;
         }
 

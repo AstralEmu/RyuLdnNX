@@ -630,7 +630,8 @@ DecodeResult decode(
  * @param buffer_size Size of input buffer
  * @param[out] header Decoded header
  * @param[out] payload Decoded payload structure
- * @param[out] extra_data Pointer to extra data (points into buffer)
+ * @param[out] extra_offset Offset of the extra data from the start of buffer
+ *             (0 when there is none; the caller adds it to its own buffer)
  * @param[out] extra_size Size of extra data
  * @return DecodeResult::Success or error
  */
@@ -640,12 +641,12 @@ DecodeResult decode_with_data(
     size_t buffer_size,
     LdnHeader& header,
     T& payload,
-    const uint8_t*& extra_data,
+    size_t& extra_offset,
     size_t& extra_size) {
     // Decode and validate header
     DecodeResult result = decode_header(buffer, buffer_size, header);
     if (result != DecodeResult::Success) {
-        extra_data = nullptr;
+        extra_offset = 0;
         extra_size = 0;
         return result;
     }
@@ -653,7 +654,7 @@ DecodeResult decode_with_data(
     // Check minimum size for structure
     const size_t min_size = sizeof(LdnHeader) + sizeof(T);
     if (buffer_size < min_size) {
-        extra_data = nullptr;
+        extra_offset = 0;
         extra_size = 0;
         return DecodeResult::BufferTooSmall;
     }
@@ -665,20 +666,19 @@ DecodeResult decode_with_data(
     const size_t total_payload = static_cast<size_t>(header.data_size);
     if (total_payload > sizeof(T)) {
         extra_size = total_payload - sizeof(T);
-        // `extra_data` points into the caller-provided `buffer`. This is an
-        // intentional zero-copy design — the caller always provides a
-        // receive buffer on the heap/static BSS, never on the stack.
-        // codeql[cpp/stack-address-escape]
-        extra_data = buffer + sizeof(LdnHeader) + sizeof(T);
+        // The offset is returned rather than a pointer: the caller applies it
+        // to the buffer it owns, so no address escapes through an output
+        // parameter.
+        extra_offset = sizeof(LdnHeader) + sizeof(T);
 
         // Verify buffer has enough data
         if (buffer_size < sizeof(LdnHeader) + total_payload) {
-            extra_data = nullptr;
+            extra_offset = 0;
             extra_size = 0;
             return DecodeResult::IncompletePacket;
         }
     } else {
-        extra_data = nullptr;
+        extra_offset = 0;
         extra_size = 0;
     }
 
@@ -851,8 +851,8 @@ inline DecodeResult decode_connect(
  * @param buffer_size Number of valid bytes in buffer
  * @param[out] header Receives the decoded LDN header
  * @param[out] request Receives the decoded request
- * @param[out] advertise_data Receives a pointer to the advertise data inside
- * buffer
+ * @param[out] advertise_offset Receives the offset of the advertise data from
+ * the start of buffer (0 when none)
  * @param[out] advertise_size Receives the advertise data size in bytes
  * @return DecodeResult::Success, or the decoding error
  */
@@ -861,10 +861,10 @@ inline DecodeResult decode_create_access_point(
     size_t buffer_size,
     LdnHeader& header,
     CreateAccessPointRequest& request,
-    const uint8_t*& advertise_data,
+    size_t& advertise_offset,
     size_t& advertise_size) {
     return decode_with_data(
-        buffer, buffer_size, header, request, advertise_data, advertise_size);
+        buffer, buffer_size, header, request, advertise_offset, advertise_size);
 }
 
 /**
@@ -910,7 +910,8 @@ inline DecodeResult decode_set_advertise_data(
  * @param buffer_size Number of valid bytes in buffer
  * @param[out] header Receives the decoded LDN header
  * @param[out] proxy_header Receives the decoded proxy data header
- * @param[out] data Receives a pointer to the payload inside buffer
+ * @param[out] data_offset Receives the offset of the payload from the start of
+ * buffer (0 when none)
  * @param[out] data_size Receives the payload size in bytes
  * @return DecodeResult::Success, or the decoding error
  */
@@ -919,10 +920,10 @@ inline DecodeResult decode_proxy_data(
     size_t buffer_size,
     LdnHeader& header,
     ProxyDataHeader& proxy_header,
-    const uint8_t*& data,
+    size_t& data_offset,
     size_t& data_size) {
     return decode_with_data(
-        buffer, buffer_size, header, proxy_header, data, data_size);
+        buffer, buffer_size, header, proxy_header, data_offset, data_size);
 }
 
 /**

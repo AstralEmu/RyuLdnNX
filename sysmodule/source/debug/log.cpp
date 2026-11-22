@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdarg>
+#include <fcntl.h>
 
 #ifdef __SWITCH__
 #include <stratosphere.hpp>
@@ -409,10 +410,8 @@ void Logger::open_file() {
         }
     }
 #else
-    // The Switch SD card uses FAT32/exFAT which has no POSIX permission
-    // model — fopen("a") creates with default FAT attributes and chmod is
-    // a no-op on this filesystem.  // codeql[cpp/world-writable-file-creation]
-    m_file = std::fopen(m_log_path, "a");
+    m_file =
+        config::open_stream(m_log_path, O_WRONLY | O_CREAT | O_APPEND, "a");
 
     if (m_file != nullptr) {
         m_file_open = true;

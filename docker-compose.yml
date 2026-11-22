@@ -124,15 +124,17 @@ services:
       dockerfile: lint.Dockerfile
     entrypoint: ["python3", "/workspace/scripts/style.py"]
 
-  # Run CodeQL analysis (standalone CLI, no GitHub Actions needed)
-  # Usage: docker compose run --rm codeql-analyze
-  codeql-create:
+  # Local CodeQL run with the same queries and paths as the GitHub workflow.
+  # Usage: CODEQL_HOME=/path/to/unpacked/codeql docker compose run --rm codeql
+  codeql:
     <<: *service-base
-    entrypoint: ["/bin/bash", "/workspace/scripts/codeql-create.sh"]
-
-  codeql-analyze:
-    <<: *service-base
-    entrypoint: ["/bin/bash", "/workspace/scripts/codeql-analyze.sh"]
+    volumes:
+      - .:/workspace
+      - ${CODEQL_HOME:-/var/empty}:/opt/codeql:ro
+    environment:
+      HOME: /tmp
+      CODEQL_HOME: /opt/codeql
+    entrypoint: ["/bin/bash", "/workspace/scripts/codeql.sh"]
 
   shell:
     <<: *service-base

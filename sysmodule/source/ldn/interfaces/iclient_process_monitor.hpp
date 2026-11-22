@@ -31,8 +31,6 @@
         (const ams::sf::ClientProcessId& client_process_id), \
         (client_process_id))
 
-// codeql[cpp/unused-local-variable,cpp/unused-static-variable] — macro
-// expansion uses `args` via perfect forwarding
 AMS_SF_DEFINE_INTERFACE(
     ams::mitm::ldn,
     IClientProcessMonitorInterface,

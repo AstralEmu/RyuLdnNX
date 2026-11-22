@@ -655,6 +655,31 @@ private:
     void handle_handshaking_state(uint64_t current_time_ms);
 
     /**
+     * @brief Handle Connected state in update loop
+     *
+     * Sends the handshake once; on failure starts the backoff.
+     *
+     * @param current_time_ms Current time in milliseconds
+     */
+    void handle_connected_state(uint64_t current_time_ms);
+
+    /**
+     * @brief Handle the server's Initialize reply to our handshake
+     *
+     * @param data Packet payload
+     * @param size Payload size in bytes
+     */
+    void handle_handshake_initialize(const uint8_t* data, size_t size);
+
+    /**
+     * @brief Handle a NetworkError the server sent during the handshake
+     *
+     * @param data Packet payload
+     * @param size Payload size in bytes
+     */
+    void handle_handshake_network_error(const uint8_t* data, size_t size);
+
+    /**
      * @brief Handle Ready state in update loop
      *
      * Processes incoming packets and sends keepalive pings.

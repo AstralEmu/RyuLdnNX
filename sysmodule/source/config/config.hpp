@@ -64,6 +64,11 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdio>
+#ifndef __SWITCH__
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace ryu_ldn::config {
 
@@ -299,6 +304,33 @@ ConfigResult load_config(const char* path, Config& config);
  * @return ConfigResult indicating success or failure type
  */
 ConfigResult save_config(const char* path, const Config& config);
+
+#ifndef __SWITCH__
+/**
+ * @brief Open a file for stdio use with an explicit creation mode (0644)
+ *
+ * Equivalent to fopen() except that a created file is not world-writable
+ * (fopen() always requests mode 0666). Host builds only: the Switch build
+ * reads and writes the configuration through ams::fs and never reaches this.
+ *
+ * @param path File to open or create
+ * @param open_flags open(2) flags (O_WRONLY | O_CREAT | ...)
+ * @param stream_mode fdopen(3) mode string matching open_flags
+ * @return Open stream, or nullptr (no descriptor left open) on failure
+ */
+inline std::FILE* open_stream(
+    const char* path, int open_flags, const char* stream_mode) {
+    const int fd = ::open(path, open_flags, 0644);
+    if (fd < 0) {
+        return nullptr;
+    }
+    std::FILE* stream = ::fdopen(fd, stream_mode);
+    if (stream == nullptr) {
+        ::close(fd);
+    }
+    return stream;
+}
+#endif  // __SWITCH__
 
 /**
  * @brief Ensure configuration file exists, create with defaults if not

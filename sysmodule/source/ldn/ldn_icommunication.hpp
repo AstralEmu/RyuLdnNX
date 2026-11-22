@@ -426,6 +426,17 @@ private:
     void HandleSyncNetworkPacket(const uint8_t* data, size_t size);
 
     /**
+     * @brief Handle ProxyConfig packet from server
+     *
+     * Stores the proxy configuration and the virtual IP and subnet mask, and
+     * sets the local IP of the proxy socket manager.
+     *
+     * @param data Packet payload
+     * @param size Payload size
+     */
+    void HandleProxyConfigPacket(const uint8_t* data, size_t size);
+
+    /**
      * @brief Handle ExternalProxy packet from server
      *
      * Server sends P2P proxy info. We skip self-loopback, ignore

@@ -452,12 +452,6 @@ using RyuCfgInServerAddress = const ryu_ldn::ipc::ServerAddressIpc&;
  *
  * Interface ID: 0x52594343 ("RYCC" - RYu Config Controller)
  */
-// The macro expansion internally declares a forwarding object (`args`) that
-// CodeQL classifies as an unused local/static variable. This is a macro-level
-// false positive: the object is consumed by perfect forwarding inside the
-// macro body, so no standalone [[maybe_unused]] declaration is possible.
-// codeql[cpp/unused-local-variable,cpp/unused-static-variable] — macro
-// expansion uses `args` via perfect forwarding
 AMS_SF_DEFINE_INTERFACE(
     ryu_ldn::ipc, IConfigService, AMS_RYU_CFG_SERVICE_INTERFACE, 0x52594343)
 

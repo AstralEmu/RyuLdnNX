@@ -8,6 +8,9 @@
 #include "config/config.hpp"
 
 #include <cstdio>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
@@ -689,6 +692,47 @@ TEST(save_config_reports_io_error_when_the_file_cannot_be_created) {
     snprintf(path, sizeof(path), "%s/config.ini", blocker.path());
     Config config = get_default_config();
     ASSERT_EQ(save_config(path, config), ConfigResult::IoError);
+}
+
+/**
+ * @brief A created file is never writable by group or others.
+ */
+TEST(open_stream_creates_file_without_world_write) {
+    char path[256];
+    snprintf(path, sizeof(path), "/tmp/test_open_stream_%d.txt", rand());
+    std::FILE* stream = open_stream(path, O_WRONLY | O_CREAT | O_TRUNC, "w");
+    ASSERT_TRUE(stream != nullptr);
+    std::fclose(stream);
+
+    struct stat info{};
+    ASSERT_EQ(stat(path, &info), 0);
+    ASSERT_EQ(static_cast<unsigned>(info.st_mode & (S_IWGRP | S_IWOTH)), 0u);
+    std::remove(path);
+}
+
+/**
+ * @brief A path that cannot be created yields no stream.
+ */
+TEST(open_stream_fails_when_the_file_cannot_be_created) {
+    ASSERT_TRUE(
+        open_stream("/nonexistent_dir/file", O_WRONLY | O_CREAT, "w") ==
+        nullptr);
+}
+
+/**
+ * @brief A stream mode fdopen rejects yields no stream and leaks no
+ * descriptor.
+ */
+TEST(open_stream_fails_on_an_invalid_stream_mode) {
+    char path[256];
+    snprintf(path, sizeof(path), "/tmp/test_open_stream_bad_%d.txt", rand());
+    const int lowest_free = dup(0);
+    close(lowest_free);
+    ASSERT_TRUE(open_stream(path, O_WRONLY | O_CREAT, "bogus") == nullptr);
+    const int after = dup(0);
+    ASSERT_EQ(after, lowest_free);
+    close(after);
+    std::remove(path);
 }
 
 // ============================================================================
