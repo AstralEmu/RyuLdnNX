@@ -239,13 +239,25 @@ class Style:
         return sorted({line.replace(prefix, "") for line in lines if line})
 
     @staticmethod
-    def run_check() -> int:
+    def run_check(only: list[str] | None = None) -> int:
         """Print every violation and return how many there are.
+
+        Args:
+            only: Restrict the check to these repo-relative paths (the staged
+                files, from the pre-commit hook); every tracked file when
+                empty or None. Paths outside the checked surface are ignored.
 
         Returns:
             The number of violations.
         """
         files = Style.files()
+
+        if only:
+            files = [path for path in files if path in set(only)]
+
+            if not files:
+                return 0
+
         issues = (
             Style.format_violations(files)
             + Style.width_violations(files)
@@ -292,7 +304,10 @@ def main() -> int:
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("check", help="list every violation (default)")
+    check = sub.add_parser("check", help="list every violation (default)")
+    check.add_argument(
+        "files", nargs="*", help="limit the check to these files"
+    )
     fmt = sub.add_parser("format", help="clang-format the files in place")
     fmt.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -302,7 +317,7 @@ def main() -> int:
 
         return 0
 
-    return 1 if Style.run_check() else 0
+    return 1 if Style.run_check(getattr(args, "files", None)) else 0
 
 
 if __name__ == "__main__":
