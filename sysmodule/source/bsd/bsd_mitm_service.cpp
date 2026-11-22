@@ -170,11 +170,9 @@ static SocketInfoEntry* FindOrCreateSocketInfoEntry(s32 fd) {
  *
  * Marks the entry as free so it can be reused by a future FindOrCreateSocketInfoEntry.
  * Does NOT compact the array — entries are slot-reused, not shifted.
+ * @p entry must be non-null (both callers pass a live table slot).
  */
 static void EraseSocketInfoEntry(SocketInfoEntry* entry) {
-    if (entry == nullptr) {
-        return;
-    }
     entry->fd = -1;
     entry->info = SocketInfo{};
     entry->valid = false;

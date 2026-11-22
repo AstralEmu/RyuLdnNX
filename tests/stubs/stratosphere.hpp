@@ -65,6 +65,12 @@ namespace os {
 /// (null = off). Same contract as the other g_host_before_* hooks below.
 inline void (*g_host_before_recursive_lock)() = nullptr;
 
+/// Test hook: runs before every lock of a NON-recursive Mutex, with the mutex
+/// being locked, on the locking thread, before it takes the lock (null = off).
+/// Lets a test stage the state another thread would have left between two
+/// critical sections without needing a second thread.
+inline void (*g_host_before_plain_lock)(const void* mutex) = nullptr;
+
 /// Mutex with the Stratosphere constructor signature (recursive flag).
 /// Satisfies Lockable, so std::scoped_lock / std::unique_lock work on it.
 class Mutex {
@@ -79,6 +85,7 @@ public:
             if (g_host_before_recursive_lock) { g_host_before_recursive_lock(); }
             m_recursive_mutex.lock();
         } else {
+            if (g_host_before_plain_lock) { g_host_before_plain_lock(this); }
             m_mutex.lock();
         }
     }
@@ -455,7 +462,12 @@ struct MitmProcessInfo {
 /// Forwarded session of the original service (libnx).
 struct Service {
     std::uint32_t session = 0;
+    std::uint32_t object_id = 0;
+    bool domain = false;
 };
+
+/// libnx: whether the forwarded session is a domain.
+inline bool serviceIsDomain(const Service* s) { return s->domain; }
 
 namespace ams {
 
@@ -477,6 +489,9 @@ struct CopyHandle {
     bool managed = false;
     CopyHandle() = default;
     CopyHandle(std::uint32_t h, bool m) : handle(h), managed(m) {}
+    std::uint32_t GetOsHandle() const { return handle; }
+    /// Gives the handle up: the destructor of the real one closes it otherwise.
+    void Detach() { handle = 0xFFFFFFFFu; managed = false; }
 };
 
 /// Output parameter of an IPC command: a reference the handler writes through.
@@ -585,6 +600,7 @@ inline std::uint64_t armTicksToNs(std::uint64_t ticks) { return ticks; }
 #define R_THROW(res) return (res)
 #define R_RETURN(res) return (res)
 #define R_UNLESS(cond, res) do { if (!(cond)) { R_RETURN(res); } } while (false)
+#define R_TRY(expr) do { const auto _r_try = (expr); if (_r_try.IsFailure()) { return _r_try; } } while (false)
 #define R_SUCCEEDED(expr) ((expr).IsSuccess())
 /// Same bit packing as the SDK: module in bits 0-8, description from bit 9
 #define MAKERESULT(module, description) \
