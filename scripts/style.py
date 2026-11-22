@@ -180,7 +180,11 @@ class Style:
             "EXTRACT_LOCAL_CLASSES = YES",
             "HIDE_UNDOC_MEMBERS = NO",
             "GENERATE_XML = YES",
-            "GENERATE_HTML = NO",
+            # Doxygen 1.9.x (the lint image) only records @param/@return as
+            # documented while a rendering backend runs: with HTML off it
+            # reports every fully documented function. The output goes to the
+            # scratch directory and is discarded.
+            "GENERATE_HTML = YES",
             "GENERATE_LATEX = NO",
             "XML_PROGRAMLISTING = NO",
             "WARN_IF_UNDOCUMENTED = YES",

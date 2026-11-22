@@ -59,10 +59,10 @@ lint: hooks-check ## Run clang-tidy on project sources (docker compose run --rm 
 	$(DOCKER_COMPOSE) run --rm lint
 
 style: hooks-check ## Formatting + Doxygen-completeness gate (docker compose run --rm style)
-	$(DOCKER_COMPOSE) run --rm style
+	DOCS_UID=$$(id -u) DOCS_GID=$$(id -g) $(DOCKER_COMPOSE) run --rm style
 
 style-fix: hooks-check ## clang-format every C/C++ source in place (docker compose run --rm style format)
-	$(DOCKER_COMPOSE) run --rm style format
+	DOCS_UID=$$(id -u) DOCS_GID=$$(id -g) $(DOCKER_COMPOSE) run --rm style format
 
 shell: ## Interactive shell inside the build container (docker compose run --rm shell)
 	$(DOCKER_COMPOSE) run --rm shell

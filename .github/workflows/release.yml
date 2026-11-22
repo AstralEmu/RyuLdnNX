@@ -57,6 +57,8 @@ jobs:
       artifact-name-debug: 'debug-symbols'
       # Release workflow always updates the coverage badge.
       badge-always: true
+    secrets:
+      GIST_BADGE_SECRET: ${{ secrets.GIST_BADGE_SECRET }}
     permissions:
       contents: read
       packages: read

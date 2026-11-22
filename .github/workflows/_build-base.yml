@@ -37,6 +37,10 @@ on:
         description: 'Update the coverage badge on every run (not only push).'
         type: boolean
         default: true
+    secrets:
+      GIST_BADGE_SECRET:
+        description: 'Token of the gist holding the coverage badge.'
+        required: false
 
 permissions:
   contents: read

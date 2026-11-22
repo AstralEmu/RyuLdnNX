@@ -111,6 +111,9 @@ services:
   style:
     <<: *service-base
     image: ryu_ldn_nx-lint:local
+    # Run as the caller: the service rewrites tracked sources in place and
+    # must not leave them owned by root (make style passes the real ids).
+    user: "${DOCS_UID:-1000}:${DOCS_GID:-1000}"
     build:
       context: .
       dockerfile: lint.Dockerfile

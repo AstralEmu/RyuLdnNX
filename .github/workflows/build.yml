@@ -115,6 +115,8 @@ jobs:
       artifact-name-debug: ryu_ldn_nx-debug-${{ github.sha }}
       # Build.yml updates the coverage badge only on push events.
       badge-always: false
+    secrets:
+      GIST_BADGE_SECRET: ${{ secrets.GIST_BADGE_SECRET }}
     permissions:
       contents: read
       packages: read
