@@ -1715,6 +1715,23 @@ TEST(stop_cannot_queue_a_session_when_the_zombie_pool_is_full) {
     ::close(a);
 }
 
+/// @test Verify a registered session ending with a full pool is left alive.
+TEST(a_registered_session_ending_with_a_full_pool_is_left_alive) {
+    reset_world();
+    P2pProxyServer server;
+    ASSERT_TRUE(start_server(server));
+    const int a = join(server, VIP_A, 0x01);
+    ASSERT_TRUE(a >= 0);
+    auto* live = static_cast<P2pProxySession*>(g_last_session.load());
+    for (int i = 0; i < P2pProxyServer::MAX_PLAYERS * 2; ++i) {
+        server.OnSessionDisconnected(new P2pProxySession(&server, -1, 0));
+    }
+    ::close(a);  // its receive thread ends and reports it to a full pool
+    settle();
+    ASSERT_FALSE(live->IsConnected());
+    delete live;  // the owner of last resort frees it
+}
+
 /// @test Verify a session that ends by itself is reaped.
 TEST(a_session_that_ends_by_itself_is_reaped) {
     reset_world();

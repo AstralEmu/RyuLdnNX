@@ -59,7 +59,11 @@ _BYPASS = re.compile(
     r"[\\@](?:cond|endcond|private|internal|hideinitializer|nosubgrouping)\b"
     r"|@(?:return|param\s+\w+)\s+(?:n/?a|none)\b"
     r"|Doxygen\s+(?:artifact|workaround)"
-    r"|clang-format\s+(?:off|on)\b",
+    r"|clang-format\s+(?:off|on)\b"
+    r"|NOLINT(?:NEXTLINE|BEGIN|END)?\b"
+    r"|cppcheck-suppress|NOSONAR|\blgtm\b"
+    r"|#\s*pragma\s+(?:GCC|clang)\s+diagnostic"
+    r"|no_sanitize|NO_THREAD_SAFETY_ANALYSIS|no_sanitize_address",
     re.IGNORECASE,
 )
 

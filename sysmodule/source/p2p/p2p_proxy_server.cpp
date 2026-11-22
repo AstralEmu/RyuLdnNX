@@ -605,13 +605,29 @@ void P2pProxyServer::Stop() {
         for (int i = 0; i < m_live_session_count; ++i) {
             P2pProxySession* live = m_live_sessions[i];
             live->Disconnect(true);  // from_master = true
+            const bool room = m_zombie_session_count < MAX_ZOMBIE_SESSIONS;
+            bool handed_over = false;
             for (auto& m_session : m_sessions) {
-                if (m_session.get() == live) {
-                    (void)m_session.release();  // the zombie queue takes over
+                if (m_session.get() != live) {
+                    continue;
+                }
+                if (room) {
+                    // The zombie queue takes over the ownership.
+                    m_zombie_sessions[m_zombie_session_count] =
+                        std::move(m_session);
+                    handed_over = true;
+                } else {
+                    // Pool full: the object is deliberately left alive (see
+                    // the error below), never destroyed under m_mutex.
+                    [[maybe_unused]] P2pProxySession* const leaked =
+                        m_session.release();
                 }
             }
-            if (m_zombie_session_count < MAX_ZOMBIE_SESSIONS) {
-                m_zombie_sessions[m_zombie_session_count++].reset(live);
+            if (room) {
+                if (!handed_over) {
+                    m_zombie_sessions[m_zombie_session_count].reset(live);
+                }
+                ++m_zombie_session_count;
                 claimed[claimed_count++] = live;
             } else {
                 LOG_ERROR(
@@ -1463,17 +1479,14 @@ void P2pProxyServer::AcceptLoop() {
         // return nullptr under pressure — the overridden `new` does NOT
         // throw. We must null-check before dereferencing `session`.
 
-        // Ownership: this raw pointer is the sole owner until the session
-        // self-registers into m_zombie_sessions via reset(session) in
-        // OnSessionDisconnected (see cppcoreguidelines-owning-memory note
-        // there). A unique_ptr here would not survive the handoff pattern
-        // (session outlives this loop iteration by design).
+        // Ownership: `session` is the sole owner until it is registered; the
+        // registration below either keeps it in m_sessions / the zombie queue
+        // or hands it back to its own thread (see OnSessionDisconnected).
         // nothrow: the sysmodule heap answers nullptr under pressure; a plain
         // `new` would run the constructor on that null (no -fcheck-new here).
-        auto* session = new (std::nothrow) P2pProxySession(
-            this,
-            client_fd,
-            remote_ip);  // NOLINT(cppcoreguidelines-owning-memory)
+        std::unique_ptr<P2pProxySession> session_owner(
+            new (std::nothrow) P2pProxySession(this, client_fd, remote_ip));
+        P2pProxySession* const session = session_owner.get();
         if (session == nullptr) {
             LOG_ERROR(
                 "P2P AcceptLoop: failed to allocate P2pProxySession "
@@ -1501,10 +1514,14 @@ void P2pProxyServer::AcceptLoop() {
                 }
             }
         }
-        if (!keep) {
-            // The destructor closes the fd (Disconnect(true)).
-            delete session;  // NOLINT(cppcoreguidelines-owning-memory)
+        if (keep) {
+            // The running session owns itself from here on: its receive
+            // thread hands it to the zombie queue on disconnect.
+            [[maybe_unused]] P2pProxySession* const self_owned =
+                session_owner.release();
         }
+        // Otherwise session_owner destroys it; the destructor closes the fd
+        // (Disconnect(true)).
     }
 }
 
@@ -1824,21 +1841,21 @@ void P2pProxyServer::ReapZombieSessions() {
     // Snapshot the current zombies under the lock, release the lock, then
     // join+delete outside it. WaitThread can be slow if the recv thread is
     // mid-syscall and we don't want to hold m_mutex while it drains.
-    P2pProxySession* zombies[MAX_ZOMBIE_SESSIONS];
+    std::unique_ptr<P2pProxySession> zombies[MAX_ZOMBIE_SESSIONS];
     int taken = 0;
     {
         std::scoped_lock lock(m_mutex);
         int kept = 0;
         for (int i = 0; i < m_zombie_session_count; ++i) {
-            // release(): the slot stops owning z, so neither the compaction
-            // below nor the tail reset can delete a session that is about to
-            // be joined.
-            P2pProxySession* z = m_zombie_sessions[i].release();
+            // Moved out of its slot: neither the compaction below nor the
+            // tail reset can delete a session that is about to be joined.
+            std::unique_ptr<P2pProxySession> z =
+                std::move(m_zombie_sessions[i]);
             if (z != nullptr &&
                 z->m_thread_done.load(std::memory_order_acquire)) {
-                zombies[taken++] = z;
+                zombies[taken++] = std::move(z);
             } else {
-                m_zombie_sessions[kept++].reset(z);
+                m_zombie_sessions[kept++] = std::move(z);
             }
         }
         m_zombie_session_count = kept;
@@ -1848,17 +1865,12 @@ void P2pProxyServer::ReapZombieSessions() {
     }
 
     for (int i = 0; i < taken; ++i) {
-        P2pProxySession* z = zombies[i];
         // Thread has returned — join and destroy the ThreadType, then free
         // the object. The destructor releases m_stack_slot back to the BSS
         // pool so a future joiner can reuse the slot.
-        // Ownership note (cppcoreguidelines-owning-memory): the owning
-        // unique_ptr slot was already reset above (kept..MAX loop), so this
-        // raw pointer is the sole owner between the reset and this delete —
-        // no double-free path.
-        os::WaitThread(&z->m_recv_thread);
-        os::DestroyThread(&z->m_recv_thread);
-        delete z;  // NOLINT(cppcoreguidelines-owning-memory) — see note above
+        os::WaitThread(&zombies[i]->m_recv_thread);
+        os::DestroyThread(&zombies[i]->m_recv_thread);
+        zombies[i].reset();
     }
 }
 
@@ -1948,11 +1960,21 @@ void P2pProxyServer::OnSessionDisconnected(P2pProxySession* session) {
 
     // Find and remove from session array
     bool found = false;
+    bool queued = false;
+    const bool room = m_zombie_session_count < MAX_ZOMBIE_SESSIONS;
     for (auto& m_session : m_sessions) {
         if (m_session.get() == session) {
-            // release(), not reset(): the session is still running on the
-            // calling thread; the zombie queue below becomes its only owner.
-            (void)m_session.release();
+            // The session is still running on the calling thread: ownership
+            // moves to the zombie queue (never destroyed here); with a full
+            // pool it is deliberately left alive, as the error below says.
+            if (room) {
+                m_zombie_sessions[m_zombie_session_count] =
+                    std::move(m_session);
+                queued = true;
+            } else {
+                [[maybe_unused]] P2pProxySession* const leaked =
+                    m_session.release();
+            }
             m_session_count--;
             found = true;
             LOG_INFO(
@@ -1976,8 +1998,11 @@ void P2pProxyServer::OnSessionDisconnected(P2pProxySession* session) {
     // 64 KB recv buffer leaked on every disconnect, and ~5 reconnects
     // were enough to exhaust the 384 KB sysmodule heap and DABRT 0x101
     // on the next allocation.
-    if (m_zombie_session_count < MAX_ZOMBIE_SESSIONS) {
-        m_zombie_sessions[m_zombie_session_count++].reset(session);
+    if (room) {
+        if (!queued) {
+            m_zombie_sessions[m_zombie_session_count].reset(session);
+        }
+        ++m_zombie_session_count;
     } else {
         LOG_ERROR(
             "Zombie session pool full (%d), dropping pointer — heap will leak",

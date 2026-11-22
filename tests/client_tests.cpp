@@ -416,10 +416,8 @@ bool test_self_move_assignment() {
     RyuLdnClientConfig cfg;
     cfg.port = 5555;
     RyuLdnClient client(cfg);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wself-move"
-    client = std::move(client);
-#pragma GCC diagnostic pop
+    RyuLdnClient& alias = client;  // the compiler cannot see the self-move
+    client = std::move(alias);
     ASSERT_EQ(client.get_config().port, 5555);
     return true;
 }

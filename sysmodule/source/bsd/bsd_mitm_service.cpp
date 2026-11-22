@@ -342,14 +342,9 @@ static os::Mutex g_abandoned_services_mutex{false};
  * forward service session.
  *
  */
-// rvalue reference is forwarded to the MitmServiceImplBase constructor
-// ( Atmosphere mitm pattern) — the check cannot see the move through
-// std::forward.
 BsdMitmService::BsdMitmService(
-    std::shared_ptr<::Service>&& s,
-    const sm::MitmProcessInfo&
-        c)  // NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved)
-    : MitmServiceImplBase(std::forward<std::shared_ptr<::Service>>(s), c),
+    std::shared_ptr<::Service>&& s, const sm::MitmProcessInfo& c)
+    : MitmServiceImplBase(std::move(s), c),
       m_client_pid(c.process_id.value),
       m_session_id(++s_next_session_id) {
     // Get more info about the forward service
@@ -755,13 +750,13 @@ Result BsdMitmService::RegisterClient(
     const ryu_ldn::bsd::LibraryConfigData& config,
     const sf::ClientProcessId& client_pid,
     u64 tmem_size,
-    sf::CopyHandle&&
-        // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
-        transfer_memory)  // forwarded to real bsd:u below
+    sf::CopyHandle&& transfer_memory)  // forwarded to real bsd:u below
 {
     m_command_count++;
 
-    Handle tmem_handle = transfer_memory.GetOsHandle();
+    // Take over the handle holder: it is detached below, never closed.
+    sf::CopyHandle tmem(std::move(transfer_memory));
+    Handle tmem_handle = tmem.GetOsHandle();
     LOG_INFO(
         "[BSD#%u] RegisterClient ENTRY: cmd_count=%u, client_pid=%lu, "
         "tmem_size=%lu, tmem_handle=0x%x",
@@ -824,7 +819,7 @@ Result BsdMitmService::RegisterClient(
     // serialization, meaning its destructor would close our local handle. Since
     // we're a MITM proxy, we must NOT close handles that belong to the client
     // process - we only forward them.
-    transfer_memory.Detach();
+    tmem.Detach();
 
     // Mark this session as registered
     if (R_SUCCEEDED(rc)) {
@@ -1451,12 +1446,7 @@ Result BsdMitmService::SendMMsg(
         in,
         out,
         .buffer_attrs = {SfBufferAttr_In | SfBufferAttr_HipcAutoSelect},
-        // const_cast: the Atmosphere sf C API takes void* for ALL buffers
-        // (In and Out alike) — the const-ness is expressed by SfBufferAttr_In.
-        .buffers =
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-        {{const_cast<void*>(static_cast<const void*>(in_data.GetPointer())),
-          in_data.GetSize()}}, );
+        .buffers = {{in_data.GetPointer(), in_data.GetSize()}}, );
 
     out_errno.SetValue(out.errno_val);
     out_count.SetValue(out.count);
@@ -1497,12 +1487,7 @@ Result BsdMitmService::RegisterResourceStatisticsName(
         pid,
         errno_out,
         .buffer_attrs = {SfBufferAttr_In | SfBufferAttr_HipcMapAlias},
-        // const_cast: the Atmosphere sf C API takes void* for ALL buffers
-        // (In and Out alike) — the const-ness is expressed by SfBufferAttr_In.
-        .buffers =
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-        {{const_cast<void*>(static_cast<const void*>(name.GetPointer())),
-          name.GetSize()}}, );
+        .buffers = {{name.GetPointer(), name.GetSize()}}, );
 
     out_errno.SetValue(errno_out);
     R_RETURN(rc);

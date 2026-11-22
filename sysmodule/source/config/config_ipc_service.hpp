@@ -456,7 +456,6 @@ using RyuCfgInServerAddress = const ryu_ldn::ipc::ServerAddressIpc&;
 // CodeQL classifies as an unused local/static variable. This is a macro-level
 // false positive: the object is consumed by perfect forwarding inside the
 // macro body, so no standalone [[maybe_unused]] declaration is possible.
-// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 // codeql[cpp/unused-local-variable,cpp/unused-static-variable] — macro
 // expansion uses `args` via perfect forwarding
 AMS_SF_DEFINE_INTERFACE(

@@ -70,8 +70,7 @@ UpnpPortMapper& UpnpPortMapper::GetInstance() {
 // Constructor / Destructor
 // =============================================================================
 
-UpnpPortMapper::UpnpPortMapper()
-    : m_urls(nullptr), m_data(nullptr), m_lan_addr{}, m_available(false) {
+UpnpPortMapper::UpnpPortMapper() noexcept : m_lan_addr{}, m_available(false) {
     // Allocate UPnP structures on the heap
     // These are C structs from miniupnpc, we manage their lifetime
     //
@@ -83,26 +82,18 @@ UpnpPortMapper::UpnpPortMapper()
     // `new (std::nothrow)`: a plain `new` is assumed by the compiler never to
     // return null (it is declared throwing), which would silently delete the
     // checks below. The nothrow form keeps them real.
-    // Ownership note (cppcoreguidelines-owning-memory): m_urls / m_data are
-    // C structs from miniupnpc wrapped for the C-API (FreeUPNPUrls takes the
-    // raw pointer). new/delete pairs are symmetric with the destructor; a
-    // unique_ptr would add .get() noise at every C-API boundary without
-    // changing the lifetime (single member, single owner, freed in dtor).
-    m_urls = new (std::nothrow)
-        UPNPUrls();  // NOLINT(cppcoreguidelines-owning-memory)
+    m_urls = std::unique_ptr<UPNPUrls>(new (std::nothrow) UPNPUrls());
     if (m_urls == nullptr) {
         LOG_ERROR(
             "UpnpPortMapper: failed to allocate UPNPUrls (heap exhausted?)");
         return;
     }
 
-    m_data = new (std::nothrow)
-        IGDdatas();  // NOLINT(cppcoreguidelines-owning-memory)
+    m_data = std::unique_ptr<IGDdatas>(new (std::nothrow) IGDdatas());
     if (m_data == nullptr) {
         LOG_ERROR(
             "UpnpPortMapper: failed to allocate IGDdatas (heap exhausted?)");
-        delete m_urls;
-        m_urls = nullptr;
+        m_urls.reset();
         return;
     }
 
@@ -110,23 +101,16 @@ UpnpPortMapper::UpnpPortMapper()
     // before dereferencing so allocation-error checkers see a null guard
     // immediately ahead of every use.
     if (m_urls != nullptr) {
-        std::memset(m_urls, 0, sizeof(UPNPUrls));
+        std::memset(m_urls.get(), 0, sizeof(UPNPUrls));
     }
     if (m_data != nullptr) {
-        std::memset(m_data, 0, sizeof(IGDdatas));
+        std::memset(m_data.get(), 0, sizeof(IGDdatas));
     }
 }
 
 UpnpPortMapper::~UpnpPortMapper() {
     // Release UPnP resources
     Cleanup();
-
-    // Free allocated structures
-    delete m_urls;
-    delete m_data;
-
-    m_urls = nullptr;
-    m_data = nullptr;
 }
 
 // =============================================================================
@@ -153,8 +137,8 @@ bool UpnpPortMapper::Discover() {
 
     LOG_INFO(
         "UpnpPortMapper::Discover: m_urls=%p, m_data=%p",
-        static_cast<void*>(m_urls),
-        static_cast<void*>(m_data));
+        static_cast<void*>(m_urls.get()),
+        static_cast<void*>(m_data.get()));
     ryu_ldn::debug::g_logger.flush();
 
     // Defensive: we should never have null structs after the constructor,
@@ -180,9 +164,9 @@ bool UpnpPortMapper::Discover() {
     if (controlURL_value != nullptr) {
         LOG_INFO("UpnpPortMapper::Discover: previous controlURL set, freeing");
         ryu_ldn::debug::g_logger.flush();
-        FreeUPNPUrls(m_urls);
-        std::memset(m_urls, 0, sizeof(UPNPUrls));
-        std::memset(m_data, 0, sizeof(IGDdatas));
+        FreeUPNPUrls(m_urls.get());
+        std::memset(m_urls.get(), 0, sizeof(UPNPUrls));
+        std::memset(m_data.get(), 0, sizeof(IGDdatas));
         LOG_INFO("UpnpPortMapper::Discover: cleanup done");
         ryu_ldn::debug::g_logger.flush();
     }
@@ -239,9 +223,9 @@ bool UpnpPortMapper::Discover() {
     //
     int result = UPNP_GetValidIGD(
         devlist,
-        m_urls,      // Output: URLs for control
-        m_data,      // Output: IGD service data
-        m_lan_addr,  // Output: Our local IP address
+        m_urls.get(),  // Output: URLs for control
+        m_data.get(),  // Output: IGD service data
+        m_lan_addr,    // Output: Our local IP address
         sizeof(m_lan_addr));
 
     // Free the device list (we've extracted what we need)
@@ -471,12 +455,12 @@ void UpnpPortMapper::Cleanup() {
     // (controlURL, rootdescURL, etc.)
     //
     if ((m_urls != nullptr) && (m_urls->controlURL != nullptr)) {
-        FreeUPNPUrls(m_urls);
-        std::memset(m_urls, 0, sizeof(UPNPUrls));
+        FreeUPNPUrls(m_urls.get());
+        std::memset(m_urls.get(), 0, sizeof(UPNPUrls));
     }
 
     if (m_data != nullptr) {
-        std::memset(m_data, 0, sizeof(IGDdatas));
+        std::memset(m_data.get(), 0, sizeof(IGDdatas));
     }
 
     m_lan_addr[0] = '\0';

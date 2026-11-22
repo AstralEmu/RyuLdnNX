@@ -44,6 +44,7 @@
 #pragma once
 
 #include <stratosphere.hpp>
+#include <memory>
 
 // Forward declarations for miniupnpc types
 struct UPNPUrls;
@@ -240,7 +241,7 @@ private:
     /**
      * @brief Private constructor (singleton)
      */
-    UpnpPortMapper();
+    UpnpPortMapper() noexcept;
 
     /**
      * @brief Destructor
@@ -255,12 +256,12 @@ private:
     /**
      * @brief UPnP URLs structure (allocated dynamically)
      */
-    UPNPUrls* m_urls;
+    std::unique_ptr<UPNPUrls> m_urls;
 
     /**
      * @brief IGD data structure (allocated dynamically)
      */
-    IGDdatas* m_data;
+    std::unique_ptr<IGDdatas> m_data;
 
     /**
      * @brief Local IP address string

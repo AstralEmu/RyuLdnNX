@@ -3026,8 +3026,9 @@ void ICommunicationService::HandleExternalProxyConnect(
     // construct on a null pointer, so the allocation is explicitly nothrow.
     // On failure clean up the way the surrounding "Failed to connect" path
     // does (DisconnectP2pProxy).
-    p2p::P2pProxyClient* const client =
-        new (std::nothrow) p2p::P2pProxyClient(packet_callback);
+    std::unique_ptr<p2p::P2pProxyClient> created(
+        new (std::nothrow) p2p::P2pProxyClient(packet_callback));
+    p2p::P2pProxyClient* const client = created.get();
     if (client == nullptr) {
         LOG_ERROR(
             "ConnectP2pProxy: failed to allocate P2pProxyClient "
@@ -3036,9 +3037,9 @@ void ICommunicationService::HandleExternalProxyConnect(
     }
     {
         // Publish it so DisconnectP2pProxy can reach it and abort the
-        // blocking steps below. This worker stays its only owner.
+        // blocking steps below.
         std::scoped_lock lock(m_p2p_client_mutex);
-        m_p2p_client.reset(client);
+        m_p2p_client = std::move(created);
     }
 
     // Connect to P2P host using IP from config
@@ -3170,8 +3171,8 @@ bool ICommunicationService::StartP2pProxyServer() {
 
     // Nothrow for the same reason as the P2pProxyClient allocation above:
     // the overridden `new` returns nullptr on heap exhaustion.
-    m_p2p_server.reset(new (std::nothrow)
-                           p2p::P2pProxyServer(master_send_callback, this));
+    m_p2p_server = std::unique_ptr<p2p::P2pProxyServer>(
+        new (std::nothrow) p2p::P2pProxyServer(master_send_callback, this));
     if (m_p2p_server == nullptr) {
         // On Switch the custom heap allocator (lmem::ExpHeap, 384 KB) can
         // return nullptr under pressure — the overridden `new` does NOT

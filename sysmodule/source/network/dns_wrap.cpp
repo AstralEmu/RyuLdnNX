@@ -52,6 +52,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 // <cstdio> is only used by getnameinfo's snprintf for the service string
 // and (under DEBUG_HEX_DUMP) by the DNS response hex-dump diagnostic. It
 // stays included unconditionally because getnameinfo always needs it.
@@ -76,6 +77,26 @@ struct AddrinfoStorage {
     /// IPv4 socket address referenced by ai.ai_addr.
     struct sockaddr_in sa;
 };
+
+/// @brief Owner of one malloc'd AddrinfoStorage node.
+using StoragePtr = std::unique_ptr<AddrinfoStorage, void (*)(void*)>;
+
+/**
+ * @brief Allocates one addrinfo node, owned until handed to the caller.
+ *
+ * The block is malloc'd (not new'd) because the list is released by
+ * __wrap_freeaddrinfo with a single std::free per node, as the C
+ * getaddrinfo contract requires.
+ *
+ * @return Owning pointer; null when the heap is exhausted.
+ */
+inline StoragePtr AllocStorage() {
+    // codeql[cpp/suspicious-allocation-size] — AddrinfoStorage is a struct
+    // containing addrinfo + sockaddr_in, not an array of addrinfo.
+    return {
+        static_cast<AddrinfoStorage*>(std::malloc(sizeof(AddrinfoStorage))),
+        &std::free};
+}
 
 // =============================================================================
 // DNS wire-format constants
@@ -756,12 +777,8 @@ int __wrap_getaddrinfo(
                 ip_sa.sin_port = htons(port);
                 ip_sa.sin_addr.s_addr = htonl(resolved_ips[i]);
 
-                // codeql[cpp/suspicious-allocation-size] — AddrinfoStorage is a
-                // struct containing addrinfo + sockaddr_in, not an array of
-                // addrinfo. NOLINTNEXTLINE(cppcoreguidelines-owning-memory) —
-                // POSIX C ABI, freed by __wrap_freeaddrinfo
-                auto* storage = static_cast<AddrinfoStorage*>(
-                    std::malloc(sizeof(AddrinfoStorage)));
+                StoragePtr owned = AllocStorage();
+                AddrinfoStorage* storage = owned.get();
                 if (storage == nullptr) {
                     if (head != nullptr) {
                         __wrap_freeaddrinfo(head);
@@ -782,7 +799,7 @@ int __wrap_getaddrinfo(
                 storage->ai.ai_canonname = nullptr;
                 storage->ai.ai_next = nullptr;
 
-                auto* ai = &storage->ai;
+                auto* ai = &owned.release()->ai;
                 if (head == nullptr) {
                     head = ai;
                 } else {
@@ -800,12 +817,8 @@ int __wrap_getaddrinfo(
         sa.sin_addr.s_addr = htonl(passive ? INADDR_ANY : INADDR_LOOPBACK);
     }
 
-    // codeql[cpp/suspicious-allocation-size] — AddrinfoStorage is a struct
-    // containing addrinfo + sockaddr_in, not an array of addrinfo.
-    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory) — POSIX C ABI, freed by
-    // __wrap_freeaddrinfo
-    auto* storage =
-        static_cast<AddrinfoStorage*>(std::malloc(sizeof(AddrinfoStorage)));
+    StoragePtr owned = AllocStorage();
+    AddrinfoStorage* storage = owned.get();
     if (storage == nullptr) {
         return EAI_MEMORY;
     }
@@ -820,7 +833,7 @@ int __wrap_getaddrinfo(
     storage->ai.ai_canonname = nullptr;
     storage->ai.ai_next = nullptr;
 
-    *res = &storage->ai;
+    *res = &owned.release()->ai;
     return 0;
 }
 
@@ -835,11 +848,11 @@ int __wrap_getaddrinfo(
 void __wrap_freeaddrinfo(struct addrinfo* res) {
     while (res != nullptr) {
         struct addrinfo* next = res->ai_next;
-        // POSIX C ABI: res comes from the caller (miniupnpc), ownership
-        // transferred by the getaddrinfo contract. ai_addr is inside the
-        // same allocation block.
-        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-        std::free(res);
+        // res comes from the caller (miniupnpc); the getaddrinfo contract
+        // hands ownership back. ai is the first member of AddrinfoStorage,
+        // so the node address is the address of the whole malloc block.
+        const StoragePtr owned(
+            reinterpret_cast<AddrinfoStorage*>(res), &std::free);
         res = next;
     }
 }
