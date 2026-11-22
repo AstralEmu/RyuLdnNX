@@ -2636,6 +2636,49 @@ TEST(has_header_threshold) {
     ASSERT_TRUE(!has_header(0));
 }
 
+TEST(encode_refuses_a_buffer_one_byte_too_small_for_every_payload_type) {
+    uint8_t buffer[512] = {};
+    size_t out_size = 99;
+    ConnectPrivateRequest connect_private{};
+    ASSERT_TRUE(encode(buffer, get_packet_size<ConnectPrivateRequest>() - 1, PacketId::ConnectPrivate,
+                       connect_private, out_size) == EncodeResult::BufferTooSmall);
+    ASSERT_EQ(out_size, 0u);
+    out_size = 99;
+    ExternalProxyConfig external{};
+    ASSERT_TRUE(encode(buffer, get_packet_size<ExternalProxyConfig>() - 1, PacketId::ExternalProxy,
+                       external, out_size) == EncodeResult::BufferTooSmall);
+    ASSERT_EQ(out_size, 0u);
+    out_size = 99;
+    ProxyConfig config{};
+    ASSERT_TRUE(encode(buffer, get_packet_size<ProxyConfig>() - 1, PacketId::ProxyConfig,
+                       config, out_size) == EncodeResult::BufferTooSmall);
+    ASSERT_EQ(out_size, 0u);
+    out_size = 99;
+    ExternalProxyConnectionState state{};
+    ASSERT_TRUE(encode(buffer, get_packet_size<ExternalProxyConnectionState>() - 1,
+                       PacketId::ExternalProxyState, state, out_size) == EncodeResult::BufferTooSmall);
+    ASSERT_EQ(out_size, 0u);
+}
+
+TEST(encode_writes_header_and_payload_for_every_payload_type) {
+    uint8_t buffer[512] = {};
+    size_t out_size = 0;
+    ConnectPrivateRequest connect_private{};
+    ASSERT_TRUE(encode(buffer, sizeof(buffer), PacketId::ConnectPrivate, connect_private, out_size) ==
+                EncodeResult::Success);
+    ASSERT_EQ(out_size, get_packet_size<ConnectPrivateRequest>());
+    out_size = 0;
+    ExternalProxyConfig external{};
+    ASSERT_TRUE(encode(buffer, sizeof(buffer), PacketId::ExternalProxy, external, out_size) ==
+                EncodeResult::Success);
+    ASSERT_EQ(out_size, get_packet_size<ExternalProxyConfig>());
+    out_size = 0;
+    ExternalProxyConnectionState state{};
+    ASSERT_TRUE(encode(buffer, sizeof(buffer), PacketId::ExternalProxyState, state, out_size) ==
+                EncodeResult::Success);
+    ASSERT_EQ(out_size, get_packet_size<ExternalProxyConnectionState>());
+}
+
 // ============================================================================
 // Main
 // ============================================================================

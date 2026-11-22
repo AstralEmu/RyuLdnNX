@@ -907,6 +907,56 @@ TEST(proxy_connect_reply_and_disconnect_are_routed_like_data) {
     ::close(b);
 }
 
+namespace {
+/// The three control messages carry a ProxyInfo first and share the routing
+/// rules of the data path: build each one around a given ProxyInfo.
+std::vector<uint8_t> control_message(proto::PacketId id, const proto::ProxyInfo& i) {
+    if (id == proto::PacketId::ProxyConnect) {
+        return typed(id, proto::ProxyConnectRequest{i});
+    }
+    if (id == proto::PacketId::ProxyConnectReply) {
+        return typed(id, proto::ProxyConnectResponse{i});
+    }
+    proto::ProxyDisconnectMessage bye{};
+    bye.info = i;
+    return typed(id, bye);
+}
+}  // namespace
+
+TEST(control_messages_follow_the_source_fix_spoof_and_broadcast_rules_of_data) {
+    for (const auto id : {proto::PacketId::ProxyConnect, proto::PacketId::ProxyConnectReply,
+                          proto::PacketId::ProxyDisconnect}) {
+        reset_world();
+        P2pProxyServer server;
+        ASSERT_TRUE(start_server(server));
+        const int a = join(server, VIP_A, 0x01);
+        const int b = join(server, VIP_B, 0x02);
+        Received r;
+        proto::ProxyInfo got{};
+
+        // A zero source is replaced by the sender's virtual address.
+        send_all(a, control_message(id, info(0, 1000, VIP_B, 2000)));
+        ASSERT_TRUE(read_packet(b, r));
+        ASSERT_TRUE(r.type == id);
+        std::memcpy(&got, r.payload.data(), sizeof(got));
+        ASSERT_EQ(got.source_ipv4, VIP_A);
+
+        // A source that is not the sender's address is dropped.
+        send_all(a, control_message(id, info(VIP_B, 1000, VIP_B, 2000)));
+        settle();
+        ASSERT_TRUE(nothing_pending(b));
+
+        // The legacy broadcast address is translated and fanned out.
+        send_all(a, control_message(id, info(VIP_A, 1000, 0xc0a800ff, 2000)));
+        ASSERT_TRUE(read_packet(b, r));
+        ASSERT_TRUE(r.type == id);
+        std::memcpy(&got, r.payload.data(), sizeof(got));
+        ASSERT_EQ(got.dest_ipv4, BROADCAST);
+        ::close(a);
+        ::close(b);
+    }
+}
+
 TEST(an_unauthenticated_peer_cannot_route_anything) {
     reset_world();
     P2pProxyServer server;
