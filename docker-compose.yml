@@ -7,6 +7,12 @@ x-service-base: &service-base
   volumes:
     - .:/workspace
   working_dir: /workspace
+  # Every service writes into the bind-mounted checkout: run as the caller so
+  # nothing it creates (objects, output/, formatted sources) is owned by root.
+  # `make` exports the real ids; plain `docker compose` falls back to 1000.
+  user: "${DOCS_UID:-1000}:${DOCS_GID:-1000}"
+  environment:
+    HOME: /tmp
 
 # Build-specific base (adds entrypoint + command)
 x-build-base: &build-base
@@ -43,6 +49,7 @@ services:
       - ./sysmodule/Atmosphere-libs:/opt/ryu_ldn_nx
     environment:
       - ATMOSPHERE_LIBS_PATH=/workspace/sysmodule/Atmosphere-libs
+      - HOME=/tmp
 
   # ──────────────────────────────────────────────────────────────────────────
   # Clean all build artifacts + output (embedded atmosphere-libs)
@@ -63,6 +70,7 @@ services:
       - ./sysmodule/Atmosphere-libs:/opt/ryu_ldn_nx
     environment:
       - ATMOSPHERE_LIBS_PATH=/workspace/sysmodule/Atmosphere-libs
+      - HOME=/tmp
 
   # Run tests (host binary with g++)
   # NOTE: tests run on the host, not in the dev container — they use
@@ -72,6 +80,7 @@ services:
     working_dir: /workspace/tests
     environment:
       - COVERAGE
+      - HOME=/tmp
     command: make clean test
 
   # Doxygen XML for the wiki code reference (rendered on the host by
@@ -80,7 +89,6 @@ services:
   # Usage: make docs
   docs:
     <<: *service-base
-    user: "${DOCS_UID:-1000}:${DOCS_GID:-1000}"
     entrypoint: ["python3", "/workspace/scripts/gen_docs.py", "--xml-only"]
 
   # GDB debugger for Switch (interactive)
@@ -111,9 +119,6 @@ services:
   style:
     <<: *service-base
     image: ryu_ldn_nx-lint:local
-    # Run as the caller: the service rewrites tracked sources in place and
-    # must not leave them owned by root (make style passes the real ids).
-    user: "${DOCS_UID:-1000}:${DOCS_GID:-1000}"
     build:
       context: .
       dockerfile: lint.Dockerfile

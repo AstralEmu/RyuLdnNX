@@ -87,6 +87,11 @@ jobs:
     if: always() && (needs.dco-check.result == 'success' || needs.dco-check.result == 'skipped')
 
     steps:
+      - name: Run containers as the runner user
+        run: |
+          echo "DOCS_UID=$(id -u)" >> "$GITHUB_ENV"
+          echo "DOCS_GID=$(id -g)" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

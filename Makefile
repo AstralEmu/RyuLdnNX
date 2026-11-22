@@ -26,6 +26,11 @@
 
 SHELL := /bin/sh
 
+# Containers write into the bind-mounted checkout: run them as the caller so
+# no artifact ends up owned by root (consumed by docker-compose.yml).
+export DOCS_UID := $(shell id -u)
+export DOCS_GID := $(shell id -g)
+
 # docker compose binary (v2). Override if your distro ships a different name.
 DOCKER_COMPOSE ?= docker compose
 
@@ -59,10 +64,10 @@ lint: hooks-check ## Run clang-tidy on project sources (docker compose run --rm 
 	$(DOCKER_COMPOSE) run --rm lint
 
 style: hooks-check ## Formatting + Doxygen-completeness gate (docker compose run --rm style)
-	DOCS_UID=$$(id -u) DOCS_GID=$$(id -g) $(DOCKER_COMPOSE) run --rm style
+	$(DOCKER_COMPOSE) run --rm style
 
 style-fix: hooks-check ## clang-format every C/C++ source in place (docker compose run --rm style format)
-	DOCS_UID=$$(id -u) DOCS_GID=$$(id -g) $(DOCKER_COMPOSE) run --rm style format
+	$(DOCKER_COMPOSE) run --rm style format
 
 shell: ## Interactive shell inside the build container (docker compose run --rm shell)
 	$(DOCKER_COMPOSE) run --rm shell
