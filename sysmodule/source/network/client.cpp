@@ -416,7 +416,9 @@ ClientOpResult RyuLdnClient::connect(const char* host, uint16_t port) {
     }
 
     // Update config with new host/port
-    if (host != nullptr) {
+    // connect() passes m_config.host itself: copying a buffer onto itself is
+    // undefined behaviour for strncpy, so only copy a different string.
+    if (host != nullptr && host != m_config.host) {
         std::strncpy(m_config.host, host, sizeof(m_config.host) - 1);
         m_config.host[sizeof(m_config.host) - 1] = '\0';
     }

@@ -19,8 +19,10 @@
 #include <cstring>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -58,6 +60,11 @@ constexpr Result ResultSuccess() { return Result(); }
 
 namespace os {
 
+/// Test hook: runs before every lock of a RECURSIVE Mutex (the lock of a
+/// plain one is untouched), on the locking thread, before it takes the lock
+/// (null = off). Same contract as the other g_host_before_* hooks below.
+inline void (*g_host_before_recursive_lock)() = nullptr;
+
 /// Mutex with the Stratosphere constructor signature (recursive flag).
 /// Satisfies Lockable, so std::scoped_lock / std::unique_lock work on it.
 class Mutex {
@@ -69,6 +76,7 @@ public:
 
     void lock() {
         if (m_recursive) {
+            if (g_host_before_recursive_lock) { g_host_before_recursive_lock(); }
             m_recursive_mutex.lock();
         } else {
             m_mutex.lock();
@@ -147,6 +155,16 @@ enum EventClearMode {
 /// multi-second timeout does not take multiple seconds. 1 = faithful.
 inline std::uint64_t g_host_wait_divisor = 1;
 
+/// Test hooks: run on the calling thread right before the operation, with no
+/// stand-in lock held, so a test can script what happens concurrently at that
+/// exact point of the code under test (null = off).
+inline void (*g_host_before_event_clear)() = nullptr;
+inline void (*g_host_before_timed_wait_any)() = nullptr;
+
+/// Nanoseconds added to armGetSystemTick(): a test moves the clock forward to
+/// cross a deadline without waiting for it.
+inline std::atomic<std::uint64_t> g_host_tick_skew_ns{0};
+
 /// Mutex and condition variable shared by every multi wait: a Signal() of any
 /// event wakes the waiters, which then look at their own holders.
 inline std::mutex& MultiWaitMutex() { static std::mutex m; return m; }
@@ -173,6 +191,7 @@ public:
         MultiWaitCv().notify_all();
     }
     void Clear() {
+        if (g_host_before_event_clear) { g_host_before_event_clear(); }
         std::lock_guard<std::mutex> lock(m_mutex);
         m_signaled = false;
     }
@@ -238,6 +257,7 @@ inline void UnlinkAllMultiWaitHolder(MultiWaitType* multi_wait) { multi_wait->ho
 /// Waits until one linked event is signaled (and consumes it, like the kernel
 /// does for an auto-clear event) or the timeout expires: nullptr then.
 inline MultiWaitHolderType* TimedWaitAny(MultiWaitType* multi_wait, TimeSpan timeout) {
+    if (g_host_before_timed_wait_any) { g_host_before_timed_wait_any(); }
     const auto deadline = std::chrono::steady_clock::now() +
         std::chrono::milliseconds(timeout.GetMilliSeconds() / g_host_wait_divisor);
     std::unique_lock<std::mutex> lock(MultiWaitMutex());
@@ -305,6 +325,7 @@ constexpr std::size_t ThreadStackAlignment = 0x1000;
 struct ThreadType {
     void (*entry)(void*) = nullptr;
     void* arg = nullptr;
+    const char* name = nullptr;
     std::thread thread;
 
     ThreadType() = default;
@@ -326,13 +347,19 @@ inline Result CreateThread(ThreadType* out, void (*entry)(void*), void* arg,
     out->arg = arg;
     return ResultSuccess();
 }
-inline void StartThread(ThreadType* thread) { thread->thread = std::thread(thread->entry, thread->arg); }
+/// Test hook: runs on the starting thread right before the new thread starts,
+/// with the name given to SetThreadNamePointer ("" when none).
+inline void (*g_host_before_start_thread)(const char*) = nullptr;
+inline void StartThread(ThreadType* thread) {
+    if (g_host_before_start_thread) { g_host_before_start_thread(thread->name != nullptr ? thread->name : ""); }
+    thread->thread = std::thread(thread->entry, thread->arg);
+}
 inline void WaitThread(ThreadType* thread) { if (thread->thread.joinable()) { thread->thread.join(); } }
 inline void DestroyThread(ThreadType*) {}
 
 /// Lowest user-mode priority of the kernel (the host ignores priorities)
 constexpr int LowestThreadPriority = 63;
-inline void SetThreadNamePointer(ThreadType*, const char*) {}
+inline void SetThreadNamePointer(ThreadType* thread, const char* name) { thread->name = name; }
 
 } // namespace os
 
@@ -542,7 +569,7 @@ template<class... Ts> constexpr void UnusedImpl(const Ts&...) {}
 
 /// libnx system tick: the host counts nanoseconds, so a tick is one nanosecond
 inline std::uint64_t armGetSystemTick() {
-    return static_cast<std::uint64_t>(
+    return ams::os::g_host_tick_skew_ns.load() + static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count());
 }

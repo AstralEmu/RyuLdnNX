@@ -16,6 +16,7 @@
 #include "../p2p/p2p_proxy_server.hpp"
 #include <arpa/inet.h>
 
+#include <new>
 #include <utility>
 
 #include <algorithm>
@@ -265,28 +266,12 @@ ICommunicationService::ICommunicationService(ncm::ProgramId program_id)
 
     // Configure packet callback to receive server responses
     // Use static callback with user_data to route to instance method
-    m_server_client.set_packet_callback(
-        [](ryu_ldn::protocol::PacketId id, const uint8_t* data, size_t size, void* user_data) {
-            auto* self = static_cast<ICommunicationService*>(user_data);
-            self->HandleServerPacket(id, data, size);
-        },
-        this
-    );
+    m_server_client.set_packet_callback(OnServerPacket, this);
 
     // Configure state callback so the receive thread can signal
     // m_handshake_event when RyuLdnClient reaches Ready state.
     // This replaces the old polling loop in ConnectToServer().
-    m_server_client.set_state_callback(
-        [](ryu_ldn::network::ConnectionState /*old_state*/,
-           ryu_ldn::network::ConnectionState new_state,
-           void* user_data) {
-            auto* self = static_cast<ICommunicationService*>(user_data);
-            if (new_state == ryu_ldn::network::ConnectionState::Ready) {
-                self->m_handshake_event.Signal();
-            }
-        },
-        this
-    );
+    m_server_client.set_state_callback(OnServerStateChange, this);
 
     // Start dedicated receive thread for asynchronous packet dispatch.
     // This mirrors Ryujinx's NetCoreServer pattern: packets are received and
@@ -304,6 +289,21 @@ ICommunicationService::ICommunicationService(ncm::ProgramId program_id)
     ));
     os::SetThreadNamePointer(&m_recv_thread, "ldn_recv");
     os::StartThread(&m_recv_thread);
+}
+
+void ICommunicationService::OnServerPacket(ryu_ldn::protocol::PacketId id, const uint8_t* data,
+                                           size_t size, void* user_data) {
+    auto* self = static_cast<ICommunicationService*>(user_data);
+    self->HandleServerPacket(id, data, size);
+}
+
+void ICommunicationService::OnServerStateChange(ryu_ldn::network::ConnectionState /*old_state*/,
+                                                ryu_ldn::network::ConnectionState new_state,
+                                                void* user_data) {
+    auto* self = static_cast<ICommunicationService*>(user_data);
+    if (new_state == ryu_ldn::network::ConnectionState::Ready) {
+        self->m_handshake_event.Signal();
+    }
 }
 
 ICommunicationService::~ICommunicationService() {
@@ -1096,7 +1096,9 @@ Result ICommunicationService::CreateNetwork(const CreateNetworkConfig &data) {
     // This allows direct P2P connections from joiners
     LOG_INFO("CreateNetwork: about to evaluate P2P proxy (m_use_p2p_proxy=%d)",
              static_cast<int>(m_use_p2p_proxy));
-    if (m_use_p2p_proxy && StartP2pProxyServer()) {
+    // StartP2pProxyServer() itself refuses when P2P is off (the flag can be
+    // cleared by the receive thread at any time), so it is the single check.
+    if (StartP2pProxyServer()) {
         LOG_INFO("CreateNetwork: P2P proxy started successfully, calling NatPunch()");
         // Attempt UPnP NAT punch to open public port
         uint16_t public_port = m_p2p_server->NatPunch();
@@ -1777,16 +1779,6 @@ void ICommunicationService::HandleServerPacket(ryu_ldn::protocol::PacketId id, c
             break;
         }
 
-        case ryu_ldn::protocol::PacketId::Disconnect: {
-            // Server notifies us of disconnection
-            LOG_INFO("Received Disconnect from server");
-            m_network_connected = false;
-            m_disconnect_reason = DisconnectReason::SystemRequest;
-            // Signal state change
-            m_state_machine.SignalStateChange();
-            break;
-        }
-
         case ryu_ldn::protocol::PacketId::Reject: {
             // We received a Reject - we are being rejected/kicked from the network
             // Like Ryujinx HandleReject: _disconnectReason = reject.DisconnectReason
@@ -2362,10 +2354,6 @@ bool ICommunicationService::WaitForResponse(ryu_ldn::protocol::PacketId expected
             LOG_VERBOSE("Already received Connected response (m_network_connected=true)");
             return true;
         }
-        if (m_last_response_id == expected_id) {
-            LOG_VERBOSE("Already have expected response: type=%u", static_cast<unsigned>(expected_id));
-            return true;
-        }
     }
 
     // Clear events before waiting. m_response_event and m_reject_event are
@@ -2476,15 +2464,6 @@ bool ICommunicationService::WaitForResponse(ryu_ldn::protocol::PacketId expected
 // Helper Methods (like Ryujinx)
 // ============================================================================
 
-void ICommunicationService::SetGameVersion(const uint8_t* version) {
-    // Like Ryujinx SetGameVersion - copy version and pad to 16 bytes
-    if (version != nullptr) {
-        std::memcpy(m_game_version, version, sizeof(m_game_version));
-    } else {
-        std::memset(m_game_version, 0, sizeof(m_game_version));
-    }
-}
-
 ryu_ldn::protocol::NetworkErrorCode ICommunicationService::ConsumeNetworkError() {
     // Like Ryujinx ConsumeNetworkError - return and reset
     auto result = m_last_network_error;
@@ -2535,13 +2514,18 @@ ryu_ldn::network::ClientOpResult ICommunicationService::SendProxyDataToServer(
     // the P2pProxyClient when in P2P mode) — for the host, _parent is the
     // P2pProxyClient that loops back to its own P2pProxyServer, so this
     // single path covers both joiner and host data plane.
-    if (m_p2p_client != nullptr && m_p2p_client->IsReady()) {
-        LOG_VERBOSE("SendProxyDataToServer: routing via P2P client");
-        if (m_p2p_client->SendProxyData(header, static_cast<const uint8_t*>(data), data_len)) {
-            return ryu_ldn::network::ClientOpResult::Success;
+    {
+        // Held across the send: a concurrent DisconnectP2pProxy must not
+        // free the client while it is in use.
+        std::scoped_lock lock(m_p2p_client_mutex);
+        if (m_p2p_client != nullptr && m_p2p_client->IsReady()) {
+            LOG_VERBOSE("SendProxyDataToServer: routing via P2P client");
+            if (m_p2p_client->SendProxyData(header, static_cast<const uint8_t*>(data), data_len)) {
+                return ryu_ldn::network::ClientOpResult::Success;
+            }
+            // Fall through to master server if P2P send fails
+            LOG_WARN("P2P send failed, falling back to master server");
         }
-        // Fall through to master server if P2P send fails
-        LOG_WARN("P2P send failed, falling back to master server");
     }
 
     return m_server_client.send_proxy_data(header, static_cast<const uint8_t*>(data), data_len);
@@ -2558,7 +2542,7 @@ void ICommunicationService::HandleExternalProxyConnect(
     LOG_INFO("HandleExternalProxyConnect: connecting to P2P host port=%u", config.proxy_port);
 
     // Clean up any existing P2P client
-    DisconnectP2pProxy();
+    ResetP2pClient();
 
     // Create callback to route P2P packets to BSD MITM
     auto packet_callback = [](ryu_ldn::protocol::PacketId type,
@@ -2605,51 +2589,58 @@ void ICommunicationService::HandleExternalProxyConnect(
     //
     // On Switch the custom heap allocator (lmem::ExpHeap, 384 KB) can
     // return nullptr under pressure — the overridden `new` does NOT
-    // throw. Null-check before dereferencing; on failure clean up the
-    // way the surrounding "Failed to connect" path does (DisconnectP2pProxy).
-    m_p2p_client = std::make_unique<p2p::P2pProxyClient>(packet_callback);
-    if (m_p2p_client == nullptr) {
+    // throw. A plain `new` expression is assumed non-null by the compiler
+    // (no -fcheck-new), which would make the check below dead code and
+    // construct on a null pointer, so the allocation is explicitly nothrow.
+    // On failure clean up the way the surrounding "Failed to connect" path
+    // does (DisconnectP2pProxy).
+    p2p::P2pProxyClient* const client =
+        new (std::nothrow) p2p::P2pProxyClient(packet_callback);
+    if (client == nullptr) {
         LOG_ERROR("ConnectP2pProxy: failed to allocate P2pProxyClient "
                    "(heap exhausted?)");
-        DisconnectP2pProxy();
         return;
+    }
+    {
+        // Publish it so DisconnectP2pProxy can reach it and abort the
+        // blocking steps below. This worker stays its only owner.
+        std::scoped_lock lock(m_p2p_client_mutex);
+        m_p2p_client.reset(client);
     }
 
     // Connect to P2P host using IP from config
     // ExternalProxyConfig has proxy_ip[16] for IPv4/IPv6
     // address_family indicates IPv4 (2) or IPv6 (23)
     bool connected = false;
-    if (m_p2p_client != nullptr && config.address_family == 2) {  // AF_INET
+    if (config.address_family == 2) {  // AF_INET
         // IPv4 address - first 4 bytes of proxy_ip
-        connected = m_p2p_client->Connect(config.proxy_ip, 4, config.proxy_port);
-    } else if (m_p2p_client == nullptr) {
-        LOG_ERROR("ConnectP2pProxy: P2pProxyClient is null after allocation");
+        connected = client->Connect(config.proxy_ip, 4, config.proxy_port);
     } else {
         LOG_WARN("Unsupported address family: %u", config.address_family);
     }
 
     if (!connected) {
         LOG_ERROR("Failed to connect to P2P host");
-        DisconnectP2pProxy();
+        ResetP2pClient();
         return;
     }
 
     // Perform authentication with ExternalProxyConfig
-    if (m_p2p_client != nullptr && !m_p2p_client->PerformAuth(config)) {
+    if (!client->PerformAuth(config)) {
         LOG_ERROR("P2P authentication failed");
-        DisconnectP2pProxy();
+        ResetP2pClient();
         return;
     }
 
     // Wait for ProxyConfig response from host
-    if (!m_p2p_client->EnsureProxyReady()) {
+    if (!client->EnsureProxyReady()) {
         LOG_ERROR("P2P proxy not ready (timeout waiting for ProxyConfig)");
-        DisconnectP2pProxy();
+        ResetP2pClient();
         return;
     }
 
     // Store P2P proxy config
-    m_proxy_config = m_p2p_client->GetProxyConfig();
+    m_proxy_config = client->GetProxyConfig();
     LOG_INFO("P2P connection established: virtual_ip=0x%08X",
              m_proxy_config.proxy_ip);
 
@@ -2678,10 +2669,34 @@ void ICommunicationService::HandleExternalProxyConnect(
 }
 
 void ICommunicationService::DisconnectP2pProxy() {
-    if (m_p2p_client != nullptr) {
+    std::unique_ptr<p2p::P2pProxyClient> detached;
+    {
+        std::scoped_lock lock(m_p2p_client_mutex);
+        if (m_p2p_client == nullptr) {
+            return;
+        }
         LOG_INFO("Disconnecting P2P proxy client");
-        m_p2p_client->Disconnect();
-        m_p2p_client.reset();
+        if (m_p2p_connect_thread_active.load()) {
+            // The connect worker holds a raw pointer to this client and is
+            // the only one allowed to free it; closing the connection makes
+            // its blocking steps fail, then it frees the client itself.
+            m_p2p_client->Disconnect();
+            return;
+        }
+        detached = std::move(m_p2p_client);
+    }
+    detached->Disconnect();
+}
+
+void ICommunicationService::ResetP2pClient() {
+    std::unique_ptr<p2p::P2pProxyClient> detached;
+    {
+        std::scoped_lock lock(m_p2p_client_mutex);
+        detached = std::move(m_p2p_client);
+    }
+    if (detached != nullptr) {
+        LOG_INFO("Disconnecting P2P proxy client");
+        detached->Disconnect();
     }
 }
 
@@ -2712,7 +2727,9 @@ bool ICommunicationService::StartP2pProxyServer() {
         }
     };
 
-    m_p2p_server = std::make_unique<p2p::P2pProxyServer>(master_send_callback, this);
+    // Nothrow for the same reason as the P2pProxyClient allocation above:
+    // the overridden `new` returns nullptr on heap exhaustion.
+    m_p2p_server.reset(new (std::nothrow) p2p::P2pProxyServer(master_send_callback, this));
     if (m_p2p_server == nullptr) {
         // On Switch the custom heap allocator (lmem::ExpHeap, 384 KB) can
         // return nullptr under pressure — the overridden `new` does NOT
@@ -2724,12 +2741,8 @@ bool ICommunicationService::StartP2pProxyServer() {
     }
 
     // Start listening on an available port
-    if (m_p2p_server == nullptr || !m_p2p_server->Start()) {
-        if (m_p2p_server == nullptr) {
-            LOG_ERROR("StartP2pProxyServer: P2pProxyServer is null after allocation");
-        } else {
-            LOG_ERROR("StartP2pProxyServer: failed to start TCP server");
-        }
+    if (!m_p2p_server->Start()) {
+        LOG_ERROR("StartP2pProxyServer: failed to start TCP server");
         StopP2pProxyServer();
         return false;
     }
@@ -2742,10 +2755,8 @@ bool ICommunicationService::StartP2pProxyServer() {
     // to ProxySocketManager::RouteIncomingData via the static callback below
     // (mirrors the relay-mode ProxyData sink in HandleServerPacket).
     constexpr uint32_t kPredictedHostIp = 0x0A720001;
-    if (m_p2p_server != nullptr) {
-        m_p2p_server->SetHostVirtualIp(kPredictedHostIp);
-        m_p2p_server->SetHostDataCallback(HostP2pInboundDataCallback, this);
-    }
+    m_p2p_server->SetHostVirtualIp(kPredictedHostIp);
+    m_p2p_server->SetHostDataCallback(HostP2pInboundDataCallback, this);
 
     LOG_INFO("StartP2pProxyServer: server started on port %u",
              m_p2p_server->GetPrivatePort());

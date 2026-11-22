@@ -554,6 +554,10 @@ private:
     // automatically on service destruction — no manual delete path
     // can be forgotten.
     std::unique_ptr<p2p::P2pProxyClient> m_p2p_client;      ///< Connected P2P proxy client (joiner side)
+    // Guards the m_p2p_client pointer and its use by the IPC send path. The
+    // async connect worker, the IPC threads (Finalize, CloseAccessPoint,
+    // SendTo) and the inactivity timer all reach the client.
+    os::SdkMutex m_p2p_client_mutex;
     std::unique_ptr<p2p::P2pProxyServer> m_p2p_server;     ///< Hosted P2P proxy server (host side)
 
     // Async ExternalProxy connect thread — mirrors Ryujinx's architecture
@@ -606,6 +610,26 @@ private:
     /// @gdb{tag="LDN:ASYNC", msg="P2pConnectThreadEntry: thread started arg=%p", args="$x0"}
     static void P2pConnectThreadEntry(void* arg);
 
+    /**
+     * @brief Packet callback registered on the server client (C function pointer)
+     * @param id Packet type
+     * @param data Packet payload
+     * @param size Payload size in bytes
+     * @param user_data Pointer to the ICommunicationService instance
+     */
+    static void OnServerPacket(ryu_ldn::protocol::PacketId id, const uint8_t* data,
+                               size_t size, void* user_data);
+
+    /**
+     * @brief State callback registered on the server client (C function pointer)
+     * @param old_state Previous connection state (unused)
+     * @param new_state New connection state; Ready signals the handshake event
+     * @param user_data Pointer to the ICommunicationService instance
+     */
+    static void OnServerStateChange(ryu_ldn::network::ConnectionState old_state,
+                                    ryu_ldn::network::ConnectionState new_state,
+                                    void* user_data);
+
     // Program ID for LocalCommunicationId replacement (like Ryujinx NeedsRealId handling)
     ncm::ProgramId m_program_id;                            ///< Client program ID (title ID)
     u64 m_local_communication_id;                           ///< LocalCommunicationId from NACP (for LDN filtering)
@@ -629,15 +653,6 @@ private:
     u8 FindLocalNodeId() const;
 
     /**
-     * @brief Set game version from local_communication_version
-     *
-     * Converts version number to string format for RyuNetworkConfig.
-     *
-     * @param version Version buffer (16 bytes)
-     */
-    void SetGameVersion(const uint8_t* version);
-
-    /**
      * @brief Consume last network error (like Ryujinx ConsumeNetworkError)
      *
      * Returns the last error and resets it to None.
@@ -658,8 +673,23 @@ private:
 
     /**
      * @brief Disconnect from P2P proxy if connected
+     *
+     * Called from any thread but the async connect worker. While the worker
+     * is in flight it is the only owner allowed to free the client (it holds
+     * a raw pointer to it): the client is then only disconnected, which
+     * makes the worker's blocking steps fail, and the worker frees it.
+     * Otherwise the client is detached under m_p2p_client_mutex and
+     * destroyed outside the lock.
      */
     void DisconnectP2pProxy();
+
+    /**
+     * @brief Disconnect and free the P2P client (async connect worker only)
+     *
+     * Same detach as DisconnectP2pProxy but unconditional: the worker is the
+     * sole user of the raw pointer, so it may free it.
+     */
+    void ResetP2pClient();
 
     /**
      * @brief Start P2P proxy server for hosting
