@@ -157,10 +157,8 @@ void LogBuffer::get_all(char* buffer, size_t buffer_size) const {
     size_t offset = 0;
 
     for (size_t i = 0; i < m_count && offset < buffer_size - 1; i++) {
+        // i < m_count, so the slot always holds a message.
         const char* msg = get(i);
-        if (msg == nullptr) {
-            continue;
-        }
 
         size_t msg_len = strlen(msg);
         size_t remaining = buffer_size - offset - 1;
@@ -287,9 +285,7 @@ void Logger::output_message(const char* message) {
     // Output to file if enabled
     if (m_enabled) {
         // Open file on-demand if not already open
-        if (!m_file_open) {
-            open_file();
-        }
+        open_file();  // no-op when the file is already open
 
 #ifdef __SWITCH__
         if (m_file_open) {

@@ -289,6 +289,14 @@ TEST(set_server_host) {
     ASSERT_STREQ(ConfigManager::Instance().GetServerHost(), "new.server.com");
 }
 
+/** @brief Test case: a null server host leaves the setting unchanged. */
+TEST(set_server_host_null_is_ignored) {
+    ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
+    ConfigManager::Instance().SetServerHost("kept.server.com");
+    ConfigManager::Instance().SetServerHost(nullptr);
+    ASSERT_STREQ(ConfigManager::Instance().GetServerHost(), "kept.server.com");
+}
+
 /** @brief Test case: set server host truncates long name. */
 TEST(set_server_host_truncates_long_name) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");

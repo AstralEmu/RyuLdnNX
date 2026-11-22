@@ -94,12 +94,10 @@ bool parse_bool(const char* value) {
     // inline case-insensitive compare to stay portable across devkitPro
     // (Switch) and the host g++ test build without pulling in <strings.h>.
     auto ieq = [](char a, char b) {
-        // ASCII-only lowercasing; fine for the literal tokens "true"/"false".
+        // ASCII-only lowercasing of the input; the reference token b is
+        // always a lowercase literal ("true"/"false").
         if (a >= 'A' && a <= 'Z') {
             a = static_cast<char>(a - 'A' + 'a');
-        }
-        if (b >= 'A' && b <= 'Z') {
-            b = static_cast<char>(b - 'A' + 'a');
         }
         return a == b;
     };

@@ -2046,10 +2046,9 @@ P2pProxySession::~P2pProxySession() {
     Disconnect(true);
     // Return the receive-thread stack slot to the global pool so the next
     // peer that connects can reuse it.
-    if (m_stack_slot >= 0) {
-        ReleaseSessionStackSlot(m_stack_slot);
-        m_stack_slot = -1;
-    }
+    // A session that never started holds -1, which the release ignores.
+    ReleaseSessionStackSlot(m_stack_slot);
+    m_stack_slot = -1;
 }
 
 /**

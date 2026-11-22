@@ -9,6 +9,7 @@
 #include "debug/log.hpp"
 #include "config/config.hpp"
 
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -345,6 +346,64 @@ TEST(log_buffer_get_all) {
     ASSERT_TRUE(strstr(output, "Line 1") != nullptr);
     ASSERT_TRUE(strstr(output, "Line 2") != nullptr);
     ASSERT_TRUE(strstr(output, "Line 3") != nullptr);
+}
+
+/** @brief Test case: get_all ignores a null or empty destination. */
+TEST(log_buffer_get_all_rejects_unusable_destination) {
+    LogBuffer buffer;
+    buffer.init(4);
+    buffer.add("Line 1");
+
+    char output[8] = "keep";
+    buffer.get_all(nullptr, sizeof(output));
+    buffer.get_all(output, 0);
+
+    ASSERT_STREQ(output, "keep");
+}
+
+/**
+ * @brief Forward a printf-style message to Logger::log_v.
+ * @param logger Logger under test
+ * @param level Severity of the message
+ * @param format printf-style format string
+ */
+static void call_log_v(
+    Logger& logger, LogLevel level, const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    logger.log_v(level, format, args);
+    va_end(args);
+}
+
+/** @brief Test case: log_v itself drops a message below the level. */
+TEST(logger_log_v_drops_message_below_level) {
+    DebugConfig config{};
+    config.enabled = true;
+    config.level = 0;  // Error only
+
+    Logger logger;
+    logger.init(config);
+    call_log_v(logger, LogLevel::Verbose, "must not appear %d", 1);
+
+    ASSERT_EQ(logger.get_buffer().count(), 0u);
+}
+
+/** @brief Test case: a message below the level is dropped everywhere. */
+TEST(logger_log_drops_message_below_level) {
+    DebugConfig config{};
+    config.enabled = true;
+    config.level = 0;  // Error only
+
+    char log_path[256];
+    snprintf(log_path, sizeof(log_path), "/tmp/test_log_%d.log", rand());
+    std::remove(log_path);
+
+    Logger logger;
+    logger.init(config, log_path);
+    logger.log(LogLevel::Verbose, "must not appear");
+
+    ASSERT_EQ(logger.get_buffer().count(), 0u);
+    std::remove(log_path);
 }
 
 /** @brief Test case: log buffer clear. */

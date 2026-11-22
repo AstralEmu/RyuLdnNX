@@ -720,13 +720,18 @@ coverage-full-enforce: clean
 	bash integration/wait-for-server.sh localhost 30456 60
 	sleep 2
 	INTEGRATION_COMPOSE_FILE="$$(pwd)/integration/docker-compose.yml" \
-		./integration/run_integration_tests localhost 30456 || true
-	@echo ""
-	@echo "=== Phase 3: Stopping LdnServer ==="
-	docker compose -f integration/docker-compose.yml down -v
+		./integration/run_integration_tests localhost 30456 ; \
+		int_exit=$$? ; \
+	echo "" ; \
+	echo "=== Phase 3: Stopping LdnServer ===" ; \
+	docker compose -f integration/docker-compose.yml down -v ; \
+	test $$int_exit -eq 0
 	@echo ""
 	@echo "=== Phase 4: Checking per-file coverage (minimum $(MIN_COVERAGE)%) ==="
 	cd .. && python3 scripts/check-coverage.py --min $(MIN_COVERAGE) --root .
+	@echo ""
+	@echo "=== Phase 5: Every line executed by unit or integration tests ==="
+	cd .. && python3 scripts/check-coverage-surface.py --root .
 
 clean:
 	rm -f *.o $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL) $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET) $(TARGET_P2P_CLIENT_REAL) $(TARGET_P2P_SERVER_REAL) $(TARGET_LDN_MITM_SERVICE) $(TARGET_LDN_ICOMMUNICATION_REAL) $(TARGET_BSD_MITM_SERVICE) $(TARGET_MAIN)
