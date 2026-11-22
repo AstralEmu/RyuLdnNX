@@ -6,6 +6,9 @@
     ``.clang-format``: 80 columns, 4 spaces);
   * **line length** -- a line is wider than 80 columns (comments and strings
     are not reflowed by clang-format, so they are checked separately);
+  * **bypass** -- a marker that hides a violation (the Doxygen cond/private/
+    internal commands, placeholder ``@return n/a``, ``clang-format off``): always an
+    error, never an exception;
   * **documentation** -- Doxygen reports an undocumented member, an
     undocumented parameter or return value, or a malformed comment. Everything
     is documented, private members and tests included.
@@ -46,6 +49,18 @@ _ALIASES = (
     r"role=\par Role^^",
     r"modified_by=\par Modified by^^",
     r"thread_safety=\par Thread safety^^",
+)
+
+
+# Markers whose only purpose is to silence a check: Doxygen exclusion
+# commands, placeholder tags written to satisfy the documentation gate and
+# clang-format switches.
+_BYPASS = re.compile(
+    r"[\\@](?:cond|endcond|private|internal|hideinitializer|nosubgrouping)\b"
+    r"|@(?:return|param\s+\w+)\s+(?:n/?a|none)\b"
+    r"|Doxygen\s+(?:artifact|workaround)"
+    r"|clang-format\s+(?:off|on)\b",
+    re.IGNORECASE,
 )
 
 
@@ -158,6 +173,32 @@ class Style:
         return out
 
     @staticmethod
+    def bypass_violations(files: list[str]) -> list[str]:
+        """Report every trick that hides a violation instead of fixing it.
+
+        Args:
+            files: Repo-relative paths to check.
+
+        Returns:
+            One ``path:line: ...`` entry per forbidden marker.
+        """
+        out: list[str] = []
+
+        for path in files:
+            with open(os.path.join(_ROOT, path), encoding="utf-8") as handle:
+                for number, text in enumerate(handle, start=1):
+                    found = _BYPASS.search(text)
+
+                    if found:
+                        out.append(
+                            f"{path}:{number}: forbidden bypass "
+                            f"'{found.group(0)}': document or fix the "
+                            "code instead"
+                        )
+
+        return out
+
+    @staticmethod
     def _doxyfile(files: list[str], log: str, out: str) -> str:
         """Return the Doxygen configuration of the completeness check.
 
@@ -173,6 +214,15 @@ class Style:
             "INPUT = " + " ".join(files),
             f"EXCLUDE_PATTERNS = {_EXCLUDE_PATTERNS}",
             "ALIASES = " + " ".join(f'"{alias}"' for alias in _ALIASES),
+            # A trailing ``} __attribute__((packed));`` is otherwise parsed as
+            # a function named ``__attribute__`` that lacks a return doc.
+            "ENABLE_PREPROCESSING = YES",
+            "MACRO_EXPANSION = YES",
+            "EXPAND_ONLY_PREDEF = YES",
+            # The Atmosphere interface macro is used without a trailing
+            # semicolon, which swallows the next declaration otherwise.
+            "PREDEFINED = __attribute__(x)= "
+            "AMS_SF_DEFINE_INTERFACE(a,b,c,d)=",
             "EXTRACT_ALL = NO",
             "EXTRACT_PRIVATE = YES",
             "EXTRACT_STATIC = YES",
@@ -200,11 +250,16 @@ class Style:
         ])
 
     @staticmethod
-    def doc_violations(files: list[str]) -> list[str]:
+    def doc_violations(
+        files: list[str], context: list[str] | None = None
+    ) -> list[str]:
         """Report what Doxygen finds undocumented or malformed.
 
         Args:
-            files: Repo-relative paths to analyse.
+            files: Repo-relative paths whose warnings are reported.
+            context: Every file Doxygen must parse so that declarations
+                living in other files resolve (all tracked files by
+                default); only warnings about ``files`` are kept.
 
         Returns:
             One entry per Doxygen warning, with the root stripped.
@@ -213,13 +268,15 @@ class Style:
             RuntimeError: If Doxygen fails to run.
         """
         tool = Style._need("doxygen")
+        context = context if context is not None else Style.files()
+        context = sorted(set(context) | set(files))
 
         with tempfile.TemporaryDirectory() as scratch:
             log = os.path.join(scratch, "warnings.log")
             result = subprocess.run(
                 [tool, "-"],
                 cwd=_ROOT,
-                input=Style._doxyfile(files, log, scratch),
+                input=Style._doxyfile(context, log, scratch),
                 capture_output=True,
                 text=True,
                 check=False,
@@ -235,8 +292,19 @@ class Style:
                 lines = handle.read().splitlines()
 
         prefix = _ROOT + os.sep
+        wanted = set(files)
+        kept: set[str] = set()
 
-        return sorted({line.replace(prefix, "") for line in lines if line})
+        for line in lines:
+            line = line.replace(prefix, "")
+            path = line.split(":", 1)[0]
+
+            # Lines naming a tracked file of another group are dropped;
+            # path-less lines (``<name>:1: ...``) are always kept.
+            if line and (path in wanted or path not in context):
+                kept.add(line)
+
+        return sorted(kept)
 
     @staticmethod
     def run_check(only: list[str] | None = None) -> int:
@@ -261,6 +329,7 @@ class Style:
         issues = (
             Style.format_violations(files)
             + Style.width_violations(files)
+            + Style.bypass_violations(files)
             + Style.doc_violations(files)
         )
 
