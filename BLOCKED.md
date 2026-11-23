@@ -23,3 +23,8 @@
 
 - `tests/main_tests.cpp:21` (`#include "main.cpp"`) and `tests/bsd_mitm_service_tests.cpp:21` (`#include "bsd/bsd_mitm_service.cpp"`) are deliberate unity builds (see the comments above `$(TARGET_MAIN)` and `$(TARGET_BSD_MITM_SERVICE)` in tests/Makefile) that reach file-local state (`g_socket_info`, `g_mitm_pid_count`, server managers, heap).
 - Real fix: an internal test-seam header exposing that state from the sources, which changes Switch-side translation units; not done without a behaviour-preserving proof. Owner decision needed.
+
+## -Wthread-safety not wired (2026-11-23)
+
+- Measured: `grep -rEc "GUARDED_BY|REQUIRES\(|ACQUIRE\(|lockable|capability\(" sysmodule/source tests/stubs` returns no file with a match, while 22 files under sysmodule/source use a mutex. clang 21 is in the lint image, but without capability annotations `-Wthread-safety` has nothing to check, so a green run would prove nothing.
+- Real fix: annotate the stub `Mutex` (tests/stubs/stratosphere.hpp, protected path) as a capability and every guarded member through macros that expand to nothing under devkitA64 GCC. Touches the Switch-side headers and the stub; needs the owner's decision and a behaviour-preserving proof.
