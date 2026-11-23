@@ -66,7 +66,8 @@ _BYPASS = re.compile(
     r"|NOLINT(?:NEXTLINE|BEGIN|END)?\b"
     r"|cppcheck-suppress|NOSONAR|\blgtm\b|codeql\s*\["
     r"|#\s*pragma\s+(?:GCC|clang)\s+diagnostic"
-    r"|no_sanitize|NO_THREAD_SAFETY_ANALYSIS|no_sanitize_address",
+    r"|no_sanitize|NO_THREAD_SAFETY_ANALYSIS|no_sanitize_address"
+    r"|(?:clang|gsl)::suppress|__clang_analyzer__|analyzer_noreturn",
     re.IGNORECASE,
 )
 
