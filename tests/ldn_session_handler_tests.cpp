@@ -118,7 +118,8 @@ static NetworkInfo make_test_network_info(
     uint8_t max_nodes,
     uint64_t game_id = 0x0100000000001234ULL) {
     NetworkInfo info{};
-    info.network_id.intent_id.local_communication_id = game_id;
+    info.network_id.intent_id.local_communication_id =
+        static_cast<int64_t>(game_id);
     info.network_id.intent_id.scene_id = 1;
     info.ldn.node_count_max = max_nodes;
     info.ldn.node_count = node_count;
@@ -529,7 +530,8 @@ TEST(session_handler_process_multiple_scan_replies) {
 
     // Receive multiple scan results
     for (int i = 0; i < 5; i++) {
-        NetworkInfo info = make_test_network_info(i + 1, 8);
+        NetworkInfo info =
+            make_test_network_info(static_cast<uint8_t>(i + 1), 8);
         LdnHeader header = make_test_header(PacketId::ScanReply, sizeof(info));
         handler.handle_scan_reply(header, info);
     }

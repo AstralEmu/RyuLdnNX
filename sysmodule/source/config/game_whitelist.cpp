@@ -108,11 +108,11 @@ u64 ParseHexId(const char* str, size_t len) {
         u64 digit;
 
         if (c >= '0' && c <= '9') {
-            digit = c - '0';
+            digit = static_cast<u64>(c - '0');
         } else if (c >= 'a' && c <= 'f') {
-            digit = 10 + (c - 'a');
+            digit = 10 + static_cast<u64>(c - 'a');
         } else if (c >= 'A' && c <= 'F') {
-            digit = 10 + (c - 'A');
+            digit = 10 + static_cast<u64>(c - 'A');
         } else {
             break;  // Invalid character, stop
         }
@@ -161,8 +161,8 @@ void LoadWhitelist() {
     LOG_INFO("GameWhitelist: file_size=%lld bytes", file_size);
 
     // Calculate capacity based on file size and allocate
-    g_whitelist_capacity =
-        static_cast<size_t>(file_size / BYTES_PER_ENTRY) + 100;  // +100 margin
+    g_whitelist_capacity = (static_cast<size_t>(file_size) / BYTES_PER_ENTRY) +
+                           100;  // +100 margin
     g_whitelist =
         std::unique_ptr<u64[]>(new (std::nothrow) u64[g_whitelist_capacity]);
     if (g_whitelist == nullptr) {
@@ -217,7 +217,7 @@ void LoadWhitelist() {
             }
         }
 
-        offset += bytes_read;
+        offset += static_cast<s64>(bytes_read);
     }
 
     // Check last line if no trailing newline

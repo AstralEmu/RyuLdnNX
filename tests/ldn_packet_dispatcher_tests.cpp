@@ -611,7 +611,7 @@ TEST(dispatcher_dispatch_proxy_data) {
     header.magic = PROTOCOL_MAGIC;
     header.version = PROTOCOL_VERSION;
     header.type = static_cast<uint8_t>(PacketId::ProxyData);
-    header.data_size = packet.size();
+    header.data_size = static_cast<int32_t>(packet.size());
 
     dispatcher.dispatch(header, packet.data(), packet.size());
 

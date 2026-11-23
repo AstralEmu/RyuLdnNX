@@ -165,7 +165,7 @@ EncodeResult encode_with_data(
 
     // Write header with combined size
     size_t offset = encode_header(
-        buffer, type, sizeof(T) + static_cast<int32_t>(extra_size));
+        buffer, type, static_cast<int32_t>(sizeof(T) + extra_size));
 
     // Write payload
     std::memcpy(buffer + offset, &payload, sizeof(T));

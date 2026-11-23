@@ -1955,7 +1955,7 @@ TEST(scenario_8_players_session) {
     for (int i = 1; i < 8; i++) {
         char name[32];
         snprintf(name, sizeof(name), "Player%d", i + 1);
-        server.SimulatePlayerJoin(0x0A000000 + i, name);
+        server.SimulatePlayerJoin(static_cast<u32>(0x0A000000 + i), name);
     }
 
     // Verify full lobby

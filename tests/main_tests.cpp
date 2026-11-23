@@ -32,8 +32,7 @@ public:
         char tmpl[] = "/tmp/ryu_boot_XXXXXX";
         m_root = ::mkdtemp(tmpl);
         m_previous = fsys::current_path();
-        fsys::create_directories(
-            fsys::path(m_root) / "sdmc:" / "config" / "ryu_ldn_nx");
+        fsys::create_directories(m_root / "sdmc:" / "config" / "ryu_ldn_nx");
         fsys::current_path(m_root);
     }
     ~SdCardDir() {

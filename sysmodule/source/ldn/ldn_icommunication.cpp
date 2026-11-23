@@ -679,8 +679,7 @@ Result ICommunicationService::Initialize(
     // Update shared state for overlay
     auto& shared_state = SharedState::GetInstance();
     shared_state.SetGameActive(true, m_client_process_id);
-    shared_state.SetLdnState(
-        static_cast<ams::mitm::ldn::CommState>(m_state_machine.GetState()));
+    shared_state.SetLdnState(m_state_machine.GetState());
 
     // Re-set LDN PID to enable BSD MITM interception
     // This is critical for retry scenarios: after Finalize() clears the PID,
@@ -988,7 +987,8 @@ Result ICommunicationService::Scan(
     scan_filter.network_type = filter.networkType;
 
     // Copy network ID (use potentially replaced local_comm_id)
-    scan_filter.network_id.intent_id.local_communication_id = local_comm_id;
+    scan_filter.network_id.intent_id.local_communication_id =
+        static_cast<int64_t>(local_comm_id);
     scan_filter.network_id.intent_id.scene_id =
         filter.networkId.intentId.sceneId;
 
@@ -1219,7 +1219,8 @@ Result ICommunicationService::CreateNetwork(const CreateNetworkConfig& data) {
         sizeof(request.user_config.user_name));
 
     // Network config (use potentially replaced local_comm_id)
-    request.network_config.intent_id.local_communication_id = local_comm_id;
+    request.network_config.intent_id.local_communication_id =
+        static_cast<int64_t>(local_comm_id);
     request.network_config.intent_id.scene_id =
         data.networkConfig.intentId.sceneId;
     request.network_config.channel = data.networkConfig.channel;
@@ -1620,7 +1621,7 @@ Result ICommunicationService::Connect(
     // Network info - copy the full structure, then fix LocalCommunicationId
     std::memcpy(&request.network_info, &data, sizeof(request.network_info));
     request.network_info.network_id.intent_id.local_communication_id =
-        local_comm_id;
+        static_cast<int64_t>(local_comm_id);
 
     // Send Connect request (12-byte header)
     LOG_INFO("Connect: sending request...");
@@ -1767,7 +1768,7 @@ Result ICommunicationService::CreateNetworkPrivate(
 
     // Network config
     request.network_config.intent_id.local_communication_id =
-        data.networkConfig.intentId.localCommunicationId;
+        static_cast<int64_t>(data.networkConfig.intentId.localCommunicationId);
     request.network_config.intent_id.scene_id =
         data.networkConfig.intentId.sceneId;
     request.network_config.channel = data.networkConfig.channel;
@@ -1872,7 +1873,7 @@ Result ICommunicationService::ConnectPrivate(const ConnectPrivateData& data) {
 
     // Network config
     request.network_config.intent_id.local_communication_id =
-        data.networkConfig.intentId.localCommunicationId;
+        static_cast<int64_t>(data.networkConfig.intentId.localCommunicationId);
     request.network_config.intent_id.scene_id =
         data.networkConfig.intentId.sceneId;
     request.network_config.channel = data.networkConfig.channel;
@@ -2467,7 +2468,7 @@ void ICommunicationService::HandleSyncNetworkPacket(
         shared_state.SetSessionInfo(
             m_network_info.ldn.nodeCount,
             m_network_info.ldn.nodeCountMax,
-            local_id,
+            static_cast<u8>(local_id),
             m_state_machine.GetState() == CommState::AccessPointCreated);
         LOG_INFO("SyncNetwork step7: SetSessionInfo done");
         ryu_ldn::debug::g_logger.flush();

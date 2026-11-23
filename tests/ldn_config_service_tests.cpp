@@ -62,7 +62,7 @@ std::string temp_config_path() {
         path,
         sizeof(path),
         "/tmp/ldn_config_service_%d_%d.ini",
-        static_cast<int>(std::rand()),
+        std::rand(),
         0);
     return path;
 }

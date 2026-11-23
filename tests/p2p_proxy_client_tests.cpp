@@ -125,7 +125,7 @@ bool parse_ipv4(const char* str, uint32_t& out_ip) {
 void ipv4_to_string(uint32_t ip, char* out, size_t out_len) {
     struct in_addr addr;
     addr.s_addr = ip;
-    inet_ntop(AF_INET, &addr, out, out_len);
+    inet_ntop(AF_INET, &addr, out, static_cast<socklen_t>(out_len));
 }
 
 /**
@@ -444,7 +444,7 @@ TEST(port_range_valid) {
     ASSERT_TRUE(PORT_BASE < 65535 - PORT_RANGE);  // Leaves room for range
 
     for (int i = 0; i < PORT_RANGE; i++) {
-        uint16_t port = PORT_BASE + i;
+        uint16_t port = static_cast<uint16_t>(PORT_BASE + i);
         ASSERT_TRUE(port > 0);
         ASSERT_TRUE(port <= 65535);
     }

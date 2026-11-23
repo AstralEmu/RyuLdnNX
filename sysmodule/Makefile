@@ -72,24 +72,9 @@ CXXFLAGS	+= $(VERSION_DEFINES)
 #   is fragile across toolchains — devkitPro uses arm-none-elf-g++ which
 #   inherits binutils behavior and historically rejects the combined form
 #   in some versions).
-# -Wno-missing-field-initializers : benign; aggregates intentionally use
-#   partial initialization (e.g. NetworkInfo nodes). Already set in
-#   stratosphere.mk SETTINGS; re-emitted here so the project keeps building
-#   even if a future Atmosphere-libs bump drops it from the submodule.
-# -Wno-unused-result       : see UNUSED_RESULT_WARNING below. Suppressed
-#   globally (rather than per-call via (void) casts) because the ignored
-#   returns are spread across libnx/stratosphere wrappers and the project's
-#   own Result types: a top-level check on a Result-ifying wrapper already
-#   covers correctness, while the underlying libc-style returns
-#   (e.g. ::write, ::read on BSD sockets) have their failure paths handled
-#   by the surrounding SocketResult state machine. A targeted suppression
-#   would require touching every call site and would not be less risky than
-#   the global flag — the global flag is the documented trade-off.
 #---------------------------------------------------------------------------------
 HARDENING_FLAGS	:=
-WARN_FLAGS		:= -Wall -Wextra -Werror \
-				   -Wno-missing-field-initializers \
-				   -Wno-unused-result
+WARN_FLAGS		:= -Wall -Wextra -Werror
 # Two separate -Wl, tokens so each linker option stands on its own
 # (see header comment for the rationale — combined form is fragile).
 LINK_HARDENING	:= -Wl,-z,relro -Wl,-z,now

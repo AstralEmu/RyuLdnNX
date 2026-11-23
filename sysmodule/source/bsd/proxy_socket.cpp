@@ -711,7 +711,8 @@ bool ProxySocket::WaitForData(u64 timeout_ms) {
         return true;
     }
 
-    return m_receive_event.TimedWait(TimeSpan::FromMilliSeconds(timeout_ms));
+    return m_receive_event.TimedWait(
+        TimeSpan::FromMilliSeconds(static_cast<s64>(timeout_ms)));
 }
 
 }  // namespace ams::mitm::bsd

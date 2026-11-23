@@ -179,15 +179,9 @@ public:
     /**
      * @brief Counts the call; the packet is not stored.
      *
-     * @param type packet id, ignored
-     * @param payload payload bytes, ignored
-     * @param payload_size payload size, ignored
      * @return next_send_result
      */
-    ClientResult send_packet(
-        protocol::PacketId type,
-        const void* payload,
-        size_t payload_size) override {
+    ClientResult send_packet(protocol::PacketId, const void*, size_t) override {
         send_packet_call_count++;
         return next_send_result;
     }
@@ -195,11 +189,9 @@ public:
     /**
      * @brief Counts the call; the bytes are not stored.
      *
-     * @param data bytes, ignored
-     * @param size byte count, ignored
      * @return next_send_result
      */
-    ClientResult send_raw(const void* data, size_t size) override {
+    ClientResult send_raw(const void*, size_t) override {
         send_raw_call_count++;
         return next_send_result;
     }
@@ -207,12 +199,10 @@ public:
     /**
      * @brief Counts the call; may fail independently of the other send methods.
      *
-     * @param msg Initialize message, ignored
      * @return next_initialize_result when use_initialize_result is set, else
      * next_send_result
      */
-    ClientResult send_initialize(
-        const protocol::InitializeMessage& msg) override {
+    ClientResult send_initialize(const protocol::InitializeMessage&) override {
         send_initialize_call_count++;
         // Lets a test fail the Initialize message alone while the preceding
         // Passphrase message (which uses next_send_result) still succeeds.
@@ -224,11 +214,9 @@ public:
     /**
      * @brief Counts the call of the message overload.
      *
-     * @param msg Passphrase message, ignored
      * @return next_send_result
      */
-    ClientResult send_passphrase(
-        const protocol::PassphraseMessage& msg) override {
+    ClientResult send_passphrase(const protocol::PassphraseMessage&) override {
         send_passphrase_msg_call_count++;
         return next_send_result;
     }
@@ -236,10 +224,9 @@ public:
     /**
      * @brief Counts the call of the C-string overload.
      *
-     * @param passphrase passphrase, ignored
      * @return next_send_result
      */
-    ClientResult send_passphrase(const char* passphrase) override {
+    ClientResult send_passphrase(const char*) override {
         send_passphrase_str_call_count++;
         return next_send_result;
     }
@@ -247,10 +234,9 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param msg Ping message, ignored
      * @return next_send_result
      */
-    ClientResult send_ping(const protocol::PingMessage& msg) override {
+    ClientResult send_ping(const protocol::PingMessage&) override {
         send_ping_call_count++;
         return next_send_result;
     }
@@ -258,11 +244,9 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param msg Disconnect message, ignored
      * @return next_send_result
      */
-    ClientResult send_disconnect(
-        const protocol::DisconnectMessage& msg) override {
+    ClientResult send_disconnect(const protocol::DisconnectMessage&) override {
         send_disconnect_call_count++;
         return next_send_result;
     }
@@ -270,15 +254,12 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param request request, ignored
-     * @param advertise_data advertise data, ignored
-     * @param advertise_size advertise data size, ignored
      * @return next_send_result
      */
     ClientResult send_create_access_point(
-        const protocol::CreateAccessPointRequest& request,
-        const uint8_t* advertise_data,
-        size_t advertise_size) override {
+        const protocol::CreateAccessPointRequest&,
+        const uint8_t*,
+        size_t) override {
         send_create_access_point_call_count++;
         return next_send_result;
     }
@@ -286,15 +267,12 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param request private request, ignored
-     * @param advertise_data advertise data, ignored
-     * @param advertise_size advertise data size, ignored
      * @return next_send_result
      */
     ClientResult send_create_access_point_private(
-        const protocol::CreateAccessPointPrivateRequest& request,
-        const uint8_t* advertise_data,
-        size_t advertise_size) override {
+        const protocol::CreateAccessPointPrivateRequest&,
+        const uint8_t*,
+        size_t) override {
         send_create_access_point_private_call_count++;
         return next_send_result;
     }
@@ -302,11 +280,9 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param request request, ignored
      * @return next_send_result
      */
-    ClientResult send_connect(
-        const protocol::ConnectRequest& request) override {
+    ClientResult send_connect(const protocol::ConnectRequest&) override {
         send_connect_call_count++;
         return next_send_result;
     }
@@ -314,11 +290,10 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param request private request, ignored
      * @return next_send_result
      */
     ClientResult send_connect_private(
-        const protocol::ConnectPrivateRequest& request) override {
+        const protocol::ConnectPrivateRequest&) override {
         send_connect_private_call_count++;
         return next_send_result;
     }
@@ -326,10 +301,9 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param filter scan filter, ignored
      * @return next_send_result
      */
-    ClientResult send_scan(const protocol::ScanFilterFull& filter) override {
+    ClientResult send_scan(const protocol::ScanFilterFull&) override {
         send_scan_call_count++;
         return next_send_result;
     }
@@ -337,15 +311,10 @@ public:
     /**
      * @brief Counts the call; the payload is not stored.
      *
-     * @param header proxy header, ignored
-     * @param data payload, ignored
-     * @param data_size payload size, ignored
      * @return next_send_result
      */
     ClientResult send_proxy_data(
-        const protocol::ProxyDataHeader& header,
-        const uint8_t* data,
-        size_t data_size) override {
+        const protocol::ProxyDataHeader&, const uint8_t*, size_t) override {
         send_proxy_data_call_count++;
         return next_send_result;
     }
@@ -353,11 +322,10 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param request accept policy request, ignored
      * @return next_send_result
      */
     ClientResult send_set_accept_policy(
-        const protocol::SetAcceptPolicyRequest& request) override {
+        const protocol::SetAcceptPolicyRequest&) override {
         send_set_accept_policy_call_count++;
         return next_send_result;
     }
@@ -365,12 +333,9 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param data advertise data, ignored
-     * @param size advertise data size, ignored
      * @return next_send_result
      */
-    ClientResult send_set_advertise_data(
-        const uint8_t* data, size_t size) override {
+    ClientResult send_set_advertise_data(const uint8_t*, size_t) override {
         send_set_advertise_data_call_count++;
         return next_send_result;
     }
@@ -378,10 +343,9 @@ public:
     /**
      * @brief Counts the call.
      *
-     * @param request reject request, ignored
      * @return next_send_result
      */
-    ClientResult send_reject(const protocol::RejectRequest& request) override {
+    ClientResult send_reject(const protocol::RejectRequest&) override {
         send_reject_call_count++;
         return next_send_result;
     }

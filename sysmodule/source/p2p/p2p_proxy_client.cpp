@@ -486,7 +486,8 @@ bool P2pProxyClient::EnsureProxyReady(int timeout_ms) {
     LOG_INFO("P2P client: waiting for proxy ready (timeout=%dms)", timeout_ms);
 
     // Wait on condition variable with timeout
-    const auto wait_time = TimeSpan::FromMilliSeconds(timeout_ms);
+    const auto wait_time =
+        TimeSpan::FromMilliSeconds(static_cast<s64>(timeout_ms));
     m_ready_cv.TimedWait(m_mutex, wait_time);
 
     if (m_ready) {

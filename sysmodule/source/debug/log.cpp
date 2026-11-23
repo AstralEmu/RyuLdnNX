@@ -107,7 +107,11 @@ void format_log_message_v(
     }
 
     // Append the actual message
-    vsnprintf(buffer + prefix_len, buffer_size - prefix_len, format, args);
+    vsnprintf(
+        buffer + prefix_len,
+        buffer_size - static_cast<size_t>(prefix_len),
+        format,
+        args);
     buffer[buffer_size - 1] = '\0';
 }
 

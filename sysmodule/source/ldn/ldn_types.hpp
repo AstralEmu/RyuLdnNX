@@ -486,11 +486,11 @@ static_assert(sizeof(ScanFilter) == 96);
 inline void NetworkInfo2NetworkConfig(
     const NetworkInfo* info, NetworkConfig* out) {
     out->intentId = info->networkId.intentId;
-    out->channel = info->common.channel;
+    out->channel = static_cast<u16>(info->common.channel);
     out->nodeCountMax = info->ldn.nodeCountMax;
     out->_unk1 = 0;
     out->localCommunicationVersion =
-        info->ldn.nodes[0].localCommunicationVersion;
+        static_cast<u16>(info->ldn.nodes[0].localCommunicationVersion);
     std::memset(out->_unk2, 0, sizeof(out->_unk2));
 }
 

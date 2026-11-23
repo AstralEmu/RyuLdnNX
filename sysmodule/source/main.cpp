@@ -363,6 +363,9 @@ Result ServerManager::OnNeedsToAccept(int port_index, Server* server) {
     sm::MitmProcessInfo client_info{};
     server->AcknowledgeMitmSession(
         std::addressof(fsrv), std::addressof(client_info));
+    // The emplaced services take the forwarded session by rvalue reference:
+    // hand each one its own copy so `fsrv` stays valid for AcceptMitmImpl.
+    std::shared_ptr<::Service> session_copy = fsrv;
 
     LOG_INFO(
         "OnNeedsToAccept: Acknowledged session for pid=%lu, "
@@ -386,7 +389,7 @@ Result ServerManager::OnNeedsToAccept(int port_index, Server* server) {
                 sf::CreateSharedObjectEmplaced<
                     mitm::ldn::ILdnMitMService,
                     mitm::ldn::LdnMitMService>(
-                    decltype(fsrv)(fsrv), client_info),
+                    std::move(session_copy), client_info),
                 fsrv);
             LOG_INFO(
                 "LDN AcceptMitmImpl result: 0x%x (session #%u)",
@@ -407,7 +410,7 @@ Result ServerManager::OnNeedsToAccept(int port_index, Server* server) {
                 sf::CreateSharedObjectEmplaced<
                     mitm::bsd::IBsdMitmService,
                     mitm::bsd::BsdMitmService>(
-                    decltype(fsrv)(fsrv), client_info),
+                    std::move(session_copy), client_info),
                 fsrv);
             LOG_INFO(
                 "BSD AcceptMitmImpl result: 0x%x (session #%u)",

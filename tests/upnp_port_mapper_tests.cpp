@@ -315,7 +315,7 @@ TEST(the_local_address_is_parsed_to_host_order_and_malformed_ones_give_zero) {
         return;
     }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
-    ASSERT_EQ(m.GetLocalIPv4(), static_cast<uint32_t>(0xC0A80164));
+    ASSERT_EQ(m.GetLocalIPv4(), 0xC0A80164u);
 
     struct Case {
         const char* lan;

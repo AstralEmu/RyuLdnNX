@@ -1427,7 +1427,7 @@ int poll(struct pollfd* fds, nfds_t n, int t) {
  */
 ssize_t send(int fd, const void* b, size_t n, int f) {
     if (take(FN_SEND))
-        return static_cast<ssize_t>(g_fault[FN_SEND].ret);
+        return g_fault[FN_SEND].ret;
     static auto fn = real<ssize_t (*)(int, const void*, size_t, int)>("send");
     return fn(fd, b, n, f);
 }
@@ -1444,7 +1444,7 @@ ssize_t send(int fd, const void* b, size_t n, int f) {
  */
 ssize_t recv(int fd, void* b, size_t n, int f) {
     if (take(FN_RECV))
-        return static_cast<ssize_t>(g_fault[FN_RECV].ret);
+        return g_fault[FN_RECV].ret;
     static auto fn = real<ssize_t (*)(int, void*, size_t, int)>("recv");
     return fn(fd, b, n, f);
 }

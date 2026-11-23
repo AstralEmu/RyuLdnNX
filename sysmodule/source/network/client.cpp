@@ -1065,7 +1065,7 @@ void RyuLdnClient::process_packets() {
             recv_buffer,
             sizeof(recv_buffer),
             recv_size,
-            m_config.recv_timeout_ms);
+            static_cast<int32_t>(m_config.recv_timeout_ms));
 
         if (result == ClientResult::Timeout) {
             // No more packets available

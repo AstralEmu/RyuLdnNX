@@ -1493,7 +1493,7 @@ TEST(a_delivery_is_capped_at_eight_sockets) {
     ASSERT_TRUE(route(IP_B, 6000, IP_A, 5000));
     size_t delivered = 0;
     for (ProxySocket* s : sockets) {
-        delivered += s->HasPendingData() ? 1 : 0;
+        delivered += s->HasPendingData() ? 1U : 0U;
     }
     ASSERT_EQ(delivered, static_cast<size_t>(8));
 }

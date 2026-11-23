@@ -318,7 +318,7 @@ ClientResult TcpClient::send_create_access_point(
     header.magic = protocol::PROTOCOL_MAGIC;
     header.version = protocol::PROTOCOL_VERSION;
     header.type = static_cast<uint8_t>(protocol::PacketId::CreateAccessPoint);
-    header.data_size = static_cast<uint32_t>(total_payload_size);
+    header.data_size = static_cast<int32_t>(total_payload_size);
 
     std::memcpy(m_send_buffer, &header, sizeof(header));
     size_t offset = sizeof(header);
@@ -470,7 +470,7 @@ ClientResult TcpClient::send_create_access_point_private(
     header.version = protocol::PROTOCOL_VERSION;
     header.type =
         static_cast<uint8_t>(protocol::PacketId::CreateAccessPointPrivate);
-    header.data_size = static_cast<uint32_t>(total_payload_size);
+    header.data_size = static_cast<int32_t>(total_payload_size);
 
     // Copy header
     std::memcpy(m_send_buffer, &header, sizeof(header));

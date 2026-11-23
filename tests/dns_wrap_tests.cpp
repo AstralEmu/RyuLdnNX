@@ -523,7 +523,7 @@ TEST(the_query_is_a_recursive_a_question_for_the_encoded_name) {
         'o',
         'm',
         0};
-    ASSERT_EQ(q.size(), static_cast<size_t>(12 + name.size() + 4));
+    ASSERT_EQ(q.size(), 12 + name.size() + 4);
     ASSERT_EQ(q[2], 0x01);  // RD
     ASSERT_EQ(q[3], 0x00);
     ASSERT_EQ(q[4], 0x00);

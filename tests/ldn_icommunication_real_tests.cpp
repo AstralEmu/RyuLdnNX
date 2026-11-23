@@ -511,7 +511,7 @@ lm::NetworkInfo make_info(std::uint8_t nodes) {
     info.ldn.nodeCountMax = 8;
     for (std::uint8_t n = 0; n < nodes; ++n) {
         info.ldn.nodes[n].ipv4Address = HOST_VIP + n;
-        info.ldn.nodes[n].nodeId = n;
+        info.ldn.nodes[n].nodeId = static_cast<std::int8_t>(n);
         info.ldn.nodes[n].isConnected = 1;
     }
     return info;
@@ -991,7 +991,7 @@ TEST(a_failing_system_network_query_is_passed_through) {
         ams::sf::Out<std::uint32_t>(address),
         ams::sf::Out<std::uint32_t>(mask));
     g_host_nifm_result = 0;
-    ASSERT_EQ(rc.GetValue(), static_cast<std::uint32_t>(MAKERESULT(0xCD, 3)));
+    ASSERT_EQ(rc.GetValue(), MAKERESULT(0xCD, 3));
     ASSERT_EQ(address, 0x12345678u);
     ASSERT_EQ(mask, 0x9ABCDEF0u);
 }
@@ -3254,10 +3254,9 @@ TEST(a_pending_disconnect_reason_is_reported_through_get_state_in_error_state) {
     ASSERT_TRUE(eventually([&] {
         std::uint32_t state = 0;
         return env->GetState(ams::sf::Out<std::uint32_t>(state)).GetValue() ==
-               static_cast<std::uint32_t>(MAKERESULT(
+               MAKERESULT(
                    0x10,
-                   static_cast<std::uint32_t>(
-                       lm::DisconnectReason::DestroyedBySystem)));
+                   static_cast<int>(lm::DisconnectReason::DestroyedBySystem));
     }));
 }
 
@@ -3560,17 +3559,6 @@ constexpr std::uint16_t P2P_PORT_FIRST =
     39990;  // first port the P2P server tries
 /// Number of ports the P2P server tries.
 constexpr int P2P_PORT_COUNT = 10;
-
-/**
- * @brief Issue a CreateNetwork with a zeroed config.
- * @param env Service under test, in the AccessPoint state.
- * @return true when CreateNetwork succeeded.
- */
-bool create_the_network(Env& env) {
-    lm::CreateNetworkConfig config{};
-    std::memset(&config, 0, sizeof(config));
-    return env->CreateNetwork(config).IsSuccess();
-}
 }  // namespace
 
 /**

@@ -1176,8 +1176,9 @@ TEST(the_waiting_queue_drops_its_oldest_token_when_full) {
     P2pProxyServer server;
     ASSERT_TRUE(start_server(server));
     for (int i = 0; i < 17; ++i) {
-        server.AddWaitingToken(
-            make_token(0x0A720100 + i, static_cast<uint8_t>(0x80 + i)));
+        server.AddWaitingToken(make_token(
+            static_cast<uint32_t>(0x0A720100 + i),
+            static_cast<uint8_t>(0x80 + i)));
     }
     const int oldest = dial();
     send_all(oldest, auth_packet(0x80));
@@ -1198,8 +1199,10 @@ TEST(the_ninth_connection_is_refused_once_eight_players_are_in) {
     ASSERT_TRUE(start_server(server));
     std::vector<int> joiners;
     for (int i = 0; i < P2pProxyServer::MAX_PLAYERS; ++i) {
-        const int fd =
-            join(server, 0x0A720010 + i, static_cast<uint8_t>(0xA0 + i));
+        const int fd = join(
+            server,
+            static_cast<uint32_t>(0x0A720010 + i),
+            static_cast<uint8_t>(0xA0 + i));
         ASSERT_TRUE(fd >= 0);
         joiners.push_back(fd);
     }

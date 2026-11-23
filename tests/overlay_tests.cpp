@@ -310,7 +310,8 @@ TEST(status_error_to_string) {
  */
 TEST(status_unknown_to_string) {
     ASSERT_STREQ(
-        ConnectionStatusToString((RyuLdnConnectionStatus)99), "Unknown");
+        ConnectionStatusToString(static_cast<RyuLdnConnectionStatus>(7)),
+        "Unknown");
 }
 
 //=============================================================================
@@ -370,7 +371,7 @@ TEST(ldn_state_error_to_string) {
  * @brief An out-of-range state maps to "Unknown".
  */
 TEST(ldn_state_unknown_to_string) {
-    ASSERT_STREQ(LdnStateToString((RyuLdnState)99), "Unknown");
+    ASSERT_STREQ(LdnStateToString(static_cast<RyuLdnState>(7)), "Unknown");
 }
 
 //=============================================================================

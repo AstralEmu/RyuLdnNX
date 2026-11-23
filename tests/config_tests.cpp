@@ -64,6 +64,17 @@ static int g_tests_failed = 0;
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
 /**
+ * @brief Widen an integral value for "%lld" printing.
+ * @tparam T integral or enum type of the value
+ * @param v value to widen
+ * @return v as long long
+ */
+template <typename T>
+static long long assert_ll(T v) {
+    return static_cast<long long>(v);
+}
+
+/**
  * @brief Abort the current test by exception when a != b.
  * @param a Actual value (integral).
  * @param b Expected value (integral).
@@ -74,7 +85,7 @@ static int g_tests_failed = 0;
         auto _b = (b);                                                       \
         if (_a != _b) {                                                      \
             printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
-            printf("    got: %lld vs %lld\n", (long long)_a, (long long)_b); \
+            printf("    got: %lld vs %lld\n", assert_ll(_a), assert_ll(_b)); \
             throw std::runtime_error("Test assertion failed");               \
         }                                                                    \
     } while (0)
@@ -706,7 +717,7 @@ TEST(open_stream_creates_file_without_world_write) {
 
     struct stat info{};
     ASSERT_EQ(stat(path, &info), 0);
-    ASSERT_EQ(static_cast<unsigned>(info.st_mode & (S_IWGRP | S_IWOTH)), 0u);
+    ASSERT_EQ(info.st_mode & (S_IWGRP | S_IWOTH), 0u);
     std::remove(path);
 }
 

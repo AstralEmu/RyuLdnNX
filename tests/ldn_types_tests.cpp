@@ -297,7 +297,7 @@ TEST(ssid_default_empty) {
 TEST(ssid_set_name) {
     ryu_ldn::protocol::Ssid ssid{};
     const char* name = "TestNetwork";
-    ssid.length = strlen(name);
+    ssid.length = static_cast<uint8_t>(strlen(name));
     memcpy(ssid.name, name, ssid.length);
 
     ASSERT_EQ(ssid.length, 11u);
@@ -827,7 +827,7 @@ TEST(protocol_external_proxy_config_fields) {
     cfg.proxy_port = 30456;
     cfg.token[0] = 0xAA;
 
-    ASSERT_EQ(cfg.proxy_ip[0], (uint8_t)'1');
+    ASSERT_EQ(cfg.proxy_ip[0], static_cast<uint8_t>('1'));
     ASSERT_EQ(cfg.address_family, 2u);
     ASSERT_EQ(cfg.proxy_port, 30456u);
     ASSERT_EQ(cfg.token[0], 0xAAu);

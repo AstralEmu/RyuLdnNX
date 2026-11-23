@@ -51,6 +51,17 @@ static int g_tests_failed = 0;
 /// Fails the current test when the expression is true.
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
+/**
+ * @brief Widen an integral value for "%lld" printing.
+ * @tparam T integral or enum type of the value
+ * @param v value to widen
+ * @return v as long long
+ */
+template <typename T>
+static long long assert_ll(T v) {
+    return static_cast<long long>(v);
+}
+
 /// Fails the current test when the two values differ.
 #define ASSERT_EQ(a, b)                                                      \
     do {                                                                     \
@@ -58,7 +69,7 @@ static int g_tests_failed = 0;
         auto _b = (b);                                                       \
         if (_a != _b) {                                                      \
             printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
-            printf("    got: %lld vs %lld\n", (long long)_a, (long long)_b); \
+            printf("    got: %lld vs %lld\n", assert_ll(_a), assert_ll(_b)); \
             throw std::runtime_error("Test assertion failed");               \
         }                                                                    \
     } while (0)

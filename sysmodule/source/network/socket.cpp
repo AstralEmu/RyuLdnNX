@@ -87,6 +87,25 @@ namespace ryu_ldn::network {
 /// @brief Per-chunk write timeout in send_all() (ms)
 constexpr uint32_t SOCKET_WRITE_TIMEOUT_MS = 5000;
 
+/**
+ * @brief Tell whether an errno value means "try again later"
+ *
+ * POSIX allows EAGAIN and EWOULDBLOCK to be the same value or two distinct
+ * ones; the second comparison only exists on platforms where they differ.
+ *
+ * @param error Value of errno after a failed socket call
+ * @return True when the call would block
+ */
+inline bool IsWouldBlock(int error) {
+    if (error == EAGAIN) {
+        return true;
+    }
+    if constexpr (EWOULDBLOCK != EAGAIN) {
+        return error == EWOULDBLOCK;
+    }
+    return false;
+}
+
 // =============================================================================
 // Static State
 // =============================================================================
@@ -557,7 +576,7 @@ SocketResult Socket::send(const uint8_t* data, size_t size, size_t& sent) {
     ssize_t ret = ::send(m_fd, data, size, MSG_NOSIGNAL);
 
     if (ret < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (IsWouldBlock(errno)) {
             return SocketResult::WouldBlock;
         }
         // Connection error - mark as disconnected
@@ -667,7 +686,7 @@ SocketResult Socket::recv(
         }
 
         if (ret < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (IsWouldBlock(errno)) {
                 return SocketResult::WouldBlock;
             }
             m_connected = false;
@@ -688,7 +707,7 @@ SocketResult Socket::recv(
     ssize_t ret = ::recv(m_fd, buffer, buffer_size, 0);
 
     if (ret < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (IsWouldBlock(errno)) {
             return SocketResult::WouldBlock;
         }
         m_connected = false;

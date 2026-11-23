@@ -120,7 +120,8 @@ static NetworkInfo make_test_network_info(
     uint8_t max_nodes,
     uint64_t game_id = 0x0100000000001234ULL) {
     NetworkInfo info{};
-    info.network_id.intent_id.local_communication_id = game_id;
+    info.network_id.intent_id.local_communication_id =
+        static_cast<int64_t>(game_id);
     info.network_id.intent_id.scene_id = 1;
     info.ldn.node_count_max = max_nodes;
     info.ldn.node_count = node_count;
@@ -630,7 +631,7 @@ TEST(integration_multiple_proxy_connections) {
     // 3 players connect to host
     for (int i = 1; i <= 3; i++) {
         ProxyConnectRequest connect{};
-        connect.info.source_ipv4 = 0x0A720000 + i + 1;
+        connect.info.source_ipv4 = static_cast<uint32_t>(0x0A720000 + i + 1);
         connect.info.source_port = static_cast<uint16_t>(1000 + i);
         connect.info.dest_ipv4 = 0x0A720001;
         connect.info.dest_port = 5678;

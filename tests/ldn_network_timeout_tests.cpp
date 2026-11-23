@@ -27,7 +27,7 @@ static void on_timeout() {
  *
  * @param ms value of the host tick clock in milliseconds
  */
-static void set_now(uint64_t ms) {
+static void set_now(int64_t ms) {
     ams::os::g_host_tick_ms = ms;
 }
 

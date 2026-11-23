@@ -67,6 +67,17 @@ _BYPASS = re.compile(
     re.IGNORECASE,
 )
 
+# Compiler flags that switch a diagnostic off or downgrade it again.
+_FLAG_BYPASS = re.compile(r"-Wno-[a-z]|-Wno-error|-fpermissive")
+_BUILD_FILES = (
+    "Makefile",
+    "tests/Makefile",
+    "sysmodule/Makefile",
+    "overlay/Makefile",
+    "docker-compose.yml",
+    "Dockerfile",
+)
+
 
 class Style:
     """Run the formatting and documentation checks over the tracked sources."""
@@ -172,6 +183,33 @@ class Style:
                         out.append(
                             f"{path}:{number}: line is {width} columns "
                             f"(limit {_COLUMNS})"
+                        )
+
+        return out
+
+    @staticmethod
+    def flag_violations() -> list[str]:
+        """Report build files that disable or downgrade a compiler warning.
+
+        Returns:
+            One ``path:line: ...`` entry per forbidden flag.
+        """
+        out: list[str] = []
+
+        for path in _BUILD_FILES:
+            full = os.path.join(_ROOT, path)
+
+            if not os.path.isfile(full):
+                continue
+
+            with open(full, encoding="utf-8") as handle:
+                for number, text in enumerate(handle, start=1):
+                    found = _FLAG_BYPASS.search(text)
+
+                    if found:
+                        out.append(
+                            f"{path}:{number}: forbidden compiler flag "
+                            f"'{found.group(0)}': fix the code instead"
                         )
 
         return out
@@ -331,7 +369,8 @@ class Style:
                 return 0
 
         issues = (
-            Style.format_violations(files)
+            Style.flag_violations()
+            + Style.format_violations(files)
             + Style.width_violations(files)
             + Style.bypass_violations(files)
             + Style.doc_violations(files)

@@ -527,7 +527,8 @@ TEST(proxy_handler_reset) {
     // Add connections
     for (int i = 0; i < 3; i++) {
         ProxyConnectRequest req{};
-        req.info = make_test_proxy_info(0x0A720001, 1000 + i, 0x0A720002, 5678);
+        req.info = make_test_proxy_info(
+            0x0A720001, static_cast<uint16_t>(1000 + i), 0x0A720002, 5678);
         LdnHeader header =
             make_test_header(PacketId::ProxyConnect, sizeof(req));
         handler.handle_proxy_connect(header, req);

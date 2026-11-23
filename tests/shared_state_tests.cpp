@@ -346,7 +346,7 @@ TEST(initially_game_not_active) {
 TEST(initially_process_id_zero) {
     auto& state = SharedState::GetInstance();
     state.Reset();
-    ASSERT_EQ(state.GetActiveProcessId(), (u64)0);
+    ASSERT_EQ(state.GetActiveProcessId(), static_cast<u64>(0));
 }
 
 /// @brief SetGameActive(true, pid) marks the game active and stores the pid.
@@ -355,7 +355,7 @@ TEST(set_game_active_true) {
     state.Reset();
     state.SetGameActive(true, 0x12345678);
     ASSERT_TRUE(state.IsGameActive());
-    ASSERT_EQ(state.GetActiveProcessId(), (u64)0x12345678);
+    ASSERT_EQ(state.GetActiveProcessId(), static_cast<u64>(0x12345678));
 }
 
 /// @brief Deactivating the game clears the stored process id.
@@ -365,7 +365,7 @@ TEST(set_game_active_false_resets_pid) {
     state.SetGameActive(true, 0x12345678);
     state.SetGameActive(false, 0);
     ASSERT_FALSE(state.IsGameActive());
-    ASSERT_EQ(state.GetActiveProcessId(), (u64)0);
+    ASSERT_EQ(state.GetActiveProcessId(), static_cast<u64>(0));
 }
 
 /// @brief Deactivating the game puts the LDN state back to None.
@@ -541,7 +541,7 @@ TEST(update_session_info_node_count) {
 TEST(initially_rtt_zero) {
     auto& state = SharedState::GetInstance();
     state.Reset();
-    ASSERT_EQ(state.GetLastRtt(), (u32)0);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(0));
 }
 
 /// @brief SetLastRtt is read back unchanged.
@@ -549,7 +549,7 @@ TEST(set_last_rtt) {
     auto& state = SharedState::GetInstance();
     state.Reset();
     state.SetLastRtt(42);
-    ASSERT_EQ(state.GetLastRtt(), (u32)42);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(42));
 }
 
 /// @brief Each new RTT replaces the previous one, up or down.
@@ -558,13 +558,13 @@ TEST(update_last_rtt) {
     state.Reset();
 
     state.SetLastRtt(100);
-    ASSERT_EQ(state.GetLastRtt(), (u32)100);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(100));
 
     state.SetLastRtt(150);
-    ASSERT_EQ(state.GetLastRtt(), (u32)150);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(150));
 
     state.SetLastRtt(80);
-    ASSERT_EQ(state.GetLastRtt(), (u32)80);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(80));
 }
 
 /// @brief LAN, medium and high latency values are stored without clamping.
@@ -574,15 +574,15 @@ TEST(rtt_typical_values) {
 
     // Low latency (LAN)
     state.SetLastRtt(5);
-    ASSERT_EQ(state.GetLastRtt(), (u32)5);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(5));
 
     // Medium latency
     state.SetLastRtt(50);
-    ASSERT_EQ(state.GetLastRtt(), (u32)50);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(50));
 
     // High latency
     state.SetLastRtt(200);
-    ASSERT_EQ(state.GetLastRtt(), (u32)200);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(200));
 }
 
 // ============================================================================
@@ -659,7 +659,7 @@ TEST(full_game_session_lifecycle) {
     // Game starts
     state.SetGameActive(true, 0xABCD1234);
     ASSERT_TRUE(state.IsGameActive());
-    ASSERT_EQ(state.GetActiveProcessId(), (u64)0xABCD1234);
+    ASSERT_EQ(state.GetActiveProcessId(), static_cast<u64>(0xABCD1234));
 
     // LDN initializes
     state.SetLdnState(CommState::Initialized);
@@ -681,7 +681,7 @@ TEST(full_game_session_lifecycle) {
 
     // RTT updates
     state.SetLastRtt(45);
-    ASSERT_EQ(state.GetLastRtt(), (u32)45);
+    ASSERT_EQ(state.GetLastRtt(), static_cast<u32>(45));
 
     // Game exits
     state.SetGameActive(false, 0);

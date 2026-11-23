@@ -1219,7 +1219,7 @@ TEST(decode_proxy_disconnect_packet) {
     ASSERT_EQ(decoded_msg.info.source_ipv4, 0x0A000001u);
     ASSERT_EQ(decoded_msg.info.dest_ipv4, 0x0A000002u);
     ASSERT_EQ(
-        static_cast<int>(decoded_msg.disconnect_reason),
+        decoded_msg.disconnect_reason,
         static_cast<int>(DisconnectReason::User));
 }
 

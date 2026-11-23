@@ -182,7 +182,7 @@ uint32_t ReconnectManager::get_next_delay_ms_with_jitter(uint32_t seed) const {
     // Map hash to range [-jitter_percent, +jitter_percent]
     // hash % (2 * jitter + 1) gives [0, 2*jitter]
     // Subtract jitter to get [-jitter, +jitter]
-    uint32_t jitter_range = (2 * m_config.jitter_percent) + 1;
+    uint32_t jitter_range = (2U * m_config.jitter_percent) + 1U;
     int32_t jitter_offset = static_cast<int32_t>(hash % jitter_range) -
                             static_cast<int32_t>(m_config.jitter_percent);
 

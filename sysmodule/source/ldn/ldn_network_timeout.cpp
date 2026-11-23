@@ -31,8 +31,8 @@ bool NetworkTimeout::RefreshTimeout() {
     std::scoped_lock lock(m_mutex);
 
     // Get current time
-    m_timeout_start_ms =
-        os::ConvertToTimeSpan(os::GetSystemTick()).GetMilliSeconds();
+    m_timeout_start_ms = static_cast<uint64_t>(
+        os::ConvertToTimeSpan(os::GetSystemTick()).GetMilliSeconds());
     m_active = true;
 
     LOG_VERBOSE(

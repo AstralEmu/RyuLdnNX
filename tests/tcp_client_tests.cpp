@@ -1150,17 +1150,15 @@ static std::vector<uint8_t> make_packet(
 }
 
 /// Assert a received wire packet has the expected type and payload size.
-#define ASSERT_WIRE(pkt, expect_type, expect_payload)                  \
-    do {                                                               \
-        ASSERT_EQ((pkt).size(), sizeof(LdnHeader) + (expect_payload)); \
-        LdnHeader hdr_{};                                              \
-        std::memcpy(&hdr_, (pkt).data(), sizeof(hdr_));                \
-        ASSERT_EQ(hdr_.magic, PROTOCOL_MAGIC);                         \
-        ASSERT_EQ(hdr_.type, static_cast<uint8_t>(expect_type));       \
-        ASSERT_EQ(hdr_.version, PROTOCOL_VERSION);                     \
-        ASSERT_EQ(                                                     \
-            static_cast<size_t>(hdr_.data_size),                       \
-            static_cast<size_t>(expect_payload));                      \
+#define ASSERT_WIRE(pkt, expect_type, expect_payload)                   \
+    do {                                                                \
+        ASSERT_EQ((pkt).size(), sizeof(LdnHeader) + (expect_payload));  \
+        LdnHeader hdr_{};                                               \
+        std::memcpy(&hdr_, (pkt).data(), sizeof(hdr_));                 \
+        ASSERT_EQ(hdr_.magic, PROTOCOL_MAGIC);                          \
+        ASSERT_EQ(hdr_.type, static_cast<uint8_t>(expect_type));        \
+        ASSERT_EQ(hdr_.version, PROTOCOL_VERSION);                      \
+        ASSERT_EQ(static_cast<size_t>(hdr_.data_size), expect_payload); \
     } while (0)
 
 /**

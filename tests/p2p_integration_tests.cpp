@@ -171,7 +171,10 @@ TEST(external_proxy_config_size_0x26) {
 TEST(external_proxy_config_proxy_ip_offset) {
     // proxy_ip should be at offset 0
     protocol::ExternalProxyConfig config{};
-    ASSERT_EQ((uintptr_t)&config.proxy_ip - (uintptr_t)&config, 0U);
+    ASSERT_EQ(
+        reinterpret_cast<uintptr_t>(&config.proxy_ip) -
+            reinterpret_cast<uintptr_t>(&config),
+        0U);
 }
 
 /**
@@ -180,7 +183,10 @@ TEST(external_proxy_config_proxy_ip_offset) {
 TEST(external_proxy_config_proxy_port_offset) {
     // proxy_port should be at offset 16
     protocol::ExternalProxyConfig config{};
-    ASSERT_EQ((uintptr_t)&config.proxy_port - (uintptr_t)&config, 16U);
+    ASSERT_EQ(
+        reinterpret_cast<uintptr_t>(&config.proxy_port) -
+            reinterpret_cast<uintptr_t>(&config),
+        16U);
 }
 
 /**
@@ -189,7 +195,10 @@ TEST(external_proxy_config_proxy_port_offset) {
 TEST(external_proxy_config_address_family_offset) {
     // address_family should be at offset 18
     protocol::ExternalProxyConfig config{};
-    ASSERT_EQ((uintptr_t)&config.address_family - (uintptr_t)&config, 18U);
+    ASSERT_EQ(
+        reinterpret_cast<uintptr_t>(&config.address_family) -
+            reinterpret_cast<uintptr_t>(&config),
+        18U);
 }
 
 /**
@@ -198,7 +207,10 @@ TEST(external_proxy_config_address_family_offset) {
 TEST(external_proxy_config_token_offset) {
     // token should be at offset 22
     protocol::ExternalProxyConfig config{};
-    ASSERT_EQ((uintptr_t)&config.token - (uintptr_t)&config, 22U);
+    ASSERT_EQ(
+        reinterpret_cast<uintptr_t>(&config.token) -
+            reinterpret_cast<uintptr_t>(&config),
+        22U);
 }
 
 // =============================================================================
@@ -281,7 +293,10 @@ TEST(proxy_data_header_size) {
  */
 TEST(proxy_data_header_dest_node_offset) {
     protocol::ProxyDataHeader header{};
-    ASSERT_EQ((uintptr_t)&header.dest_node_id - (uintptr_t)&header, 0U);
+    ASSERT_EQ(
+        reinterpret_cast<uintptr_t>(&header.dest_node_id) -
+            reinterpret_cast<uintptr_t>(&header),
+        0U);
 }
 
 /**
@@ -289,7 +304,10 @@ TEST(proxy_data_header_dest_node_offset) {
  */
 TEST(proxy_data_header_src_node_offset) {
     protocol::ProxyDataHeader header{};
-    ASSERT_EQ((uintptr_t)&header.src_node_id - (uintptr_t)&header, 4U);
+    ASSERT_EQ(
+        reinterpret_cast<uintptr_t>(&header.src_node_id) -
+            reinterpret_cast<uintptr_t>(&header),
+        4U);
 }
 
 /**
@@ -297,7 +315,10 @@ TEST(proxy_data_header_src_node_offset) {
  */
 TEST(proxy_data_header_protocol_type_offset) {
     protocol::ProxyDataHeader header{};
-    ASSERT_EQ((uintptr_t)&header.protocol_type - (uintptr_t)&header, 8U);
+    ASSERT_EQ(
+        reinterpret_cast<uintptr_t>(&header.protocol_type) -
+            reinterpret_cast<uintptr_t>(&header),
+        8U);
 }
 
 /**
@@ -305,7 +326,10 @@ TEST(proxy_data_header_protocol_type_offset) {
  */
 TEST(proxy_data_header_data_length_offset) {
     protocol::ProxyDataHeader header{};
-    ASSERT_EQ((uintptr_t)&header.data_length - (uintptr_t)&header, 10U);
+    ASSERT_EQ(
+        reinterpret_cast<uintptr_t>(&header.data_length) -
+            reinterpret_cast<uintptr_t>(&header),
+        10U);
 }
 
 // =============================================================================

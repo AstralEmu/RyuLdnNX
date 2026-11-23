@@ -208,7 +208,7 @@ private:
 };
 
 /// Host clock: tests set the "system tick" directly, in milliseconds.
-inline std::uint64_t g_host_tick_ms = 0;
+inline std::int64_t g_host_tick_ms = 0;
 
 /// Duration with a millisecond resolution (os::TimeSpan stand-in)
 class TimeSpan {
@@ -218,14 +218,14 @@ public:
      *
      * @param ms duration in milliseconds
      */
-    explicit TimeSpan(std::uint64_t ms) : m_ms(ms) {}
+    explicit TimeSpan(std::int64_t ms) : m_ms(ms) {}
     /**
      * @brief Span of whole seconds
      *
      * @param s duration in seconds
      * @return span of s * 1000 ms
      */
-    static TimeSpan FromSeconds(std::uint64_t s) {
+    static TimeSpan FromSeconds(std::int64_t s) {
         return TimeSpan(s * 1000);
     }
     /**
@@ -234,7 +234,7 @@ public:
      * @param ms duration in milliseconds
      * @return span of ms
      */
-    static TimeSpan FromMilliSeconds(std::uint64_t ms) {
+    static TimeSpan FromMilliSeconds(std::int64_t ms) {
         return TimeSpan(ms);
     }
     /**
@@ -247,14 +247,14 @@ public:
      * @return Span of ns / 1000000 ms
      */
     static TimeSpan FromNanoSeconds(std::int64_t ns) {
-        return TimeSpan(static_cast<std::uint64_t>(ns > 0 ? ns / 1000000 : 0));
+        return TimeSpan(ns > 0 ? ns / 1000000 : 0);
     }
     /**
      * @brief Duration in milliseconds
      *
      * @return the span in ms
      */
-    std::uint64_t GetMilliSeconds() const {
+    std::int64_t GetMilliSeconds() const {
         return m_ms;
     }
     /**
@@ -263,18 +263,18 @@ public:
      * @return the span in ns (ms * 1000000)
      */
     std::int64_t GetNanoSeconds() const {
-        return static_cast<std::int64_t>(m_ms) * 1000000;
+        return m_ms * 1000000;
     }
 
 private:
     /// Duration in milliseconds
-    std::uint64_t m_ms;
+    std::int64_t m_ms;
 };
 
 /// Tick of the host clock (os::Tick stand-in), in milliseconds
 struct Tick {
     /// Tick value, in milliseconds
-    std::uint64_t ms;
+    std::int64_t ms;
 };
 
 /**
@@ -306,7 +306,7 @@ enum EventClearMode {
 
 /// Host shortcut: real waits last (requested ms / divisor), so a test of a
 /// multi-second timeout does not take multiple seconds. 1 = faithful.
-inline std::uint64_t g_host_wait_divisor = 1;
+inline std::int64_t g_host_wait_divisor = 1;
 
 /// Test hooks: run on the calling thread right before the operation, with no
 /// stand-in lock held, so a test can script what happens concurrently at that
@@ -775,8 +775,7 @@ inline void SleepThread(std::int64_t ns) {
         g_host_before_sleep_thread(ns);
     }
     std::this_thread::sleep_for(
-        std::chrono::nanoseconds(
-            ns / static_cast<std::int64_t>(os::g_host_wait_divisor)));
+        std::chrono::nanoseconds(ns / os::g_host_wait_divisor));
 }
 
 }  // namespace svc
@@ -1303,8 +1302,7 @@ inline std::uint64_t armTicksToNs(std::uint64_t ticks) {
 #define R_SUCCEEDED(expr) ((expr).IsSuccess())
 /// Same bit packing as the SDK: module in bits 0-8, description from bit 9
 #define MAKERESULT(module, description) \
-    (static_cast<std::uint32_t>(        \
-        ((module) & 0x1FF) | (((description) & 0x1FFF) << 9)))
+    (((module) & 0x1FF) | (((description) & 0x1FFF) << 9))
 
 /// Result module/description: the host Result keeps the same bit packing as
 /// the real one (module in bits 0-8, description from bit 9), so a code
@@ -1398,8 +1396,7 @@ inline std::uint32_t nifmGetCurrentIpConfigInfo(
  */
 inline void svcSleepThread(std::int64_t ns) {
     std::this_thread::sleep_for(
-        std::chrono::nanoseconds(
-            ns / static_cast<std::int64_t>(ams::os::g_host_wait_divisor)));
+        std::chrono::nanoseconds(ns / ams::os::g_host_wait_divisor));
 }
 
 // ---------------------------------------------------------------------------

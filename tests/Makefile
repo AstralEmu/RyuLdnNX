@@ -8,7 +8,17 @@ CXXFLAGS := -std=c++20 -Wall -Wextra -g -O0
 CXXFLAGS += -I../sysmodule/source
 # Host stand-ins for Stratosphere/libnx (tests only, never seen by the sysmodule build)
 CXXFLAGS += -Istubs
+# Stubs that wrap a system header via #include_next: -isystem keeps the
+# GCC-extension diagnostic of -Wpedantic out of them without any suppression.
+CXXFLAGS += -isystem stubs/system
 CXXFLAGS += -DTEST_BUILD
+# Strict diagnostics, every warning is an error: a regression fails the build.
+# Fix the code, never add a -Wno-* flag (scripts/style.py rejects them).
+STRICT_WARNINGS := -Wpedantic -Wshadow -Wconversion -Wsign-conversion \
+    -Wold-style-cast -Wcast-qual -Wnull-dereference -Wdouble-promotion \
+    -Wformat=2 -Wuseless-cast -Wduplicated-cond -Wlogical-op \
+    -Woverloaded-virtual -Wnon-virtual-dtor -Wimplicit-fallthrough
+CXXFLAGS += $(STRICT_WARNINGS) -Werror
 LDFLAGS += -no-pie
 
 # Coverage flags (optional)
