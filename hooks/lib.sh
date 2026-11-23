@@ -27,7 +27,7 @@ wiki_git() {
 # or `main` depending on age). Never hardcoded.
 wiki_branch() {
 	wd=$(wiki_dir)
-	ref=$(git -C "$wd" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+	ref=$(git -C "$wd" symbolic-ref --quiet --short refs/remotes/origin/HEAD || [ $? -eq 1 ])
 	if [ -n "$ref" ]; then
 		echo "${ref#origin/}"
 		return

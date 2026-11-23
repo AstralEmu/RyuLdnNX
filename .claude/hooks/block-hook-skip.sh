@@ -10,7 +10,7 @@ cmd="$(printf '%s' "$input" | python3 -c 'import json,sys
 try:
     print(json.load(sys.stdin).get("tool_input", {}).get("command", ""))
 except Exception:
-    pass' 2>/dev/null || true)"
+    pass')"
 
 # Fallback: if command extraction failed, scan the raw payload.
 [ -z "$cmd" ] && cmd="$input"
