@@ -61,6 +61,12 @@ PacketDispatcher::PacketDispatcher()
 
 // ============================================================================
 // Handler Registration
+//
+// The setters below name their member through `this->` on purpose: members
+// whose type is an alias template (PacketHandler<T>) are invisible to
+// cppcheck's "does this member function use a member" analysis, which then
+// reports every one of them as able to be static. Spelling the member access
+// out keeps that analysis truthful.
 // ============================================================================
 
 /**
@@ -74,7 +80,7 @@ PacketDispatcher::PacketDispatcher()
  */
 void PacketDispatcher::set_initialize_handler(
     PacketHandler<protocol::InitializeMessage> handler) {
-    m_initialize_handler = handler;
+    this->m_initialize_handler = handler;
 }
 
 /**
@@ -88,7 +94,7 @@ void PacketDispatcher::set_initialize_handler(
  */
 void PacketDispatcher::set_connected_handler(
     PacketHandler<protocol::NetworkInfo> handler) {
-    m_connected_handler = handler;
+    this->m_connected_handler = handler;
 }
 
 /**
@@ -102,7 +108,7 @@ void PacketDispatcher::set_connected_handler(
  */
 void PacketDispatcher::set_sync_network_handler(
     PacketHandler<protocol::NetworkInfo> handler) {
-    m_sync_network_handler = handler;
+    this->m_sync_network_handler = handler;
 }
 
 /**
@@ -116,7 +122,7 @@ void PacketDispatcher::set_sync_network_handler(
  */
 void PacketDispatcher::set_scan_reply_handler(
     PacketHandler<protocol::NetworkInfo> handler) {
-    m_scan_reply_handler = handler;
+    this->m_scan_reply_handler = handler;
 }
 
 /**
@@ -143,7 +149,7 @@ void PacketDispatcher::set_scan_reply_end_handler(EmptyPacketHandler handler) {
  */
 void PacketDispatcher::set_disconnect_handler(
     PacketHandler<protocol::DisconnectMessage> handler) {
-    m_disconnect_handler = handler;
+    this->m_disconnect_handler = handler;
 }
 
 /**
@@ -157,7 +163,7 @@ void PacketDispatcher::set_disconnect_handler(
  */
 void PacketDispatcher::set_ping_handler(
     PacketHandler<protocol::PingMessage> handler) {
-    m_ping_handler = handler;
+    this->m_ping_handler = handler;
 }
 
 /**
@@ -171,7 +177,7 @@ void PacketDispatcher::set_ping_handler(
  */
 void PacketDispatcher::set_network_error_handler(
     PacketHandler<protocol::NetworkErrorMessage> handler) {
-    m_network_error_handler = handler;
+    this->m_network_error_handler = handler;
 }
 
 /**
@@ -185,7 +191,7 @@ void PacketDispatcher::set_network_error_handler(
  */
 void PacketDispatcher::set_proxy_config_handler(
     PacketHandler<protocol::ProxyConfig> handler) {
-    m_proxy_config_handler = handler;
+    this->m_proxy_config_handler = handler;
 }
 
 /**
@@ -199,7 +205,7 @@ void PacketDispatcher::set_proxy_config_handler(
  */
 void PacketDispatcher::set_proxy_connect_handler(
     PacketHandler<protocol::ProxyConnectRequest> handler) {
-    m_proxy_connect_handler = handler;
+    this->m_proxy_connect_handler = handler;
 }
 
 /**
@@ -213,7 +219,7 @@ void PacketDispatcher::set_proxy_connect_handler(
  */
 void PacketDispatcher::set_proxy_connect_reply_handler(
     PacketHandler<protocol::ProxyConnectResponse> handler) {
-    m_proxy_connect_reply_handler = handler;
+    this->m_proxy_connect_reply_handler = handler;
 }
 
 /**
@@ -241,7 +247,7 @@ void PacketDispatcher::set_proxy_data_handler(ProxyDataHandler handler) {
  */
 void PacketDispatcher::set_proxy_disconnect_handler(
     PacketHandler<protocol::ProxyDisconnectMessage> handler) {
-    m_proxy_disconnect_handler = handler;
+    this->m_proxy_disconnect_handler = handler;
 }
 
 /**
@@ -255,7 +261,7 @@ void PacketDispatcher::set_proxy_disconnect_handler(
  */
 void PacketDispatcher::set_reject_handler(
     PacketHandler<protocol::RejectRequest> handler) {
-    m_reject_handler = handler;
+    this->m_reject_handler = handler;
 }
 
 /**
@@ -283,7 +289,7 @@ void PacketDispatcher::set_reject_reply_handler(EmptyPacketHandler handler) {
  */
 void PacketDispatcher::set_accept_policy_handler(
     PacketHandler<protocol::SetAcceptPolicyRequest> handler) {
-    m_accept_policy_handler = handler;
+    this->m_accept_policy_handler = handler;
 }
 
 // ============================================================================

@@ -70,7 +70,8 @@ UpnpPortMapper& UpnpPortMapper::GetInstance() {
 // Constructor / Destructor
 // =============================================================================
 
-UpnpPortMapper::UpnpPortMapper() noexcept : m_lan_addr{}, m_available(false) {
+UpnpPortMapper::UpnpPortMapper() noexcept
+    : m_urls(new (std::nothrow) UPNPUrls()), m_lan_addr{}, m_available(false) {
     // Allocate UPnP structures on the heap
     // These are C structs from miniupnpc, we manage their lifetime
     //
@@ -82,7 +83,6 @@ UpnpPortMapper::UpnpPortMapper() noexcept : m_lan_addr{}, m_available(false) {
     // `new (std::nothrow)`: a plain `new` is assumed by the compiler never to
     // return null (it is declared throwing), which would silently delete the
     // checks below. The nothrow form keeps them real.
-    m_urls = std::unique_ptr<UPNPUrls>(new (std::nothrow) UPNPUrls());
     if (m_urls == nullptr) {
         LOG_ERROR(
             "UpnpPortMapper: failed to allocate UPNPUrls (heap exhausted?)");

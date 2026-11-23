@@ -60,7 +60,7 @@ public:
      *
      * @param value raw result code, 0 for success
      */
-    constexpr Result(std::uint32_t value) : m_value(value) {}
+    explicit constexpr Result(std::uint32_t value) : m_value(value) {}
     /**
      * @brief Whether the code is 0
      *
@@ -518,6 +518,20 @@ inline void UnlinkAllMultiWaitHolder(MultiWaitType* multi_wait) {
 }
 
 /**
+ * @brief Consume the first linked event that is signaled
+ *
+ * @param multi_wait Multi wait whose holders are scanned
+ * @return The holder whose event was consumed, or nullptr if none was ready
+ */
+inline MultiWaitHolderType* ConsumeReadyHolder(MultiWaitType* multi_wait) {
+    const auto it = std::find_if(
+        multi_wait->holders.begin(),
+        multi_wait->holders.end(),
+        [](auto* holder) { return holder->event->TryConsume(); });
+    return it != multi_wait->holders.end() ? *it : nullptr;
+}
+
+/**
  * @brief Wait for one linked event
  *
  * Waits until one linked event is signaled (and consumes it, like the kernel
@@ -538,19 +552,12 @@ inline MultiWaitHolderType* TimedWaitAny(
                               timeout.GetMilliSeconds() / g_host_wait_divisor);
     std::unique_lock<std::mutex> lock(MultiWaitMutex());
     for (;;) {
-        for (auto* holder : multi_wait->holders) {
-            if (holder->event->TryConsume()) {
-                return holder;
-            }
+        if (auto* holder = ConsumeReadyHolder(multi_wait)) {
+            return holder;
         }
         if (MultiWaitCv().wait_until(lock, deadline) ==
             std::cv_status::timeout) {
-            for (auto* holder : multi_wait->holders) {
-                if (holder->event->TryConsume()) {
-                    return holder;
-                }
-            }
-            return nullptr;
+            return ConsumeReadyHolder(multi_wait);
         }
     }
 }
@@ -1240,17 +1247,47 @@ inline std::uint64_t armTicksToNs(std::uint64_t ticks) {
 }
 
 /// Aborts the process on a failed Result, like the SDK macro does
-#define R_ABORT_UNLESS(expr)                                         \
-    do {                                                             \
-        if (::ams::Result r_abort_ = (expr); r_abort_.IsFailure()) { \
-            std::abort();                                            \
-        }                                                            \
+#define R_ABORT_UNLESS(expr)                                        \
+    do {                                                            \
+        if (::ams::Result r_abort_ = ::ams::detail::AsResult(expr); \
+            r_abort_.IsFailure()) {                                 \
+            std::abort();                                           \
+        }                                                           \
     } while (false)
 
 /// Marks the arguments as intentionally unused
 #define AMS_UNUSED(...) ::ams::impl::UnusedImpl(__VA_ARGS__)
 /// Returns a success Result from the enclosing function
 #define R_SUCCEED() return ::ams::ResultSuccess()
+namespace ams::detail {
+/**
+ * @brief Passes a Result through unchanged
+ *
+ * @param res Result to return
+ * @return @p res
+ */
+constexpr Result AsResult(Result res) {
+    return res;
+}
+/**
+ * @brief Wraps a raw result code, as the production macros accept both
+ *
+ * @param code raw result code
+ * @return the Result carrying @p code
+ */
+constexpr Result AsResult(std::int32_t code) {
+    return Result(static_cast<std::uint32_t>(code));
+}
+/**
+ * @brief Wraps a libnx result code
+ *
+ * @param code raw libnx result code
+ * @return the Result carrying @p code
+ */
+constexpr Result AsResult(std::uint32_t code) {
+    return Result(code);
+}
+}  // namespace ams::detail
 /**
  * @brief Whether a Result is a failure
  *
@@ -1262,13 +1299,13 @@ inline std::uint64_t armTicksToNs(std::uint64_t ticks) {
  *
  * @param res Result to return
  */
-#define R_THROW(res) return (res)
+#define R_THROW(res) return ::ams::detail::AsResult(res)
 /**
  * @brief Returns the given Result from the enclosing function
  *
  * @param res Result to return
  */
-#define R_RETURN(res) return (res)
+#define R_RETURN(res) return ::ams::detail::AsResult(res)
 /**
  * @brief Returns res from the enclosing function when cond is false
  *
@@ -1410,10 +1447,16 @@ inline std::vector<std::string> g_host_boot_calls;
 /// that an unreachable-in-production branch aborts.
 namespace ams {
 struct HostAbort {};
+namespace {
+/// Throws HostAbort; a call rather than a throw-expression, so the statement
+/// reads as an ordinary aborting call at every use site.
+[[noreturn]] inline void AbortImpl() {
+    throw HostAbort{};
+}
+}  // namespace
 }  // namespace ams
 /// Throws HostAbort instead of aborting the process
-#define AMS_ABORT(...) \
-    throw ::ams::HostAbort {}
+#define AMS_ABORT(...) ::ams::AbortImpl()
 /**
  * @brief Branch hint, ignored on the host
  *
@@ -1586,12 +1629,22 @@ struct ServiceName {
     /**
      * @brief Builds a name from text, truncated to 8 characters
      *
+     * The literal size is part of the signature so every read of `text` is
+     * provably inside the array that was passed: a service name is always a
+     * string literal, and a bound derived from the array itself cannot run
+     * past a short one.
+     *
+     * @tparam N Size of the passed array, NUL terminator included
      * @param text NUL-terminated service name
      * @return the encoded name
      */
-    static constexpr ServiceName Encode(const char* text) {
+    template <std::size_t N>
+    static constexpr ServiceName Encode(const char (&text)[N]) {
         ServiceName n{};
-        for (std::size_t i = 0; i < 8 && text[i] != '\0'; ++i) {
+        for (std::size_t i = 0; i < N - 1 && i < 8; ++i) {
+            if (text[i] == '\0') {
+                break;
+            }
             n.name[i] = text[i];
         }
         return n;

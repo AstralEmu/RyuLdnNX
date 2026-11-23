@@ -69,9 +69,9 @@ std::uint32_t g_rc = 0;             ///< Result the fake bsd:u answers with
 /**
  * @brief Fake bsd:u dispatch hook; records the call and answers g_rc.
  * @param call Forwarded call.
- * @return Result built from g_rc.
+ * @return Raw result code, the value g_rc answers with.
  */
-ams::Result fake_bsd(const host_mitm::Call& call) {
+std::uint32_t fake_bsd(const host_mitm::Call& call) {
     g_seen.command = call.command;
     g_seen.in.clear();
     if (call.in != nullptr) {
@@ -85,7 +85,7 @@ ams::Result fake_bsd(const host_mitm::Call& call) {
         std::memcpy(
             call.out, g_reply.data(), std::min(call.out_size, g_reply.size()));
     }
-    return ams::Result(g_rc);
+    return g_rc;
 }
 
 template <class T>
@@ -1966,8 +1966,8 @@ namespace {
 /// game's fd 4 becomes a proxy socket that is then closed, and data lands on
 /// the proxy of fd 3.
 /// @param call Forwarded Select call; its output receives a fixed Pair.
-/// @return Success.
-ams::Result proxies_change_during_the_real_wait(const host_mitm::Call& call) {
+/// @return Success code.
+std::uint32_t proxies_change_during_the_real_wait(const host_mitm::Call& call) {
     deliver(3, "late");
     auto& manager = sut::ProxySocketManager::GetInstance();
     manager
@@ -1975,7 +1975,7 @@ ams::Result proxies_change_during_the_real_wait(const host_mitm::Call& call) {
         ->Close();
     Pair p{0, 1};
     std::memcpy(call.out, &p, sizeof(p));
-    return ams::Result();
+    return 0;
 }
 }  // namespace
 
@@ -2247,11 +2247,11 @@ TEST(poll_adds_the_events_that_arrived_while_the_real_wait_ran) {
     p.in[0] = {3, POLLIN, 0};
     p.in[1] = {9, POLLIN, 0};
     host_mitm::g_dispatch_hook =
-        [](const host_mitm::Call& call) -> ams::Result {
+        [](const host_mitm::Call& call) -> std::uint32_t {
         deliver(3, "late");
         Pair pr{0, 0};
         std::memcpy(call.out, &pr, sizeof(pr));
-        return ams::Result();
+        return 0;
     };
     ASSERT_TRUE(p.run(*svc, 2).IsSuccess());
     host_mitm::g_dispatch_hook = fake_bsd;
@@ -2689,14 +2689,14 @@ namespace {
 /// Stages a concurrent IPC thread: fd 4 becomes a closed proxy socket while
 /// the real poll waits.
 /// @param call Forwarded Poll call.
-/// @return Success.
-ams::Result a_proxy_closes_during_the_real_poll(const host_mitm::Call& call) {
+/// @return Success code.
+std::uint32_t a_proxy_closes_during_the_real_poll(const host_mitm::Call& call) {
     sut::ProxySocketManager::GetInstance()
         .CreateProxySocket(4, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp)
         ->Close();
     Pair p{0, 1};
     std::memcpy(call.out, &p, sizeof(p));
-    return ams::Result();
+    return 0;
 }
 }  // namespace
 

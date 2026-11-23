@@ -62,10 +62,25 @@ struct Call {
     const Options* options;
 };
 
-/// Plays the real service. Null: every call succeeds and leaves `out` alone.
-using Hook = ams::Result (*)(const Call&);
-/// Hook installed by the test, or nullptr for "always succeed".
-inline Hook g_dispatch_hook = nullptr;
+/// Plays the real service. The hook answers with the raw result code, which is
+/// what the forwarded IPC call returns on the wire; Dispatch wraps it in an
+/// ams::Result.
+using Hook = std::uint32_t (*)(const Call&);
+
+/**
+ * @brief Hook used when the test installs none: succeeds, leaves `out` alone.
+ * @param call Forwarded call, ignored.
+ * @return Success code.
+ */
+inline std::uint32_t Succeed(const Call& call) {
+    (void)call;
+    return 0;
+}
+
+/// Hook installed by the test; Succeed when none is installed. It starts on a
+/// real function on purpose: the call then always reaches code that may read
+/// the forwarded structs, which is what the real macro does.
+inline Hook g_dispatch_hook = &Succeed;
 
 /// Number of calls forwarded since the last reset.
 inline unsigned g_dispatch_count = 0;
@@ -79,7 +94,7 @@ inline unsigned g_dispatch_count = 0;
  * @param out Raw output struct, or nullptr.
  * @param out_size Size of `out` in bytes.
  * @param options Designated options of the call.
- * @return Result of g_dispatch_hook, or success when no hook is installed.
+ * @return Result of g_dispatch_hook.
  */
 inline ams::Result Dispatch(
     ::Service* service,
@@ -90,11 +105,8 @@ inline ams::Result Dispatch(
     std::size_t out_size,
     const Options& options) {
     ++g_dispatch_count;
-    if (g_dispatch_hook == nullptr) {
-        return ams::ResultSuccess();
-    }
     const Call call{service, command, in, in_size, out, out_size, &options};
-    return g_dispatch_hook(call);
+    return ams::Result(g_dispatch_hook(call));
 }
 
 }  // namespace host_mitm

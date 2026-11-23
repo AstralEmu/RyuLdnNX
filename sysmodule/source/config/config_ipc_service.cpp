@@ -478,7 +478,7 @@ ams::Result ConfigService::SetUsePassphrase(u32 enabled) {
 // =============================================================================
 
 ams::Result ConfigService::IsGameActive(ams::sf::Out<u32> out) {
-    auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    const auto& state = ams::mitm::ldn::SharedState::GetInstance();
     *out = state.IsGameActive() ? 1 : 0;
     LOG_VERBOSE("Config IPC: IsGameActive -> %u", *out);
     R_SUCCEED();
@@ -492,7 +492,7 @@ ams::Result ConfigService::GetLdnState(ams::sf::Out<u32> out) {
 }
 
 ams::Result ConfigService::GetSessionInfo(RyuCfgOutSessionInfo out) {
-    auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    const auto& state = ams::mitm::ldn::SharedState::GetInstance();
     u8 node_count;
     u8 max_nodes;
     u8 local_node_id;
@@ -515,7 +515,7 @@ ams::Result ConfigService::GetSessionInfo(RyuCfgOutSessionInfo out) {
 }
 
 ams::Result ConfigService::GetLastRtt(ams::sf::Out<u32> out) {
-    auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    const auto& state = ams::mitm::ldn::SharedState::GetInstance();
     *out = state.GetLastRtt();
     LOG_VERBOSE("Config IPC: GetLastRtt -> %u ms", *out);
     R_SUCCEED();
@@ -529,7 +529,7 @@ ams::Result ConfigService::ForceReconnect() {
 }
 
 ams::Result ConfigService::GetActiveProcessId(ams::sf::Out<u64> out) {
-    auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    const auto& state = ams::mitm::ldn::SharedState::GetInstance();
     *out = state.GetActiveProcessId();
     LOG_VERBOSE("Config IPC: GetActiveProcessId -> 0x%lx", *out);
     R_SUCCEED();

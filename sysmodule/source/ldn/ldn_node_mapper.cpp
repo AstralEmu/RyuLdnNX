@@ -18,6 +18,7 @@
  * @license GPL-2.0-or-later
  */
 
+#include <algorithm>
 #include "ldn_node_mapper.hpp"
 
 namespace ams::mitm::ldn {
@@ -122,13 +123,10 @@ u32 LdnNodeMapper::GetNodeIp(u32 node_id) const {
 size_t LdnNodeMapper::GetConnectedCount() const {
     std::scoped_lock lk(m_mutex);
 
-    size_t count = 0;
-    for (auto m_node : m_nodes) {
-        if (m_node.is_connected) {
-            count++;
-        }
-    }
-    return count;
+    return static_cast<size_t>(std::count_if(
+        std::begin(m_nodes), std::end(m_nodes), [](const auto& node) {
+            return node.is_connected;
+        }));
 }
 
 /**

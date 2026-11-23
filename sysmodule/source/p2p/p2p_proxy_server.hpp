@@ -473,8 +473,10 @@ private:
     // through m_mutex (we don't want to take m_mutex on every poll cycle).
     /// True while the server is running
     std::atomic<bool> m_running;
-    /// True once the server has been stopped and cleaned up
-    bool m_disposed;
+    /// True once the server has been stopped and cleaned up. Atomic for the
+    /// same reason as m_running: the lease thread reads it while the owner
+    /// thread sets it.
+    std::atomic<bool> m_disposed{false};
 
     // Accept thread (stack lives in BSS — see g_p2p_accept_thread_stack in
     // p2p_proxy_server.cpp). Inlining the stack inside the class with
@@ -488,8 +490,9 @@ private:
     // Lease renewal thread (stack: g_p2p_lease_thread_stack in BSS)
     /// Thread running LeaseRenewalLoop()
     os::ThreadType m_lease_thread{};
-    /// True while the lease renewal thread is running
-    bool m_lease_thread_running;
+    /// True while the lease renewal thread is running. Atomic: the owner
+    /// thread flips it to ask for the join, the lease thread polls it.
+    std::atomic<bool> m_lease_thread_running{false};
 
     // Sessions
     /// Authenticated sessions (owning); empty slots are null

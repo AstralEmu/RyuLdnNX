@@ -14,6 +14,8 @@
 
 #include <stratosphere.hpp>
 
+#include <atomic>
+
 extern "C" {
 #include <switch/services/bsd.h>
 }
@@ -206,7 +208,9 @@ alignas(HEAP_ALIGNMENT) constinit u8 g_heap_memory[384_KB];
 /// Handle of the expanded heap; valid once g_heap_initialized is true.
 constinit lmem::HeapHandle g_heap_handle;
 /// Set under g_heap_init_mutex when the heap has been created (lazy init).
-constinit bool g_heap_initialized;
+/// Atomic because the fast path reads it without the lock: the release store
+/// below publishes g_heap_handle to the acquire load in GetHeapHandle().
+constinit std::atomic<bool> g_heap_initialized{false};
 // Heap init mutex. `os::SdkMutex` provides a constexpr constructor that
 // constant-initializes the underlying critical section on Horizon (the
 // `AMS_OS_INTERNAL_CRITICAL_SECTION_IMPL_CONSTANT_INITIALIZER` path), so
@@ -229,16 +233,20 @@ constinit os::SdkMutex g_heap_init_mutex;
  * @return Handle of the 384 KB expanded heap.
  */
 lmem::HeapHandle GetHeapHandle() {
-    if (AMS_UNLIKELY(!g_heap_initialized)) {
-        std::scoped_lock lk(g_heap_init_mutex);
+    if (AMS_LIKELY(g_heap_initialized.load(std::memory_order_acquire))) {
+        return g_heap_handle;
+    }
 
-        if (AMS_LIKELY(!g_heap_initialized)) {
-            g_heap_handle = lmem::CreateExpHeap(
-                g_heap_memory,
-                sizeof(g_heap_memory),
-                lmem::CreateOption_ThreadSafe);
-            g_heap_initialized = true;
-        }
+    std::scoped_lock lk(g_heap_init_mutex);
+    // Re-checked under the lock: another thread may have created the heap
+    // while this one waited for it. Relaxed is enough here because the lock
+    // itself orders this read against the creating thread's release store.
+    if (!g_heap_initialized.load(std::memory_order_relaxed)) {
+        g_heap_handle = lmem::CreateExpHeap(
+            g_heap_memory,
+            sizeof(g_heap_memory),
+            lmem::CreateOption_ThreadSafe);
+        g_heap_initialized.store(true, std::memory_order_release);
     }
 
     return g_heap_handle;
@@ -279,6 +287,15 @@ struct LdnMitmManagerOptions {
     static constexpr bool CanDeferInvokeRequest = false;
     /// Required: this manager hosts MITM ports.
     static constexpr bool CanManageMitmServers = true;
+
+    // The options above are only consumed by the atmosphere template, so
+    // state their non-negotiable contract here, next to the values.
+    static_assert(PointerBufferSize > 0, "a session needs a pointer buffer");
+    static_assert(MaxDomains > 0, "a MITM manager needs a domain");
+    static_assert(MaxDomainObjects > 0, "a domain needs at least one object");
+    static_assert(
+        !CanDeferInvokeRequest, "the LDN service never defers a request");
+    static_assert(CanManageMitmServers, "this manager hosts ldn:u and bsd:u");
 };
 
 /// Maximum concurrent sessions
@@ -448,7 +465,8 @@ void LoopServerThread(void* /*unused*/) {
  * The thread argument is not used.
  */
 void ProcessForServerOnAllThreads(void* /*unused*/) {
-    // Initialize extra threads
+    // Create every extra thread first, then start them: the stacks and thread
+    // objects only exist when NumExtraThreads is non-zero, hence the guard.
     if constexpr (NumExtraThreads > 0) {
         const s32 priority =
             os::GetThreadCurrentPriority(os::GetCurrentThread());
@@ -463,10 +481,6 @@ void ProcessForServerOnAllThreads(void* /*unused*/) {
                     priority));
             os::SetThreadNamePointer(g_extra_threads + i, "ryu_ldn::Thread");
         }
-    }
-
-    // Start extra threads
-    if constexpr (NumExtraThreads > 0) {
         for (size_t i = 0; i < NumExtraThreads; i++) {
             os::StartThread(g_extra_threads + i);
         }
@@ -516,6 +530,14 @@ struct ConfigServerManagerOptions {
     static constexpr bool CanDeferInvokeRequest = false;
     /// ryu:cfg is a regular service, not a MITM.
     static constexpr bool CanManageMitmServers = false;
+
+    // The options above are only consumed by the atmosphere template, so
+    // state their non-negotiable contract here, next to the values.
+    static_assert(PointerBufferSize > 0, "a session needs a pointer buffer");
+    static_assert(MaxDomains == 0, "ryu:cfg hands out no domain");
+    static_assert(MaxDomainObjects == 0, "ryu:cfg hands out no domain object");
+    static_assert(!CanDeferInvokeRequest, "ryu:cfg never defers a request");
+    static_assert(!CanManageMitmServers, "ryu:cfg is not a MITM service");
 };
 
 /// Maximum concurrent sessions for config service

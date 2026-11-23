@@ -43,6 +43,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <stratosphere.hpp>
 #include <array>
 #include <memory>
@@ -592,24 +593,26 @@ private:
     /// @param key Option key, see MakeOptionKey().
     /// @return Pointer to the stored value, or nullptr if the key is absent.
     s32* FindSocketOption(uint32_t key) {
-        for (auto& entry : m_socket_options) {
-            if (entry.valid && entry.key == key) {
-                return &entry.value;
-            }
-        }
-        return nullptr;
+        const auto it = std::find_if(
+            m_socket_options.begin(),
+            m_socket_options.end(),
+            [key](const auto& entry) {
+                return entry.valid && entry.key == key;
+            });
+        return it != m_socket_options.end() ? &it->value : nullptr;
     }
 
     /// Const overload.
     /// @param key Option key, see MakeOptionKey().
     /// @return Pointer to the stored value, or nullptr if the key is absent.
     const s32* FindSocketOption(uint32_t key) const {
-        for (const auto& entry : m_socket_options) {
-            if (entry.valid && entry.key == key) {
-                return &entry.value;
-            }
-        }
-        return nullptr;
+        const auto it = std::find_if(
+            m_socket_options.begin(),
+            m_socket_options.end(),
+            [key](const auto& entry) {
+                return entry.valid && entry.key == key;
+            });
+        return it != m_socket_options.end() ? &it->value : nullptr;
     }
 
     /// Set a socket option: update existing key, or insert in first free slot.
@@ -621,15 +624,17 @@ private:
             *existing = value;
             return true;
         }
-        for (auto& entry : m_socket_options) {
-            if (!entry.valid) {
-                entry.key = key;
-                entry.value = value;
-                entry.valid = true;
-                return true;
-            }
+        const auto free_slot = std::find_if(
+            m_socket_options.begin(),
+            m_socket_options.end(),
+            [](const auto& entry) { return !entry.valid; });
+        if (free_slot == m_socket_options.end()) {
+            return false;
         }
-        return false;
+        free_slot->key = key;
+        free_slot->value = value;
+        free_slot->valid = true;
+        return true;
     }
 
     /**

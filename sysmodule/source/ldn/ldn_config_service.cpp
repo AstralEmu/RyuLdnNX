@@ -33,7 +33,7 @@ Result LdnConfigService::GetVersion(sf::Out<std::array<char, 32>> out) {
 }
 
 Result LdnConfigService::GetConnectionStatus(sf::Out<ConnectionStatus> out) {
-    auto& shared_state = SharedState::GetInstance();
+    const auto& shared_state = SharedState::GetInstance();
     CommState ldn_state = shared_state.GetLdnState();
 
     // Map LDN state to connection status
@@ -63,13 +63,13 @@ Result LdnConfigService::GetLdnState(sf::Out<u32> out) {
 }
 
 Result LdnConfigService::GetSessionInfo(sf::Out<SessionInfo> out) {
-    auto& shared_state = SharedState::GetInstance();
+    const auto& shared_state = SharedState::GetInstance();
     *out = shared_state.GetSessionInfoStruct();
     R_SUCCEED();
 }
 
 Result LdnConfigService::GetServerAddress(sf::Out<ServerAddress> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     ServerAddress addr{};
     std::strncpy(addr.host, cfg.GetServerHost(), 63);
     addr.host[63] = '\0';
@@ -93,7 +93,7 @@ Result LdnConfigService::SetServerAddress(const ServerAddress& address) {
 }
 
 Result LdnConfigService::GetDebugEnabled(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     *out = cfg.GetDebugEnabled() ? 1 : 0;
     R_SUCCEED();
 }
@@ -112,7 +112,7 @@ Result LdnConfigService::ForceReconnect() {
 }
 
 Result LdnConfigService::GetLastRtt(sf::Out<u32> out) {
-    auto& shared_state = SharedState::GetInstance();
+    const auto& shared_state = SharedState::GetInstance();
     *out = shared_state.GetLastRtt();
     R_SUCCEED();
 }
@@ -122,7 +122,7 @@ Result LdnConfigService::GetLastRtt(sf::Out<u32> out) {
 // =============================================================================
 
 Result LdnConfigService::GetPassphrase(sf::Out<Passphrase> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     Passphrase p{};
     std::strncpy(p.passphrase, cfg.GetPassphrase(), 63);
     p.passphrase[63] = '\0';
@@ -137,7 +137,7 @@ Result LdnConfigService::SetPassphrase(Passphrase passphrase) {
 }
 
 Result LdnConfigService::GetLdnEnabled(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     *out = cfg.GetLdnEnabled() ? 1 : 0;
     R_SUCCEED();
 }
@@ -203,7 +203,7 @@ Result LdnConfigService::SetMaxReconnectAttempts(u32 attempts) {
 // ============================================================================
 
 Result LdnConfigService::GetDebugLevel(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     *out = cfg.GetDebugLevel();
     R_SUCCEED();
 }
@@ -215,7 +215,7 @@ Result LdnConfigService::SetDebugLevel(u32 level) {
 }
 
 Result LdnConfigService::GetLogToFile(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     *out = cfg.GetDebugEnabled() ? 1 : 0;  // Maps to debug.enabled
     R_SUCCEED();
 }

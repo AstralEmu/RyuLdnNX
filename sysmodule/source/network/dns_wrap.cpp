@@ -473,22 +473,21 @@ int ParseDnsResponse(
         }
 
         // A record: TYPE=A, CLASS=IN, RDLENGTH=4
+        // The loop condition already bounds ip_count by max_ips.
         if (rtype == DNS_TYPE_A && rclass == DNS_CLASS_IN &&
             rdlength == DNS_RDLENGTH_IPV4) {
-            if (ip_count < max_ips) {
-                uint32_t ip = (static_cast<uint32_t>(p[0]) << 24) |
-                              (static_cast<uint32_t>(p[1]) << 16) |
-                              (static_cast<uint32_t>(p[2]) << 8) |
-                              static_cast<uint32_t>(p[3]);
-                LOG_INFO(
-                    "DNS A record: raw_ip=0x%08X -> %u.%u.%u.%u",
-                    ip,
-                    p[0],
-                    p[1],
-                    p[2],
-                    p[3]);
-                out_ips[ip_count++] = ip;
-            }
+            uint32_t ip = (static_cast<uint32_t>(p[0]) << 24) |
+                          (static_cast<uint32_t>(p[1]) << 16) |
+                          (static_cast<uint32_t>(p[2]) << 8) |
+                          static_cast<uint32_t>(p[3]);
+            LOG_INFO(
+                "DNS A record: raw_ip=0x%08X -> %u.%u.%u.%u",
+                ip,
+                p[0],
+                p[1],
+                p[2],
+                p[3]);
+            out_ips[ip_count++] = ip;
         }
 
         p += rdlength;
@@ -849,8 +848,7 @@ void __wrap_freeaddrinfo(struct addrinfo* res) {
         // res comes from the caller (miniupnpc); the getaddrinfo contract
         // hands ownership back. ai is the first member of AddrinfoStorage,
         // so the node address is the address of the whole malloc block.
-        const StoragePtr owned(
-            reinterpret_cast<AddrinfoStorage*>(res), &std::free);
+        std::free(reinterpret_cast<AddrinfoStorage*>(res));
         res = next;
     }
 }

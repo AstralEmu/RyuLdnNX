@@ -150,6 +150,7 @@
  * @license GPL-2.0-or-later
  */
 
+#include <algorithm>
 #include "p2p_proxy_server.hpp"
 #include "../debug/log.hpp"
 
@@ -334,8 +335,6 @@ P2pProxyServer::P2pProxyServer(
       m_private_port(0),
       m_public_port(0),
       m_running(false),
-      m_disposed(false),
-      m_lease_thread_running(false),
       m_session_count(0),
       m_zombie_session_count(0),
       m_waiting_token_count(0),
@@ -814,7 +813,7 @@ uint16_t P2pProxyServer::NatPunch() {
 void P2pProxyServer::ReleaseNatPunch() {
     LOG_INFO(
         "ReleaseNatPunch: ENTRY (lease_running=%d, public_port=%u)",
-        static_cast<int>(m_lease_thread_running),
+        static_cast<int>(m_lease_thread_running.load()),
         m_public_port);
 
     // =========================================================================
@@ -823,11 +822,11 @@ void P2pProxyServer::ReleaseNatPunch() {
     // Must stop before deleting mapping, otherwise renewal might
     // try to refresh a deleted mapping.
 
-    if (m_lease_thread_running) {
+    if (m_lease_thread_running.load()) {
         LOG_INFO(
             "ReleaseNatPunch: signalling lease thread, waiting for join (~250 "
             "ms max)");
-        m_lease_thread_running = false;
+        m_lease_thread_running.store(false);
         // Thread exits within ~ChunkMs (=250 ms) of seeing the flag flip.
         os::WaitThread(&m_lease_thread);
         os::DestroyThread(&m_lease_thread);
@@ -866,11 +865,11 @@ void P2pProxyServer::ReleaseNatPunch() {
  * the UPnP port mapping.
  */
 void P2pProxyServer::StartLeaseRenewal() {
-    if (m_lease_thread_running) {
+    if (m_lease_thread_running.load()) {
         return;  // Already running
     }
 
-    m_lease_thread_running = true;
+    m_lease_thread_running.store(true);
 
     R_ABORT_UNLESS(
         os::CreateThread(
@@ -904,8 +903,8 @@ void P2pProxyServer::StartLeaseRenewal() {
 void P2pProxyServer::LeaseRenewalLoop() const {
     LOG_INFO(
         "P2P LeaseRenewalLoop: entry, m_lease_thread_running=%d, m_disposed=%d",
-        static_cast<int>(m_lease_thread_running),
-        static_cast<int>(m_disposed));
+        static_cast<int>(m_lease_thread_running.load()),
+        static_cast<int>(m_disposed.load()));
     ryu_ldn::debug::g_logger.flush();
 
     // We chunk the long renewal interval into short sleeps so ReleaseNatPunch()
@@ -920,11 +919,12 @@ void P2pProxyServer::LeaseRenewalLoop() const {
     constexpr int64_t ChunkMs = 250;
     const int64_t total_ms = static_cast<int64_t>(PORT_LEASE_RENEW) * 1000;
 
-    while (m_lease_thread_running && !m_disposed) {
+    while (m_lease_thread_running.load() && !m_disposed.load()) {
         // Wait for the full renewal interval, but in ChunkMs slices so a
         // flipped m_lease_thread_running pulls us out within one chunk.
         for (int64_t waited = 0;
-             waited < total_ms && m_lease_thread_running && !m_disposed;
+             waited < total_ms && m_lease_thread_running.load() &&
+             !m_disposed.load();
              waited += ChunkMs) {
             const auto chunk_ns =
                 TimeSpan::FromMilliSeconds(ChunkMs).GetNanoSeconds();
@@ -932,11 +932,11 @@ void P2pProxyServer::LeaseRenewalLoop() const {
         }
 
         // Check if we should exit (Stop / dispose flipped during the slices)
-        if (!m_lease_thread_running || m_disposed) {
+        if (!m_lease_thread_running.load() || m_disposed.load()) {
             LOG_INFO(
                 "LeaseRenewalLoop: exit requested (running=%d, disposed=%d)",
-                static_cast<int>(m_lease_thread_running),
-                static_cast<int>(m_disposed));
+                static_cast<int>(m_lease_thread_running.load()),
+                static_cast<int>(m_disposed.load()));
             break;
         }
 
@@ -1073,13 +1073,10 @@ bool P2pProxyServer::TryRegisterUser(
             // 1. PhysicalIP is all zeros: Allow any client (private IP)
             // 2. PhysicalIP is set: Must match client's IP
 
-            bool is_private = true;
-            for (unsigned char j : token.physical_ip) {
-                if (j != 0) {
-                    is_private = false;
-                    break;
-                }
-            }
+            const bool is_private = std::none_of(
+                std::begin(token.physical_ip),
+                std::end(token.physical_ip),
+                [](unsigned char j) { return j != 0; });
 
             bool ip_match = is_private;
             if (!ip_match && token.address_family == 2) {  // AF_INET = 2 (IPv4)
@@ -1163,12 +1160,13 @@ bool P2pProxyServer::TryRegisterUser(
                 }
 
                 // Add session to player list
-                for (auto& m_session : m_sessions) {
-                    if (m_session == nullptr) {
-                        m_session.reset(session);
-                        m_session_count++;
-                        break;
-                    }
+                const auto free_session = std::find_if(
+                    std::begin(m_sessions),
+                    std::end(m_sessions),
+                    [](const auto& s) { return s == nullptr; });
+                if (free_session != std::end(m_sessions)) {
+                    free_session->reset(session);
+                    m_session_count++;
                 }
 
                 // Send ProxyConfig response to client
@@ -1315,12 +1313,15 @@ bool P2pProxyServer::BroadcastFromHost(
             }
         }
     } else {
-        for (const auto& m_session : m_sessions) {
-            if (m_session != nullptr && m_session->IsAuthenticated() &&
-                m_session->GetVirtualIpAddress() == dest_ip) {
-                any_sent = m_session->Send(packet, encoded);
-                break;
-            }
+        const auto target = std::find_if(
+            std::begin(m_sessions),
+            std::end(m_sessions),
+            [dest_ip](const auto& s) {
+                return s != nullptr && s->IsAuthenticated() &&
+                       s->GetVirtualIpAddress() == dest_ip;
+            });
+        if (target != std::end(m_sessions)) {
+            any_sent = (*target)->Send(packet, encoded);
         }
     }
     return any_sent;

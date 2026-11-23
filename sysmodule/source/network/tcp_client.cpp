@@ -55,7 +55,9 @@ TcpClient::TcpClient() = default;
  * @brief Destructor - ensures clean disconnection
  */
 TcpClient::~TcpClient() {
-    disconnect();
+    // Qualified on purpose: a virtual call would resolve to the base class
+    // during destruction, so a derived class would silently keep the socket.
+    TcpClient::disconnect();
 }
 
 bool TcpClient::initialize() {
@@ -81,7 +83,10 @@ TcpClient::TcpClient(TcpClient&& other) noexcept
 /**
  * @brief Move assignment operator
  *
- * Disconnects current connection (if any) and takes ownership from other.
+ * Disconnects current connection (if any) and takes ownership from other:
+ * socket, reassembly buffer and send buffer content all follow the moved
+ * connection. The locks stay with their object, since a lock protects the
+ * state of its owner rather than being part of the moved value.
  *
  * @param other Client to move from
  * @return Reference to this client
@@ -90,6 +95,8 @@ TcpClient& TcpClient::operator=(TcpClient&& other) noexcept {
     if (this != &other) {
         disconnect();
         m_socket = std::move(other.m_socket);
+        std::memcpy(m_send_buffer, other.m_send_buffer, sizeof(m_send_buffer));
+        std::memset(other.m_send_buffer, 0, sizeof(other.m_send_buffer));
         m_recv_buffer.reset();
         other.m_recv_buffer.reset();
     }
@@ -169,7 +176,7 @@ ClientResult TcpClient::send_packet(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     // Encode packet into send buffer using encode_raw for arbitrary data
     size_t encoded_size = 0;
@@ -198,7 +205,7 @@ ClientResult TcpClient::send_raw(const void* data, size_t size) {
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     if (data == nullptr || size == 0) {
         return ClientResult::EncodingError;
@@ -218,7 +225,7 @@ ClientResult TcpClient::send_initialize(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size =
         encode_fixed(protocol::PacketId::Initialize, msg);
@@ -235,7 +242,7 @@ ClientResult TcpClient::send_passphrase(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size =
         encode_fixed(protocol::PacketId::Passphrase, msg);
@@ -265,7 +272,7 @@ ClientResult TcpClient::send_ping(const protocol::PingMessage& msg) {
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size = encode_fixed(protocol::PacketId::Ping, msg);
     return socket_to_client_result(
@@ -281,7 +288,7 @@ ClientResult TcpClient::send_disconnect(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size =
         encode_fixed(protocol::PacketId::Disconnect, msg);
@@ -300,7 +307,7 @@ ClientResult TcpClient::send_create_access_point(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     // Wire layout (same as Ryujinx LdnMasterProxyClient.CreateNetwork):
     //   LdnHeader | CreateAccessPointRequest | AdvertiseData[N]
@@ -391,7 +398,7 @@ ClientResult TcpClient::send_connect(const protocol::ConnectRequest& request) {
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size =
         encode_fixed(protocol::PacketId::Connect, request);
@@ -455,7 +462,7 @@ ClientResult TcpClient::send_create_access_point_private(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     // Encode header + request + advertise data
     size_t total_payload_size = sizeof(request) + advertise_size;
@@ -498,7 +505,7 @@ ClientResult TcpClient::send_connect_private(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size =
         encode_fixed(protocol::PacketId::ConnectPrivate, request);
@@ -514,7 +521,7 @@ ClientResult TcpClient::send_scan(const protocol::ScanFilterFull& filter) {
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size = encode_fixed(protocol::PacketId::Scan, filter);
     return socket_to_client_result(
@@ -535,7 +542,7 @@ ClientResult TcpClient::send_proxy_data(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     size_t encoded_size = 0;
     protocol::EncodeResult encode_result = protocol::encode_proxy_data(
@@ -563,7 +570,7 @@ ClientResult TcpClient::send_set_accept_policy(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size =
         encode_fixed(protocol::PacketId::SetAcceptPolicy, request);
@@ -580,7 +587,7 @@ ClientResult TcpClient::send_set_advertise_data(
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     // Limit to max advertise data size (384 bytes as per protocol)
     size = std::min<size_t>(size, 384);
@@ -612,7 +619,7 @@ ClientResult TcpClient::send_reject(const protocol::RejectRequest& request) {
         return ClientResult::NotConnected;
     }
 
-    std::scoped_lock send_lock(m_send_mutex);
+    std::scoped_lock send_lock(m_locks.send);
 
     const size_t encoded_size =
         encode_fixed(protocol::PacketId::Reject, request);
@@ -646,7 +653,7 @@ ClientResult TcpClient::receive_packet(
     // Serialize receivers — m_recv_buffer state (partial-packet reassembly)
     // is not safe for concurrent access. receive_into_buffer is called only
     // from here so no nested locking needed.
-    std::scoped_lock recv_lock(m_recv_mutex);
+    std::scoped_lock recv_lock(m_locks.recv);
 
     payload_size = 0;
 

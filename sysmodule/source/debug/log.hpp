@@ -217,8 +217,10 @@ public:
     void clear();
 
 private:
-    /// Ring storage, one NUL-terminated message per slot.
-    char m_messages[MAX_LOG_BUFFER_ENTRIES][MAX_LOG_MESSAGE_LENGTH];
+    /// Ring storage, one NUL-terminated message per slot. Slots are written
+    /// before they are counted, so only the zero state needs no reader care;
+    /// it costs nothing but keeps the object free of uninitialized bytes.
+    char m_messages[MAX_LOG_BUFFER_ENTRIES][MAX_LOG_MESSAGE_LENGTH] = {};
     /// Number of slots in use by the ring.
     size_t m_capacity = MAX_LOG_BUFFER_ENTRIES;
     /// Messages currently stored (at most m_capacity).

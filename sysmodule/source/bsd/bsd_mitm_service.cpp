@@ -47,6 +47,7 @@
  * @license GPL-2.0-or-later
  */
 
+#include <algorithm>
 #include "bsd_mitm_service.hpp"
 #include "proxy_socket_manager.hpp"
 #include "bsd_types.hpp"
@@ -153,12 +154,11 @@ static os::Mutex g_socket_info_mutex{false};
  * @return The valid entry for @p fd, or nullptr if none is tracked.
  */
 static SocketInfoEntry* FindSocketInfoEntry(s32 fd) {
-    for (auto& entry : g_socket_info) {
-        if (entry.valid && entry.fd == fd) {
-            return &entry;
-        }
-    }
-    return nullptr;
+    const auto it = std::find_if(
+        g_socket_info.begin(), g_socket_info.end(), [fd](const auto& entry) {
+            return entry.valid && entry.fd == fd;
+        });
+    return it != g_socket_info.end() ? &*it : nullptr;
 }
 
 /**
@@ -174,14 +174,16 @@ static SocketInfoEntry* FindOrCreateSocketInfoEntry(s32 fd) {
     if (SocketInfoEntry* existing = FindSocketInfoEntry(fd)) {
         return existing;
     }
-    for (auto& entry : g_socket_info) {
-        if (!entry.valid) {
-            entry.fd = fd;
-            entry.valid = true;
-            return &entry;
-        }
+    const auto free_slot = std::find_if(
+        g_socket_info.begin(), g_socket_info.end(), [](const auto& entry) {
+            return !entry.valid;
+        });
+    if (free_slot == g_socket_info.end()) {
+        return nullptr;
     }
-    return nullptr;
+    free_slot->fd = fd;
+    free_slot->valid = true;
+    return &*free_slot;
 }
 
 /**
@@ -243,12 +245,11 @@ static os::Mutex g_mitm_pids_mutex{false};
  * @return The valid entry for @p pid, or nullptr if none exists.
  */
 static MitmPidEntry* FindMitmPidEntry(u64 pid) {
-    for (auto& entry : g_mitm_pid_count) {
-        if (entry.valid && entry.pid == pid) {
-            return &entry;
-        }
-    }
-    return nullptr;
+    const auto it = std::find_if(
+        g_mitm_pid_count.begin(),
+        g_mitm_pid_count.end(),
+        [pid](const auto& entry) { return entry.valid && entry.pid == pid; });
+    return it != g_mitm_pid_count.end() ? &*it : nullptr;
 }
 
 /**
@@ -263,15 +264,17 @@ static MitmPidEntry* FindOrCreateMitmPidEntry(u64 pid) {
     if (MitmPidEntry* existing = FindMitmPidEntry(pid)) {
         return existing;
     }
-    for (auto& entry : g_mitm_pid_count) {
-        if (!entry.valid) {
-            entry.pid = pid;
-            entry.count = 0;
-            entry.valid = true;
-            return &entry;
-        }
+    const auto free_slot = std::find_if(
+        g_mitm_pid_count.begin(),
+        g_mitm_pid_count.end(),
+        [](const auto& entry) { return !entry.valid; });
+    if (free_slot == g_mitm_pid_count.end()) {
+        return nullptr;
     }
-    return nullptr;
+    free_slot->pid = pid;
+    free_slot->count = 0;
+    free_slot->valid = true;
+    return &*free_slot;
 }
 
 /**
@@ -525,12 +528,10 @@ BsdMitmService::~BsdMitmService() {
                     if (!slot.valid) {
                         slot.service = std::move(m_forward_service);
                         slot.valid = true;
-                        size_t count = 0;
-                        for (const auto& s : g_abandoned_forward_services) {
-                            if (s.valid) {
-                                count++;
-                            }
-                        }
+                        const auto count = static_cast<size_t>(std::count_if(
+                            g_abandoned_forward_services.begin(),
+                            g_abandoned_forward_services.end(),
+                            [](const auto& s) { return s.valid; }));
                         LOG_INFO(
                             "[BSD#%u] Abandoned services count: %zu",
                             m_session_id,
@@ -686,12 +687,10 @@ bool BsdMitmService::ShouldMitm(const sm::MitmProcessInfo& client_info) {
 void BsdMitmService::CleanupAbandonedServices() {
     std::scoped_lock lock(g_abandoned_services_mutex);
 
-    size_t count = 0;
-    for (const auto& slot : g_abandoned_forward_services) {
-        if (slot.valid) {
-            count++;
-        }
-    }
+    const auto count = static_cast<size_t>(std::count_if(
+        g_abandoned_forward_services.begin(),
+        g_abandoned_forward_services.end(),
+        [](const auto& slot) { return slot.valid; }));
     if (count == 0) {
         return;
     }
@@ -793,6 +792,16 @@ Result BsdMitmService::RegisterClient(
         u64 tmem_size;
     } forward_input = {
         .config = config, .pid_placeholder = 0, .tmem_size = tmem_size};
+
+    // The InRaw buffer above is copied verbatim into the forwarded call, so
+    // its layout is the ABI: config block first, then the two u64 fields, no
+    // padding between or after them.
+    static_assert(
+        sizeof(forward_input) == sizeof(forward_input.config) + 2 * sizeof(u64),
+        "InRaw must be the config block followed by two u64 fields");
+    static_assert(
+        sizeof(forward_input.config) == sizeof(ryu_ldn::bsd::LibraryConfigData),
+        "InRaw must start with the library config block");
 
     u64 pid_out = 0;
 
@@ -1275,6 +1284,15 @@ Result BsdMitmService::RegisterClientShared(
         u64 tmem_size;
     } forward_input = {
         .config = config, .pid_placeholder = 0, .tmem_size = tmem_size};
+
+    // Same ABI as RegisterClient: config block first, then the two u64
+    // fields, no padding between or after them.
+    static_assert(
+        sizeof(forward_input) == sizeof(forward_input.config) + 2 * sizeof(u64),
+        "InRaw must be the config block followed by two u64 fields");
+    static_assert(
+        sizeof(forward_input.config) == sizeof(ryu_ldn::bsd::LibraryConfigData),
+        "InRaw must start with the library config block");
 
     u64 pid_out = 0;
 

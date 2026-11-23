@@ -9,6 +9,7 @@
  * @license GPL-2.0-or-later
  */
 
+#include <algorithm>
 #include "proxy_socket_manager.hpp"
 #include "../debug/log.hpp"
 
@@ -45,13 +46,10 @@ ProxySocket* ProxySocketManager::CreateProxySocket(
     }
 
     // Find first free slot (fd == INVALID_FD)
-    ProxySocketEntry* slot = nullptr;
-    for (auto& entry : m_sockets) {
-        if (entry.fd == INVALID_FD) {
-            slot = &entry;
-            break;
-        }
-    }
+    ProxySocketEntry* slot = &*std::find_if(
+        m_sockets.begin(), m_sockets.end(), [](const auto& entry) {
+            return entry.fd == INVALID_FD;
+        });
     // m_socket_count counts exactly the entries whose fd is not INVALID_FD and
     // is below MAX_PROXY_SOCKETS here, so a free slot always exists.
 
@@ -78,23 +76,21 @@ ProxySocket* ProxySocketManager::GetProxySocket(s32 fd) {
 ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(
     s32 fd) {
     // Caller must hold m_mutex
-    for (auto& entry : m_sockets) {
-        if (entry.fd != INVALID_FD && entry.fd == fd) {
-            return &entry;
-        }
-    }
-    return nullptr;
+    const auto it = std::find_if(
+        m_sockets.begin(), m_sockets.end(), [fd](const auto& entry) {
+            return entry.fd != INVALID_FD && entry.fd == fd;
+        });
+    return it != m_sockets.end() ? &*it : nullptr;
 }
 
 const ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(
     s32 fd) const {
     // Caller must hold m_mutex
-    for (const auto& entry : m_sockets) {
-        if (entry.fd != INVALID_FD && entry.fd == fd) {
-            return &entry;
-        }
-    }
-    return nullptr;
+    const auto it = std::find_if(
+        m_sockets.begin(), m_sockets.end(), [fd](const auto& entry) {
+            return entry.fd != INVALID_FD && entry.fd == fd;
+        });
+    return it != m_sockets.end() ? &*it : nullptr;
 }
 
 bool ProxySocketManager::IsProxySocket(s32 fd) const {
@@ -219,7 +215,7 @@ bool ProxySocketManager::SendProxyData(
     uint16_t dest_port,
     ryu_ldn::bsd::ProtocolType protocol,
     const void* data,
-    size_t data_len) {
+    size_t data_len) const {
     SendProxyDataCallback callback;
     {
         std::scoped_lock lock(m_mutex);
@@ -263,7 +259,7 @@ bool ProxySocketManager::SendProxyConnect(
     uint16_t source_port,
     uint32_t dest_ip,
     uint16_t dest_port,
-    ryu_ldn::bsd::ProtocolType protocol) {
+    ryu_ldn::bsd::ProtocolType protocol) const {
     SendProxyConnectCallback callback;
     {
         std::scoped_lock lock(m_mutex);
@@ -288,7 +284,7 @@ bool ProxySocketManager::SendProxyConnectReply(
     uint16_t source_port,
     uint32_t dest_ip,
     uint16_t dest_port,
-    ryu_ldn::bsd::ProtocolType protocol) {
+    ryu_ldn::bsd::ProtocolType protocol) const {
     SendProxyConnectReplyCallback callback;
     {
         std::scoped_lock lock(m_mutex);
@@ -313,7 +309,7 @@ bool ProxySocketManager::SendProxyDisconnect(
     uint16_t source_port,
     uint32_t dest_ip,
     uint16_t dest_port,
-    ryu_ldn::bsd::ProtocolType protocol) {
+    ryu_ldn::bsd::ProtocolType protocol) const {
     SendProxyDisconnectCallback callback;
     {
         std::scoped_lock lock(m_mutex);

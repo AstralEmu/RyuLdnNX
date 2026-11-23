@@ -42,7 +42,7 @@ PID ?=
 # to pin a digest: ACTIONLINT_IMAGE=rhysd/actionlint@sha256:...
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.7
 
-.PHONY: build test clean dist lint style style-fix shell debug help hooks hooks-check workflow-lint docs
+.PHONY: build test clean dist lint cppcheck style style-fix shell debug help hooks hooks-check workflow-lint docs
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} \
@@ -62,6 +62,9 @@ dist: ## Package SD card layout + release ZIP (runs the dist target in sysmodule
 
 lint: hooks-check ## Run clang-tidy on project sources (docker compose run --rm lint)
 	$(DOCKER_COMPOSE) run --rm lint
+
+cppcheck: hooks-check ## cppcheck gate, any finding fails (docker compose run --rm cppcheck)
+	$(DOCKER_COMPOSE) run --rm cppcheck
 
 style: hooks-check ## Formatting + Doxygen-completeness gate (docker compose run --rm style)
 	$(DOCKER_COMPOSE) run --rm style

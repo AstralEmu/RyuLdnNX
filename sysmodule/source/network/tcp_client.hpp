@@ -489,20 +489,34 @@ private:
     uint8_t m_send_buffer[2048]{};  ///< Buffer for encoding outgoing packets
                                     ///< (zero-initialized, LINT-22)
 
-    // Internal thread-safety: protects m_send_buffer + socket send calls,
-    // and m_recv_buffer + socket recv calls. They are separate so a long
-    // poll() on recv does not block sends — mirrors NetCoreServer's design
-    // (used by Ryujinx) where async send and async receive do not contend
-    // with each other.
-    /// Guards m_send_buffer and socket send calls (non-recursive)
-    mutable ::ams::os::Mutex m_send_mutex{false};
-    /// Guards the receive buffer and socket recv calls (non-recursive)
-    mutable ::ams::os::Mutex m_recv_mutex{false};
+    /**
+     * @brief The per-object locks, which are identity and never move
+     *
+     * A lock protects the state of the object that owns it; it carries no
+     * value of its own, so it is neither copied nor moved. TcpClient's move
+     * assignment leaves the target's locks alone and assigns the rest.
+     */
+    struct Locks {
+        /// Guards m_send_buffer and socket send calls (non-recursive)
+        mutable ::ams::os::Mutex send{false};
+        /// Guards the receive buffer and socket recv calls (non-recursive)
+        mutable ::ams::os::Mutex recv{false};
+        Locks() = default;
+        Locks(const Locks&) = delete;
+        Locks& operator=(const Locks&) = delete;
+        Locks& operator=(Locks&&) = delete;
+    };
+
+    /// Send/receive locks: protect m_send_buffer + socket send calls, and
+    /// m_recv_buffer + socket recv calls. They are separate so a long poll() on
+    /// recv does not block sends — mirrors NetCoreServer's design (used by
+    /// Ryujinx) where async send and async receive do not contend.
+    Locks m_locks;
 
     /**
      * @brief Encode a fixed-size message into the send buffer
      *
-     * The caller holds m_send_mutex. Fitting the buffer is proven at compile
+     * The caller holds m_locks.send. Fitting the buffer is proven at compile
      * time (static_assert), so there is no runtime failure to report.
      *
      * @tparam T Payload struct type

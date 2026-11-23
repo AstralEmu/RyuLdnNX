@@ -90,9 +90,7 @@ void PassphraseEditorGui::update() {
                 char c = passphrase[8 + i];
                 const char* pos = strchr(hex, c);
                 u8 newIndex = pos ? static_cast<u8>(pos - hex) : 0;
-                if (m_charIndices[i] != newIndex) {
-                    m_charIndices[i] = newIndex;
-                }
+                m_charIndices[i] = newIndex;
             }
             RefreshDisplay();
         }

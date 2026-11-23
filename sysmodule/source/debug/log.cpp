@@ -215,12 +215,13 @@ void Logger::init(const config::DebugConfig& config, const char* log_path) {
     // Reset header flag - new session needs new header
     m_header_written = false;
 
-    // Log initialization
+    // Log initialization. The status in the message is literally "enabled":
+    // this line only exists inside the enabled branch above.
     if (m_enabled) {
         log(LogLevel::Info,
             "Logger initialized (level=%u, file=%s)",
             static_cast<uint32_t>(m_level),
-            m_enabled ? "enabled" : "disabled");
+            "enabled");
     }
 }
 

@@ -339,7 +339,7 @@ public:
         uint16_t dest_port,
         ryu_ldn::bsd::ProtocolType protocol,
         const void* data,
-        size_t data_len);
+        size_t data_len) const;
 
     /**
      * @brief Callback type for sending ProxyConnect to the LDN server
@@ -393,7 +393,7 @@ public:
         uint16_t source_port,
         uint32_t dest_ip,
         uint16_t dest_port,
-        ryu_ldn::bsd::ProtocolType protocol);
+        ryu_ldn::bsd::ProtocolType protocol) const;
 
     /**
      * @brief Callback type for sending ProxyConnectReply to the LDN server
@@ -433,7 +433,7 @@ public:
         uint16_t source_port,
         uint32_t dest_ip,
         uint16_t dest_port,
-        ryu_ldn::bsd::ProtocolType protocol);
+        ryu_ldn::bsd::ProtocolType protocol) const;
 
     /**
      * @brief Callback type for sending ProxyDisconnect to the LDN server
@@ -471,7 +471,7 @@ public:
         uint16_t source_port,
         uint32_t dest_ip,
         uint16_t dest_port,
-        ryu_ldn::bsd::ProtocolType protocol);
+        ryu_ldn::bsd::ProtocolType protocol) const;
 
     /**
      * @brief Route incoming ProxyConnectReply to the connecting socket
@@ -718,8 +718,10 @@ private:
 
     // Fixed-size ring buffer — same rationale as ProxySocket's rx ring:
     // no heap allocation per arriving packet.
-    /// Ring storage, guarded by m_mutex
-    PendingPacket m_pending_ring[MaxPendingPackets];
+    /// Ring storage, guarded by m_mutex. A slot is filled before
+    /// m_pending_count counts it, so only the zero state itself needs no
+    /// reader care; the singleton gets it from .bss at no cost.
+    PendingPacket m_pending_ring[MaxPendingPackets] = {};
     /// Index of the oldest pending packet
     size_t m_pending_head = 0;
     /// Index where the next packet is written

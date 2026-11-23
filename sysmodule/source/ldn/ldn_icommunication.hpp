@@ -81,7 +81,7 @@ public:
      * @return Result code
      */
     /// @gdb{tag="LDN:OPS", msg="GetState"}
-    Result GetState(ams::sf::Out<u32> state);
+    Result GetState(ams::sf::Out<u32> state) const;
 
     /**
      * @brief Get current network information
@@ -110,7 +110,7 @@ public:
      * @return Result code
      */
     /// @gdb{tag="LDN:OPS", msg="GetDisconnectReason"}
-    Result GetDisconnectReason(ams::sf::Out<u32> reason);
+    Result GetDisconnectReason(ams::sf::Out<u32> reason) const;
 
     /**
      * @brief Get security parameters

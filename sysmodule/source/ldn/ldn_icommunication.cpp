@@ -755,7 +755,7 @@ Result ICommunicationService::Finalize() {
 // Query Operations
 // ============================================================================
 
-Result ICommunicationService::GetState(ams::sf::Out<u32> state) {
+Result ICommunicationService::GetState(ams::sf::Out<u32> state) const {
     // No update() call needed — the receive thread processes packets
     // asynchronously and updates state via HandleServerPacket + events.
 
@@ -813,8 +813,9 @@ Result ICommunicationService::GetIpv4Address(
     u32 gateway;
     u32 primary_dns;
     u32 secondary_dns;
-    Result rc = nifmGetCurrentIpConfigInfo(
-        &addr, &netmask, &gateway, &primary_dns, &secondary_dns);
+    // Direct-initialised: libnx hands back a raw u32 code.
+    const Result rc{nifmGetCurrentIpConfigInfo(
+        &addr, &netmask, &gateway, &primary_dns, &secondary_dns)};
 
     if (R_SUCCEEDED(rc)) {
         // Convert from network byte order to host byte order
@@ -825,7 +826,8 @@ Result ICommunicationService::GetIpv4Address(
     R_RETURN(rc);
 }
 
-Result ICommunicationService::GetDisconnectReason(ams::sf::Out<u32> reason) {
+Result ICommunicationService::GetDisconnectReason(
+    ams::sf::Out<u32> reason) const {
     reason.SetValue(static_cast<u32>(m_disconnect_reason));
     R_SUCCEED();
 }

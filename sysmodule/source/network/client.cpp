@@ -334,6 +334,7 @@ RyuLdnClient& RyuLdnClient::operator=(RyuLdnClient&& other) noexcept {
         m_ping_timeout_ms = other.m_ping_timeout_ms;
         m_pending_ping_count = other.m_pending_ping_count;
         m_last_rtt_ms = other.m_last_rtt_ms;
+        m_ping_id = other.m_ping_id;
 
         other.m_state_callback = nullptr;
         other.m_packet_callback = nullptr;

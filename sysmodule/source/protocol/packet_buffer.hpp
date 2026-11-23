@@ -321,8 +321,10 @@ public:
     }
 
 private:
-    /// Backing storage for the accumulated bytes
-    uint8_t m_buffer[BufferSize];
+    /// Backing storage for the accumulated bytes. Only [0, m_write_pos) is
+    /// ever read, and every one of those bytes was written first; the zero
+    /// state keeps uninitialized bytes out of the object regardless.
+    uint8_t m_buffer[BufferSize] = {};
     /// Number of valid bytes in m_buffer (next write offset)
     size_t m_write_pos;
 };
