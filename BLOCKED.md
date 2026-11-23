@@ -18,3 +18,8 @@
 - `/usr/include/.../sys/socket.h` + `sys/poll.h` readability-inconsistent-declaration-parameter-name: the "definition seen here" notes all point to tests/socket_tests.cpp:1404,1443,1463,1486,1504,1522 and tests/dns_wrap_tests.cpp:166,192 (forbidden path), none to sysmodule/overlay.
 - `sysmodule/source/bsd/bsd_mitm_service.cpp:749` `sf::CopyHandle&& transfer_memory`: with `std::move` -> hicpp/performance-move-const-arg ("trivially-copyable"); with `std::forward`/`static_cast` -> cppcoreguidelines-rvalue-reference-param-not-moved. Cause: tests/stubs CopyHandle is trivially copyable, the real one is not (move needed on target). The signature is fixed by the IPC macros (ibsd_mitm_service.hpp:66). Left with std::move.
 - `p2p_proxy_client.cpp:620` and `p2p_proxy_server.cpp:2239` clang-analyzer-unix.BlockInCriticalSection: notes show "Entering critical section here" at tests/stubs/stratosphere.hpp:143 (stub Mutex::lock) and no exit after the scoped_lock/unique_lock destructor (stub unlock() re-branches on m_recursive after the g_host_before_plain_lock(this) callback). Stub is in tests/ (forbidden); lock_guard/unique_lock variants tried, same result.
+
+## clang-tidy: bugprone-suspicious-include (2026-11-23)
+
+- `tests/main_tests.cpp:21` (`#include "main.cpp"`) and `tests/bsd_mitm_service_tests.cpp:21` (`#include "bsd/bsd_mitm_service.cpp"`) are deliberate unity builds (see the comments above `$(TARGET_MAIN)` and `$(TARGET_BSD_MITM_SERVICE)` in tests/Makefile) that reach file-local state (`g_socket_info`, `g_mitm_pid_count`, server managers, heap).
+- Real fix: an internal test-seam header exposing that state from the sources, which changes Switch-side translation units; not done without a behaviour-preserving proof. Owner decision needed.

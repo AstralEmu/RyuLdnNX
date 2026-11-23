@@ -154,6 +154,15 @@ extern "C" int setsockopt(
     return 0;
 }
 
+/// Declaration binding the interposer below to the libc symbol `sendto`.
+extern "C" ssize_t interposed_sendto(
+    int fd,
+    const void* buf,
+    size_t len,
+    int flags,
+    const struct sockaddr* to,
+    socklen_t tolen) __asm__("sendto");
+
 /**
  * @brief Fake sendto(): records the query and its target in g_net, or fails
  *        when g_net.sendto_fails
@@ -163,7 +172,7 @@ extern "C" int setsockopt(
  * @param to destination, a sockaddr_in
  * @return len, or -1 with errno ENETUNREACH
  */
-extern "C" ssize_t sendto(
+extern "C" ssize_t interposed_sendto(
     int /*unused*/,
     const void* buf,
     size_t len,
@@ -181,6 +190,15 @@ extern "C" ssize_t sendto(
     return static_cast<ssize_t>(len);
 }
 
+/// Declaration binding the interposer below to the libc symbol `recvfrom`.
+extern "C" ssize_t interposed_recvfrom(
+    int fd,
+    void* buf,
+    size_t len,
+    int flags,
+    struct sockaddr* from,
+    socklen_t* fromlen) __asm__("recvfrom");
+
 /**
  * @brief Fake recvfrom(): returns g_net.recv_result unless it is -2, in which
  *        case it copies the scripted response
@@ -189,7 +207,7 @@ extern "C" ssize_t sendto(
  * @param len capacity of buf
  * @return bytes copied, or the scripted value
  */
-extern "C" ssize_t recvfrom(
+extern "C" ssize_t interposed_recvfrom(
     int /*unused*/,
     void* buf,
     size_t len,

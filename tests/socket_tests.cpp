@@ -1217,6 +1217,7 @@ TEST(send_recv_connected) {
         &client_len);
 
     if (cr == SocketResult::Success) {
+        ASSERT_TRUE(accepted >= 0);
         uint8_t data[] = {0x01, 0x02, 0x03};
         size_t sent = 0;
         SocketResult sr = sock.send(data, sizeof(data), sent);
@@ -1403,6 +1404,9 @@ F real(const char* name) {
 
 extern "C" {
 
+/// Declaration binding the interposer below to the libc symbol `socket`.
+int interposed_socket(int d, int t, int p) noexcept __asm__("socket");
+
 /**
  * @brief Interposed socket(): fails when Fn::Socket is armed, otherwise
  * forwards to libc
@@ -1412,7 +1416,7 @@ extern "C" {
  * @param p protocol
  * @return the descriptor, or the injected value
  */
-int socket(int d, int t, int p) noexcept {
+int interposed_socket(int d, int t, int p) noexcept {
     if (take(Fn::Socket)) {
         return static_cast<int>(g_fault[fn_index(Fn::Socket)].ret);
     }
@@ -1440,6 +1444,11 @@ int fcntl(int fd, int cmd, ...) {
     return fn(fd, cmd, arg);
 }
 
+/// Declaration binding the interposer below to the libc symbol `setsockopt`.
+int interposed_setsockopt(
+    int fd, int l, int n, const void* v, socklen_t len) noexcept
+    __asm__("setsockopt");
+
 /**
  * @brief Interposed setsockopt(): fails when Fn::Setsockopt is armed, otherwise
  *        forwards to libc
@@ -1451,7 +1460,8 @@ int fcntl(int fd, int cmd, ...) {
  * @param len size of v
  * @return 0 or -1, or the injected value
  */
-int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
+int interposed_setsockopt(
+    int fd, int l, int n, const void* v, socklen_t len) noexcept {
     if (take(Fn::Setsockopt)) {
         return static_cast<int>(g_fault[fn_index(Fn::Setsockopt)].ret);
     }
@@ -1459,6 +1469,11 @@ int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
         real<int (*)(int, int, int, const void*, socklen_t)>("setsockopt");
     return fn(fd, l, n, v, len);
 }
+
+/// Declaration binding the interposer below to the libc symbol `getsockopt`.
+int interposed_getsockopt(
+    int fd, int l, int n, void* v, socklen_t* len) noexcept
+    __asm__("getsockopt");
 
 /**
  * @brief Interposed getsockopt(): fails when Fn::Getsockopt is armed, or
@@ -1471,7 +1486,8 @@ int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
  * @param len size of v
  * @return 0 or -1, or the injected value
  */
-int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
+int interposed_getsockopt(
+    int fd, int l, int n, void* v, socklen_t* len) noexcept {
     bool inject = take(Fn::Getsockopt);
     if (inject && !g_fault[fn_index(Fn::Getsockopt)].set_out) {
         return static_cast<int>(g_fault[fn_index(Fn::Getsockopt)].ret);
@@ -1485,6 +1501,9 @@ int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
     return r;
 }
 
+/// Declaration binding the interposer below to the libc symbol `poll`.
+int interposed_poll(struct pollfd* fds, nfds_t n, int t) __asm__("poll");
+
 /**
  * @brief Interposed poll(): fails when Fn::Poll is armed, otherwise forwards to
  *        libc
@@ -1494,13 +1513,16 @@ int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
  * @param t timeout in ms
  * @return the libc result, or the injected value
  */
-int poll(struct pollfd* fds, nfds_t n, int t) {
+int interposed_poll(struct pollfd* fds, nfds_t n, int t) {
     if (take(Fn::Poll)) {
         return static_cast<int>(g_fault[fn_index(Fn::Poll)].ret);
     }
     static auto fn = real<int (*)(struct pollfd*, nfds_t, int)>("poll");
     return fn(fds, n, t);
 }
+
+/// Declaration binding the interposer below to the libc symbol `send`.
+ssize_t interposed_send(int fd, const void* b, size_t n, int f) __asm__("send");
 
 /**
  * @brief Interposed send(): fails when Fn::Send is armed, otherwise forwards to
@@ -1512,13 +1534,16 @@ int poll(struct pollfd* fds, nfds_t n, int t) {
  * @param f flags
  * @return bytes sent, or the injected value
  */
-ssize_t send(int fd, const void* b, size_t n, int f) {
+ssize_t interposed_send(int fd, const void* b, size_t n, int f) {
     if (take(Fn::Send)) {
         return g_fault[fn_index(Fn::Send)].ret;
     }
     static auto fn = real<ssize_t (*)(int, const void*, size_t, int)>("send");
     return fn(fd, b, n, f);
 }
+
+/// Declaration binding the interposer below to the libc symbol `recv`.
+ssize_t interposed_recv(int fd, void* b, size_t n, int f) __asm__("recv");
 
 /**
  * @brief Interposed recv(): fails when Fn::Recv is armed, otherwise forwards to
@@ -1530,7 +1555,7 @@ ssize_t send(int fd, const void* b, size_t n, int f) {
  * @param f flags
  * @return bytes received, or the injected value
  */
-ssize_t recv(int fd, void* b, size_t n, int f) {
+ssize_t interposed_recv(int fd, void* b, size_t n, int f) {
     if (take(Fn::Recv)) {
         return g_fault[fn_index(Fn::Recv)].ret;
     }
