@@ -28,3 +28,28 @@
 
 - Measured: `grep -rEc "GUARDED_BY|REQUIRES\(|ACQUIRE\(|lockable|capability\(" sysmodule/source tests/stubs` returns no file with a match, while 22 files under sysmodule/source use a mutex. clang 21 is in the lint image, but without capability annotations `-Wthread-safety` has nothing to check, so a green run would prove nothing.
 - Real fix: annotate the stub `Mutex` (tests/stubs/stratosphere.hpp, protected path) as a capability and every guarded member through macros that expand to nothing under devkitA64 GCC. Touches the Switch-side headers and the stub; needs the owner's decision and a behaviour-preserving proof.
+
+## -fanalyzer (GCC) not a gate (2026-11-23)
+
+- `g++ -std=c++20 -DTEST_BUILD -fanalyzer -c` over every `sysmodule/source/*.cpp` (build-logs/fanalyzer-all.log): 3 warnings. `config.hpp:332` `-Wanalyzer-malloc-leak` x2 (open_stream(), whose result is owned by a `std::unique_ptr<FILE>` in config.cpp:636/723/765) and `ldn_icommunication.cpp:3201` `-Wanalyzer-null-argument` (`this` of a captureless lambda's `_FUN` stub).
+- Tried: replacing the `&std::fclose` deleter with a named functor calling `std::fclose` directly; the leak warnings stayed identical, change reverted. GCC documents C++ support of `-fanalyzer` as limited; no source-level fix without suppressing, which is forbidden. Owner decision: keep it out of the gates (clang-analyzer runs via clang-tidy).
+
+## zizmor: 5 findings left in .github/workflows (2026-11-23)
+
+Measured with `docker compose run -T --rm --entrypoint zizmor lint .github/workflows` (build-logs/zizmor.log): 52 findings at the start, 5 after fixing 13 `artipacked` (persist-credentials: false) and `excessive-permissions` (game-hub-manager.yml, permissions moved to the 5 jobs). Left:
+- `artipacked` x3 (issue-automation.yml create-branch job, submodule-updater.yml, tag-release.yml): these jobs `git push` with the checkout credentials. Fix = pass the token to the push step explicitly; not testable locally, a mistake breaks release tagging. Owner decision.
+- `unpinned-images` codeql.yml:23 `container: ghcr.io/ethiquema/ryu_ldn_nx:latest`: pinning by digest freezes a CI-built image that changes on every build; needs a versioned tag scheme in build-container.yml. Owner decision.
+- `dangerous-triggers` issue-automation.yml:6 `issue_comment`: the job at :581 reacts to comments; needs a review of what it does with the comment text. Owner decision.
+
+## Weak PRNG for generated passphrases (2026-11-23)
+
+flawfinder (level >= 3, build-logs/flawfinder.log): `srand(time)` + `rand()` generate the `Ryujinx-xxxxxxxx` passphrase in sysmodule/source/config/config_manager.cpp:67-78, overlay/source/utils/formatters.hpp:131-137 and overlay/source/views/connection/main_dashboard_gui.cpp:30,373: predictable output. Real fix: `randomGet` (libnx, already used at sysmodule/source/network/client.cpp:1192) on Switch and `getrandom` on the host build, behind a test seam. It changes Switch-side code and needs a behaviour proof; not done unattended. The two format hits (config.cpp:380, log.cpp:110) are false positives (constant format strings).
+
+## semgrep not measured (2026-11-23)
+
+`docker compose run -T --rm --entrypoint semgrep lint --config p/cpp --metrics=off --quiet sysmodule/source overlay/source` exits rc=7 with no finding printed (registry rules need network from the container; build-logs/semgrep.log). Needs vendored rules or network access; not wired.
+
+## Wiki and repo records blocked by regress-guard on the owner's pre-commit hook edit (2026-11-23)
+
+- Two identical refusals when recording the -fanalyzer measurement in the wiki: `BLOCKED by regress-guard: error swallowed by added line` (the `style_staged=` assignment), in the owner's uncommitted edit of the pre-commit hook (visible in the working-tree diff of that file), not in my change; an earlier record with the same edit passed.
+- Staged and ready: wiki (5 pages, -fanalyzer measurement) and repo (this file). Unblock: the owner records the hook edit, or records these two with the trailer `Regress-Accept: <hook path>:style_staged`.
