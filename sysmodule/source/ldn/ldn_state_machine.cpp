@@ -11,10 +11,7 @@
 namespace ams::mitm::ldn {
 
 LdnStateMachine::LdnStateMachine()
-    : m_state(CommState::None),
-      m_state_event(os::EventClearMode_AutoClear, true),
-      m_callback(nullptr),
-      m_callback_user_data(nullptr) {}
+    : m_state_event(os::EventClearMode_AutoClear, true) {}
 
 LdnStateMachine::~LdnStateMachine() = default;
 

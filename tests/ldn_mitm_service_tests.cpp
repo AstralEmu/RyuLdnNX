@@ -19,7 +19,6 @@
 using ams::mitm::ldn::IClientProcessMonitor;
 using ams::mitm::ldn::IClientProcessMonitorInterface;
 using ams::mitm::ldn::ICommunicationInterface;
-using ams::mitm::ldn::ICommunicationService;
 using ams::mitm::ldn::LdnMitMService;
 using ams::mitm::ldn::SharedState;
 
@@ -125,7 +124,7 @@ TEST(the_first_application_id_is_judged_by_the_whitelist) {
 TEST(creating_the_service_registers_the_client_pid_for_the_bsd_mitm) {
     SharedState::GetInstance().SetLdnPid(0);
     auto service = make_service(77, WHITELISTED_GAME);
-    ASSERT_EQ(SharedState::GetInstance().GetLdnPid(), 77u);
+    ASSERT_EQ(SharedState::GetInstance().GetLdnPid(), 77U);
 }
 
 /**
@@ -138,7 +137,7 @@ TEST(destroying_the_service_keeps_the_pid_for_the_communication_service) {
     {
         auto service = make_service(78, WHITELISTED_GAME);
     }
-    ASSERT_EQ(SharedState::GetInstance().GetLdnPid(), 78u);
+    ASSERT_EQ(SharedState::GetInstance().GetLdnPid(), 78U);
 }
 
 /**
@@ -196,7 +195,7 @@ TEST(the_network_config_is_extracted_from_the_network_info) {
     info.ldn.nodeCountMax = 8;
     info.ldn.nodes[0].localCommunicationVersion = 3;
 
-    ams::mitm::ldn::NetworkConfig config;
+    ams::mitm::ldn::NetworkConfig config{};
     std::memset(&config, 0xAA, sizeof(config));
     ams::mitm::ldn::NetworkInfo2NetworkConfig(&info, &config);
 
@@ -210,8 +209,8 @@ TEST(the_network_config_is_extracted_from_the_network_info) {
     ASSERT_EQ(config.nodeCountMax, 8);
     ASSERT_EQ(config._unk1, 0);
     ASSERT_EQ(config.localCommunicationVersion, 3);
-    for (std::size_t i = 0; i < sizeof(config._unk2); ++i) {
-        ASSERT_EQ(config._unk2[i], 0);
+    for (const auto byte : config._unk2) {
+        ASSERT_EQ(byte, 0);
     }
 }
 
@@ -227,7 +226,7 @@ TEST(the_security_parameter_is_extracted_from_the_network_info) {
         info.networkId.sessionId.raw[i] = static_cast<std::uint8_t>(0x80 + i);
     }
 
-    ams::mitm::ldn::SecurityParameter param;
+    ams::mitm::ldn::SecurityParameter param{};
     std::memset(&param, 0, sizeof(param));
     ams::mitm::ldn::NetworkInfo2SecurityParameter(&info, &param);
 

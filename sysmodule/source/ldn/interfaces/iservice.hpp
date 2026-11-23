@@ -9,7 +9,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_INTERFACES_ISERVICE_HPP_
+#define SYSMODULE_SOURCE_LDN_INTERFACES_ISERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "icommunication.hpp"
@@ -46,3 +47,4 @@
 
 AMS_SF_DEFINE_MITM_INTERFACE(
     ams::mitm::ldn, ILdnMitMService, AMS_RYU_LDN_MITM_SERVICE, 0x7A5E89C2)
+#endif  // SYSMODULE_SOURCE_LDN_INTERFACES_ISERVICE_HPP_

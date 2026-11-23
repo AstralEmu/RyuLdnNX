@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SYSMODULE_SOURCE_UTIL_MEMORY_CONFIG_HPP_
+#define SYSMODULE_SOURCE_UTIL_MEMORY_CONFIG_HPP_
 
 // TODO(MEDIUM): migrate callers (main.cpp, ldn_icommunication.cpp, p2p_*.cpp,
 // tcp_client.cpp, etc.)
@@ -190,3 +191,4 @@ inline constexpr size_t MAX_PACKET_SIZE =
     131072;  ///< 128 KB max protocol packet
 
 }  // namespace ryu_ldn::memory
+#endif  // SYSMODULE_SOURCE_UTIL_MEMORY_CONFIG_HPP_

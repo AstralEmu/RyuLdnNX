@@ -71,7 +71,7 @@ UpnpPortMapper& UpnpPortMapper::GetInstance() {
 // =============================================================================
 
 UpnpPortMapper::UpnpPortMapper() noexcept
-    : m_urls(new (std::nothrow) UPNPUrls()), m_lan_addr{}, m_available(false) {
+    : m_urls(new (std::nothrow) UPNPUrls()) {
     // Allocate UPnP structures on the heap
     // These are C structs from miniupnpc, we manage their lifetime
     //

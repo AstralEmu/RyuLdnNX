@@ -9,7 +9,8 @@
  * with any Result, read the buffers the MITM passed) and inspect what the
  * MITM forwarded.
  */
-#pragma once
+#ifndef TESTS_STUBS_STRATOSPHERE_SF_SF_MITM_DISPATCH_H_
+#define TESTS_STUBS_STRATOSPHERE_SF_SF_MITM_DISPATCH_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -105,7 +106,14 @@ inline ams::Result Dispatch(
     std::size_t out_size,
     const Options& options) {
     ++g_dispatch_count;
-    const Call call{service, command, in, in_size, out, out_size, &options};
+    const Call call{
+        .service = service,
+        .command = command,
+        .in = in,
+        .in_size = in_size,
+        .out = out,
+        .out_size = out_size,
+        .options = &options};
     return ams::Result(g_dispatch_hook(call));
 }
 
@@ -175,3 +183,5 @@ inline ams::Result Dispatch(
         nullptr,                             \
         0,                                   \
         ::host_mitm::Options{__VA_ARGS__})
+
+#endif  // TESTS_STUBS_STRATOSPHERE_SF_SF_MITM_DISPATCH_H_

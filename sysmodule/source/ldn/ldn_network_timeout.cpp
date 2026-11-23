@@ -15,8 +15,7 @@ NetworkTimeout::NetworkTimeout(
     uint64_t idle_timeout_ms, TimeoutCallback callback)
     : m_idle_timeout_ms(idle_timeout_ms),
       m_callback(callback),
-      m_timeout_start_ms(0),
-      m_active(false),
+
       m_mutex(false)  // Non-recursive mutex
 {
     LOG_VERBOSE("NetworkTimeout created with %lu ms timeout", idle_timeout_ms);

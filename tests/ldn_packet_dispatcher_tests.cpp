@@ -84,51 +84,51 @@ using namespace ryu_ldn::protocol;
 /// Records which dispatcher callbacks ran and the last arguments they got.
 static struct CallbackState {
     /// Callback state: initialize called.
-    bool initialize_called;
+    bool initialize_called{false};
     /// Callback state: connected called.
-    bool connected_called;
+    bool connected_called{false};
     /// Callback state: sync network called.
-    bool sync_network_called;
+    bool sync_network_called{false};
     /// Callback state: scan reply called.
-    bool scan_reply_called;
+    bool scan_reply_called{false};
     /// Callback state: scan reply end called.
-    bool scan_reply_end_called;
+    bool scan_reply_end_called{false};
     /// Callback state: disconnect called.
-    bool disconnect_called;
+    bool disconnect_called{false};
     /// Callback state: ping called.
-    bool ping_called;
+    bool ping_called{false};
     /// Callback state: network error called.
-    bool network_error_called;
+    bool network_error_called{false};
     /// Callback state: proxy config called.
-    bool proxy_config_called;
+    bool proxy_config_called{false};
     /// Callback state: proxy connect called.
-    bool proxy_connect_called;
+    bool proxy_connect_called{false};
     /// Callback state: proxy connect reply called.
-    bool proxy_connect_reply_called;
+    bool proxy_connect_reply_called{false};
     /// Callback state: proxy data called.
-    bool proxy_data_called;
+    bool proxy_data_called{false};
     /// Callback state: proxy disconnect called.
-    bool proxy_disconnect_called;
+    bool proxy_disconnect_called{false};
     /// Callback state: reject called.
-    bool reject_called;
+    bool reject_called{false};
     /// Callback state: reject reply called.
-    bool reject_reply_called;
+    bool reject_reply_called{false};
     /// Callback state: set accept policy called.
-    bool set_accept_policy_called;
+    bool set_accept_policy_called{false};
 
     // Store received data for verification
     /// Callback state: last initialize.
-    InitializeMessage last_initialize;
+    InitializeMessage last_initialize{};
     /// Callback state: last network info.
-    NetworkInfo last_network_info;
+    NetworkInfo last_network_info{};
     /// Callback state: last ping.
-    PingMessage last_ping;
+    PingMessage last_ping{};
     /// Callback state: last error.
-    NetworkErrorMessage last_error;
+    NetworkErrorMessage last_error{};
     /// Callback state: last proxy config.
-    ProxyConfig last_proxy_config;
+    ProxyConfig last_proxy_config{};
     /// Callback state: last proxy header.
-    ProxyDataHeader last_proxy_header;
+    ProxyDataHeader last_proxy_header{};
     /// Callback state: last proxy data.
     std::vector<uint8_t> last_proxy_data;
 
@@ -533,9 +533,9 @@ TEST(dispatcher_dispatch_proxy_config) {
         header, reinterpret_cast<const uint8_t*>(&cfg), sizeof(cfg));
 
     ASSERT_TRUE(g_callback_state.proxy_config_called);
-    ASSERT_EQ(g_callback_state.last_proxy_config.proxy_ip, 0x0A720001u);
+    ASSERT_EQ(g_callback_state.last_proxy_config.proxy_ip, 0x0A720001U);
     ASSERT_EQ(
-        g_callback_state.last_proxy_config.proxy_subnet_mask, 0xFFFF0000u);
+        g_callback_state.last_proxy_config.proxy_subnet_mask, 0xFFFF0000U);
 }
 
 /** @brief Test case: dispatcher dispatch proxy connect. */
@@ -616,7 +616,7 @@ TEST(dispatcher_dispatch_proxy_data) {
     dispatcher.dispatch(header, packet.data(), packet.size());
 
     ASSERT_TRUE(g_callback_state.proxy_data_called);
-    ASSERT_EQ(g_callback_state.last_proxy_header.info.source_ipv4, 0xC0A80101u);
+    ASSERT_EQ(g_callback_state.last_proxy_header.info.source_ipv4, 0xC0A80101U);
     ASSERT_EQ(g_callback_state.last_proxy_header.info.dest_port, 54321);
     ASSERT_EQ(
         g_callback_state.last_proxy_header.data_length, sizeof(game_data));
@@ -879,7 +879,7 @@ int g_typed_hits = 0;
 
 template <typename T>
 /// Test helper: count typed.
-void count_typed(const LdnHeader&, const T&) {
+void count_typed(const LdnHeader& /*unused*/, const T& /*unused*/) {
     ++g_typed_hits;
 }
 
@@ -919,8 +919,9 @@ bool check_typed_guards(
     g_typed_hits = 0;
     dispatcher.dispatch(
         make_header(id, payload.size()), payload.data(), payload.size());
-    if (g_typed_hits != 0)
+    if (g_typed_hits != 0) {
         return false;
+    }
 
     (dispatcher.*setter)(&count_typed<T>);
 
@@ -928,12 +929,14 @@ bool check_typed_guards(
         make_header(id, payload.size() - 1),
         payload.data(),
         payload.size() - 1);
-    if (g_typed_hits != 0)
+    if (g_typed_hits != 0) {
         return false;
+    }
 
     dispatcher.dispatch(make_header(id, 0), payload.data(), 0);
-    if (g_typed_hits != 0)
+    if (g_typed_hits != 0) {
         return false;
+    }
 
     dispatcher.dispatch(
         make_header(id, payload.size()), payload.data(), payload.size());
@@ -1063,7 +1066,7 @@ TEST(proxy_data_rejects_truncated_header_and_overlong_declared_length) {
         packet.data(),
         packet.size());
     ASSERT_TRUE(g_callback_state.proxy_data_called);
-    ASSERT_EQ(g_callback_state.last_proxy_data.size(), 4u);
+    ASSERT_EQ(g_callback_state.last_proxy_data.size(), 4U);
 }
 
 // ============================================================================

@@ -33,7 +33,8 @@
  * @see RyuLdnProtocol.cs for reference implementation
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_PACKET_DISPATCHER_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_PACKET_DISPATCHER_HPP_
 
 #include <cstdint>
 #include <cstddef>
@@ -220,37 +221,42 @@ public:
 private:
     // Handler pointers (nullptr = not registered)
     /// Initialize packet handler (unset = ignored)
-    PacketHandler<protocol::InitializeMessage> m_initialize_handler;
+    PacketHandler<protocol::InitializeMessage> m_initialize_handler{nullptr};
     /// Connected packet handler (NetworkInfo) (unset = ignored)
-    PacketHandler<protocol::NetworkInfo> m_connected_handler;
+    PacketHandler<protocol::NetworkInfo> m_connected_handler{nullptr};
     /// SyncNetwork packet handler (NetworkInfo) (unset = ignored)
-    PacketHandler<protocol::NetworkInfo> m_sync_network_handler;
+    PacketHandler<protocol::NetworkInfo> m_sync_network_handler{nullptr};
     /// ScanReply packet handler (one NetworkInfo per hit) (unset = ignored)
-    PacketHandler<protocol::NetworkInfo> m_scan_reply_handler;
+    PacketHandler<protocol::NetworkInfo> m_scan_reply_handler{nullptr};
     /// ScanReplyEnd handler (empty payload) (unset = ignored)
-    EmptyPacketHandler m_scan_reply_end_handler;
+    EmptyPacketHandler m_scan_reply_end_handler{nullptr};
     /// Disconnect packet handler (unset = ignored)
-    PacketHandler<protocol::DisconnectMessage> m_disconnect_handler;
+    PacketHandler<protocol::DisconnectMessage> m_disconnect_handler{nullptr};
     /// Ping packet handler (unset = ignored)
-    PacketHandler<protocol::PingMessage> m_ping_handler;
+    PacketHandler<protocol::PingMessage> m_ping_handler{nullptr};
     /// NetworkError packet handler (unset = ignored)
-    PacketHandler<protocol::NetworkErrorMessage> m_network_error_handler;
+    PacketHandler<protocol::NetworkErrorMessage> m_network_error_handler{
+        nullptr};
     /// ProxyConfig packet handler (virtual IP and mask) (unset = ignored)
-    PacketHandler<protocol::ProxyConfig> m_proxy_config_handler;
+    PacketHandler<protocol::ProxyConfig> m_proxy_config_handler{nullptr};
     /// ProxyConnect request handler (unset = ignored)
-    PacketHandler<protocol::ProxyConnectRequest> m_proxy_connect_handler;
+    PacketHandler<protocol::ProxyConnectRequest> m_proxy_connect_handler{
+        nullptr};
     /// ProxyConnectReply response handler (unset = ignored)
-    PacketHandler<protocol::ProxyConnectResponse> m_proxy_connect_reply_handler;
+    PacketHandler<protocol::ProxyConnectResponse> m_proxy_connect_reply_handler{
+        nullptr};
     /// ProxyData handler (header plus raw payload) (unset = ignored)
-    ProxyDataHandler m_proxy_data_handler;
+    ProxyDataHandler m_proxy_data_handler{nullptr};
     /// ProxyDisconnect packet handler (unset = ignored)
-    PacketHandler<protocol::ProxyDisconnectMessage> m_proxy_disconnect_handler;
+    PacketHandler<protocol::ProxyDisconnectMessage> m_proxy_disconnect_handler{
+        nullptr};
     /// Reject request handler (unset = ignored)
-    PacketHandler<protocol::RejectRequest> m_reject_handler;
+    PacketHandler<protocol::RejectRequest> m_reject_handler{nullptr};
     /// RejectReply handler (empty payload) (unset = ignored)
-    EmptyPacketHandler m_reject_reply_handler;
+    EmptyPacketHandler m_reject_reply_handler{nullptr};
     /// SetAcceptPolicy request handler (unset = ignored)
-    PacketHandler<protocol::SetAcceptPolicyRequest> m_accept_policy_handler;
+    PacketHandler<protocol::SetAcceptPolicyRequest> m_accept_policy_handler{
+        nullptr};
 
     /**
      * @brief Helper to safely parse and dispatch typed packets
@@ -264,3 +270,4 @@ private:
 };
 
 }  // namespace ryu_ldn::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_PACKET_DISPATCHER_HPP_

@@ -6,7 +6,8 @@
  * only prints the totals and returns non-zero when an assertion failed.
  */
 
-#pragma once
+#ifndef TESTS_TEST_HARNESS_HPP_
+#define TESTS_TEST_HARNESS_HPP_
 
 #include <cstdio>
 
@@ -101,3 +102,4 @@ inline int test_report(const char* suite) {
     printf("========================================\n\n");
     return g_tests_failed > 0 ? 1 : 0;
 }
+#endif  // TESTS_TEST_HARNESS_HPP_

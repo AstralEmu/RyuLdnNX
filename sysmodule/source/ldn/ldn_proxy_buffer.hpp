@@ -32,7 +32,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_PROXY_BUFFER_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_PROXY_BUFFER_HPP_
 
 #include <stratosphere.hpp>
 #include "../protocol/types.hpp"
@@ -63,7 +64,7 @@ public:
 
     /// Total buffer size (fits ~4 max-size packets)
     static constexpr size_t BufferSize =
-        MaxPacketDataSize * 4 + 256;  // ~8.5KB (reduced from 16.5KB)
+        (MaxPacketDataSize * 4) + 256;  // ~8.5KB (reduced from 16.5KB)
 
     /// Maximum number of packets that can be queued
     static constexpr size_t MaxQueuedPackets = 16;  // Reduced from 32
@@ -155,14 +156,15 @@ private:
 
     mutable os::SdkMutex m_mutex;  ///< Thread safety
 
-    PacketEntry m_packets[MaxQueuedPackets];  ///< Packet metadata queue
-    size_t m_packet_read_idx;                 ///< Read position
-    size_t m_packet_write_idx;                ///< Write position
-    size_t m_packet_count;                    ///< Number of packets
+    PacketEntry m_packets[MaxQueuedPackets]{};  ///< Packet metadata queue
+    size_t m_packet_read_idx{0};                ///< Read position
+    size_t m_packet_write_idx{0};               ///< Write position
+    size_t m_packet_count{0};                   ///< Number of packets
 
-    u8 m_data_buffer[BufferSize];  ///< Payload data storage
-    size_t m_data_read_pos;        ///< Data read position
-    size_t m_data_write_pos;       ///< Data write position
+    u8 m_data_buffer[BufferSize]{};  ///< Payload data storage
+    size_t m_data_read_pos{0};       ///< Data read position
+    size_t m_data_write_pos{0};      ///< Data write position
 };
 
 }  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_PROXY_BUFFER_HPP_

@@ -66,7 +66,9 @@ TEST(deactivating_the_game_resets_the_runtime_state_but_not_the_ldn_pid) {
     s.SetLastRtt(42);
     s.SetGameActive(false, 0);
 
-    u8 n = 1, m = 1, l = 1;
+    u8 n = 1;
+    u8 m = 1;
+    u8 l = 1;
     bool h = true;
     s.GetSessionInfo(n, m, l, h);
     ASSERT_TRUE(s.GetLdnState() == CommState::None);
@@ -145,7 +147,9 @@ TEST(ldn_state_is_stored_as_given) {
 TEST(session_info_round_trips_through_both_accessors) {
     SharedState& s = fresh();
     s.SetSessionInfo(5, 8, 3, true);
-    u8 n = 0, m = 0, l = 0;
+    u8 n = 0;
+    u8 m = 0;
+    u8 l = 0;
     bool h = false;
     s.GetSessionInfo(n, m, l, h);
     ASSERT_EQ(n, 5);

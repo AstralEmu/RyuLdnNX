@@ -13,7 +13,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_INTERFACES_ICOMMUNICATION_HPP_
+#define SYSMODULE_SOURCE_LDN_INTERFACES_ICOMMUNICATION_HPP_
 
 #include <stratosphere.hpp>
 #include "../ldn_types.hpp"
@@ -190,3 +191,4 @@ AMS_SF_DEFINE_INTERFACE(
     ICommunicationInterface,
     AMS_RYU_LDN_ICOMMUNICATION,
     0x85280DC3)
+#endif  // SYSMODULE_SOURCE_LDN_INTERFACES_ICOMMUNICATION_HPP_

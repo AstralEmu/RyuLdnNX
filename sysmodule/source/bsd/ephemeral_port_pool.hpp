@@ -38,7 +38,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_EPHEMERAL_PORT_POOL_HPP_
+#define SYSMODULE_SOURCE_BSD_EPHEMERAL_PORT_POOL_HPP_
 
 #include <stratosphere.hpp>
 #include <array>
@@ -252,14 +253,14 @@ private:
      *
      * Bit is set (1) if port is allocated, clear (0) if available.
      */
-    std::bitset<EPHEMERAL_PORT_COUNT> m_udp_ports{};
+    std::bitset<EPHEMERAL_PORT_COUNT> m_udp_ports;
 
     /**
      * @brief Port allocation bitset for TCP
      *
      * Bit is set (1) if port is allocated, clear (0) if available.
      */
-    std::bitset<EPHEMERAL_PORT_COUNT> m_tcp_ports{};
+    std::bitset<EPHEMERAL_PORT_COUNT> m_tcp_ports;
 
     /**
      * @brief Next allocation hint for UDP (round-robin)
@@ -273,3 +274,4 @@ private:
 };
 
 }  // namespace ams::mitm::bsd
+#endif  // SYSMODULE_SOURCE_BSD_EPHEMERAL_PORT_POOL_HPP_

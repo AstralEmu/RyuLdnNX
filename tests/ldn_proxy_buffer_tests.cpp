@@ -26,7 +26,7 @@ using ryu_ldn::protocol::ProxyDataHeader;
  * @return zeroed header carrying tag and length
  */
 static ProxyDataHeader header_with_tag(uint32_t tag, uint32_t length) {
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     std::memset(&h, 0, sizeof(h));
     h.info.source_ipv4 = tag;
     h.data_length = length;
@@ -66,7 +66,7 @@ TEST(a_new_buffer_is_empty) {
     ASSERT_TRUE(b.IsEmpty());
     ASSERT_EQ(b.GetPendingCount(), static_cast<size_t>(0));
     ASSERT_EQ(b.GetUsedBytes(), static_cast<size_t>(0));
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     size_t size = 0;
     u8 out[8];
     ASSERT_FALSE(b.Peek(h, size));
@@ -80,16 +80,16 @@ TEST(a_packet_is_read_back_with_its_header_and_payload) {
     ASSERT_EQ(b.GetPendingCount(), static_cast<size_t>(1));
     ASSERT_EQ(b.GetUsedBytes(), static_cast<size_t>(5));
 
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     size_t size = 0;
     ASSERT_TRUE(b.Peek(h, size));
-    ASSERT_EQ(h.info.source_ipv4, 7u);
+    ASSERT_EQ(h.info.source_ipv4, 7U);
     ASSERT_EQ(size, static_cast<size_t>(5));
     ASSERT_EQ(b.GetPendingCount(), static_cast<size_t>(1));
 
     u8 out[16] = {};
     ASSERT_TRUE(b.Read(h, out, size, sizeof(out)));
-    ASSERT_EQ(h.data_length, 5u);
+    ASSERT_EQ(h.data_length, 5U);
     ASSERT_EQ(size, static_cast<size_t>(5));
     ASSERT_EQ(out[0], static_cast<u8>(0xAB));
     ASSERT_EQ(out[4], static_cast<u8>(0xAB));
@@ -103,7 +103,7 @@ TEST(packets_come_out_in_arrival_order) {
     ASSERT_TRUE(write_packet(b, 1, 10, 0x11));
     ASSERT_TRUE(write_packet(b, 2, 20, 0x22));
     ASSERT_TRUE(write_packet(b, 3, 30, 0x33));
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     size_t size = 0;
     u8 out[64];
     for (uint32_t tag = 1; tag <= 3; ++tag) {
@@ -121,12 +121,12 @@ TEST(packets_come_out_in_arrival_order) {
 TEST(read_truncates_to_the_caller_buffer_and_still_consumes_the_packet) {
     LdnProxyBuffer b;
     ASSERT_TRUE(write_packet(b, 1, 100, 0x5A));
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     size_t size = 0;
     u8 out[10];
     ASSERT_TRUE(b.Read(h, out, size, sizeof(out)));
     ASSERT_EQ(size, static_cast<size_t>(10));
-    ASSERT_EQ(h.data_length, 100u);
+    ASSERT_EQ(h.data_length, 100U);
     ASSERT_TRUE(b.IsEmpty());
 }
 
@@ -134,18 +134,18 @@ TEST(read_truncates_to_the_caller_buffer_and_still_consumes_the_packet) {
 TEST(a_zero_length_packet_and_a_null_payload_are_accepted) {
     LdnProxyBuffer b;
     ASSERT_TRUE(b.Write(header_with_tag(9, 0), nullptr, 0));
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     size_t size = 99;
     ASSERT_TRUE(b.Read(h, nullptr, size, 0));
     ASSERT_EQ(size, static_cast<size_t>(0));
-    ASSERT_EQ(h.info.source_ipv4, 9u);
+    ASSERT_EQ(h.info.source_ipv4, 9U);
 }
 
 /** @brief Test case: a null output buffer still consumes the packet. */
 TEST(a_null_output_buffer_still_consumes_the_packet) {
     LdnProxyBuffer b;
     ASSERT_TRUE(write_packet(b, 1, 8, 0x01));
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     size_t size = 0;
     ASSERT_TRUE(b.Read(h, nullptr, size, 8));
     ASSERT_EQ(size, static_cast<size_t>(8));
@@ -206,7 +206,7 @@ TEST(used_bytes_follow_the_unread_data_when_the_writer_has_wrapped) {
     for (int i = 0; i < 4; ++i) {
         ASSERT_TRUE(write_packet(b, static_cast<uint32_t>(i), big, 0x01));
     }
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     size_t size = 0;
     u8 out[LdnProxyBuffer::MaxPacketDataSize];
     ASSERT_TRUE(b.Read(h, out, size, sizeof(out)));
@@ -214,7 +214,9 @@ TEST(used_bytes_follow_the_unread_data_when_the_writer_has_wrapped) {
     // Wrap: only 256 bytes remain at the end, so the writer restarts at
     // offset 0 while the oldest unread data starts at 2 * big.
     ASSERT_TRUE(write_packet(b, 10, big, 0x0A));
-    ASSERT_EQ(b.GetUsedBytes(), LdnProxyBuffer::BufferSize - 2 * big + big);
+    // Two segments: what is left at the end of the buffer, then the packet
+    // the writer just stored at offset 0.
+    ASSERT_EQ(b.GetUsedBytes(), (LdnProxyBuffer::BufferSize - 2 * big) + big);
 }
 
 /**
@@ -224,7 +226,7 @@ TEST(used_bytes_follow_the_unread_data_when_the_writer_has_wrapped) {
 TEST(unread_packets_are_never_overwritten_after_the_writer_wraps) {
     LdnProxyBuffer b;
     const size_t big = LdnProxyBuffer::MaxPacketDataSize;
-    ProxyDataHeader h;
+    ProxyDataHeader h{};
     size_t size = 0;
     u8 out[LdnProxyBuffer::MaxPacketDataSize];
 

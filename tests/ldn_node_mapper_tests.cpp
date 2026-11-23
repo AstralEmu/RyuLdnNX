@@ -22,7 +22,7 @@ using ams::mitm::ldn::NetworkInfo;
  * @return The initialized NetworkInfo.
  */
 static NetworkInfo make_info(u8 count) {
-    NetworkInfo info;
+    NetworkInfo info{};
     std::memset(&info, 0, sizeof(info));
     info.ldn.nodeCount = count;
     return info;
@@ -38,7 +38,7 @@ TEST(a_new_mapper_is_empty_and_has_no_local_node) {
     ASSERT_EQ(m.GetLocalNodeId(), static_cast<u8>(0xFF));
     for (u32 i = 0; i < LdnNodeMapper::MaxNodes; ++i) {
         ASSERT_FALSE(m.IsNodeConnected(i));
-        ASSERT_EQ(m.GetNodeIp(i), 0u);
+        ASSERT_EQ(m.GetNodeIp(i), 0U);
     }
 }
 
@@ -47,7 +47,7 @@ TEST(add_node_connects_it_and_stores_the_address) {
     LdnNodeMapper m;
     m.AddNode(3, 0x0A720004);
     ASSERT_TRUE(m.IsNodeConnected(3));
-    ASSERT_EQ(m.GetNodeIp(3), 0x0A720004u);
+    ASSERT_EQ(m.GetNodeIp(3), 0x0A720004U);
     ASSERT_EQ(m.GetConnectedCount(), static_cast<size_t>(1));
 }
 
@@ -59,7 +59,7 @@ TEST(add_node_updates_an_existing_entry) {
     LdnNodeMapper m;
     m.AddNode(1, 1);
     m.AddNode(1, 2);
-    ASSERT_EQ(m.GetNodeIp(1), 2u);
+    ASSERT_EQ(m.GetNodeIp(1), 2U);
     ASSERT_EQ(m.GetConnectedCount(), static_cast<size_t>(1));
 }
 
@@ -73,7 +73,7 @@ TEST(out_of_range_node_ids_are_ignored_everywhere) {
     m.RemoveNode(LdnNodeMapper::MaxNodes);
     ASSERT_EQ(m.GetConnectedCount(), static_cast<size_t>(0));
     ASSERT_FALSE(m.IsNodeConnected(LdnNodeMapper::MaxNodes));
-    ASSERT_EQ(m.GetNodeIp(LdnNodeMapper::MaxNodes), 0u);
+    ASSERT_EQ(m.GetNodeIp(LdnNodeMapper::MaxNodes), 0U);
     ASSERT_FALSE(m.ShouldRouteToNode(
         LdnNodeMapper::BroadcastNodeId, 0, LdnNodeMapper::MaxNodes));
 }
@@ -87,7 +87,7 @@ TEST(remove_node_disconnects_but_keeps_the_address) {
     m.AddNode(2, 0x42);
     m.RemoveNode(2);
     ASSERT_FALSE(m.IsNodeConnected(2));
-    ASSERT_EQ(m.GetNodeIp(2), 0x42u);
+    ASSERT_EQ(m.GetNodeIp(2), 0x42U);
     ASSERT_EQ(m.GetConnectedCount(), static_cast<size_t>(0));
 }
 
@@ -100,7 +100,7 @@ TEST(clear_resets_nodes_and_the_local_node_id) {
     ASSERT_EQ(m.GetLocalNodeId(), static_cast<u8>(4));
     m.Clear();
     ASSERT_EQ(m.GetConnectedCount(), static_cast<size_t>(0));
-    ASSERT_EQ(m.GetNodeIp(7), 0u);
+    ASSERT_EQ(m.GetNodeIp(7), 0U);
     ASSERT_EQ(m.GetLocalNodeId(), static_cast<u8>(0xFF));
 }
 
@@ -122,10 +122,10 @@ TEST(update_from_network_info_replaces_the_previous_content) {
     m.UpdateFromNetworkInfo(info);
 
     ASSERT_EQ(m.GetConnectedCount(), static_cast<size_t>(2));
-    ASSERT_EQ(m.GetNodeIp(0), 0x0A720001u);
-    ASSERT_EQ(m.GetNodeIp(1), 0x0A720002u);
+    ASSERT_EQ(m.GetNodeIp(0), 0x0A720001U);
+    ASSERT_EQ(m.GetNodeIp(1), 0x0A720002U);
     ASSERT_FALSE(m.IsNodeConnected(5));
-    ASSERT_EQ(m.GetNodeIp(5), 0u);
+    ASSERT_EQ(m.GetNodeIp(5), 0U);
 }
 
 /**
@@ -143,7 +143,7 @@ TEST(update_from_network_info_skips_disconnected_and_indexes_by_node_id) {
     info.ldn.nodes[1].ipv4Address = 0x22;
     m.UpdateFromNetworkInfo(info);
     ASSERT_TRUE(m.IsNodeConnected(6));
-    ASSERT_EQ(m.GetNodeIp(6), 0x66u);
+    ASSERT_EQ(m.GetNodeIp(6), 0x66U);
     ASSERT_FALSE(m.IsNodeConnected(2));
 }
 

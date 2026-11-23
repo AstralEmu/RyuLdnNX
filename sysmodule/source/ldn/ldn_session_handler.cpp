@@ -49,23 +49,7 @@ namespace ryu_ldn::ldn {
  * - No node ID assigned
  * - No callbacks registered
  */
-LdnSessionHandler::LdnSessionHandler()
-    : m_state(LdnSessionState::None),
-      m_is_host(false),
-      m_local_node_id(-1),
-      m_last_ping_id(0),
-      m_session_id{},
-      m_mac_address{},
-      m_network_info{},
-      m_accept_policy(protocol::AcceptPolicy::AcceptAll),
-      m_state_callback(nullptr),
-      m_network_updated_callback(nullptr),
-      m_scan_result_callback(nullptr),
-      m_scan_completed_callback(nullptr),
-      m_disconnected_callback(nullptr),
-      m_error_callback(nullptr),
-      m_rejected_callback(nullptr),
-      m_accept_policy_changed_callback(nullptr) {}
+LdnSessionHandler::LdnSessionHandler() : m_network_info{} {}
 
 // ============================================================================
 // Callback Registration

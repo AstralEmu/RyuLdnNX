@@ -178,15 +178,7 @@ public:
     /** Callback fired on every state change made through SetState(). */
     using StateCallback = std::function<void(CommState)>;
 
-    TestErrorHandler()
-        : m_current_state(CommState::None),
-          m_disconnect_reason(DisconnectReason::None),
-          m_last_error(LdnErrorCode::Success),
-          m_retry_count(0),
-          m_max_retries(3),
-          m_connection_lost(false),
-          m_error_callback(nullptr),
-          m_state_callback(nullptr) {}
+    TestErrorHandler() : m_error_callback(nullptr), m_state_callback(nullptr) {}
 
     // ========================================================================
     // Configuration
@@ -222,23 +214,23 @@ public:
     // ========================================================================
 
     /** @return Current communication state. */
-    CommState GetState() const {
+    [[nodiscard]] CommState GetState() const {
         return m_current_state;
     }
     /** @return Reason recorded by the last error, None when clean. */
-    DisconnectReason GetDisconnectReason() const {
+    [[nodiscard]] DisconnectReason GetDisconnectReason() const {
         return m_disconnect_reason;
     }
     /** @return Last error code recorded, Success when clean. */
-    LdnErrorCode GetLastError() const {
+    [[nodiscard]] LdnErrorCode GetLastError() const {
         return m_last_error;
     }
     /** @return Number of retries consumed since the last ResetError(). */
-    uint32_t GetRetryCount() const {
+    [[nodiscard]] uint32_t GetRetryCount() const {
         return m_retry_count;
     }
     /** @return true once HandleConnectionLoss() has been called. */
-    bool IsConnectionLost() const {
+    [[nodiscard]] bool IsConnectionLost() const {
         return m_connection_lost;
     }
 
@@ -378,7 +370,7 @@ public:
      *
      * @return true if recovery is possible
      */
-    bool CanRecover() const {
+    [[nodiscard]] bool CanRecover() const {
         // Can only recover from certain disconnect reasons
         return m_current_state == CommState::Error &&
                (m_disconnect_reason == DisconnectReason::ConnectionFailed ||
@@ -399,17 +391,17 @@ private:
     }
 
     /** Current communication state. */
-    CommState m_current_state;
+    CommState m_current_state{CommState::None};
     /** Reason of the last disconnect. */
-    DisconnectReason m_disconnect_reason;
+    DisconnectReason m_disconnect_reason{DisconnectReason::None};
     /** Last error code recorded. */
-    LdnErrorCode m_last_error;
+    LdnErrorCode m_last_error{LdnErrorCode::Success};
     /** Retries consumed so far. */
-    uint32_t m_retry_count;
+    uint32_t m_retry_count{0};
     /** Maximum retries allowed in setup states. */
-    uint32_t m_max_retries;
+    uint32_t m_max_retries{3};
     /** Set by HandleConnectionLoss(), cleared by ResetError(). */
-    bool m_connection_lost;
+    bool m_connection_lost{false};
     /** Observer notified on errors, may be empty. */
     ErrorCallback m_error_callback;
     /** Observer notified on state changes, may be empty. */
@@ -427,7 +419,7 @@ TEST(error_handler_initial_state) {
     ASSERT_EQ(handler.GetState(), CommState::None);
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::None);
     ASSERT_EQ(handler.GetLastError(), LdnErrorCode::Success);
-    ASSERT_EQ(handler.GetRetryCount(), 0u);
+    ASSERT_EQ(handler.GetRetryCount(), 0U);
     ASSERT_FALSE(handler.IsConnectionLost());
 }
 
@@ -469,7 +461,7 @@ TEST(connection_loss_from_access_point_retry) {
     // First loss: should retry
     bool should_retry = handler.HandleConnectionLoss();
     ASSERT_TRUE(should_retry);
-    ASSERT_EQ(handler.GetRetryCount(), 1u);
+    ASSERT_EQ(handler.GetRetryCount(), 1U);
     ASSERT_EQ(handler.GetState(), CommState::AccessPoint);  // State unchanged
 }
 
@@ -641,7 +633,7 @@ TEST(reset_error_clears_state) {
 
     ASSERT_EQ(handler.GetLastError(), LdnErrorCode::Success);
     ASSERT_EQ(handler.GetDisconnectReason(), DisconnectReason::None);
-    ASSERT_EQ(handler.GetRetryCount(), 0u);
+    ASSERT_EQ(handler.GetRetryCount(), 0U);
     ASSERT_FALSE(handler.IsConnectionLost());
 }
 
@@ -722,7 +714,7 @@ TEST(multiple_connection_losses_accumulate_retries) {
         handler.HandleConnectionLoss();
     }
 
-    ASSERT_EQ(handler.GetRetryCount(), 3u);
+    ASSERT_EQ(handler.GetRetryCount(), 3U);
     ASSERT_EQ(handler.GetState(), CommState::Station);  // Still trying
 }
 
@@ -761,14 +753,14 @@ TEST(null_callbacks_safe) {
  * values. */
 TEST(disconnect_reason_values) {
     // Verify enum values match Nintendo's LDN protocol
-    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::None), 0u);
-    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::User), 1u);
-    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::SystemRequest), 2u);
-    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::DestroyedByUser), 3u);
-    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::DestroyedBySystem), 4u);
-    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::Rejected), 5u);
-    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::ConnectionFailed), 6u);
-    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::SignalLost), 7u);
+    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::None), 0U);
+    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::User), 1U);
+    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::SystemRequest), 2U);
+    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::DestroyedByUser), 3U);
+    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::DestroyedBySystem), 4U);
+    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::Rejected), 5U);
+    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::ConnectionFailed), 6U);
+    ASSERT_EQ(static_cast<uint32_t>(DisconnectReason::SignalLost), 7U);
 }
 
 // ============================================================================

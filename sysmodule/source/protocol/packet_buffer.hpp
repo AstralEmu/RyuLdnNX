@@ -12,7 +12,8 @@
  * @license MIT
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_PROTOCOL_PACKET_BUFFER_HPP_
+#define SYSMODULE_SOURCE_PROTOCOL_PACKET_BUFFER_HPP_
 
 #include "types.hpp"
 #include "ryu_protocol.hpp"
@@ -66,10 +67,7 @@ public:
      * MAX_PACKET_SIZE to handle maximum-sized packets. Smaller buffers can be
      * used for testing or when only small packets are expected.
      */
-    PacketBuffer() : m_write_pos(0) {
-        // Production code should use large enough buffers
-        // static_assert removed to allow testing with smaller buffers
-    }
+    PacketBuffer() = default;
 
     /**
      * @brief Reset buffer to empty state
@@ -82,7 +80,7 @@ public:
      * @brief Get current data size in buffer
      * @return Number of bytes in buffer
      */
-    size_t size() const {
+    [[nodiscard]] size_t size() const {
         return m_write_pos;
     }
 
@@ -90,7 +88,7 @@ public:
      * @brief Check if buffer is empty
      * @return true if no data in buffer
      */
-    bool empty() const {
+    [[nodiscard]] bool empty() const {
         return m_write_pos == 0;
     }
 
@@ -98,7 +96,7 @@ public:
      * @brief Get available space in buffer
      * @return Number of bytes that can be appended
      */
-    size_t available() const {
+    [[nodiscard]] size_t available() const {
         return BufferSize - m_write_pos;
     }
 
@@ -106,7 +104,7 @@ public:
      * @brief Get pointer to raw buffer data
      * @return Pointer to buffer start
      */
-    const uint8_t* data() const {
+    [[nodiscard]] const uint8_t* data() const {
         return m_buffer;
     }
 
@@ -135,7 +133,7 @@ public:
      * @brief Check if buffer contains a complete packet
      * @return true if at least one complete packet is available
      */
-    bool has_complete_packet() const {
+    [[nodiscard]] bool has_complete_packet() const {
         if (m_write_pos < sizeof(LdnHeader)) {
             return false;
         }
@@ -193,12 +191,12 @@ public:
      * @brief Get packet type of next packet (if available)
      * @return PacketId of next packet, or Initialize (0) if no packet
      */
-    PacketId peek_packet_type() const {
+    [[nodiscard]] PacketId peek_packet_type() const {
         if (m_write_pos < sizeof(LdnHeader)) {
             return PacketId::Initialize;
         }
 
-        LdnHeader header;
+        LdnHeader header{};
         DecodeResult result = decode_header(m_buffer, m_write_pos, header);
         if (result != DecodeResult::Success) {
             return PacketId::Initialize;
@@ -271,7 +269,7 @@ public:
         size_t discarded = 0;
 
         while (m_write_pos >= sizeof(LdnHeader)) {
-            LdnHeader header;
+            LdnHeader header{};
             DecodeResult result = decode_header(m_buffer, m_write_pos, header);
 
             if (result == DecodeResult::Success ||
@@ -326,7 +324,7 @@ private:
     /// state keeps uninitialized bytes out of the object regardless.
     uint8_t m_buffer[BufferSize] = {};
     /// Number of valid bytes in m_buffer (next write offset)
-    size_t m_write_pos;
+    size_t m_write_pos{0};
 };
 
 /**
@@ -353,3 +351,4 @@ inline const char* buffer_result_to_string(BufferResult result) {
 }
 
 }  // namespace ryu_ldn::protocol
+#endif  // SYSMODULE_SOURCE_PROTOCOL_PACKET_BUFFER_HPP_

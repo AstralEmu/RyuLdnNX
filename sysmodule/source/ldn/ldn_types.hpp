@@ -12,9 +12,12 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_TYPES_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_TYPES_HPP_
 
 #include <stratosphere.hpp>
+
+#include <algorithm>
 
 namespace ams::mitm::ldn {
 
@@ -76,16 +79,14 @@ enum class NodeStateChange : u8 {
  *
  * Flags to control what networks are returned by Scan().
  */
-enum ScanFilterFlag : u32 {
-    ScanFilterFlag_LocalCommunicationId = 1 << 0,
-    ScanFilterFlag_SessionId = 1 << 1,
-    ScanFilterFlag_NetworkType = 1 << 2,
-    ScanFilterFlag_Ssid = 1 << 4,
-    ScanFilterFlag_SceneId = 1 << 5,
-    ScanFilterFlag_IntentId =
-        ScanFilterFlag_LocalCommunicationId | ScanFilterFlag_SceneId,
-    ScanFilterFlag_NetworkId =
-        ScanFilterFlag_IntentId | ScanFilterFlag_SessionId
+enum class ScanFilterFlag : u32 {
+    LocalCommunicationId = 1 << 0,
+    SessionId = 1 << 1,
+    NetworkType = 1 << 2,
+    Ssid = 1 << 4,
+    SceneId = 1 << 5,
+    IntentId = LocalCommunicationId | SceneId,
+    NetworkId = IntentId | SessionId
 };
 
 /**
@@ -132,8 +133,9 @@ struct Ssid {
     /// @param b SSID to compare with.
     /// @return True when lengths match and the first length bytes are equal.
     bool operator==(const Ssid& b) const {
-        if (length != b.length)
+        if (length != b.length) {
             return false;
+        }
         return std::memcmp(raw, b.raw, length) == 0;
     }
 
@@ -142,8 +144,7 @@ struct Ssid {
     /// @return This object.
     Ssid& operator=(const char* s) {
         size_t len = std::strlen(s);
-        if (len > SsidLengthMax)
-            len = SsidLengthMax;
+        len = std::min(len, SsidLengthMax);
         length = static_cast<u8>(len);
         std::memcpy(raw, s, len);
         raw[len] = '\0';
@@ -464,7 +465,7 @@ static_assert(sizeof(ConnectPrivateData) == 192);
  * 0x2A, Reserved (16 bytes) at 0x4C and Flag (u32) at 0x5C.
  */
 struct __attribute__((packed)) ScanFilter {
-    NetworkId networkId;  ///< Network id to match (ScanFilterFlag_NetworkId).
+    NetworkId networkId;  ///< Network id to match (ScanFilterFlag::NetworkId).
     u32 networkType;      ///< Network type to match.
     MacAddress bssid;     ///< BSSID to match.
     Ssid ssid;            ///< SSID to match.
@@ -534,3 +535,4 @@ inline const char* CommStateToString(CommState state) {
 }
 
 }  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_TYPES_HPP_

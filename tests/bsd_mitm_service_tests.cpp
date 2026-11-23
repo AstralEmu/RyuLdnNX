@@ -138,12 +138,12 @@ Sent g_sent;
  * @return Always true.
  */
 bool record_send(
-    std::uint32_t,
-    std::uint16_t,
+    std::uint32_t /*unused*/,
+    std::uint16_t /*unused*/,
     std::uint32_t dest_ip,
     std::uint16_t dest_port,
-    bsdt::ProtocolType,
-    const void*,
+    bsdt::ProtocolType /*unused*/,
+    const void* /*unused*/,
     std::size_t len) {
     g_sent.count++;
     g_sent.dest_ip = dest_ip;
@@ -224,8 +224,7 @@ bsdt::SockAddrIn ldn_addr(std::uint32_t host_ip, std::uint16_t port) {
  * @return The buffer.
  */
 ams::sf::InBuffer in_of(const bsdt::SockAddrIn& a) {
-    return ams::sf::InBuffer(
-        reinterpret_cast<const std::uint8_t*>(&a), sizeof(a));
+    return {reinterpret_cast<const std::uint8_t*>(&a), sizeof(a)};
 }
 
 /**
@@ -244,7 +243,12 @@ void track(
     bool is_proxy = false,
     bool broadcast = false) {
     auto* entry = sut::FindOrCreateSocketInfoEntry(fd);
-    entry->info = sut::SocketInfo{type, proto, is_proxy, broadcast, 0};
+    entry->info = sut::SocketInfo{
+        .type = type,
+        .protocol = proto,
+        .is_proxy = is_proxy,
+        .broadcast = broadcast,
+        .session_id = 0};
 }
 
 /**
@@ -371,10 +375,10 @@ TEST(a_game_outside_the_whitelist_is_not_intercepted_and_not_counted) {
 TEST(the_first_session_of_a_pid_is_skipped_and_the_following_ones_intercepted) {
     reset();
     ASSERT_FALSE(sut::BsdMitmService::ShouldMitm(client(PID, GAME)));
-    ASSERT_EQ(sut::FindMitmPidEntry(PID)->count, 1u);
+    ASSERT_EQ(sut::FindMitmPidEntry(PID)->count, 1U);
     ASSERT_TRUE(sut::BsdMitmService::ShouldMitm(client(PID, GAME)));
     ASSERT_TRUE(sut::BsdMitmService::ShouldMitm(client(PID, GAME)));
-    ASSERT_EQ(sut::FindMitmPidEntry(PID)->count, 3u);
+    ASSERT_EQ(sut::FindMitmPidEntry(PID)->count, 3U);
 }
 
 /**
@@ -424,7 +428,7 @@ TEST(a_session_without_a_forward_service_constructs_and_tears_down) {
     for (const auto& slot : sut::g_abandoned_forward_services) {
         abandoned += slot.valid ? 1 : 0;
     }
-    ASSERT_EQ(abandoned, 0u);
+    ASSERT_EQ(abandoned, 0U);
 }
 
 /**
@@ -443,7 +447,7 @@ TEST(a_session_that_never_registered_parks_its_forward_service) {
     for (const auto& slot : sut::g_abandoned_forward_services) {
         abandoned += slot.valid ? 1 : 0;
     }
-    ASSERT_EQ(abandoned, 1u);
+    ASSERT_EQ(abandoned, 1U);
 }
 
 /**
@@ -470,7 +474,7 @@ TEST(a_registered_session_releases_its_forward_service_normally) {
     for (const auto& slot : sut::g_abandoned_forward_services) {
         abandoned += slot.valid ? 1 : 0;
     }
-    ASSERT_EQ(abandoned, 0u);
+    ASSERT_EQ(abandoned, 0U);
 }
 
 /**
@@ -513,7 +517,7 @@ TEST(a_session_that_is_not_the_last_of_its_pid_keeps_the_abandoned_services) {
         auto svc = make();
     }
     ASSERT_FALSE(parked.expired());
-    ASSERT_EQ(sut::FindMitmPidEntry(PID)->count, 1u);
+    ASSERT_EQ(sut::FindMitmPidEntry(PID)->count, 1U);
 }
 
 /**
@@ -576,7 +580,7 @@ TEST(the_teardown_frees_a_full_abandoned_table_to_park_its_own_service) {
     for (const auto& slot : sut::g_abandoned_forward_services) {
         abandoned += slot.valid ? 1 : 0;
     }
-    ASSERT_EQ(abandoned, 1u);
+    ASSERT_EQ(abandoned, 1U);
 }
 
 namespace {
@@ -621,7 +625,7 @@ TEST(a_table_refilled_during_cleanup_leaves_service_to_base_destructor) {
         sut::BsdMitmService svc(std::move(service), client(PID, GAME));
     }
     ams::os::g_host_before_plain_lock = nullptr;
-    ASSERT_EQ(g_abandoned_locks, 3u);
+    ASSERT_EQ(g_abandoned_locks, 3U);
     ASSERT_TRUE(own.expired());
     unsigned abandoned = 0;
     for (const auto& slot : sut::g_abandoned_forward_services) {
@@ -642,13 +646,15 @@ TEST(the_teardown_forgets_the_sockets_of_its_session_and_closes_their_proxies) {
     {
         auto svc = make();
         auto other = make(PID + 1);
-        reply_with(Pair{0, fd_proxy});
-        std::int32_t e = 0, fd = 0;
-        ams::sf::Out<std::int32_t> oe(e), ofd(fd);
+        reply_with(Pair{.a = 0, .b = fd_proxy});
+        std::int32_t e = 0;
+        std::int32_t fd = 0;
+        ams::sf::Out<std::int32_t> oe(e);
+        ams::sf::Out<std::int32_t> ofd(fd);
         svc->Socket(oe, ofd, 2, 2, 0);
-        reply_with(Pair{0, fd_plain});
+        reply_with(Pair{.a = 0, .b = fd_plain});
         svc->Socket(oe, ofd, 2, 2, 0);
-        reply_with(Pair{0, fd_other});
+        reply_with(Pair{.a = 0, .b = fd_other});
         other->Socket(oe, ofd, 2, 2, 0);
         ASSERT_EQ(bind_ldn(*svc, fd_proxy, 5000), 0);
         ASSERT_TRUE(proxy_of(fd_proxy) != nullptr);
@@ -687,16 +693,16 @@ TEST(register_client_forwards_the_config_the_handle_and_the_client_pid) {
     const auto rc =
         svc->RegisterClient(out, cfg, cp, 0x4000, ams::sf::CopyHandle(9, true));
     ASSERT_TRUE(rc.IsSuccess());
-    ASSERT_EQ(g_seen.command, 0u);
+    ASSERT_EQ(g_seen.command, 0U);
     ASSERT_TRUE(g_seen.options.in_send_pid);
-    ASSERT_EQ(g_seen.options.in_num_handles, 1u);
-    ASSERT_EQ(g_seen.options.in_handles[0], 9u);
+    ASSERT_EQ(g_seen.options.in_num_handles, 1U);
+    ASSERT_EQ(g_seen.options.in_handles[0], 9U);
     ASSERT_EQ(g_seen.options.override_pid, PID);
-    ASSERT_EQ(out_result, 0xABCDu);
+    ASSERT_EQ(out_result, 0xABCDU);
     std::uint64_t tmem_size = 0;
     std::memcpy(
         &tmem_size, g_seen.in.data() + sizeof(bsdt::LibraryConfigData) + 8, 8);
-    ASSERT_EQ(tmem_size, 0x4000u);
+    ASSERT_EQ(tmem_size, 0x4000U);
 }
 
 /**
@@ -714,7 +720,7 @@ TEST(register_client_invalid_handle_is_forwarded_and_failure_not_registered) {
     g_rc = 0x1234;
     const auto rc = svc->RegisterClient(
         out, cfg, cp, 0x4000, ams::sf::CopyHandle(INVALID_HANDLE, false));
-    ASSERT_EQ(rc.GetValue(), 0x1234u);
+    ASSERT_EQ(rc.GetValue(), 0x1234U);
     ASSERT_EQ(g_seen.options.in_handles[0], INVALID_HANDLE);
 }
 
@@ -732,13 +738,13 @@ TEST(register_client_shared_forwards_the_pid_and_marks_session_registered) {
     bsdt::LibraryConfigData cfg{};
     reply_with(std::uint64_t{55});
     ASSERT_TRUE(svc->RegisterClientShared(out, cfg, cp, 0x2000).IsSuccess());
-    ASSERT_EQ(g_seen.command, 33u);
+    ASSERT_EQ(g_seen.command, 33U);
     ASSERT_TRUE(g_seen.options.in_send_pid);
     ASSERT_EQ(g_seen.options.override_pid, PID);
-    ASSERT_EQ(out_result, 55u);
+    ASSERT_EQ(out_result, 55U);
     g_rc = 5;
     auto other = make(PID + 1);
-    ASSERT_EQ(other->RegisterClientShared(out, cfg, cp, 0x2000).GetValue(), 5u);
+    ASSERT_EQ(other->RegisterClientShared(out, cfg, cp, 0x2000).GetValue(), 5U);
 }
 
 /**
@@ -751,10 +757,10 @@ TEST(start_monitoring_forwards_the_pid_and_returns_the_errno) {
     ams::sf::Out<std::int32_t> oe(e);
     reply_with(std::int32_t{3});
     ASSERT_TRUE(svc->StartMonitoring(oe, 0x77).IsSuccess());
-    ASSERT_EQ(g_seen.command, 1u);
+    ASSERT_EQ(g_seen.command, 1U);
     std::uint64_t pid = 0;
     std::memcpy(&pid, g_seen.in.data(), 8);
-    ASSERT_EQ(pid, 0x77u);
+    ASSERT_EQ(pid, 0x77U);
     ASSERT_EQ(e, 3);
 }
 
@@ -765,26 +771,28 @@ TEST(start_monitoring_forwards_the_pid_and_returns_the_errno) {
 TEST(socket_tracks_a_new_tcp_or_udp_socket_with_the_protocol_the_type_implies) {
     reset();
     auto svc = make();
-    std::int32_t e = -1, fd = -1;
-    ams::sf::Out<std::int32_t> oe(e), ofd(fd);
-    reply_with(Pair{0, 20});
+    std::int32_t e = -1;
+    std::int32_t fd = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> ofd(fd);
+    reply_with(Pair{.a = 0, .b = 20});
     ASSERT_TRUE(svc->Socket(oe, ofd, 2, 1, 0).IsSuccess());
-    ASSERT_EQ(g_seen.command, 2u);
+    ASSERT_EQ(g_seen.command, 2U);
     ASSERT_EQ(fd, 20);
     ASSERT_TRUE(
         sut::FindSocketInfoEntry(20)->info.type == bsdt::SocketType::Stream);
     ASSERT_TRUE(
         sut::FindSocketInfoEntry(20)->info.protocol == bsdt::ProtocolType::Tcp);
-    reply_with(Pair{0, 21});
+    reply_with(Pair{.a = 0, .b = 21});
     svc->Socket(oe, ofd, 2, 2, 0);
     ASSERT_TRUE(
         sut::FindSocketInfoEntry(21)->info.protocol == bsdt::ProtocolType::Udp);
-    reply_with(Pair{0, 22});
+    reply_with(Pair{.a = 0, .b = 22});
     svc->Socket(oe, ofd, 2, 3, 0);
     ASSERT_TRUE(
         sut::FindSocketInfoEntry(22)->info.protocol ==
         bsdt::ProtocolType::Unspecified);
-    reply_with(Pair{0, 23});
+    reply_with(Pair{.a = 0, .b = 23});
     svc->Socket(oe, ofd, 2, 2, 17);
     ASSERT_TRUE(
         sut::FindSocketInfoEntry(23)->info.protocol == bsdt::ProtocolType::Udp);
@@ -797,14 +805,16 @@ TEST(socket_tracks_a_new_tcp_or_udp_socket_with_the_protocol_the_type_implies) {
 TEST(socket_does_not_track_a_failed_creation) {
     reset();
     auto svc = make();
-    std::int32_t e = -1, fd = -1;
-    ams::sf::Out<std::int32_t> oe(e), ofd(fd);
-    reply_with(Pair{97, -1});
+    std::int32_t e = -1;
+    std::int32_t fd = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> ofd(fd);
+    reply_with(Pair{.a = 97, .b = -1});
     svc->Socket(oe, ofd, 2, 2, 0);
     ASSERT_EQ(e, 97);
-    reply_with(Pair{0, 30});
+    reply_with(Pair{.a = 0, .b = 30});
     g_rc = 9;
-    ASSERT_EQ(svc->Socket(oe, ofd, 2, 2, 0).GetValue(), 9u);
+    ASSERT_EQ(svc->Socket(oe, ofd, 2, 2, 0).GetValue(), 9U);
     ASSERT_TRUE(sut::FindSocketInfoEntry(30) == nullptr);
 }
 
@@ -817,9 +827,11 @@ TEST(socket_with_a_full_tracking_table_still_returns_the_socket) {
     for (std::size_t i = 0; i < sut::MAX_SOCKET_INFO; i++) {
         track_udp(static_cast<std::int32_t>(i));
     }
-    std::int32_t e = -1, fd = -1;
-    ams::sf::Out<std::int32_t> oe(e), ofd(fd);
-    reply_with(Pair{0, 500});
+    std::int32_t e = -1;
+    std::int32_t fd = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> ofd(fd);
+    reply_with(Pair{.a = 0, .b = 500});
     ASSERT_TRUE(svc->Socket(oe, ofd, 2, 2, 0).IsSuccess());
     ASSERT_EQ(fd, 500);
     ASSERT_TRUE(sut::FindSocketInfoEntry(500) == nullptr);
@@ -831,25 +843,27 @@ TEST(socket_with_a_full_tracking_table_still_returns_the_socket) {
 TEST(socket_exempt_tracks_like_socket_and_forwards_command_3) {
     reset();
     auto svc = make();
-    std::int32_t e = -1, fd = -1;
-    ams::sf::Out<std::int32_t> oe(e), ofd(fd);
-    reply_with(Pair{0, 40});
+    std::int32_t e = -1;
+    std::int32_t fd = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> ofd(fd);
+    reply_with(Pair{.a = 0, .b = 40});
     ASSERT_TRUE(svc->SocketExempt(oe, ofd, 2, 1, 0).IsSuccess());
-    ASSERT_EQ(g_seen.command, 3u);
+    ASSERT_EQ(g_seen.command, 3U);
     ASSERT_TRUE(
         sut::FindSocketInfoEntry(40)->info.protocol == bsdt::ProtocolType::Tcp);
-    reply_with(Pair{0, 41});
+    reply_with(Pair{.a = 0, .b = 41});
     svc->SocketExempt(oe, ofd, 2, 2, 0);
     ASSERT_TRUE(
         sut::FindSocketInfoEntry(41)->info.protocol == bsdt::ProtocolType::Udp);
-    reply_with(Pair{0, 42});
+    reply_with(Pair{.a = 0, .b = 42});
     svc->SocketExempt(oe, ofd, 2, 2, 6);
     ASSERT_TRUE(
         sut::FindSocketInfoEntry(42)->info.protocol == bsdt::ProtocolType::Tcp);
-    reply_with(Pair{5, -1});
+    reply_with(Pair{.a = 5, .b = -1});
     svc->SocketExempt(oe, ofd, 2, 2, 0);
     ASSERT_EQ(e, 5);
-    ASSERT_EQ(forwarded(), 4u);
+    ASSERT_EQ(forwarded(), 4U);
 }
 
 /**
@@ -862,9 +876,11 @@ TEST(socket_exempt_with_a_full_tracking_table_still_returns_the_socket) {
     for (std::size_t i = 0; i < sut::MAX_SOCKET_INFO; i++) {
         track_udp(static_cast<std::int32_t>(i));
     }
-    std::int32_t e = -1, fd = -1;
-    ams::sf::Out<std::int32_t> oe(e), ofd(fd);
-    reply_with(Pair{0, 500});
+    std::int32_t e = -1;
+    std::int32_t fd = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> ofd(fd);
+    reply_with(Pair{.a = 0, .b = 500});
     ASSERT_TRUE(svc->SocketExempt(oe, ofd, 2, 2, 0).IsSuccess());
     ASSERT_EQ(fd, 500);
     ASSERT_TRUE(sut::FindSocketInfoEntry(500) == nullptr);
@@ -876,13 +892,15 @@ TEST(socket_exempt_with_a_full_tracking_table_still_returns_the_socket) {
 TEST(open_forwards_the_path_buffer_and_returns_the_fd) {
     reset();
     auto svc = make();
-    std::int32_t e = -1, fd = -1;
-    ams::sf::Out<std::int32_t> oe(e), ofd(fd);
+    std::int32_t e = -1;
+    std::int32_t fd = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> ofd(fd);
     const std::uint8_t path[] = "/dev/bpf";
-    reply_with(Pair{0, 9});
+    reply_with(Pair{.a = 0, .b = 9});
     ASSERT_TRUE(
         svc->Open(oe, ofd, ams::sf::InBuffer(path, sizeof(path))).IsSuccess());
-    ASSERT_EQ(g_seen.command, 4u);
+    ASSERT_EQ(g_seen.command, 4U);
     ASSERT_TRUE(g_seen.options.buffers[0].ptr == path);
     ASSERT_EQ(g_seen.options.buffers[0].size, sizeof(path));
     ASSERT_EQ(fd, 9);
@@ -900,13 +918,13 @@ TEST(close_forgets_the_socket_and_closes_its_proxy) {
     ams::sf::Out<std::int32_t> oe(e);
     reply_with(std::int32_t{0});
     ASSERT_TRUE(svc->Close(oe, 50).IsSuccess());
-    ASSERT_EQ(g_seen.command, 26u);
+    ASSERT_EQ(g_seen.command, 26U);
     ASSERT_TRUE(proxy_of(50) == nullptr);
     ASSERT_TRUE(sut::FindSocketInfoEntry(50) == nullptr);
     svc->Close(oe, 51);
     ASSERT_TRUE(sut::FindSocketInfoEntry(51) == nullptr);
     svc->Close(oe, 52);  // never tracked: only forwarded
-    ASSERT_EQ(forwarded(), 3u);
+    ASSERT_EQ(forwarded(), 3U);
 }
 
 /**
@@ -930,57 +948,59 @@ TEST(close_of_a_proxy_flag_without_a_proxy_socket_just_forgets_the_entry) {
 TEST(plain_commands_are_forwarded_with_their_command_id_and_return_the_reply) {
     reset();
     auto svc = make();
-    std::int32_t e = -1, f = -1;
-    ams::sf::Out<std::int32_t> oe(e), of(f);
+    std::int32_t e = -1;
+    std::int32_t f = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> of(f);
     std::uint8_t buf[32] = {};
     ams::sf::OutAutoSelectBuffer out_buf(buf, sizeof(buf));
     ams::sf::InBuffer in_buf(buf, sizeof(buf));
 
-    reply_with(Pair{4, 8});
+    reply_with(Pair{.a = 4, .b = 8});
     ASSERT_TRUE(svc->Accept(oe, of, 3, out_buf).IsSuccess());
-    ASSERT_EQ(g_seen.command, 12u);
+    ASSERT_EQ(g_seen.command, 12U);
     ASSERT_EQ(e, 4);
     ASSERT_EQ(f, 8);
     ASSERT_TRUE(g_seen.options.buffers[0].ptr == buf);
 
     reply_with(std::int32_t{6});
     svc->Listen(oe, 3, 5);
-    ASSERT_EQ(g_seen.command, 18u);
+    ASSERT_EQ(g_seen.command, 18U);
     ASSERT_EQ(e, 6);
 
     reply_with(std::int32_t{7});
     svc->Shutdown(oe, 3, 2);
-    ASSERT_EQ(g_seen.command, 22u);
+    ASSERT_EQ(g_seen.command, 22U);
     ASSERT_EQ(e, 7);
 
     reply_with(std::int32_t{8});
     svc->ShutdownAllSockets(oe, 99, 1);
-    ASSERT_EQ(g_seen.command, 23u);
+    ASSERT_EQ(g_seen.command, 23U);
     ASSERT_EQ(e, 8);
 
-    reply_with(Pair{1, 2});
+    reply_with(Pair{.a = 1, .b = 2});
     svc->DuplicateSocket(oe, of, 3, 99);
-    ASSERT_EQ(g_seen.command, 27u);
+    ASSERT_EQ(g_seen.command, 27U);
     ASSERT_EQ(f, 2);
 
     reply_with(std::int32_t{9});
     svc->GetResourceStatistics(oe, out_buf, 99);
-    ASSERT_EQ(g_seen.command, 28u);
+    ASSERT_EQ(g_seen.command, 28U);
     ASSERT_EQ(e, 9);
 
-    reply_with(Pair{0, 77});
+    reply_with(Pair{.a = 0, .b = 77});
     svc->EventFd(oe, of, 1, 0);
-    ASSERT_EQ(g_seen.command, 31u);
+    ASSERT_EQ(g_seen.command, 31U);
     ASSERT_EQ(f, 77);
 
     reply_with(std::int32_t{10});
     svc->RegisterResourceStatisticsName(oe, 99, in_buf);
-    ASSERT_EQ(g_seen.command, 32u);
+    ASSERT_EQ(g_seen.command, 32U);
     ASSERT_EQ(e, 10);
 
     reply_with(std::int32_t{11});
     svc->Sysctl(oe, in_buf, in_buf, out_buf, in_buf);
-    ASSERT_EQ(g_seen.command, 7u);
+    ASSERT_EQ(g_seen.command, 7U);
     ASSERT_EQ(e, 11);
     ASSERT_EQ(g_seen.options.buffers[2].size, sizeof(buf));
 }
@@ -994,10 +1014,12 @@ TEST(multi_message_commands_are_forwarded_for_plain_and_proxy_sockets) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 70, 5000), 0);
     track_udp(71);
-    std::int32_t e = -1, c = -1;
-    ams::sf::Out<std::int32_t> oe(e), oc(c);
+    std::int32_t e = -1;
+    std::int32_t c = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> oc(c);
     std::uint8_t buf[16] = {};
-    reply_with(Pair{0, 3});
+    reply_with(Pair{.a = 0, .b = 3});
     for (std::int32_t fd : {70, 71, 72}) {
         ASSERT_TRUE(svc->RecvMMsg(
                            oe,
@@ -1008,15 +1030,15 @@ TEST(multi_message_commands_are_forwarded_for_plain_and_proxy_sockets) {
                            0,
                            ams::sf::OutAutoSelectBuffer(buf, sizeof(buf)))
                         .IsSuccess());
-        ASSERT_EQ(g_seen.command, 29u);
+        ASSERT_EQ(g_seen.command, 29U);
         ASSERT_EQ(c, 3);
         ASSERT_TRUE(
             svc->SendMMsg(oe, oc, fd, 2, 0, ams::sf::InBuffer(buf, sizeof(buf)))
                 .IsSuccess());
-        ASSERT_EQ(g_seen.command, 30u);
+        ASSERT_EQ(g_seen.command, 30U);
         ASSERT_EQ(c, 3);
     }
-    ASSERT_EQ(forwarded(), 6u);
+    ASSERT_EQ(forwarded(), 6U);
 }
 
 // ---------------------------------------------------------------------------
@@ -1031,11 +1053,11 @@ TEST(bind_to_an_ldn_address_creates_a_proxy_socket_and_is_not_forwarded) {
     reset();
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 100, 5000), 0);
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
     ASSERT_TRUE(sut::FindSocketInfoEntry(100)->info.is_proxy);
     sut::ProxySocket* p = proxy_of(100);
     ASSERT_TRUE(p != nullptr);
-    ASSERT_EQ(p->GetLocalAddr().GetPort(), 5000u);
+    ASSERT_EQ(p->GetLocalAddr().GetPort(), 5000U);
     ASSERT_TRUE(p->GetState() == sut::ProxySocketState::Bound);
 }
 
@@ -1079,8 +1101,8 @@ TEST(bind_to_inaddr_any_binds_proxy_to_local_ldn_ip_and_real_socket_too) {
     ASSERT_TRUE(svc->Bind(oe, 103, in_of(addr)).IsSuccess());
     ASSERT_EQ(e, 0);
     ASSERT_EQ(proxy_of(103)->GetLocalAddr().sin_addr, LDN_HOST);
-    ASSERT_EQ(g_seen.command, 13u);
-    ASSERT_EQ(forwarded(), 1u);
+    ASSERT_EQ(g_seen.command, 13U);
+    ASSERT_EQ(forwarded(), 1U);
     ASSERT_TRUE(sut::FindSocketInfoEntry(103)->info.is_proxy);
 }
 
@@ -1122,7 +1144,7 @@ TEST(bind_to_inaddr_any_without_a_local_ldn_ip_keeps_inaddr_any_on_the_proxy) {
     ams::sf::Out<std::int32_t> oe(e);
     svc->Bind(oe, 106, in_of(addr));
     ASSERT_EQ(e, 0);
-    ASSERT_EQ(proxy_of(106)->GetLocalAddr().sin_addr, 0u);
+    ASSERT_EQ(proxy_of(106)->GetLocalAddr().sin_addr, 0U);
 }
 
 /**
@@ -1136,7 +1158,7 @@ TEST(bind_of_an_untracked_socket_is_forwarded) {
     ams::sf::Out<std::int32_t> oe(e);
     reply_with(std::int32_t{13});
     ASSERT_TRUE(svc->Bind(oe, 107, in_of(addr)).IsSuccess());
-    ASSERT_EQ(g_seen.command, 13u);
+    ASSERT_EQ(g_seen.command, 13U);
     ASSERT_EQ(e, 13);
     ASSERT_TRUE(proxy_of(107) == nullptr);
 }
@@ -1153,16 +1175,16 @@ TEST(bind_of_a_foreign_short_or_missing_address_is_forwarded) {
     auto outside =
         ldn_addr(0xC0A80001, 5007);  // 192.168.0.1: neither LDN nor any
     svc->Bind(oe, 108, in_of(outside));
-    ASSERT_EQ(forwarded(), 1u);
+    ASSERT_EQ(forwarded(), 1U);
     auto inet6 = ldn_addr(LDN_HOST, 5007);
     inet6.sin_family = static_cast<std::uint8_t>(bsdt::AddressFamily::Inet6);
     svc->Bind(oe, 108, in_of(inet6));
-    ASSERT_EQ(forwarded(), 2u);
+    ASSERT_EQ(forwarded(), 2U);
     const std::uint8_t few[4] = {};
     svc->Bind(oe, 108, ams::sf::InBuffer(few, sizeof(few)));
-    ASSERT_EQ(forwarded(), 3u);
+    ASSERT_EQ(forwarded(), 3U);
     svc->Bind(oe, 108, ams::sf::InBuffer(nullptr, sizeof(bsdt::SockAddrIn)));
-    ASSERT_EQ(forwarded(), 4u);
+    ASSERT_EQ(forwarded(), 4U);
     ASSERT_TRUE(proxy_of(108) == nullptr);
 }
 
@@ -1176,7 +1198,7 @@ TEST(bind_reports_enomem_when_the_proxy_table_is_full) {
     ASSERT_EQ(
         bind_ldn(*svc, 109, 5008),
         static_cast<std::int32_t>(bsdt::BsdErrno::NoMem));
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -1235,12 +1257,12 @@ TEST(
     ams::sf::Out<std::int32_t> oe(e);
     ASSERT_TRUE(svc->Connect(oe, 120, in_of(peer)).IsSuccess());
     ASSERT_EQ(e, 0);
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
     sut::ProxySocket* p = proxy_of(120);
     ASSERT_TRUE(p != nullptr);
     ASSERT_TRUE(p->GetState() == sut::ProxySocketState::Connected);
     ASSERT_TRUE(p->GetLocalAddr().GetPort() != 0);
-    ASSERT_EQ(p->GetRemoteAddr().GetPort(), 6000u);
+    ASSERT_EQ(p->GetRemoteAddr().GetPort(), 6000U);
     ASSERT_TRUE(sut::FindSocketInfoEntry(120)->info.is_proxy);
 }
 
@@ -1256,7 +1278,7 @@ TEST(connect_of_a_bound_proxy_keeps_its_local_port) {
     ams::sf::Out<std::int32_t> oe(e);
     svc->Connect(oe, 121, in_of(peer));
     ASSERT_EQ(e, 0);
-    ASSERT_EQ(proxy_of(121)->GetLocalAddr().GetPort(), 5100u);
+    ASSERT_EQ(proxy_of(121)->GetLocalAddr().GetPort(), 5100U);
     ASSERT_TRUE(proxy_of(121)->GetState() == sut::ProxySocketState::Connected);
 }
 
@@ -1303,7 +1325,7 @@ TEST(connect_forwards_untracked_foreign_short_and_missing_addresses) {
     const auto peer = ldn_addr(LDN_PEER, 6000);
     reply_with(std::int32_t{111});
     svc->Connect(oe, 125, in_of(peer));  // untracked
-    ASSERT_EQ(g_seen.command, 14u);
+    ASSERT_EQ(g_seen.command, 14U);
     ASSERT_EQ(e, 111);
     const auto outside = ldn_addr(0xC0A80001, 80);
     svc->Connect(oe, 124, in_of(outside));
@@ -1313,7 +1335,7 @@ TEST(connect_forwards_untracked_foreign_short_and_missing_addresses) {
     auto inet6 = peer;
     inet6.sin_family = static_cast<std::uint8_t>(bsdt::AddressFamily::Inet6);
     svc->Connect(oe, 124, in_of(inet6));
-    ASSERT_EQ(forwarded(), 5u);
+    ASSERT_EQ(forwarded(), 5U);
     ASSERT_TRUE(proxy_of(124) == nullptr);
 }
 
@@ -1412,8 +1434,10 @@ TEST(sendto_ldn_peer_from_plain_socket_creates_a_proxy_and_sends_through_it) {
     track_udp(130);
     const auto peer = ldn_addr(LDN_PEER, 6000);
     const std::uint8_t data[5] = {1, 2, 3, 4, 5};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     ASSERT_TRUE(svc->SendTo(
                        oe,
                        on,
@@ -1424,10 +1448,10 @@ TEST(sendto_ldn_peer_from_plain_socket_creates_a_proxy_and_sends_through_it) {
                     .IsSuccess());
     ASSERT_EQ(e, 0);
     ASSERT_EQ(n, 5);
-    ASSERT_EQ(forwarded(), 0u);
-    ASSERT_EQ(g_sent.count, 1u);
+    ASSERT_EQ(forwarded(), 0U);
+    ASSERT_EQ(g_sent.count, 1U);
     ASSERT_EQ(g_sent.dest_ip, LDN_PEER);
-    ASSERT_EQ(g_sent.dest_port, 6000u);
+    ASSERT_EQ(g_sent.dest_port, 6000U);
     ASSERT_TRUE(sut::FindSocketInfoEntry(130)->info.is_proxy);
     ASSERT_TRUE(proxy_of(130)->GetState() == sut::ProxySocketState::Bound);
 }
@@ -1443,12 +1467,14 @@ TEST(sendto_through_an_existing_proxy_does_not_create_another) {
         false;  // tracked as plain, proxy already there
     const auto peer = ldn_addr(LDN_PEER, 6000);
     const std::uint8_t data[2] = {1, 2};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     svc->SendTo(
         oe, on, 131, 0, ams::sf::InBuffer(data, sizeof(data)), in_of(peer));
     ASSERT_EQ(n, 2);
-    ASSERT_EQ(proxy_of(131)->GetLocalAddr().GetPort(), 5200u);
+    ASSERT_EQ(proxy_of(131)->GetLocalAddr().GetPort(), 5200U);
     ASSERT_TRUE(sut::FindSocketInfoEntry(131)->info.is_proxy);
 }
 
@@ -1462,8 +1488,10 @@ TEST(sendto_reports_the_proxy_error_as_errno_and_zero_bytes) {
     sut::ProxySocketManager::GetInstance().SetSendCallback(nullptr);
     const auto peer = ldn_addr(LDN_PEER, 6000);
     const std::uint8_t data[2] = {1, 2};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     svc->SendTo(
         oe, on, 132, 0, ams::sf::InBuffer(data, sizeof(data)), in_of(peer));
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::NetUnreach));
@@ -1479,8 +1507,10 @@ TEST(sendto_reports_enetunreach_without_a_proxy_or_with_a_short_address) {
     auto svc = make();
     const auto peer = ldn_addr(LDN_PEER, 6000);
     const std::uint8_t data[2] = {1, 2};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     svc->SendTo(
         oe,
         on,
@@ -1501,7 +1531,7 @@ TEST(sendto_reports_enetunreach_without_a_proxy_or_with_a_short_address) {
         ams::sf::InBuffer(data, sizeof(data)),
         ams::sf::InBuffer(few, sizeof(few)));
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::NetUnreach));
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -1514,8 +1544,10 @@ TEST(sendto_with_the_proxy_table_full_reports_enetunreach) {
     fill_proxy_table();
     const auto peer = ldn_addr(LDN_PEER, 6000);
     const std::uint8_t data[2] = {1, 2};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     svc->SendTo(
         oe, on, 135, 0, ams::sf::InBuffer(data, sizeof(data)), in_of(peer));
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::NetUnreach));
@@ -1532,13 +1564,15 @@ TEST(sendto_without_ephemeral_port_leaves_proxy_unbound_and_refuses_send) {
     exhaust_ports(bsdt::ProtocolType::Udp);
     const auto peer = ldn_addr(LDN_PEER, 6000);
     const std::uint8_t data[2] = {1, 2};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     svc->SendTo(
         oe, on, 136, 0, ams::sf::InBuffer(data, sizeof(data)), in_of(peer));
     ASSERT_TRUE(proxy_of(136)->GetState() == sut::ProxySocketState::Created);
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::DestAddrReq));
-    ASSERT_EQ(g_sent.count, 0u);
+    ASSERT_EQ(g_sent.count, 0U);
 }
 
 /**
@@ -1554,8 +1588,10 @@ TEST(sendto_returns_the_error_of_a_refused_auto_bind) {
     ams::os::g_host_before_recursive_lock = bind_the_proxy_first;
     const auto peer = ldn_addr(LDN_PEER, 6000);
     const std::uint8_t data[2] = {1, 2};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     const auto rc = svc->SendTo(
         oe, on, 137, 0, ams::sf::InBuffer(data, sizeof(data)), in_of(peer));
     ams::os::g_host_before_recursive_lock = nullptr;
@@ -1572,9 +1608,11 @@ TEST(sendto_a_non_ldn_destination_is_forwarded_with_both_buffers) {
     track_udp(138);
     const auto outside = ldn_addr(0xC0A80001, 80);
     const std::uint8_t data[3] = {1, 2, 3};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
-    reply_with(Pair{0, 3});
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
+    reply_with(Pair{.a = 0, .b = 3});
     ASSERT_TRUE(svc->SendTo(
                        oe,
                        on,
@@ -1583,7 +1621,7 @@ TEST(sendto_a_non_ldn_destination_is_forwarded_with_both_buffers) {
                        ams::sf::InBuffer(data, sizeof(data)),
                        in_of(outside))
                     .IsSuccess());
-    ASSERT_EQ(g_seen.command, 11u);
+    ASSERT_EQ(g_seen.command, 11U);
     ASSERT_EQ(n, 3);
     ASSERT_EQ(g_seen.options.buffers[0].size, sizeof(data));
     ASSERT_EQ(g_seen.options.buffers[1].size, sizeof(bsdt::SockAddrIn));
@@ -1609,7 +1647,7 @@ TEST(sendto_a_non_ldn_destination_is_forwarded_with_both_buffers) {
     inet6.sin_family = static_cast<std::uint8_t>(bsdt::AddressFamily::Inet6);
     svc->SendTo(
         oe, on, 138, 0, ams::sf::InBuffer(data, sizeof(data)), in_of(inet6));
-    ASSERT_EQ(forwarded(), 5u);
+    ASSERT_EQ(forwarded(), 5U);
 }
 
 /**
@@ -1620,8 +1658,10 @@ TEST(send_and_write_go_through_a_connected_proxy) {
     auto svc = make();
     track_udp(140);
     const auto peer = ldn_addr(LDN_PEER, 6000);
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     svc->Connect(oe, 140, in_of(peer));
     const std::uint8_t data[4] = {1, 2, 3, 4};
     ASSERT_TRUE(svc->Send(oe, on, 140, 0, ams::sf::InBuffer(data, sizeof(data)))
@@ -1631,8 +1671,8 @@ TEST(send_and_write_go_through_a_connected_proxy) {
     ASSERT_TRUE(
         svc->Write(oe, on, 140, ams::sf::InBuffer(data, 3)).IsSuccess());
     ASSERT_EQ(n, 3);
-    ASSERT_EQ(g_sent.count, 2u);
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(g_sent.count, 2U);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -1643,8 +1683,10 @@ TEST(send_and_write_report_the_proxy_error_of_an_unconnected_proxy) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 141, 5400), 0);
     const std::uint8_t data[4] = {1, 2, 3, 4};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     svc->Send(oe, on, 141, 0, ams::sf::InBuffer(data, sizeof(data)));
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::NotConn));
     ASSERT_EQ(n, 0);
@@ -1667,18 +1709,20 @@ TEST(send_and_write_of_a_plain_socket_are_forwarded) {
         bsdt::ProtocolType::Tcp,
         true);  // proxy flag, no proxy object
     const std::uint8_t data[4] = {1, 2, 3, 4};
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
-    reply_with(Pair{0, 4});
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
+    reply_with(Pair{.a = 0, .b = 4});
     for (std::int32_t fd : {142, 143}) {
         svc->Send(oe, on, fd, 0, ams::sf::InBuffer(data, sizeof(data)));
-        ASSERT_EQ(g_seen.command, 10u);
+        ASSERT_EQ(g_seen.command, 10U);
         ASSERT_EQ(n, 4);
         svc->Write(oe, on, fd, ams::sf::InBuffer(data, sizeof(data)));
-        ASSERT_EQ(g_seen.command, 24u);
+        ASSERT_EQ(g_seen.command, 24U);
         ASSERT_EQ(n, 4);
     }
-    ASSERT_EQ(forwarded(), 4u);
+    ASSERT_EQ(forwarded(), 4U);
 }
 
 // ---------------------------------------------------------------------------
@@ -1695,8 +1739,10 @@ TEST(
     auto svc = make();
     track_udp(150);
     const auto peer = ldn_addr(LDN_PEER, 6000);
-    std::int32_t e = -1, n = -1;
-    ams::sf::Out<std::int32_t> oe(e), on(n);
+    std::int32_t e = -1;
+    std::int32_t n = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     svc->Connect(oe, 150, in_of(peer));
     proxy_of(150)->SetNonBlocking(true);
     ASSERT_TRUE(deliver(150, "hello"));
@@ -1720,7 +1766,7 @@ TEST(
     e = -1;
     svc->Read(oe, on, 150, ams::sf::OutAutoSelectBuffer(buf, sizeof(buf)));
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::Again));
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -1731,9 +1777,11 @@ TEST(recvfrom_returns_the_datagram_with_the_sender_address) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 151, 5500), 0);
     ASSERT_TRUE(deliver(151, "ping"));
-    std::int32_t ret = -1, e = -1;
+    std::int32_t ret = -1;
+    std::int32_t e = -1;
     std::uint32_t len = 99;
-    ams::sf::Out<std::int32_t> oret(ret), oe(e);
+    ams::sf::Out<std::int32_t> oret(ret);
+    ams::sf::Out<std::int32_t> oe(e);
     ams::sf::Out<std::uint32_t> olen(len);
     std::uint8_t buf[16] = {};
     bsdt::SockAddrIn from{};
@@ -1752,7 +1800,7 @@ TEST(recvfrom_returns_the_datagram_with_the_sender_address) {
     ASSERT_EQ(e, 0);
     ASSERT_EQ(len, sizeof(bsdt::SockAddrIn));
     ASSERT_EQ(from.GetAddr(), LDN_PEER);
-    ASSERT_EQ(from.GetPort(), 6000u);
+    ASSERT_EQ(from.GetPort(), 6000U);
     // A too small address buffer is left alone and reported as length 0.
     ASSERT_TRUE(deliver(151, "pong"));
     std::uint8_t tiny[4] = {};
@@ -1765,7 +1813,7 @@ TEST(recvfrom_returns_the_datagram_with_the_sender_address) {
         ams::sf::OutAutoSelectBuffer(buf, sizeof(buf)),
         ams::sf::OutAutoSelectBuffer(tiny, sizeof(tiny)));
     ASSERT_EQ(ret, 4);
-    ASSERT_EQ(len, 0u);
+    ASSERT_EQ(len, 0U);
 }
 
 /**
@@ -1776,9 +1824,11 @@ TEST(recvfrom_reports_the_error_of_an_empty_non_blocking_proxy) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 152, 5501), 0);
     proxy_of(152)->SetNonBlocking(true);
-    std::int32_t ret = 5, e = -1;
+    std::int32_t ret = 5;
+    std::int32_t e = -1;
     std::uint32_t len = 99;
-    ams::sf::Out<std::int32_t> oret(ret), oe(e);
+    ams::sf::Out<std::int32_t> oret(ret);
+    ams::sf::Out<std::int32_t> oe(e);
     ams::sf::Out<std::uint32_t> olen(len);
     std::uint8_t buf[16] = {};
     svc->RecvFrom(
@@ -1791,7 +1841,7 @@ TEST(recvfrom_reports_the_error_of_an_empty_non_blocking_proxy) {
         ams::sf::OutAutoSelectBuffer(buf, sizeof(buf)));
     ASSERT_EQ(ret, -1);
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::Again));
-    ASSERT_EQ(len, 0u);
+    ASSERT_EQ(len, 0U);
 }
 
 /**
@@ -1806,27 +1856,31 @@ TEST(recv_recvfrom_and_read_of_a_plain_socket_are_forwarded) {
         bsdt::SocketType::Dgram,
         bsdt::ProtocolType::Udp,
         true);  // flag without proxy
-    std::int32_t ret = -1, e = -1, n = -1;
+    std::int32_t ret = -1;
+    std::int32_t e = -1;
+    std::int32_t n = -1;
     std::uint32_t len = 0;
-    ams::sf::Out<std::int32_t> oret(ret), oe(e), on(n);
+    ams::sf::Out<std::int32_t> oret(ret);
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> on(n);
     ams::sf::Out<std::uint32_t> olen(len);
     std::uint8_t buf[16] = {};
     ams::sf::OutAutoSelectBuffer out_buf(buf, sizeof(buf));
     for (std::int32_t fd : {153, 154}) {
-        reply_with(Pair{0, 6});
+        reply_with(Pair{.a = 0, .b = 6});
         svc->Recv(oe, on, fd, 0, out_buf);
-        ASSERT_EQ(g_seen.command, 8u);
+        ASSERT_EQ(g_seen.command, 8U);
         ASSERT_EQ(n, 6);
         svc->Read(oe, on, fd, out_buf);
-        ASSERT_EQ(g_seen.command, 25u);
+        ASSERT_EQ(g_seen.command, 25U);
         ASSERT_EQ(n, 6);
-        reply_with(Triple{6, 0, 16});
+        reply_with(Triple{.a = 6, .b = 0, .c = 16});
         svc->RecvFrom(oret, oe, olen, fd, 0, out_buf, out_buf);
-        ASSERT_EQ(g_seen.command, 9u);
+        ASSERT_EQ(g_seen.command, 9U);
         ASSERT_EQ(ret, 6);
-        ASSERT_EQ(len, 16u);
+        ASSERT_EQ(len, 16U);
     }
-    ASSERT_EQ(forwarded(), 6u);
+    ASSERT_EQ(forwarded(), 6U);
 }
 
 // ---------------------------------------------------------------------------
@@ -1880,7 +1934,8 @@ struct SelectSets {
      * @return The Select result.
      */
     ams::Result run(sut::BsdMitmService& svc, std::int32_t nfds) {
-        ams::sf::Out<std::int32_t> oe(errno_out), oc(count);
+        ams::sf::Out<std::int32_t> oe(errno_out);
+        ams::sf::Out<std::int32_t> oc(count);
         return svc.Select(
             oe,
             oc,
@@ -1914,7 +1969,7 @@ TEST(select_over_proxy_sockets_only_is_answered_locally) {
     set_bit(s.e_in, 5);  // closed: error
     set_bit(s.e_in, 4);  // open: no error
     ASSERT_TRUE(s.run(*svc, 8).IsSuccess());
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
     ASSERT_EQ(s.errno_out, 0);
     ASSERT_EQ(s.count, 3);
     ASSERT_TRUE(has_bit(s.r_out, 3));
@@ -1937,7 +1992,7 @@ TEST(select_mixing_real_sockets_answers_locally_when_a_proxy_is_ready) {
     set_bit(s.r_in, 3);
     set_bit(s.r_in, 6);  // a real socket
     ASSERT_TRUE(s.run(*svc, 8).IsSuccess());
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
     ASSERT_EQ(s.count, 1);
     ASSERT_TRUE(has_bit(s.r_out, 3));
 }
@@ -1952,9 +2007,9 @@ TEST(select_mixing_real_sockets_forwards_when_no_proxy_is_ready) {
     SelectSets s;
     set_bit(s.r_in, 3);  // proxy with nothing pending
     set_bit(s.r_in, 6);  // a real socket
-    reply_with(Pair{0, 1});
+    reply_with(Pair{.a = 0, .b = 1});
     ASSERT_TRUE(s.run(*svc, 8).IsSuccess());
-    ASSERT_EQ(g_seen.command, 5u);
+    ASSERT_EQ(g_seen.command, 5U);
     ASSERT_EQ(g_seen.options.buffers[0].size, sizeof(s.r_in));
     ASSERT_EQ(s.errno_out, 0);
     ASSERT_EQ(s.count, 1);
@@ -1973,7 +2028,7 @@ std::uint32_t proxies_change_during_the_real_wait(const host_mitm::Call& call) {
     manager
         .CreateProxySocket(4, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp)
         ->Close();
-    Pair p{0, 1};
+    Pair p{.a = 0, .b = 1};
     std::memcpy(call.out, &p, sizeof(p));
     return 0;
 }
@@ -2013,8 +2068,8 @@ TEST(select_after_a_failed_real_wait_does_not_add_proxy_results) {
     set_bit(s.r_in, 3);
     set_bit(s.r_in, 6);
     g_rc = 11;
-    reply_with(Pair{4, 0});
-    ASSERT_EQ(s.run(*svc, 8).GetValue(), 11u);
+    reply_with(Pair{.a = 4, .b = 0});
+    ASSERT_EQ(s.run(*svc, 8).GetValue(), 11U);
     ASSERT_EQ(s.errno_out, 4);
     ASSERT_EQ(s.count, 0);
     ASSERT_FALSE(has_bit(s.r_out, 3));
@@ -2029,9 +2084,9 @@ TEST(select_over_real_sockets_only_is_forwarded) {
     SelectSets s;
     set_bit(s.r_in, 6);
     set_bit(s.w_in, 7);
-    reply_with(Pair{0, 2});
+    reply_with(Pair{.a = 0, .b = 2});
     ASSERT_TRUE(s.run(*svc, 8).IsSuccess());
-    ASSERT_EQ(g_seen.command, 5u);
+    ASSERT_EQ(g_seen.command, 5U);
     ASSERT_EQ(s.count, 2);
     ASSERT_EQ(g_seen.options.buffers[6].size, sizeof(s.e_out));
 }
@@ -2042,12 +2097,14 @@ TEST(select_over_real_sockets_only_is_forwarded) {
 TEST(select_ignores_descriptors_past_the_set_and_works_without_sets) {
     reset();
     auto svc = make();
-    std::int32_t e = -1, c = -1;
-    ams::sf::Out<std::int32_t> oe(e), oc(c);
+    std::int32_t e = -1;
+    std::int32_t c = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> oc(c);
     // nfds larger than the 8-bit sets: fd 8.. are outside every set.
     std::uint8_t one[1] = {0};
     set_bit(one, 3);
-    reply_with(Pair{0, 0});
+    reply_with(Pair{.a = 0, .b = 0});
     ASSERT_TRUE(svc->Select(
                        oe,
                        oc,
@@ -2060,7 +2117,7 @@ TEST(select_ignores_descriptors_past_the_set_and_works_without_sets) {
                        ams::sf::OutAutoSelectBuffer(nullptr, 0),
                        ams::sf::OutAutoSelectBuffer(nullptr, 0))
                     .IsSuccess());
-    ASSERT_EQ(g_seen.command, 5u);
+    ASSERT_EQ(g_seen.command, 5U);
     // Null input sets: no descriptor is watched, no proxy involved: forwarded
     // as is.
     ASSERT_TRUE(svc->Select(
@@ -2075,7 +2132,7 @@ TEST(select_ignores_descriptors_past_the_set_and_works_without_sets) {
                        ams::sf::OutAutoSelectBuffer(nullptr, 0),
                        ams::sf::OutAutoSelectBuffer(nullptr, 0))
                     .IsSuccess());
-    ASSERT_EQ(forwarded(), 2u);
+    ASSERT_EQ(forwarded(), 2U);
 }
 
 /**
@@ -2086,8 +2143,10 @@ TEST(select_never_writes_a_ready_proxy_into_missing_output_sets) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 3, 5609), 0);
     ASSERT_TRUE(deliver(3, "x"));
-    std::int32_t e = -1, c = -1;
-    ams::sf::Out<std::int32_t> oe(e), oc(c);
+    std::int32_t e = -1;
+    std::int32_t c = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> oc(c);
     std::uint8_t in[1] = {0};
     set_bit(in, 3);
     ASSERT_TRUE(svc->Select(
@@ -2145,7 +2204,8 @@ struct PollSet {
         sut::BsdMitmService& svc,
         std::int32_t nfds,
         std::size_t out_bytes = sizeof(out)) {
-        ams::sf::Out<std::int32_t> oe(errno_out), oc(count);
+        ams::sf::Out<std::int32_t> oe(errno_out);
+        ams::sf::Out<std::int32_t> oc(count);
         return svc.Poll(
             oe,
             oc,
@@ -2171,11 +2231,14 @@ TEST(poll_over_proxy_sockets_only_is_answered_locally) {
     ASSERT_TRUE(deliver(3, "x"));
     proxy_of(5)->Close();
     PollSet p;
-    p.in[0] = {3, POLLIN, 0};
-    p.in[1] = {4, POLLIN, 0};   // nothing pending
-    p.in[2] = {5, POLLOUT, 0};  // closed: writable bit and hang-up
+    p.in[0] = {.fd = 3, .events = POLLIN, .revents = 0};
+    p.in[1] = {.fd = 4, .events = POLLIN, .revents = 0};  // nothing pending
+    p.in[2] = {
+        .fd = 5,
+        .events = POLLOUT,
+        .revents = 0};  // closed: writable bit and hang-up
     ASSERT_TRUE(p.run(*svc, 3).IsSuccess());
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
     ASSERT_EQ(p.count, 2);
     ASSERT_EQ(p.out[0].revents, POLLIN);
     ASSERT_EQ(p.out[1].revents, 0);
@@ -2191,11 +2254,11 @@ TEST(poll_mixing_real_sockets_answers_locally_when_a_proxy_is_ready) {
     ASSERT_EQ(bind_ldn(*svc, 3, 5703), 0);
     ASSERT_TRUE(deliver(3, "x"));
     PollSet p;
-    p.in[0] = {3, POLLIN, 0};
-    p.in[1] = {9, POLLIN, 0};  // real socket
+    p.in[0] = {.fd = 3, .events = POLLIN, .revents = 0};
+    p.in[1] = {.fd = 9, .events = POLLIN, .revents = 0};  // real socket
     p.in[1].revents = POLLIN;  // stale value must not leak out
     ASSERT_TRUE(p.run(*svc, 2).IsSuccess());
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
     ASSERT_EQ(p.count, 1);
     ASSERT_EQ(p.out[0].revents, POLLIN);
     ASSERT_EQ(p.out[1].revents, 0);
@@ -2211,26 +2274,26 @@ TEST(
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 3, 5704), 0);
     PollSet p;
-    p.in[0] = {3, POLLIN, 0};  // empty
-    p.in[1] = {9, POLLIN, 0};
-    reply_with(Pair{0, 1});
+    p.in[0] = {.fd = 3, .events = POLLIN, .revents = 0};  // empty
+    p.in[1] = {.fd = 9, .events = POLLIN, .revents = 0};
+    reply_with(Pair{.a = 0, .b = 1});
     ASSERT_TRUE(p.run(*svc, 2).IsSuccess());
-    ASSERT_EQ(g_seen.command, 6u);
+    ASSERT_EQ(g_seen.command, 6U);
     ASSERT_EQ(p.count, 1);
     // Now with a proxy that has data, interest in writing and a closed one.
     ASSERT_EQ(bind_ldn(*svc, 4, 5705), 0);
     ASSERT_EQ(bind_ldn(*svc, 5, 5706), 0);
     proxy_of(5)->Close();
     PollSet q;
-    q.in[0] = {4, POLLOUT, 0};
-    q.in[1] = {9, POLLIN, 0};
-    q.in[2] = {5, POLLIN, 0};
+    q.in[0] = {.fd = 4, .events = POLLOUT, .revents = 0};
+    q.in[1] = {.fd = 9, .events = POLLIN, .revents = 0};
+    q.in[2] = {.fd = 5, .events = POLLIN, .revents = 0};
     // POLLOUT is always ready, so the proxy answers locally; use only the
     // closed one.
     PollSet r;
-    r.in[0] = {5, 0, 0};
-    r.in[1] = {9, POLLIN, 0};
-    reply_with(Pair{0, 0});
+    r.in[0] = {.fd = 5, .events = 0, .revents = 0};
+    r.in[1] = {.fd = 9, .events = POLLIN, .revents = 0};
+    reply_with(Pair{.a = 0, .b = 0});
     ASSERT_TRUE(r.run(*svc, 2).IsSuccess());
     ASSERT_EQ(r.out[0].revents, POLLHUP);
     ASSERT_EQ(r.count, 1);
@@ -2244,12 +2307,12 @@ TEST(poll_adds_the_events_that_arrived_while_the_real_wait_ran) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 3, 5707), 0);
     PollSet p;
-    p.in[0] = {3, POLLIN, 0};
-    p.in[1] = {9, POLLIN, 0};
+    p.in[0] = {.fd = 3, .events = POLLIN, .revents = 0};
+    p.in[1] = {.fd = 9, .events = POLLIN, .revents = 0};
     host_mitm::g_dispatch_hook =
         [](const host_mitm::Call& call) -> std::uint32_t {
         deliver(3, "late");
-        Pair pr{0, 0};
+        Pair pr{.a = 0, .b = 0};
         std::memcpy(call.out, &pr, sizeof(pr));
         return 0;
     };
@@ -2267,10 +2330,10 @@ TEST(poll_after_a_failed_real_wait_does_not_add_proxy_events) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 3, 5708), 0);
     PollSet p;
-    p.in[0] = {3, POLLIN, 0};
-    p.in[1] = {9, POLLIN, 0};
+    p.in[0] = {.fd = 3, .events = POLLIN, .revents = 0};
+    p.in[1] = {.fd = 9, .events = POLLIN, .revents = 0};
     g_rc = 9;
-    ASSERT_EQ(p.run(*svc, 2).GetValue(), 9u);
+    ASSERT_EQ(p.run(*svc, 2).GetValue(), 9U);
     ASSERT_EQ(p.count, 0);
 }
 
@@ -2281,10 +2344,10 @@ TEST(poll_over_real_sockets_only_is_forwarded_with_both_buffers) {
     reset();
     auto svc = make();
     PollSet p;
-    p.in[0] = {9, POLLIN, 0};
-    reply_with(Pair{0, 1});
+    p.in[0] = {.fd = 9, .events = POLLIN, .revents = 0};
+    reply_with(Pair{.a = 0, .b = 1});
     ASSERT_TRUE(p.run(*svc, 1).IsSuccess());
-    ASSERT_EQ(g_seen.command, 6u);
+    ASSERT_EQ(g_seen.command, 6U);
     ASSERT_EQ(g_seen.options.buffers[0].size, sizeof(p.in));
     ASSERT_EQ(g_seen.options.buffers[1].size, sizeof(p.out));
     ASSERT_EQ(p.count, 1);
@@ -2298,8 +2361,8 @@ TEST(poll_with_an_output_buffer_smaller_than_the_input_does_not_copy_it) {
     reset();
     auto svc = make();
     PollSet p;
-    p.in[0] = {9, POLLIN, 0};
-    reply_with(Pair{0, 0});
+    p.in[0] = {.fd = 9, .events = POLLIN, .revents = 0};
+    reply_with(Pair{.a = 0, .b = 0});
     p.out[0].fd = 1234;
     ASSERT_TRUE(p.run(*svc, 4, sizeof(bsdt::PollFd)).IsSuccess());
     ASSERT_EQ(p.out[0].fd, 1234);  // not overwritten by the copy of the input
@@ -2317,8 +2380,10 @@ TEST(ioctl_fionread_on_a_proxy_is_answered_locally) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 160, 5800), 0);
     ASSERT_TRUE(deliver(160, "abcd"));
-    std::int32_t e = -1, r = -1;
-    ams::sf::Out<std::int32_t> oe(e), orr(r);
+    std::int32_t e = -1;
+    std::int32_t r = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> orr(r);
     std::uint8_t in[4] = {};
     std::int32_t pending = -1;
     ASSERT_TRUE(
@@ -2335,7 +2400,7 @@ TEST(ioctl_fionread_on_a_proxy_is_answered_locally) {
     ASSERT_EQ(e, 0);
     ASSERT_EQ(r, 0);
     ASSERT_EQ(pending, 4);
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
     // A buffer too small for the answer is left alone.
     std::uint8_t tiny[2] = {0x55, 0x55};
     svc->Ioctl(
@@ -2356,8 +2421,10 @@ TEST(ioctl_other_requests_on_a_proxy_are_refused) {
     reset();
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 161, 5801), 0);
-    std::int32_t e = 0, r = 0;
-    ams::sf::Out<std::int32_t> oe(e), orr(r);
+    std::int32_t e = 0;
+    std::int32_t r = 0;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> orr(r);
     std::uint8_t in[4] = {};
     std::uint8_t out[4] = {};
     svc->Ioctl(
@@ -2370,7 +2437,7 @@ TEST(ioctl_other_requests_on_a_proxy_are_refused) {
         ams::sf::OutAutoSelectBuffer(out, sizeof(out)));
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::Inval));
     ASSERT_EQ(r, -1);
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -2379,11 +2446,13 @@ TEST(ioctl_other_requests_on_a_proxy_are_refused) {
 TEST(ioctl_on_a_plain_socket_is_forwarded) {
     reset();
     auto svc = make();
-    std::int32_t e = -1, r = -1;
-    ams::sf::Out<std::int32_t> oe(e), orr(r);
+    std::int32_t e = -1;
+    std::int32_t r = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> orr(r);
     std::uint8_t in[4] = {};
     std::uint8_t out[4] = {};
-    reply_with(Pair{0, 12});
+    reply_with(Pair{.a = 0, .b = 12});
     ASSERT_TRUE(svc->Ioctl(
                        oe,
                        orr,
@@ -2393,7 +2462,7 @@ TEST(ioctl_on_a_plain_socket_is_forwarded) {
                        ams::sf::InBuffer(in, sizeof(in)),
                        ams::sf::OutAutoSelectBuffer(out, sizeof(out)))
                     .IsSuccess());
-    ASSERT_EQ(g_seen.command, 19u);
+    ASSERT_EQ(g_seen.command, 19U);
     ASSERT_EQ(r, 12);
 }
 
@@ -2404,8 +2473,10 @@ TEST(fcntl_on_a_proxy_reads_and_sets_the_non_blocking_flag) {
     reset();
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 163, 5802), 0);
-    std::int32_t e = -1, r = -1;
-    ams::sf::Out<std::int32_t> oe(e), orr(r);
+    std::int32_t e = -1;
+    std::int32_t r = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> orr(r);
     svc->Fcntl(oe, orr, 163, 3, 0);
     ASSERT_EQ(r, 0);
     svc->Fcntl(oe, orr, 163, 4, 0x0004);
@@ -2418,7 +2489,7 @@ TEST(fcntl_on_a_proxy_reads_and_sets_the_non_blocking_flag) {
     svc->Fcntl(oe, orr, 163, 99, 0);
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::Inval));
     ASSERT_EQ(r, -1);
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -2427,11 +2498,13 @@ TEST(fcntl_on_a_proxy_reads_and_sets_the_non_blocking_flag) {
 TEST(fcntl_on_a_plain_socket_is_forwarded) {
     reset();
     auto svc = make();
-    std::int32_t e = -1, r = -1;
-    ams::sf::Out<std::int32_t> oe(e), orr(r);
-    reply_with(Pair{0, 5});
+    std::int32_t e = -1;
+    std::int32_t r = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> orr(r);
+    reply_with(Pair{.a = 0, .b = 5});
     ASSERT_TRUE(svc->Fcntl(oe, orr, 164, 3, 0).IsSuccess());
-    ASSERT_EQ(g_seen.command, 20u);
+    ASSERT_EQ(g_seen.command, 20U);
     ASSERT_EQ(r, 5);
 }
 
@@ -2462,7 +2535,7 @@ TEST(getsockopt_on_a_proxy_is_answered_by_the_proxy) {
         ams::sf::OutAutoSelectBuffer(
             reinterpret_cast<std::uint8_t*>(&value), sizeof(value)));
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::NoProtoOpt));
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -2484,7 +2557,7 @@ TEST(getsockopt_on_a_plain_socket_is_forwarded) {
                ams::sf::OutAutoSelectBuffer(
                    reinterpret_cast<std::uint8_t*>(&value), sizeof(value)))
             .IsSuccess());
-    ASSERT_EQ(g_seen.command, 17u);
+    ASSERT_EQ(g_seen.command, 17U);
     ASSERT_EQ(e, 3);
 }
 
@@ -2519,7 +2592,7 @@ TEST(setsockopt_on_a_proxy_is_applied_by_the_proxy_and_reports_its_error) {
         bcast,
         ams::sf::InBuffer(short_value, sizeof(short_value)));
     ASSERT_EQ(e, static_cast<std::int32_t>(bsdt::BsdErrno::Inval));
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -2544,7 +2617,7 @@ TEST(setsockopt_so_broadcast_on_a_plain_socket_is_saved_and_forwarded) {
         bcast,
         ams::sf::InBuffer(
             reinterpret_cast<const std::uint8_t*>(&value), sizeof(value)));
-    ASSERT_EQ(g_seen.command, 21u);
+    ASSERT_EQ(g_seen.command, 21U);
     ASSERT_TRUE(sut::FindSocketInfoEntry(168)->info.broadcast);
     value = 0;
     svc->SetSockOpt(
@@ -2580,7 +2653,7 @@ TEST(setsockopt_so_broadcast_on_a_plain_socket_is_saved_and_forwarded) {
             reinterpret_cast<const std::uint8_t*>(&value), sizeof(value)));
     ASSERT_FALSE(sut::FindSocketInfoEntry(168)->info.broadcast);
     ASSERT_TRUE(sut::FindSocketInfoEntry(169) == nullptr);
-    ASSERT_EQ(forwarded(), 5u);
+    ASSERT_EQ(forwarded(), 5U);
 }
 
 /**
@@ -2602,12 +2675,12 @@ TEST(getpeername_of_a_connected_proxy_returns_the_peer_address) {
             reinterpret_cast<std::uint8_t*>(&got), sizeof(got)));
     ASSERT_EQ(e, 0);
     ASSERT_EQ(got.GetAddr(), LDN_PEER);
-    ASSERT_EQ(got.GetPort(), 6000u);
+    ASSERT_EQ(got.GetPort(), 6000U);
     std::uint8_t tiny[4] = {0x55};
     svc->GetPeerName(oe, 170, ams::sf::OutAutoSelectBuffer(tiny, sizeof(tiny)));
     ASSERT_EQ(e, 0);
     ASSERT_EQ(tiny[0], 0x55);
-    ASSERT_EQ(forwarded(), 1u - 1u);
+    ASSERT_EQ(forwarded(), 1U - 1U);
 }
 
 /**
@@ -2644,11 +2717,11 @@ TEST(getsockname_of_a_proxy_returns_the_local_address) {
         ams::sf::OutAutoSelectBuffer(
             reinterpret_cast<std::uint8_t*>(&got), sizeof(got)));
     ASSERT_EQ(e, 0);
-    ASSERT_EQ(got.GetPort(), 5806u);
+    ASSERT_EQ(got.GetPort(), 5806U);
     std::uint8_t tiny[4] = {0x55};
     svc->GetSockName(oe, 172, ams::sf::OutAutoSelectBuffer(tiny, sizeof(tiny)));
     ASSERT_EQ(tiny[0], 0x55);
-    ASSERT_EQ(forwarded(), 0u);
+    ASSERT_EQ(forwarded(), 0U);
 }
 
 /**
@@ -2662,10 +2735,10 @@ TEST(getpeername_and_getsockname_of_a_plain_socket_are_forwarded) {
     std::uint8_t buf[16] = {};
     reply_with(std::int32_t{6});
     svc->GetPeerName(oe, 173, ams::sf::OutAutoSelectBuffer(buf, sizeof(buf)));
-    ASSERT_EQ(g_seen.command, 15u);
+    ASSERT_EQ(g_seen.command, 15U);
     ASSERT_EQ(e, 6);
     svc->GetSockName(oe, 173, ams::sf::OutAutoSelectBuffer(buf, sizeof(buf)));
-    ASSERT_EQ(g_seen.command, 16u);
+    ASSERT_EQ(g_seen.command, 16U);
 }
 
 /**
@@ -2675,9 +2748,11 @@ TEST(socket_reusing_a_tracked_descriptor_number_overwrites_its_entry) {
     reset();
     auto svc = make();
     track(20, bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp, true, true);
-    std::int32_t e = -1, fd = -1;
-    ams::sf::Out<std::int32_t> oe(e), ofd(fd);
-    reply_with(Pair{0, 20});
+    std::int32_t e = -1;
+    std::int32_t fd = -1;
+    ams::sf::Out<std::int32_t> oe(e);
+    ams::sf::Out<std::int32_t> ofd(fd);
+    reply_with(Pair{.a = 0, .b = 20});
     svc->Socket(oe, ofd, 2, 2, 0);
     const auto* entry = sut::FindSocketInfoEntry(20);
     ASSERT_TRUE(entry->info.protocol == bsdt::ProtocolType::Udp);
@@ -2694,7 +2769,7 @@ std::uint32_t a_proxy_closes_during_the_real_poll(const host_mitm::Call& call) {
     sut::ProxySocketManager::GetInstance()
         .CreateProxySocket(4, bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp)
         ->Close();
-    Pair p{0, 1};
+    Pair p{.a = 0, .b = 1};
     std::memcpy(call.out, &p, sizeof(p));
     return 0;
 }
@@ -2709,9 +2784,15 @@ TEST(poll_adds_writable_and_hangup_events_of_proxy_that_appeared_mid_wait) {
     auto svc = make();
     ASSERT_EQ(bind_ldn(*svc, 3, 5709), 0);
     PollSet p;
-    p.in[0] = {3, POLLIN, 0};   // proxy, nothing pending: no early answer
-    p.in[1] = {4, POLLOUT, 0};  // a real socket when the call starts
-    p.in[2] = {9, POLLIN, 0};
+    p.in[0] = {
+        .fd = 3,
+        .events = POLLIN,
+        .revents = 0};  // proxy, nothing pending: no early answer
+    p.in[1] = {
+        .fd = 4,
+        .events = POLLOUT,
+        .revents = 0};  // a real socket when the call starts
+    p.in[2] = {.fd = 9, .events = POLLIN, .revents = 0};
     host_mitm::g_dispatch_hook = a_proxy_closes_during_the_real_poll;
     ASSERT_TRUE(p.run(*svc, 3).IsSuccess());
     host_mitm::g_dispatch_hook = fake_bsd;

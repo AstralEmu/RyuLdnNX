@@ -10,7 +10,8 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  */
-#pragma once
+#ifndef OVERLAY_SOURCE_VIEWS_CONNECTION_MAIN_DASHBOARD_GUI_HPP_
+#define OVERLAY_SOURCE_VIEWS_CONNECTION_MAIN_DASHBOARD_GUI_HPP_
 
 #include <tesla.hpp>
 
@@ -111,3 +112,4 @@ private:
      * update() subtitle. */
     std::string m_cachedInfoSubtitle;
 };
+#endif  // OVERLAY_SOURCE_VIEWS_CONNECTION_MAIN_DASHBOARD_GUI_HPP_

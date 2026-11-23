@@ -165,7 +165,8 @@ public:
     TestNodeMapper() {
         // Initialize with empty nodes
         for (uint8_t i = 0; i < TEST_MAX_NODES; i++) {
-            m_nodes[i] = {i, 0, false};
+            m_nodes[i] = {
+                .node_id = i, .ipv4_address = 0, .is_connected = false};
         }
     }
 
@@ -199,9 +200,10 @@ public:
      * @param node_id Slot to query.
      * @return True when the slot is in range and connected.
      */
-    bool is_node_connected(uint32_t node_id) const {
-        if (node_id >= TEST_MAX_NODES)
+    [[nodiscard]] bool is_node_connected(uint32_t node_id) const {
+        if (node_id >= TEST_MAX_NODES) {
             return false;
+        }
         return m_nodes[node_id].is_connected;
     }
 
@@ -210,10 +212,11 @@ public:
      * @param ip Virtual IPv4 address to look up.
      * @return True when the IP is registered and its node is connected.
      */
-    bool is_ip_connected(uint32_t ip) const {
+    [[nodiscard]] bool is_ip_connected(uint32_t ip) const {
         auto it = m_ip_to_node.find(ip);
-        if (it == m_ip_to_node.end())
+        if (it == m_ip_to_node.end()) {
             return false;
+        }
         return m_nodes[it->second].is_connected;
     }
 
@@ -222,9 +225,10 @@ public:
      * @param node_id Slot to query.
      * @return The registered IP, or 0 when out of range or unset.
      */
-    uint32_t get_node_ip(uint32_t node_id) const {
-        if (node_id >= TEST_MAX_NODES)
+    [[nodiscard]] uint32_t get_node_ip(uint32_t node_id) const {
+        if (node_id >= TEST_MAX_NODES) {
             return 0;
+        }
         return m_nodes[node_id].ipv4_address;
     }
 
@@ -233,10 +237,11 @@ public:
      * @param ip Virtual IPv4 address to look up.
      * @return The node ID, or 0xFFFFFFFF when the IP is unknown.
      */
-    uint32_t get_ip_node_id(uint32_t ip) const {
+    [[nodiscard]] uint32_t get_ip_node_id(uint32_t ip) const {
         auto it = m_ip_to_node.find(ip);
-        if (it == m_ip_to_node.end())
+        if (it == m_ip_to_node.end()) {
             return 0xFFFFFFFF;
+        }
         return it->second;
     }
 
@@ -245,12 +250,12 @@ public:
      * @param source_ip IP of the sender, excluded from the result.
      * @return IPs of every other connected node.
      */
-    std::vector<uint32_t> get_broadcast_target_ips(uint32_t source_ip) const {
+    [[nodiscard]] std::vector<uint32_t> get_broadcast_target_ips(
+        uint32_t source_ip) const {
         std::vector<uint32_t> targets;
-        for (uint8_t i = 0; i < TEST_MAX_NODES; i++) {
-            if (m_nodes[i].is_connected &&
-                m_nodes[i].ipv4_address != source_ip) {
-                targets.push_back(m_nodes[i].ipv4_address);
+        for (auto m_node : m_nodes) {
+            if (m_node.is_connected && m_node.ipv4_address != source_ip) {
+                targets.push_back(m_node.ipv4_address);
             }
         }
         return targets;
@@ -260,18 +265,19 @@ public:
      * @brief Count the connected nodes.
      * @return Number of connected slots.
      */
-    size_t get_connected_count() const {
+    [[nodiscard]] size_t get_connected_count() const {
         size_t count = 0;
-        for (uint8_t i = 0; i < TEST_MAX_NODES; i++) {
-            if (m_nodes[i].is_connected)
+        for (auto m_node : m_nodes) {
+            if (m_node.is_connected) {
                 count++;
+            }
         }
         return count;
     }
 
 private:
     /// Node slots indexed by node ID.
-    NodeEntry m_nodes[TEST_MAX_NODES];
+    NodeEntry m_nodes[TEST_MAX_NODES]{};
     /// Reverse map from virtual IP to node ID.
     std::map<uint32_t, uint32_t> m_ip_to_node;  // IP -> node_id mapping
 };
@@ -287,7 +293,7 @@ private:
  */
 class TestProxyBuffer {
 public:
-    TestProxyBuffer() : m_write_pos(0), m_read_pos(0) {
+    TestProxyBuffer() {
         m_buffer.resize(MAX_PROXY_DATA_SIZE * 4);  // 4 packets
     }
 
@@ -355,7 +361,7 @@ public:
      * @brief Count the packets not yet read.
      * @return Number of queued packets.
      */
-    size_t pending_packets() const {
+    [[nodiscard]] size_t pending_packets() const {
         return m_packet_sizes.size();
     }
 
@@ -370,9 +376,9 @@ private:
     /// Raw storage of headers and payloads.
     std::vector<uint8_t> m_buffer;
     /// Offset where the next packet is written.
-    size_t m_write_pos;
+    size_t m_write_pos{0};
     /// Offset of the next packet to read.
-    size_t m_read_pos;
+    size_t m_read_pos{0};
     /// Total size (header + payload) of each queued packet, oldest first.
     std::vector<size_t> m_packet_sizes;
 };
@@ -385,7 +391,7 @@ private:
  * @brief ProxyInfo is 16 bytes, as in the RyuLDN protocol.
  */
 TEST(proxy_info_size) {
-    ASSERT_EQ(sizeof(ProxyInfo), 0x10u);  // 16 bytes per RyuLDN protocol
+    ASSERT_EQ(sizeof(ProxyInfo), 0x10U);  // 16 bytes per RyuLDN protocol
 }
 
 /**
@@ -400,9 +406,9 @@ TEST(proxy_info_fields) {
     info.protocol = ProtocolType::Udp;
 
     ASSERT_EQ(info.source_ipv4, TEST_IP_NODE0);
-    ASSERT_EQ(info.source_port, 12345u);
+    ASSERT_EQ(info.source_port, 12345U);
     ASSERT_EQ(info.dest_ipv4, TEST_IP_NODE1);
-    ASSERT_EQ(info.dest_port, 54321u);
+    ASSERT_EQ(info.dest_port, 54321U);
     ASSERT_EQ(info.protocol, ProtocolType::Udp);
 }
 
@@ -411,10 +417,10 @@ TEST(proxy_info_fields) {
  */
 TEST(proxy_info_zero_init) {
     ProxyInfo info{};
-    ASSERT_EQ(info.source_ipv4, 0u);
-    ASSERT_EQ(info.source_port, 0u);
-    ASSERT_EQ(info.dest_ipv4, 0u);
-    ASSERT_EQ(info.dest_port, 0u);
+    ASSERT_EQ(info.source_ipv4, 0U);
+    ASSERT_EQ(info.source_port, 0U);
+    ASSERT_EQ(info.dest_ipv4, 0U);
+    ASSERT_EQ(info.dest_port, 0U);
 }
 
 // ============================================================================
@@ -425,7 +431,7 @@ TEST(proxy_info_zero_init) {
  * @brief ProxyDataHeader is 20 bytes, as in the RyuLDN protocol.
  */
 TEST(proxy_data_header_size) {
-    ASSERT_EQ(sizeof(ProxyDataHeader), 0x14u);  // 20 bytes per RyuLDN protocol
+    ASSERT_EQ(sizeof(ProxyDataHeader), 0x14U);  // 20 bytes per RyuLDN protocol
 }
 
 /**
@@ -442,7 +448,7 @@ TEST(proxy_data_header_fields) {
 
     ASSERT_EQ(header.info.source_ipv4, TEST_IP_NODE0);
     ASSERT_EQ(header.info.dest_ipv4, TEST_IP_NODE1);
-    ASSERT_EQ(header.data_length, 100u);
+    ASSERT_EQ(header.data_length, 100U);
 }
 
 /**
@@ -461,9 +467,9 @@ TEST(proxy_data_header_broadcast) {
  */
 TEST(proxy_data_header_zero_init) {
     ProxyDataHeader header{};
-    ASSERT_EQ(header.info.dest_ipv4, 0u);
-    ASSERT_EQ(header.info.source_ipv4, 0u);
-    ASSERT_EQ(header.data_length, 0u);
+    ASSERT_EQ(header.info.dest_ipv4, 0U);
+    ASSERT_EQ(header.info.source_ipv4, 0U);
+    ASSERT_EQ(header.data_length, 0U);
 }
 
 // ============================================================================
@@ -475,7 +481,7 @@ TEST(proxy_data_header_zero_init) {
  */
 TEST(node_mapper_initial_state) {
     TestNodeMapper mapper;
-    ASSERT_EQ(mapper.get_connected_count(), 0u);
+    ASSERT_EQ(mapper.get_connected_count(), 0U);
 }
 
 /**
@@ -488,8 +494,8 @@ TEST(node_mapper_add_node) {
     ASSERT_TRUE(mapper.is_node_connected(0));
     ASSERT_TRUE(mapper.is_ip_connected(TEST_IP_NODE0));
     ASSERT_EQ(mapper.get_node_ip(0), TEST_IP_NODE0);
-    ASSERT_EQ(mapper.get_ip_node_id(TEST_IP_NODE0), 0u);
-    ASSERT_EQ(mapper.get_connected_count(), 1u);
+    ASSERT_EQ(mapper.get_ip_node_id(TEST_IP_NODE0), 0U);
+    ASSERT_EQ(mapper.get_connected_count(), 1U);
 }
 
 /**
@@ -501,7 +507,7 @@ TEST(node_mapper_add_multiple_nodes) {
     mapper.add_node(1, TEST_IP_NODE1);
     mapper.add_node(2, TEST_IP_NODE2);
 
-    ASSERT_EQ(mapper.get_connected_count(), 3u);
+    ASSERT_EQ(mapper.get_connected_count(), 3U);
     ASSERT_TRUE(mapper.is_node_connected(0));
     ASSERT_TRUE(mapper.is_node_connected(1));
     ASSERT_TRUE(mapper.is_node_connected(2));
@@ -521,7 +527,7 @@ TEST(node_mapper_remove_node) {
     ASSERT_FALSE(mapper.is_node_connected(0));
     ASSERT_FALSE(mapper.is_ip_connected(TEST_IP_NODE0));
     ASSERT_TRUE(mapper.is_node_connected(1));
-    ASSERT_EQ(mapper.get_connected_count(), 1u);
+    ASSERT_EQ(mapper.get_connected_count(), 1U);
 }
 
 /**
@@ -530,7 +536,7 @@ TEST(node_mapper_remove_node) {
 TEST(node_mapper_invalid_node_id) {
     TestNodeMapper mapper;
     ASSERT_FALSE(mapper.is_node_connected(100));
-    ASSERT_EQ(mapper.get_node_ip(100), 0u);
+    ASSERT_EQ(mapper.get_node_ip(100), 0U);
 }
 
 /**
@@ -544,7 +550,7 @@ TEST(node_mapper_broadcast_targets) {
 
     // Broadcast from node 0 should target nodes 1 and 2
     auto targets = mapper.get_broadcast_target_ips(TEST_IP_NODE0);
-    ASSERT_EQ(targets.size(), 2u);
+    ASSERT_EQ(targets.size(), 2U);
 }
 
 /**
@@ -591,7 +597,7 @@ TEST(node_mapper_max_nodes) {
  */
 TEST(proxy_buffer_initial_empty) {
     TestProxyBuffer buffer;
-    ASSERT_EQ(buffer.pending_packets(), 0u);
+    ASSERT_EQ(buffer.pending_packets(), 0U);
 }
 
 /**
@@ -607,7 +613,7 @@ TEST(proxy_buffer_write_read_small) {
 
     uint8_t data[] = {0x01, 0x02, 0x03, 0x04};
     ASSERT_TRUE(buffer.write(header, data, sizeof(data)));
-    ASSERT_EQ(buffer.pending_packets(), 1u);
+    ASSERT_EQ(buffer.pending_packets(), 1U);
 
     ProxyDataHeader read_header{};
     uint8_t read_data[64];
@@ -618,8 +624,8 @@ TEST(proxy_buffer_write_read_small) {
     ASSERT_EQ(read_header.info.dest_ipv4, TEST_IP_NODE1);
     ASSERT_EQ(read_header.info.source_ipv4, TEST_IP_NODE0);
     ASSERT_EQ(read_size, sizeof(data));
-    ASSERT_EQ(read_data[0], 0x01u);
-    ASSERT_EQ(read_data[3], 0x04u);
+    ASSERT_EQ(read_data[0], 0x01U);
+    ASSERT_EQ(read_data[3], 0x04U);
 }
 
 /**
@@ -633,11 +639,11 @@ TEST(proxy_buffer_write_multiple) {
         header.info.dest_ipv4 = 0x0A720000 + i;
         header.info.source_ipv4 = TEST_IP_NODE0;
 
-        uint8_t data = static_cast<uint8_t>(i);
+        auto data = static_cast<uint8_t>(i);
         ASSERT_TRUE(buffer.write(header, &data, 1));
     }
 
-    ASSERT_EQ(buffer.pending_packets(), 4u);
+    ASSERT_EQ(buffer.pending_packets(), 4U);
 }
 
 /**
@@ -652,15 +658,17 @@ TEST(proxy_buffer_read_order_fifo) {
         header.info.dest_ipv4 = 0x0A720000 + i;
         header.info.source_ipv4 = TEST_IP_NODE0;
 
-        uint8_t data = static_cast<uint8_t>(i * 10);
+        auto data = static_cast<uint8_t>(i * 10);
         buffer.write(header, &data, 1);
     }
 
     // Read should be in FIFO order
     for (uint32_t i = 0; i < 3; i++) {
         ProxyDataHeader header{};
-        uint8_t data;
-        size_t size;
+        // Zeroed so a failed write in read() cannot leave the assertion below
+        // comparing an indeterminate value.
+        uint8_t data = 0;
+        size_t size = 0;
         ASSERT_TRUE(buffer.read(header, &data, size, 1));
         ASSERT_EQ(header.info.dest_ipv4, 0x0A720000 + i);
         ASSERT_EQ(data, static_cast<uint8_t>(i * 10));
@@ -688,10 +696,10 @@ TEST(proxy_buffer_reset) {
     uint8_t data = 0x42;
     buffer.write(header, &data, 1);
 
-    ASSERT_EQ(buffer.pending_packets(), 1u);
+    ASSERT_EQ(buffer.pending_packets(), 1U);
 
     buffer.reset();
-    ASSERT_EQ(buffer.pending_packets(), 0u);
+    ASSERT_EQ(buffer.pending_packets(), 0U);
 }
 
 /**
@@ -715,7 +723,7 @@ TEST(proxy_buffer_header_only) {
 
     ASSERT_EQ(read_header.info.dest_ipv4, TEST_IP_NODE1);
     ASSERT_EQ(read_header.info.source_ipv4, TEST_IP_NODE2);
-    ASSERT_EQ(read_size, 0u);
+    ASSERT_EQ(read_size, 0U);
 }
 
 // ============================================================================
@@ -898,7 +906,10 @@ TEST(proxy_header_byte_layout) {
     header.info.protocol = ProtocolType::Udp;  // 17
     header.data_length = 0x12345678;
 
-    uint8_t* bytes = reinterpret_cast<uint8_t*>(&header);
+    // Copy the object representation out first: reading the wire bytes through
+    // an unsigned-char view of the struct is what memcpy expresses directly.
+    uint8_t bytes[sizeof(ProxyDataHeader)] = {};
+    std::memcpy(bytes, &header, sizeof(header));
 
     // ProxyInfo layout (16 bytes):
     // - source_ipv4: 4 bytes (offset 0)
@@ -909,36 +920,36 @@ TEST(proxy_header_byte_layout) {
     // data_length: 4 bytes (offset 16)
 
     // Little-endian: source_ipv4 at offset 0
-    ASSERT_EQ(bytes[0], 0x04u);
-    ASSERT_EQ(bytes[1], 0x03u);
-    ASSERT_EQ(bytes[2], 0x02u);
-    ASSERT_EQ(bytes[3], 0x01u);
+    ASSERT_EQ(bytes[0], 0x04U);
+    ASSERT_EQ(bytes[1], 0x03U);
+    ASSERT_EQ(bytes[2], 0x02U);
+    ASSERT_EQ(bytes[3], 0x01U);
 
     // source_port at offset 4
-    ASSERT_EQ(bytes[4], 0x06u);
-    ASSERT_EQ(bytes[5], 0x05u);
+    ASSERT_EQ(bytes[4], 0x06U);
+    ASSERT_EQ(bytes[5], 0x05U);
 
     // dest_ipv4 at offset 6
-    ASSERT_EQ(bytes[6], 0x0Au);
-    ASSERT_EQ(bytes[7], 0x09u);
-    ASSERT_EQ(bytes[8], 0x08u);
-    ASSERT_EQ(bytes[9], 0x07u);
+    ASSERT_EQ(bytes[6], 0x0AU);
+    ASSERT_EQ(bytes[7], 0x09U);
+    ASSERT_EQ(bytes[8], 0x08U);
+    ASSERT_EQ(bytes[9], 0x07U);
 
     // dest_port at offset 10
-    ASSERT_EQ(bytes[10], 0x0Cu);
-    ASSERT_EQ(bytes[11], 0x0Bu);
+    ASSERT_EQ(bytes[10], 0x0CU);
+    ASSERT_EQ(bytes[11], 0x0BU);
 
     // protocol at offset 12 (ProtocolType::Udp = 17)
-    ASSERT_EQ(bytes[12], 17u);
-    ASSERT_EQ(bytes[13], 0u);
-    ASSERT_EQ(bytes[14], 0u);
-    ASSERT_EQ(bytes[15], 0u);
+    ASSERT_EQ(bytes[12], 17U);
+    ASSERT_EQ(bytes[13], 0U);
+    ASSERT_EQ(bytes[14], 0U);
+    ASSERT_EQ(bytes[15], 0U);
 
     // data_length at offset 16
-    ASSERT_EQ(bytes[16], 0x78u);
-    ASSERT_EQ(bytes[17], 0x56u);
-    ASSERT_EQ(bytes[18], 0x34u);
-    ASSERT_EQ(bytes[19], 0x12u);
+    ASSERT_EQ(bytes[16], 0x78U);
+    ASSERT_EQ(bytes[17], 0x56U);
+    ASSERT_EQ(bytes[18], 0x34U);
+    ASSERT_EQ(bytes[19], 0x12U);
 }
 
 /**

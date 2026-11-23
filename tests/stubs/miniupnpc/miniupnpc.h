@@ -9,10 +9,13 @@
  * argument through g_fake_upnp.
  */
 
-#pragma once
+#ifndef TESTS_STUBS_MINIUPNPC_MINIUPNPC_H_
+#define TESTS_STUBS_MINIUPNPC_MINIUPNPC_H_
 
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 
 /// Subset of miniupnpc's UPNPUrls: the URLs of the discovered IGD.
@@ -42,37 +45,63 @@ struct UPNPDev {
 };
 
 /// Return value of the UPNP_*PortMapping/ExternalIP calls on success.
-#define UPNPCOMMAND_SUCCESS (0)
+inline constexpr int UPNPCOMMAND_SUCCESS = 0;
+
+/// Control URL the stubbed IGD serves; its array size is the copy capacity.
+inline constexpr char kFakeControlUrl[] = "http://192.168.1.1/ctl";
+
+/// Integer shared between the lease thread and the test thread; copyable
+/// so `g_fake_upnp = FakeUpnp{}` still resets the fake between tests.
+///
+/// Derives from std::atomic<int> so the implicit read conversion and the
+/// atomic load/store come from the standard library, as the fake int field
+/// does for the tests; only the copy semantics the reset needs are added.
+struct SharedInt : std::atomic<int> {
+    /// Starts at zero, like the FakeUpnp member it backs.
+    SharedInt() : std::atomic<int>(0) {}
+    /**
+     * @brief Copy the current value (used when the fake is reset).
+     * @param other Source whose value is read.
+     */
+    SharedInt(const SharedInt& other) : std::atomic<int>(other.load()) {}
+    /**
+     * @brief Copy-assign the current value (used when the fake is reset).
+     * @param other Source whose value is read.
+     * @return This object.
+     */
+    SharedInt& operator=(const SharedInt& other) {
+        store(other.load());
+        return *this;
+    }
+    /**
+     * @brief Assign a value.
+     * @param v Value to store.
+     * @return This object.
+     */
+    SharedInt& operator=(int v) {
+        store(v);
+        return *this;
+    }
+    /**
+     * @brief Increment and return the new value.
+     * @return Value after the increment.
+     */
+    int operator++() {
+        return std::atomic<int>::operator++();
+    }
+};
 
 /// Scripted answers and recorded calls of the fake library.
+///
+/// Fields are grouped to keep the struct padding-free (clang-tidy
+/// clang-analyzer-optin.performance.Padding); order carries no meaning.
 struct FakeUpnp {
-    // answers
-    bool devices_found = true;     ///< upnpDiscover returns a device list
-    int igd_result = 1;            ///< UPNP_GetValidIGD return value
-    bool igd_sets_control = true;  ///< UPNP_GetValidIGD fills the control URL
     /// LAN address UPNP_GetValidIGD writes into lanaddr.
     std::string lan_addr = "192.168.1.100";
     /// Service type UPNP_GetValidIGD writes into IGDdatas.
     std::string service_type = "urn:fake:WANIPConnection:1";
-    /// UPNP_AddPortMapping return value (0 = UPNPCOMMAND_SUCCESS).
-    int add_result = 0;
-    /// UPNP_DeletePortMapping return value (0 = UPNPCOMMAND_SUCCESS).
-    int delete_result = 0;
-    /// UPNP_GetExternalIPAddress return value (0 = UPNPCOMMAND_SUCCESS).
-    int external_ip_result = 0;
     /// External IP copied out by UPNP_GetExternalIPAddress (TEST-NET-3 range).
     std::string external_ip = "203.0.113.7";
-    // recorded
-    /// Number of upnpDiscover calls.
-    int discover_calls = 0;
-    /// Number of UPNP_AddPortMapping calls.
-    int add_calls = 0;
-    /// Number of freeUPNPDevlist calls.
-    int devlist_frees = 0;
-    /// Number of FreeUPNPUrls calls.
-    int urls_frees = 0;
-    /// Discovery delay (ms) passed to the last upnpDiscover call.
-    int last_delay = 0;
     // Arguments of the last UPNP_AddPortMapping call (all strings in the API)
     std::string add_ext_port,  ///< External port of the last AddPortMapping.
         add_int_port,          ///< Internal port of the last AddPortMapping.
@@ -80,14 +109,37 @@ struct FakeUpnp {
         add_desc,              ///< Mapping description of the last add.
         add_proto,             ///< Protocol ("TCP"/"UDP") of the last add.
         add_lease;             ///< Lease duration string of the last add.
-    /// Whether the last UPNP_AddPortMapping got a null remote host.
-    bool add_remote_host_null = false;
     std::string del_ext_port,  ///< External port of the last delete.
         del_proto;             ///< Protocol of the last delete.
-    /// Whether the last UPNP_DeletePortMapping got a null remote host.
-    bool del_remote_host_null = false;
     /// Service type string passed by the last add/delete/external-IP call.
     std::string used_service_type;
+    // answers
+    int igd_result = 1;  ///< UPNP_GetValidIGD return value
+    /// UPNP_AddPortMapping return value (0 = UPNPCOMMAND_SUCCESS).
+    SharedInt add_result;
+    /// UPNP_DeletePortMapping return value (0 = UPNPCOMMAND_SUCCESS).
+    int delete_result = 0;
+    /// UPNP_GetExternalIPAddress return value (0 = UPNPCOMMAND_SUCCESS).
+    int external_ip_result = 0;
+    // recorded
+    /// Number of upnpDiscover calls.
+    int discover_calls = 0;
+    /// Number of UPNP_AddPortMapping calls.
+    SharedInt add_calls;
+    /// Number of freeUPNPDevlist calls.
+    int devlist_frees = 0;
+    /// Number of FreeUPNPUrls calls.
+    int urls_frees = 0;
+    /// Discovery delay (ms) passed to the last upnpDiscover call.
+    int last_delay = 0;
+    /// upnpDiscover returns a device list
+    bool devices_found = true;
+    /// UPNP_GetValidIGD fills the control URL
+    bool igd_sets_control = true;
+    /// Whether the last UPNP_AddPortMapping got a null remote host.
+    bool add_remote_host_null = false;
+    /// Whether the last UPNP_DeletePortMapping got a null remote host.
+    bool del_remote_host_null = false;
 };
 /// Single instance every stubbed miniupnpc function reads and writes.
 inline FakeUpnp g_fake_upnp;
@@ -104,7 +156,13 @@ inline FakeUpnp g_fake_upnp;
  *         or nullptr when FakeUpnp::devices_found is false.
  */
 inline UPNPDev* upnpDiscover(
-    int delay, const char*, const char*, int, int, unsigned char, int* error) {
+    int delay,
+    const char* /*unused*/,
+    const char* /*unused*/,
+    int /*unused*/,
+    int /*unused*/,
+    unsigned char /*unused*/,
+    int* error) {
     ++g_fake_upnp.discover_calls;
     g_fake_upnp.last_delay = delay;
     *error = g_fake_upnp.devices_found ? 0 : -1;
@@ -119,7 +177,9 @@ inline UPNPDev* upnpDiscover(
  */
 inline void freeUPNPDevlist(UPNPDev* devlist) {
     ++g_fake_upnp.devlist_frees;
-    std::free(devlist);
+    // The real API releases the calloc'ed node; the owner keeps that pairing
+    // explicit while the caller-facing signature stays the C one.
+    std::unique_ptr<UPNPDev, void (*)(void*)> release(devlist, &std::free);
 }
 
 /**
@@ -136,10 +196,21 @@ inline void freeUPNPDevlist(UPNPDev* devlist) {
  * @return FakeUpnp::igd_result (1 = valid connected IGD in real miniupnpc).
  */
 inline int UPNP_GetValidIGD(
-    UPNPDev*, UPNPUrls* urls, IGDdatas* data, char* lanaddr, int lanaddrlen) {
+    UPNPDev* /*unused*/,
+    UPNPUrls* urls,
+    IGDdatas* data,
+    char* lanaddr,
+    int lanaddrlen) {
     if (g_fake_upnp.igd_sets_control) {
-        urls->controlURL = static_cast<char*>(std::malloc(32));
-        std::strcpy(urls->controlURL, "http://192.168.1.1/ctl");
+        std::unique_ptr<char, void (*)(void*)> control(
+            static_cast<char*>(std::malloc(sizeof(kFakeControlUrl))),
+            &std::free);
+        if (control) {
+            // Capacity is the array size, so the copy provably fits.
+            std::char_traits<char>::copy(
+                control.get(), kFakeControlUrl, sizeof(kFakeControlUrl));
+        }
+        urls->controlURL = control.release();
     }
     std::strncpy(
         data->first.servicetype,
@@ -158,7 +229,10 @@ inline int UPNP_GetValidIGD(
  */
 inline void FreeUPNPUrls(UPNPUrls* urls) {
     ++g_fake_upnp.urls_frees;
-    std::free(urls->controlURL);
+    // The owner takes the pointer the API says was malloc'ed and releases it
+    // on scope exit, after the member is reset like the real function does.
+    std::unique_ptr<char, void (*)(void*)> release(
+        urls->controlURL, &std::free);
     urls->controlURL = nullptr;
 }
 
@@ -175,7 +249,7 @@ inline void FreeUPNPUrls(UPNPUrls* urls) {
  * @return FakeUpnp::add_result.
  */
 inline int UPNP_AddPortMapping(
-    const char*,
+    const char* /*unused*/,
     const char* servicetype,
     const char* ext_port,
     const char* in_port,
@@ -205,7 +279,7 @@ inline int UPNP_AddPortMapping(
  * @return FakeUpnp::delete_result.
  */
 inline int UPNP_DeletePortMapping(
-    const char*,
+    const char* /*unused*/,
     const char* servicetype,
     const char* ext_port,
     const char* proto,
@@ -227,8 +301,10 @@ inline int UPNP_DeletePortMapping(
  * @return FakeUpnp::external_ip_result.
  */
 inline int UPNP_GetExternalIPAddress(
-    const char*, const char* servicetype, char* ext_ip) {
+    const char* /*unused*/, const char* servicetype, char* ext_ip) {
     g_fake_upnp.used_service_type = servicetype;
     std::strncpy(ext_ip, g_fake_upnp.external_ip.c_str(), 15);
     return g_fake_upnp.external_ip_result;
 }
+
+#endif  // TESTS_STUBS_MINIUPNPC_MINIUPNPC_H_

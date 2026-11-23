@@ -10,7 +10,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_CLIENT_PROCESS_MONITOR_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_CLIENT_PROCESS_MONITOR_HPP_
 
 #include <stratosphere.hpp>
 #include "interfaces/iclient_process_monitor.hpp"
@@ -44,3 +45,4 @@ static_assert(
     ams::mitm::ldn::IsIClientProcessMonitorInterface<IClientProcessMonitor>);
 
 }  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_CLIENT_PROCESS_MONITOR_HPP_

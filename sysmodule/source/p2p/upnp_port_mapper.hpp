@@ -41,7 +41,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_P2P_UPNP_PORT_MAPPER_HPP_
+#define SYSMODULE_SOURCE_P2P_UPNP_PORT_MAPPER_HPP_
 
 #include <stratosphere.hpp>
 #include <memory>
@@ -266,12 +267,13 @@ private:
     /**
      * @brief Local IP address string
      */
-    char m_lan_addr[64];
+    char m_lan_addr[64]{};
 
     /**
      * @brief Whether discovery succeeded
      */
-    bool m_available;
+    bool m_available{false};
 };
 
 }  // namespace ams::mitm::p2p
+#endif  // SYSMODULE_SOURCE_P2P_UPNP_PORT_MAPPER_HPP_

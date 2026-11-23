@@ -48,17 +48,7 @@ namespace ryu_ldn::ldn {
  * Initializes handler in unconfigured state with empty connection table.
  * No callbacks are registered initially.
  */
-LdnProxyHandler::LdnProxyHandler()
-    : m_configured(false),
-      m_proxy_ip(0),
-      m_proxy_subnet_mask(0),
-      m_connections{},
-      m_connection_count(0),
-      m_config_callback(nullptr),
-      m_connect_callback(nullptr),
-      m_connect_reply_callback(nullptr),
-      m_data_callback(nullptr),
-      m_disconnect_callback(nullptr) {}
+LdnProxyHandler::LdnProxyHandler() : m_connections{} {}
 
 // ============================================================================
 // Callback Registration

@@ -299,8 +299,8 @@ TEST(ryu_network_config_p2p_disabled) {
 
     // Check private_ip is all zeros
     bool all_zeros = true;
-    for (int i = 0; i < 16; i++) {
-        if (config.private_ip[i] != 0) {
+    for (unsigned char i : config.private_ip) {
+        if (i != 0) {
             all_zeros = false;
             break;
         }
@@ -601,7 +601,7 @@ TEST(master_send_callback_user_data_pattern) {
         size_t last_size;
     };
 
-    Context ctx{0, 0};
+    Context ctx{.call_count = 0, .last_size = 0};
 
     auto callback = [](const void* data, size_t size, void* user_data) {
         auto* c = static_cast<Context*>(user_data);

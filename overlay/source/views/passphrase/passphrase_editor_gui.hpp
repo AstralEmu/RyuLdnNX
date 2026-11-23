@@ -9,7 +9,8 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  */
-#pragma once
+#ifndef OVERLAY_SOURCE_VIEWS_PASSPHRASE_PASSPHRASE_EDITOR_GUI_HPP_
+#define OVERLAY_SOURCE_VIEWS_PASSPHRASE_PASSPHRASE_EDITOR_GUI_HPP_
 
 #include <tesla.hpp>
 
@@ -85,3 +86,4 @@ private:
     /** Apply the passphrase and go back. */
     void ApplyPassphrase();
 };
+#endif  // OVERLAY_SOURCE_VIEWS_PASSPHRASE_PASSPHRASE_EDITOR_GUI_HPP_

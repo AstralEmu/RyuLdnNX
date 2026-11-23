@@ -30,14 +30,7 @@ namespace ams::mitm::ldn {
  *
  * All indices start at 0, buffer is empty.
  */
-LdnProxyBuffer::LdnProxyBuffer()
-    : m_packets{},
-      m_packet_read_idx(0),
-      m_packet_write_idx(0),
-      m_packet_count(0),
-      m_data_buffer{},
-      m_data_read_pos(0),
-      m_data_write_pos(0) {}
+LdnProxyBuffer::LdnProxyBuffer() = default;
 
 /**
  * @brief Write a packet to the buffer

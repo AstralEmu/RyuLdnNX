@@ -20,7 +20,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_SHARED_STATE_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_SHARED_STATE_HPP_
 
 #include <stratosphere.hpp>
 #include <unordered_set>
@@ -309,14 +310,16 @@ public:
     /// @gdb{tag="LDN:STATE", msg="GetActiveSessionCount"}
     u32 GetActiveSessionCount() const;
 
-private:
-    /// @gdb{tag="LDN:STATE", msg="SharedState: constructor"}
-    SharedState() = default;
+    // Non-copyable
     SharedState(const SharedState&) = delete;
     SharedState& operator=(const SharedState&) = delete;
 
+private:
+    /// @gdb{tag="LDN:STATE", msg="SharedState: constructor"}
+    SharedState() = default;
+
     /// Guards every non-atomic field below
-    mutable ams::os::SdkMutex m_mutex{};
+    mutable ams::os::SdkMutex m_mutex;
     /// True while a game is using LDN
     bool m_game_active = false;
     /// Process ID of the active game (0 if none)
@@ -343,3 +346,4 @@ private:
 };
 
 }  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_SHARED_STATE_HPP_

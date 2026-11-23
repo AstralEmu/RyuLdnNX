@@ -9,7 +9,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_STATE_MACHINE_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_STATE_MACHINE_HPP_
 
 #include <stratosphere.hpp>
 #include "ldn_types.hpp"
@@ -253,12 +254,13 @@ public:
     void SignalStateChange();
 
 private:
-    mutable os::SdkMutex m_mutex;   ///< Mutex for thread safety
-    CommState m_state;              ///< Current state
-    os::SystemEvent m_state_event;  ///< State change event
+    mutable os::SdkMutex m_mutex;        ///< Mutex for thread safety
+    CommState m_state{CommState::None};  ///< Current state
+    os::SystemEvent m_state_event;       ///< State change event
 
-    StateCallback m_callback;    ///< Optional state change callback
-    void* m_callback_user_data;  ///< User data for callback
+    StateCallback m_callback{nullptr};    ///< Optional state change callback
+    void* m_callback_user_data{nullptr};  ///< User data for callback
 };
 
 }  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_STATE_MACHINE_HPP_

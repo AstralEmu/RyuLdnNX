@@ -29,17 +29,17 @@
 //=============================================================================
 
 /// Unsigned 8-bit integer, as in libnx types.
-typedef uint8_t u8;
+using u8 = uint8_t;
 /// Unsigned 16-bit integer, as in libnx types.
-typedef uint16_t u16;
+using u16 = uint16_t;
 /// Unsigned 32-bit integer, as in libnx types.
-typedef uint32_t u32;
+using u32 = uint32_t;
 /// Unsigned 64-bit integer, as in libnx types.
-typedef uint64_t u64;
+using u64 = uint64_t;
 /// Signed 32-bit integer, as in libnx types.
-typedef int32_t s32;
+using s32 = int32_t;
 /// Result code; 0 means success, as in libnx.
-typedef int32_t Result;
+using Result = int32_t;
 
 /**
  * @brief Check a Result for success.
@@ -350,12 +350,12 @@ static int g_tests_passed = 0;
 
 /// @test Verify command ids are sequential.
 TEST(command_ids_are_sequential) {
-    ASSERT_EQ(IPC_CMD_GET_PASSPHRASE, 65011u);
-    ASSERT_EQ(IPC_CMD_SET_PASSPHRASE, 65012u);
-    ASSERT_EQ(IPC_CMD_GET_LDN_ENABLED, 65013u);
-    ASSERT_EQ(IPC_CMD_SET_LDN_ENABLED, 65014u);
-    ASSERT_EQ(IPC_CMD_SAVE_CONFIG, 65029u);
-    ASSERT_EQ(IPC_CMD_RELOAD_CONFIG, 65030u);
+    ASSERT_EQ(IPC_CMD_GET_PASSPHRASE, 65011U);
+    ASSERT_EQ(IPC_CMD_SET_PASSPHRASE, 65012U);
+    ASSERT_EQ(IPC_CMD_GET_LDN_ENABLED, 65013U);
+    ASSERT_EQ(IPC_CMD_SET_LDN_ENABLED, 65014U);
+    ASSERT_EQ(IPC_CMD_SAVE_CONFIG, 65029U);
+    ASSERT_EQ(IPC_CMD_RELOAD_CONFIG, 65030U);
 }
 
 /// @test Verify command ids no overlap with existing.
@@ -384,24 +384,24 @@ TEST(command_ids_paired_get_set) {
 
 /// @test Verify ipc passphrase size.
 TEST(ipc_passphrase_size) {
-    ASSERT_EQ(sizeof(IpcPassphrase), 64u);
+    ASSERT_EQ(sizeof(IpcPassphrase), 64U);
 }
 
 /// @test Verify ipc server address size.
 TEST(ipc_server_address_size) {
-    ASSERT_EQ(sizeof(IpcServerAddress), 68u);
+    ASSERT_EQ(sizeof(IpcServerAddress), 68U);
 }
 
 /// @test Verify ipc debug settings size.
 TEST(ipc_debug_settings_size) {
-    ASSERT_EQ(sizeof(IpcDebugSettings), 8u);
+    ASSERT_EQ(sizeof(IpcDebugSettings), 8U);
 }
 
 /// @test Verify structures are pod.
 TEST(structures_are_pod) {
     // Verify structures are trivially copyable (POD-like)
     IpcPassphrase p1 = {};
-    IpcPassphrase p2;
+    IpcPassphrase p2{};
     memcpy(&p2, &p1, sizeof(IpcPassphrase));
     ASSERT_EQ(p2.passphrase[0], '\0');
 }
@@ -595,11 +595,11 @@ TEST(debug_level_invalid) {
 
 /// @test Verify config result values.
 TEST(config_result_values) {
-    ASSERT_EQ(static_cast<u32>(IpcConfigResult::Success), 0u);
-    ASSERT_EQ(static_cast<u32>(IpcConfigResult::FileNotFound), 1u);
-    ASSERT_EQ(static_cast<u32>(IpcConfigResult::ParseError), 2u);
-    ASSERT_EQ(static_cast<u32>(IpcConfigResult::IoError), 3u);
-    ASSERT_EQ(static_cast<u32>(IpcConfigResult::InvalidValue), 4u);
+    ASSERT_EQ(static_cast<u32>(IpcConfigResult::Success), 0U);
+    ASSERT_EQ(static_cast<u32>(IpcConfigResult::FileNotFound), 1U);
+    ASSERT_EQ(static_cast<u32>(IpcConfigResult::ParseError), 2U);
+    ASSERT_EQ(static_cast<u32>(IpcConfigResult::IoError), 3U);
+    ASSERT_EQ(static_cast<u32>(IpcConfigResult::InvalidValue), 4U);
 }
 
 //=============================================================================
@@ -609,8 +609,8 @@ TEST(config_result_values) {
 /// @test Verify debug settings zero init.
 TEST(debug_settings_zero_init) {
     IpcDebugSettings settings = {};
-    ASSERT_EQ(settings.enabled, 0u);
-    ASSERT_EQ(settings.level, 0u);
+    ASSERT_EQ(settings.enabled, 0U);
+    ASSERT_EQ(settings.level, 0U);
 }
 
 /// @test Verify debug settings assignment.
@@ -618,8 +618,8 @@ TEST(debug_settings_assignment) {
     IpcDebugSettings settings = {};
     settings.enabled = 1;
     settings.level = 2;
-    ASSERT_EQ(settings.enabled, 1u);
-    ASSERT_EQ(settings.level, 2u);
+    ASSERT_EQ(settings.enabled, 1U);
+    ASSERT_EQ(settings.level, 2U);
 }
 
 //=============================================================================
@@ -632,7 +632,7 @@ TEST(server_address_default_port) {
     strncpy(addr.host, "localhost", sizeof(addr.host));
     addr.port = 39990;
     ASSERT_STREQ(addr.host, "localhost");
-    ASSERT_EQ(addr.port, 39990u);
+    ASSERT_EQ(addr.port, 39990U);
 }
 
 /// @test Verify server address long hostname.
@@ -653,7 +653,7 @@ TEST(server_address_truncates_too_long) {
         "a";
     strncpy(addr.host, tooLong, sizeof(addr.host) - 1);
     addr.host[sizeof(addr.host) - 1] = '\0';
-    ASSERT_EQ(strlen(addr.host), 63u);
+    ASSERT_EQ(strlen(addr.host), 63U);
 }
 
 //=============================================================================
@@ -679,7 +679,7 @@ TEST(passphrase_max_length) {
     // Fill with 63 chars + null terminator
     memset(p.passphrase, 'x', 63);
     p.passphrase[63] = '\0';
-    ASSERT_EQ(strlen(p.passphrase), 63u);
+    ASSERT_EQ(strlen(p.passphrase), 63U);
 }
 
 //=============================================================================

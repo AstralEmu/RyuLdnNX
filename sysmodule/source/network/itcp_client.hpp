@@ -9,7 +9,8 @@
  * between ITcpClient and TcpClient.
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_ITCP_CLIENT_HPP_
+#define SYSMODULE_SOURCE_NETWORK_ITCP_CLIENT_HPP_
 
 #include <cstdint>
 #include <cstddef>
@@ -149,7 +150,7 @@ public:
      *
      * @return true if connected
      */
-    virtual bool is_connected() const = 0;
+    [[nodiscard]] virtual bool is_connected() const = 0;
 
     /**
      * @brief Send a raw protocol packet with header encoding
@@ -331,7 +332,7 @@ public:
      *
      * @return true if at least one complete packet is available
      */
-    virtual bool has_packet_available() const = 0;
+    [[nodiscard]] virtual bool has_packet_available() const = 0;
 
     /**
      * @brief Enable or disable TCP_NODELAY
@@ -343,3 +344,4 @@ public:
 };
 
 }  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_ITCP_CLIENT_HPP_

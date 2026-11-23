@@ -134,7 +134,7 @@ static int g_test_count = 0;
  */
 static void register_test(const char* name, void (*func)()) {
     if (g_test_count < 128) {
-        g_tests[g_test_count++] = {name, func};
+        g_tests[g_test_count++] = {.name = name, .func = func};
     }
 }
 
@@ -292,13 +292,13 @@ TEST(lease_timing_correct) {
 /// @test Verify port range valid.
 TEST(port_range_valid) {
     // All ports in range should be valid (< 65536)
-    uint16_t max_private =
+    const uint32_t max_private =
         p2p_proxy::PRIVATE_PORT_BASE + p2p_proxy::PRIVATE_PORT_RANGE - 1;
-    uint16_t max_public =
+    const uint32_t max_public =
         p2p_proxy::PUBLIC_PORT_BASE + p2p_proxy::PUBLIC_PORT_RANGE - 1;
 
-    ASSERT_TRUE(max_private < 65536);
-    ASSERT_TRUE(max_public < 65536);
+    ASSERT_TRUE(max_private < 65536U);
+    ASSERT_TRUE(max_public < 65536U);
     ASSERT_EQ(max_private, 39999U);
     ASSERT_EQ(max_public, 39999U);
 }

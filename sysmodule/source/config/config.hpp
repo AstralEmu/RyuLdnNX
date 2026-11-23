@@ -60,7 +60,8 @@
  * @see Epic 2, Story 2.1 for requirements
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_CONFIG_CONFIG_HPP_
+#define SYSMODULE_SOURCE_CONFIG_CONFIG_HPP_
 
 #include <cstdint>
 #include <cstddef>
@@ -365,3 +366,4 @@ inline const char* config_result_to_string(ConfigResult result) {
 }
 
 }  // namespace ryu_ldn::config
+#endif  // SYSMODULE_SOURCE_CONFIG_CONFIG_HPP_

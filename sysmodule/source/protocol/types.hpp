@@ -54,10 +54,13 @@
  * Reference: LdnServer/Network/RyuLdnProtocol.cs
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_PROTOCOL_TYPES_HPP_
+#define SYSMODULE_SOURCE_PROTOCOL_TYPES_HPP_
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 
 namespace ryu_ldn::protocol {
 
@@ -268,12 +271,8 @@ struct __attribute__((packed)) MacAddress {
      * Zero MAC address is used to indicate "unassigned" or "any"
      * in certain protocol operations (e.g., new client registration).
      */
-    bool is_zero() const {
-        for (int i = 0; i < 6; i++) {
-            if (data[i] != 0)
-                return false;
-        }
-        return true;
+    [[nodiscard]] bool is_zero() const {
+        return std::ranges::all_of(data, [](uint8_t b) { return b == 0; });
     }
 };
 static_assert(sizeof(MacAddress) == 6, "MacAddress must be 6 bytes");
@@ -303,12 +302,8 @@ struct __attribute__((packed)) SessionId {
      *
      * Zero session ID typically means "unassigned" or "new client".
      */
-    bool is_zero() const {
-        for (int i = 0; i < 16; i++) {
-            if (data[i] != 0)
-                return false;
-        }
-        return true;
+    [[nodiscard]] bool is_zero() const {
+        return std::ranges::all_of(data, [](uint8_t b) { return b == 0; });
     }
 };
 static_assert(sizeof(SessionId) == 16, "SessionId must be 16 bytes");
@@ -1200,3 +1195,4 @@ enum class NetworkErrorCode : uint32_t {
 };
 
 }  // namespace ryu_ldn::protocol
+#endif  // SYSMODULE_SOURCE_PROTOCOL_TYPES_HPP_

@@ -117,15 +117,15 @@ enum class StateTransitionResult { Success, InvalidTransition, AlreadyInState };
 class TestLdnStateMachine {
 public:
     /** Start in None with the state-change event not signaled. */
-    TestLdnStateMachine() : m_state(CommState::None), m_event_signaled(false) {}
+    TestLdnStateMachine() = default;
 
     /** @return Current state. */
-    CommState GetState() const {
+    [[nodiscard]] CommState GetState() const {
         return m_state;
     }
     /** @return true if a transition happened since the last ClearEventFlag().
      */
-    bool WasEventSignaled() const {
+    [[nodiscard]] bool WasEventSignaled() const {
         return m_event_signaled;
     }
     /** Reset the simulated state-change event flag. */
@@ -138,16 +138,16 @@ public:
      * @param state State to compare against.
      * @return true if the machine is exactly in that state.
      */
-    bool IsInState(CommState state) const {
+    [[nodiscard]] bool IsInState(CommState state) const {
         return m_state == state;
     }
     /** @return true in every state except None and Error. */
-    bool IsInitialized() const {
+    [[nodiscard]] bool IsInitialized() const {
         return m_state != CommState::None && m_state != CommState::Error;
     }
     /** @return true when a network exists (AccessPointCreated or
      * StationConnected). */
-    bool IsNetworkActive() const {
+    [[nodiscard]] bool IsNetworkActive() const {
         return m_state == CommState::AccessPointCreated ||
                m_state == CommState::StationConnected;
     }
@@ -302,9 +302,9 @@ private:
     }
 
     /** Current state. */
-    CommState m_state;
+    CommState m_state{CommState::None};
     /** Set by every successful transition, cleared by ClearEventFlag(). */
-    bool m_event_signaled;
+    bool m_event_signaled{false};
 };
 
 // ============================================================================

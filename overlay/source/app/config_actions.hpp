@@ -8,7 +8,8 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  */
-#pragma once
+#ifndef OVERLAY_SOURCE_APP_CONFIG_ACTIONS_HPP_
+#define OVERLAY_SOURCE_APP_CONFIG_ACTIONS_HPP_
 
 #include <switch.h>
 
@@ -58,3 +59,4 @@ inline bool DoReloadConfig() {
     Result rc = ryuLdnReloadConfig(svc, &result);
     return R_SUCCEEDED(rc) && result == RyuLdnConfigResult_Success;
 }
+#endif  // OVERLAY_SOURCE_APP_CONFIG_ACTIONS_HPP_

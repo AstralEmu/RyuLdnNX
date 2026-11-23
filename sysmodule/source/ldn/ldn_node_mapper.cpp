@@ -32,8 +32,7 @@ namespace ams::mitm::ldn {
  * - is_connected: false
  */
 LdnNodeMapper::LdnNodeMapper()
-    : m_nodes{},
-      m_local_node_id(0xFF)  // 0xFF = not assigned
+
 {
     // Initialize empty node entries with their respective IDs
     for (size_t i = 0; i < MaxNodes; i++) {

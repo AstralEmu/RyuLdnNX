@@ -136,7 +136,7 @@ public:
      * @brief Reset all state (for testing)
      */
     void Reset() {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_game_active = false;
         m_process_id = 0;
         m_ldn_state = CommState::None;
@@ -159,7 +159,7 @@ public:
      * @param process_id Process id of the game; stored only when `active`.
      */
     void SetGameActive(bool active, u64 process_id) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_game_active = active;
         m_process_id = active ? process_id : 0;
         if (!active) {
@@ -178,7 +178,7 @@ public:
      * @return The game-active flag.
      */
     bool IsGameActive() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return m_game_active;
     }
 
@@ -187,7 +187,7 @@ public:
      * @return Process id, or 0 when no game is active.
      */
     u64 GetActiveProcessId() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return m_process_id;
     }
 
@@ -200,7 +200,7 @@ public:
      * @param state New state.
      */
     void SetLdnState(CommState state) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_ldn_state = state;
     }
 
@@ -209,7 +209,7 @@ public:
      * @return The stored state (None after Reset).
      */
     CommState GetLdnState() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return m_ldn_state;
     }
 
@@ -226,7 +226,7 @@ public:
      */
     void SetSessionInfo(
         u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_node_count = node_count;
         m_max_nodes = max_nodes;
         m_local_node_id = local_node_id;
@@ -242,7 +242,7 @@ public:
      */
     void GetSessionInfo(
         u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         node_count = m_node_count;
         max_nodes = m_max_nodes;
         local_node_id = m_local_node_id;
@@ -258,7 +258,7 @@ public:
      * @param rtt_ms Round-trip time in milliseconds.
      */
     void SetLastRtt(u32 rtt_ms) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_last_rtt_ms = rtt_ms;
     }
 
@@ -267,7 +267,7 @@ public:
      * @return Round-trip time in milliseconds (0 when unknown).
      */
     u32 GetLastRtt() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return m_last_rtt_ms;
     }
 
@@ -278,7 +278,7 @@ public:
     /// @brief Ask the network layer to reconnect; the request is a one-shot
     /// flag.
     void RequestReconnect() {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_reconnect_requested = true;
     }
 
@@ -287,16 +287,18 @@ public:
      * @return true if a reconnect had been requested since the last consume.
      */
     bool ConsumeReconnectRequest() {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         bool was_requested = m_reconnect_requested;
         m_reconnect_requested = false;
         return was_requested;
     }
 
-private:
-    SharedState() = default;
+    // Non-copyable
     SharedState(const SharedState&) = delete;
     SharedState& operator=(const SharedState&) = delete;
+
+private:
+    SharedState() = default;
 
     /// Guards every field below.
     mutable std::mutex m_mutex;
@@ -389,7 +391,9 @@ TEST(set_game_active_false_resets_session_info) {
     state.SetSessionInfo(4, 8, 2, true);
     state.SetGameActive(false, 0);
 
-    u8 count, max, local;
+    u8 count;
+    u8 max;
+    u8 local;
     bool is_host;
     state.GetSessionInfo(count, max, local, is_host);
     ASSERT_EQ(count, 0);
@@ -471,7 +475,9 @@ TEST(initially_session_info_empty) {
     auto& state = SharedState::GetInstance();
     state.Reset();
 
-    u8 count, max, local;
+    u8 count;
+    u8 max;
+    u8 local;
     bool is_host;
     state.GetSessionInfo(count, max, local, is_host);
 
@@ -488,7 +494,9 @@ TEST(set_session_info_as_host) {
 
     state.SetSessionInfo(4, 8, 0, true);
 
-    u8 count, max, local;
+    u8 count;
+    u8 max;
+    u8 local;
     bool is_host;
     state.GetSessionInfo(count, max, local, is_host);
 
@@ -508,7 +516,9 @@ TEST(set_session_info_as_client) {
 
     state.SetSessionInfo(3, 8, 2, false);
 
-    u8 count, max, local;
+    u8 count;
+    u8 max;
+    u8 local;
     bool is_host;
     state.GetSessionInfo(count, max, local, is_host);
 
@@ -526,7 +536,9 @@ TEST(update_session_info_node_count) {
     state.SetSessionInfo(2, 8, 0, true);
     state.SetSessionInfo(5, 8, 0, true);  // More players joined
 
-    u8 count, max, local;
+    u8 count;
+    u8 max;
+    u8 local;
     bool is_host;
     state.GetSessionInfo(count, max, local, is_host);
 
@@ -673,7 +685,9 @@ TEST(full_game_session_lifecycle) {
     state.SetLdnState(CommState::StationConnected);
     state.SetSessionInfo(4, 8, 2, false);
 
-    u8 count, max, local;
+    u8 count;
+    u8 max;
+    u8 local;
     bool is_host;
     state.GetSessionInfo(count, max, local, is_host);
     ASSERT_EQ(count, 4);
@@ -705,7 +719,9 @@ TEST(host_session_lifecycle) {
 
     state.SetSessionInfo(1, 8, 0, true);
 
-    u8 count, max, local;
+    u8 count;
+    u8 max;
+    u8 local;
     bool is_host;
     state.GetSessionInfo(count, max, local, is_host);
     ASSERT_EQ(count, 1);

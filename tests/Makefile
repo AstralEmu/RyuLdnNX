@@ -21,6 +21,30 @@ STRICT_WARNINGS := -Wpedantic -Wshadow -Wconversion -Wsign-conversion \
 CXXFLAGS += $(STRICT_WARNINGS) -Werror
 LDFLAGS += -no-pie
 
+# Compile-time and library hardening, always on: libstdc++ container and
+# string assertions, stack protector, stack clash protection, and the
+# control-flow protection of the host toolchain.
+CXXFLAGS += -D_GLIBCXX_ASSERTIONS -fstack-protector-strong \
+    -fstack-clash-protection -fcf-protection
+
+# Sanitizer build (optional): make SANITIZE=address,undefined test
+#                             make SANITIZE=thread test
+# Any report aborts the test (no recovery). _FORTIFY_SOURCE is not used:
+# it needs -O1 and GCC 12 then reports a false -Wstringop-overflow in the
+# dead branch of PacketBuffer::append (see BLOCKED.md).
+ifdef SANITIZE
+CXXFLAGS += -fsanitize=$(SANITIZE) -fno-sanitize-recover=all \
+    -fno-omit-frame-pointer
+LDFLAGS += -fsanitize=$(SANITIZE)
+# allocator_may_return_null: the tests drive the nothrow allocation-failure
+# paths on purpose (a huge size must make `new (std::nothrow)` return null,
+# as it does on the Switch heap); ASan would otherwise abort on the request.
+# Leaks (LSan) and every UBSan report stay fatal.
+export ASAN_OPTIONS := allocator_may_return_null=1:detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
+export UBSAN_OPTIONS := print_stacktrace=1:halt_on_error=1
+export TSAN_OPTIONS := allocator_may_return_null=1:halt_on_error=1:second_deadlock_stack=1
+endif
+
 # Coverage flags (optional)
 ifdef COVERAGE
 CXXFLAGS += --coverage

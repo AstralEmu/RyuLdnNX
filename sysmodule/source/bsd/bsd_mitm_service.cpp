@@ -154,11 +154,10 @@ static os::Mutex g_socket_info_mutex{false};
  * @return The valid entry for @p fd, or nullptr if none is tracked.
  */
 static SocketInfoEntry* FindSocketInfoEntry(s32 fd) {
-    const auto it = std::find_if(
-        g_socket_info.begin(), g_socket_info.end(), [fd](const auto& entry) {
-            return entry.valid && entry.fd == fd;
-        });
-    return it != g_socket_info.end() ? &*it : nullptr;
+    auto* const it = std::ranges::find_if(
+        g_socket_info,
+        [fd](const auto& entry) { return entry.valid && entry.fd == fd; });
+    return it != g_socket_info.end() ? it : nullptr;
 }
 
 /**
@@ -174,16 +173,14 @@ static SocketInfoEntry* FindOrCreateSocketInfoEntry(s32 fd) {
     if (SocketInfoEntry* existing = FindSocketInfoEntry(fd)) {
         return existing;
     }
-    const auto free_slot = std::find_if(
-        g_socket_info.begin(), g_socket_info.end(), [](const auto& entry) {
-            return !entry.valid;
-        });
+    auto* const free_slot = std::ranges::find_if(
+        g_socket_info, [](const auto& entry) { return !entry.valid; });
     if (free_slot == g_socket_info.end()) {
         return nullptr;
     }
     free_slot->fd = fd;
     free_slot->valid = true;
-    return &*free_slot;
+    return free_slot;
 }
 
 /**
@@ -245,11 +242,11 @@ static os::Mutex g_mitm_pids_mutex{false};
  * @return The valid entry for @p pid, or nullptr if none exists.
  */
 static MitmPidEntry* FindMitmPidEntry(u64 pid) {
-    const auto it = std::find_if(
-        g_mitm_pid_count.begin(),
-        g_mitm_pid_count.end(),
+    auto* const it = std::ranges::find_if(
+        g_mitm_pid_count,
+
         [pid](const auto& entry) { return entry.valid && entry.pid == pid; });
-    return it != g_mitm_pid_count.end() ? &*it : nullptr;
+    return it != g_mitm_pid_count.end() ? it : nullptr;
 }
 
 /**
@@ -264,9 +261,9 @@ static MitmPidEntry* FindOrCreateMitmPidEntry(u64 pid) {
     if (MitmPidEntry* existing = FindMitmPidEntry(pid)) {
         return existing;
     }
-    const auto free_slot = std::find_if(
-        g_mitm_pid_count.begin(),
-        g_mitm_pid_count.end(),
+    auto* const free_slot = std::ranges::find_if(
+        g_mitm_pid_count,
+
         [](const auto& entry) { return !entry.valid; });
     if (free_slot == g_mitm_pid_count.end()) {
         return nullptr;
@@ -274,7 +271,7 @@ static MitmPidEntry* FindOrCreateMitmPidEntry(u64 pid) {
     free_slot->pid = pid;
     free_slot->count = 0;
     free_slot->valid = true;
-    return &*free_slot;
+    return free_slot;
 }
 
 /**
@@ -753,7 +750,6 @@ Result BsdMitmService::RegisterClient(
 {
     m_command_count++;
 
-    // Take over the handle holder: it is detached below, never closed.
     sf::CopyHandle tmem(std::move(transfer_memory));
     Handle tmem_handle = tmem.GetOsHandle();
     LOG_INFO(
@@ -797,7 +793,8 @@ Result BsdMitmService::RegisterClient(
     // its layout is the ABI: config block first, then the two u64 fields, no
     // padding between or after them.
     static_assert(
-        sizeof(forward_input) == sizeof(forward_input.config) + 2 * sizeof(u64),
+        sizeof(forward_input) ==
+            sizeof(forward_input.config) + (2 * sizeof(u64)),
         "InRaw must be the config block followed by two u64 fields");
     static_assert(
         sizeof(forward_input.config) == sizeof(ryu_ldn::bsd::LibraryConfigData),
@@ -1288,7 +1285,8 @@ Result BsdMitmService::RegisterClientShared(
     // Same ABI as RegisterClient: config block first, then the two u64
     // fields, no padding between or after them.
     static_assert(
-        sizeof(forward_input) == sizeof(forward_input.config) + 2 * sizeof(u64),
+        sizeof(forward_input) ==
+            sizeof(forward_input.config) + (2 * sizeof(u64)),
         "InRaw must be the config block followed by two u64 fields");
     static_assert(
         sizeof(forward_input.config) == sizeof(ryu_ldn::bsd::LibraryConfigData),
@@ -1742,13 +1740,12 @@ Result BsdMitmService::Bind(
 
                         out_errno.SetValue(0);
                         R_SUCCEED();
-                    } else {
-                        LOG_ERROR(
-                            "BSD Bind fd=%d failed to create proxy socket", fd);
-                        out_errno.SetValue(
-                            static_cast<s32>(ryu_ldn::bsd::BsdErrno::NoMem));
-                        R_SUCCEED();
                     }
+                    LOG_ERROR(
+                        "BSD Bind fd=%d failed to create proxy socket", fd);
+                    out_errno.SetValue(
+                        static_cast<s32>(ryu_ldn::bsd::BsdErrno::NoMem));
+                    R_SUCCEED();
                 }
             }
         }
@@ -3486,7 +3483,8 @@ Result BsdMitmService::Fcntl(
             out_result.SetValue(flags);
             LOG_INFO("BSD Fcntl F_GETFL fd=%d -> flags=0x%x", fd, flags);
             R_SUCCEED();
-        } else if (cmd == F_SETFL) {
+        }
+        if (cmd == F_SETFL) {
             // Set non-blocking flag
             bool non_blocking = (arg & O_NONBLOCK) != 0;
             proxy->SetNonBlocking(non_blocking);

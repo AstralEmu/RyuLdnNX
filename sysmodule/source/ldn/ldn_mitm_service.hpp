@@ -9,7 +9,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_MITM_SERVICE_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_MITM_SERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "interfaces/iservice.hpp"
@@ -91,3 +92,4 @@ public:
 static_assert(ams::mitm::ldn::IsILdnMitMService<LdnMitMService>);
 
 }  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_MITM_SERVICE_HPP_

@@ -105,9 +105,10 @@ namespace test_helpers {
  * @return true on success, false for a null or invalid string
  */
 bool parse_ipv4(const char* str, uint32_t& out_ip) {
-    if (!str)
+    if (str == nullptr) {
         return false;
-    struct in_addr addr;
+    }
+    struct in_addr addr{};
     if (inet_pton(AF_INET, str, &addr) != 1) {
         return false;
     }
@@ -123,7 +124,7 @@ bool parse_ipv4(const char* str, uint32_t& out_ip) {
  * @param out_len size of out in bytes
  */
 void ipv4_to_string(uint32_t ip, char* out, size_t out_len) {
-    struct in_addr addr;
+    struct in_addr addr{};
     addr.s_addr = ip;
     inet_ntop(AF_INET, &addr, out, static_cast<socklen_t>(out_len));
 }
@@ -139,16 +140,19 @@ bool is_private_ip(uint32_t ip) {
     uint32_t host_ip = ntohl(ip);
 
     // 10.0.0.0/8
-    if ((host_ip & 0xFF000000) == 0x0A000000)
+    if ((host_ip & 0xFF000000) == 0x0A000000) {
         return true;
+    }
 
     // 172.16.0.0/12
-    if ((host_ip & 0xFFF00000) == 0xAC100000)
+    if ((host_ip & 0xFFF00000) == 0xAC100000) {
         return true;
+    }
 
     // 192.168.0.0/16
-    if ((host_ip & 0xFFFF0000) == 0xC0A80000)
+    if ((host_ip & 0xFFFF0000) == 0xC0A80000) {
         return true;
+    }
 
     return false;
 }
@@ -331,7 +335,8 @@ TEST(public_ip_1_1_1_1) {
 /// @test Verify broadcast calc class c.
 TEST(broadcast_calc_class_c) {
     // 192.168.1.0/24
-    uint32_t ip = 0, mask = 0;
+    uint32_t ip = 0;
+    uint32_t mask = 0;
     ASSERT_TRUE(test_helpers::parse_ipv4("192.168.1.100", ip));
     ASSERT_TRUE(test_helpers::parse_ipv4("255.255.255.0", mask));
 
@@ -345,7 +350,8 @@ TEST(broadcast_calc_class_c) {
 /// @test Verify broadcast calc class b.
 TEST(broadcast_calc_class_b) {
     // 10.114.0.0/16 (LDN network)
-    uint32_t ip = 0, mask = 0;
+    uint32_t ip = 0;
+    uint32_t mask = 0;
     ASSERT_TRUE(test_helpers::parse_ipv4("10.114.0.1", ip));
     ASSERT_TRUE(test_helpers::parse_ipv4("255.255.0.0", mask));
 
@@ -359,7 +365,8 @@ TEST(broadcast_calc_class_b) {
 /// @test Verify broadcast calc class a.
 TEST(broadcast_calc_class_a) {
     // 10.0.0.0/8
-    uint32_t ip = 0, mask = 0;
+    uint32_t ip = 0;
+    uint32_t mask = 0;
     ASSERT_TRUE(test_helpers::parse_ipv4("10.0.0.1", ip));
     ASSERT_TRUE(test_helpers::parse_ipv4("255.0.0.0", mask));
 
@@ -444,7 +451,7 @@ TEST(port_range_valid) {
     ASSERT_TRUE(PORT_BASE < 65535 - PORT_RANGE);  // Leaves room for range
 
     for (int i = 0; i < PORT_RANGE; i++) {
-        uint16_t port = static_cast<uint16_t>(PORT_BASE + i);
+        auto port = static_cast<uint16_t>(PORT_BASE + i);
         ASSERT_TRUE(port > 0);
         ASSERT_TRUE(port <= 65535);
     }
@@ -491,8 +498,7 @@ int main() {
     if (g_tests_passed == g_tests_run) {
         printf("\nAll tests PASSED!\n");
         return 0;
-    } else {
-        printf("\nSome tests FAILED!\n");
-        return 1;
     }
+    printf("\nSome tests FAILED!\n");
+    return 1;
 }

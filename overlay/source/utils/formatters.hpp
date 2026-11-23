@@ -8,7 +8,8 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  */
-#pragma once
+#ifndef OVERLAY_SOURCE_UTILS_FORMATTERS_HPP_
+#define OVERLAY_SOURCE_UTILS_FORMATTERS_HPP_
 
 #include <cstring>
 #include <cstdlib>
@@ -139,3 +140,4 @@ inline void GenerateRandomPassphraseOverlay(char* out, size_t out_size) {
 }
 
 }  // namespace ryu_ldn::overlay
+#endif  // OVERLAY_SOURCE_UTILS_FORMATTERS_HPP_

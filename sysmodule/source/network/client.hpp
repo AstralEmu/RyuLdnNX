@@ -77,11 +77,14 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_CLIENT_HPP_
+#define SYSMODULE_SOURCE_NETWORK_CLIENT_HPP_
 
 #include <cstdint>
 #include <cstddef>
 #include <memory>
+#include <mutex>
+#include <stratosphere.hpp>
 
 #include "itcp_client.hpp"
 #include "connection_state.hpp"
@@ -89,8 +92,7 @@
 #include "../config/config.hpp"
 #include "../protocol/types.hpp"
 
-namespace ryu_ldn {
-namespace network {
+namespace ryu_ldn::network {
 
 /**
  * @brief Result codes for RyuLdnClient operations
@@ -579,6 +581,34 @@ public:
     ClientOpResult send_raw_packet(const void* data, size_t size);
 
 private:
+    /**
+     * Serializes connect(), disconnect() and update(). Non-recursive: the
+     * send_*() methods and getters never take it (HandleServerPacket calls
+     * send_ping_response() from inside update()). Callbacks run under this
+     * lock and must not call connect(), disconnect() or update().
+     * Lock order: g_active_service_mutex > m_op_mutex > m_shared_mutex > leaf.
+     * Not touched by move construction/assignment.
+     */
+    class OpMutex {
+    public:
+        OpMutex() = default;
+        OpMutex(OpMutex&&) = delete;
+        OpMutex& operator=(OpMutex&&) = delete;
+        /// Acquire the lock.
+        void lock() {
+            m_mutex.lock();
+        }
+        /// Release the lock.
+        void unlock() {
+            m_mutex.unlock();
+        }
+
+    private:
+        ::ams::os::Mutex m_mutex{false};  ///< Underlying non-recursive mutex.
+    };
+    /// Serializes connect(), disconnect() and update() (see above).
+    mutable OpMutex m_op_mutex;
+
     // ========================================================================
     // Internal State
     // ========================================================================
@@ -812,5 +842,5 @@ private:
 /// @gdb{tag="NETWORK:PACKET", msg="client_op_result_to_string"}
 const char* client_op_result_to_string(ClientOpResult result);
 
-}  // namespace network
-}  // namespace ryu_ldn
+}  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_CLIENT_HPP_

@@ -139,15 +139,6 @@ Result ryuLdnGetConnectionStatus(
     return rc;
 }
 
-Result ryuLdnIsServiceActive(RyuLdnConfigService* s, u32* active) {
-    if (!s) {
-        return RyuLdn_ResultInvalidArg;
-    }
-
-    *active = 0;
-    return serviceDispatchOut(&s->s, RyuCfgCmd_IsServiceActive, *active);
-}
-
 Result ryuLdnIsGameActive(RyuLdnConfigService* s, u32* active) {
     if (!s) {
         return RyuLdn_ResultInvalidArg;
@@ -177,32 +168,6 @@ Result ryuLdnGetSessionInfo(RyuLdnConfigService* s, RyuLdnSessionInfo* info) {
 
     memset(info, 0, sizeof(*info));
     return serviceDispatchOut(&s->s, RyuCfgCmd_GetSessionInfo, *info);
-}
-
-Result ryuLdnGetLastRtt(RyuLdnConfigService* s, u32* rtt_ms) {
-    if (!s) {
-        return RyuLdn_ResultInvalidArg;
-    }
-
-    *rtt_ms = 0;
-    return serviceDispatchOut(&s->s, RyuCfgCmd_GetLastRtt, *rtt_ms);
-}
-
-Result ryuLdnForceReconnect(RyuLdnConfigService* s) {
-    if (!s) {
-        return RyuLdn_ResultInvalidArg;
-    }
-
-    return serviceDispatch(&s->s, RyuCfgCmd_ForceReconnect);
-}
-
-Result ryuLdnGetActiveProcessId(RyuLdnConfigService* s, u64* pid) {
-    if (!s) {
-        return RyuLdn_ResultInvalidArg;
-    }
-
-    *pid = 0;
-    return serviceDispatchOut(&s->s, RyuCfgCmd_GetActiveProcessId, *pid);
 }
 
 //=============================================================================
@@ -294,28 +259,6 @@ Result ryuLdnGetServerAddress(RyuLdnConfigService* s, char* host, u16* port) {
     return rc;
 }
 
-Result ryuLdnSetServerAddress(
-    RyuLdnConfigService* s, const char* host, u16 port) {
-    if (!s) {
-        return RyuLdn_ResultInvalidArg;
-    }
-
-    struct {
-        char host[64];
-        u16 port;
-        u16 padding;
-    } in;
-
-    memset(&in, 0, sizeof(in));
-    if (host == NULL) {
-        return RyuLdn_ResultInvalidArg;
-    }
-    snprintf(in.host, sizeof(in.host), "%s", host);
-    in.port = port;
-
-    return serviceDispatchIn(&s->s, RyuCfgCmd_SetServerAddress, in);
-}
-
 Result ryuLdnGetLdnEnabled(RyuLdnConfigService* s, u32* enabled) {
     if (!s) {
         return RyuLdn_ResultInvalidArg;
@@ -395,25 +338,4 @@ Result ryuLdnSetPassphrase(RyuLdnConfigService* s, const char* passphrase) {
     }
     snprintf(passphrase_buf, sizeof(passphrase_buf), "%s", passphrase);
     return serviceDispatchIn(&s->s, RyuCfgCmd_SetPassphrase, passphrase_buf);
-}
-
-const char* ryuLdnStateToString(RyuLdnState state) {
-    switch (state) {
-        case RyuLdnState_None:
-            return "None";
-        case RyuLdnState_Initialized:
-            return "Initialized";
-        case RyuLdnState_AccessPoint:
-            return "Access Point";
-        case RyuLdnState_AccessPointCreated:
-            return "AP Created";
-        case RyuLdnState_Station:
-            return "Station";
-        case RyuLdnState_StationConnected:
-            return "Connected";
-        case RyuLdnState_Error:
-            return "Error";
-        default:
-            return "Unknown";
-    }
 }

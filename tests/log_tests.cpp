@@ -9,6 +9,7 @@
 #include "debug/log.hpp"
 #include "config/config.hpp"
 
+#include <bit>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -108,7 +109,7 @@ static int g_test_count = 0;
  */
 static void register_test(const char* name, void (*func)()) {
     if (g_test_count < 128) {
-        g_tests[g_test_count++] = {name, func};
+        g_tests[g_test_count++] = {.name = name, .func = func};
     }
 }
 
@@ -126,10 +127,10 @@ TEST(log_level_to_string) {
 
 /** @brief Test case: log level from config. */
 TEST(log_level_from_config) {
-    ASSERT_EQ(static_cast<uint32_t>(LogLevel::Error), 0u);
-    ASSERT_EQ(static_cast<uint32_t>(LogLevel::Warning), 1u);
-    ASSERT_EQ(static_cast<uint32_t>(LogLevel::Info), 2u);
-    ASSERT_EQ(static_cast<uint32_t>(LogLevel::Verbose), 3u);
+    ASSERT_EQ(static_cast<uint32_t>(LogLevel::Error), 0U);
+    ASSERT_EQ(static_cast<uint32_t>(LogLevel::Warning), 1U);
+    ASSERT_EQ(static_cast<uint32_t>(LogLevel::Info), 2U);
+    ASSERT_EQ(static_cast<uint32_t>(LogLevel::Verbose), 3U);
 }
 
 // ============================================================================
@@ -158,7 +159,7 @@ TEST(logger_init_enabled) {
     logger.init(config);
 
     ASSERT_TRUE(logger.is_enabled());
-    ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2u);
+    ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2U);
 }
 
 /** @brief Test case: logger should log level filtering. */
@@ -243,8 +244,9 @@ TEST(format_log_message_truncation) {
 
     // Buffer should be null-terminated and not overflow
     ASSERT_TRUE(strlen(buffer) < sizeof(buffer));
-    ASSERT_TRUE(
-        buffer[sizeof(buffer) - 1] == '\0' || strlen(buffer) < sizeof(buffer));
+    const bool null_terminated =
+        buffer[sizeof(buffer) - 1] == '\0' || strlen(buffer) < sizeof(buffer);
+    ASSERT_TRUE(null_terminated);
 }
 
 // ============================================================================
@@ -321,7 +323,7 @@ TEST(log_buffer_stores_messages) {
     buffer.add("Message 2");
     buffer.add("Message 3");
 
-    ASSERT_EQ(buffer.count(), 3u);
+    ASSERT_EQ(buffer.count(), 3U);
 }
 
 /** @brief Test case: log buffer circular. */
@@ -334,7 +336,7 @@ TEST(log_buffer_circular) {
     buffer.add("Message 3");
     buffer.add("Message 4");  // Should overwrite Message 1
 
-    ASSERT_EQ(buffer.count(), 3u);
+    ASSERT_EQ(buffer.count(), 3U);
 
     // First message should now be Message 2
     const char* first = buffer.get(0);
@@ -396,7 +398,7 @@ TEST(logger_log_v_drops_message_below_level) {
     logger.init(config);
     call_log_v(logger, LogLevel::Verbose, "must not appear %d", 1);
 
-    ASSERT_EQ(logger.get_buffer().count(), 0u);
+    ASSERT_EQ(logger.get_buffer().count(), 0U);
 }
 
 /** @brief Test case: a message below the level is dropped everywhere. */
@@ -413,7 +415,7 @@ TEST(logger_log_drops_message_below_level) {
     logger.init(config, log_path);
     logger.log(LogLevel::Verbose, "must not appear");
 
-    ASSERT_EQ(logger.get_buffer().count(), 0u);
+    ASSERT_EQ(logger.get_buffer().count(), 0U);
     std::remove(log_path);
 }
 
@@ -424,10 +426,10 @@ TEST(log_buffer_clear) {
 
     buffer.add("Message 1");
     buffer.add("Message 2");
-    ASSERT_EQ(buffer.count(), 2u);
+    ASSERT_EQ(buffer.count(), 2U);
 
     buffer.clear();
-    ASSERT_EQ(buffer.count(), 0u);
+    ASSERT_EQ(buffer.count(), 0U);
 }
 
 // ============================================================================
@@ -444,7 +446,7 @@ TEST(logger_from_full_config) {
     logger.init(config.debug);
 
     ASSERT_TRUE(logger.is_enabled());
-    ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2u);
+    ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2U);
     ASSERT_TRUE(logger.should_log(LogLevel::Error));
     ASSERT_TRUE(logger.should_log(LogLevel::Warning));
     ASSERT_TRUE(logger.should_log(LogLevel::Info));
@@ -472,7 +474,7 @@ TEST(log_buffer_init_capacity_clamp) {
     buffer.init(MAX_LOG_BUFFER_ENTRIES + 100);  // Exceeds max
 
     // Should be clamped to MAX_LOG_BUFFER_ENTRIES
-    ASSERT_EQ(buffer.count(), 0u);
+    ASSERT_EQ(buffer.count(), 0U);
 }
 
 /** @brief Test case: log buffer init small capacity. */
@@ -484,7 +486,7 @@ TEST(log_buffer_init_small_capacity) {
     buffer.add("B");
     buffer.add("C");  // Should overwrite A
 
-    ASSERT_EQ(buffer.count(), 2u);
+    ASSERT_EQ(buffer.count(), 2U);
 }
 
 /** @brief Test case: log buffer get by index. */
@@ -525,7 +527,7 @@ TEST(log_buffer_add_null_ignored) {
     buffer.init(10);
 
     buffer.add(nullptr);
-    ASSERT_EQ(buffer.count(), 0u);
+    ASSERT_EQ(buffer.count(), 0U);
 }
 
 // ============================================================================
@@ -535,7 +537,7 @@ TEST(log_buffer_add_null_ignored) {
 /** @brief Test case: logger flush without file. */
 TEST(logger_flush_without_file) {
     Logger logger;
-    DebugConfig cfg;
+    DebugConfig cfg{};
     cfg.enabled = true;
     cfg.level = 3;
 
@@ -548,7 +550,7 @@ TEST(logger_flush_without_file) {
 /** @brief Test case: logger flush with file. */
 TEST(logger_flush_with_file) {
     Logger logger;
-    DebugConfig cfg;
+    DebugConfig cfg{};
     cfg.enabled = true;
     cfg.level = 3;
 
@@ -566,7 +568,7 @@ TEST(logger_flush_with_file) {
 /** @brief Test case: logger check idle timeout no file. */
 TEST(logger_check_idle_timeout_no_file) {
     Logger logger;
-    DebugConfig cfg;
+    DebugConfig cfg{};
     cfg.enabled = true;
     cfg.level = 3;
 
@@ -579,7 +581,7 @@ TEST(logger_check_idle_timeout_no_file) {
 /** @brief Test case: logger check idle timeout with file. */
 TEST(logger_check_idle_timeout_with_file) {
     Logger logger;
-    DebugConfig cfg;
+    DebugConfig cfg{};
     cfg.enabled = true;
     cfg.level = 3;
 
@@ -597,9 +599,12 @@ TEST(logger_check_idle_timeout_with_file) {
 
 /** @brief Test case: log level to string unknown. */
 TEST(log_level_to_string_unknown) {
+    // bit_cast builds the out-of-enumerator level without a cast the
+    // EnumCastOutOfRange check would reject; the enum type itself accepts any
+    // value of its fixed underlying type.
+    const auto unknown_level = std::bit_cast<LogLevel>(99U);
     ASSERT_TRUE(
-        std::strcmp(
-            log_level_to_string(static_cast<LogLevel>(99)), "UNKNOWN") == 0);
+        std::strcmp(log_level_to_string(unknown_level), "UNKNOWN") == 0);
 }
 
 /**
@@ -614,7 +619,7 @@ TEST(logger_init_with_explicit_null_path_uses_the_default_path) {
     logger.init(config, nullptr);
 
     ASSERT_FALSE(logger.is_enabled());
-    ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2u);
+    ASSERT_EQ(static_cast<uint32_t>(logger.get_level()), 2U);
 }
 
 /**

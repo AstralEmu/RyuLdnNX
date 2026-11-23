@@ -798,8 +798,9 @@ static ldn::LdnProxyHandler* g_proxy = nullptr;
  * @param m Decoded Initialize message.
  */
 static void on_initialize(const LdnHeader& h, const InitializeMessage& m) {
-    if (g_session)
+    if (g_session) {
         g_session->handle_initialize(h, m);
+    }
 }
 
 /**
@@ -808,8 +809,9 @@ static void on_initialize(const LdnHeader& h, const InitializeMessage& m) {
  * @param i Network information of the joined session.
  */
 static void on_connected(const LdnHeader& h, const NetworkInfo& i) {
-    if (g_session)
+    if (g_session) {
         g_session->handle_connected(h, i);
+    }
 }
 
 /**
@@ -818,8 +820,9 @@ static void on_connected(const LdnHeader& h, const NetworkInfo& i) {
  * @param i Updated network information.
  */
 static void on_sync_network(const LdnHeader& h, const NetworkInfo& i) {
-    if (g_session)
+    if (g_session) {
         g_session->handle_sync_network(h, i);
+    }
 }
 
 /**
@@ -828,8 +831,9 @@ static void on_sync_network(const LdnHeader& h, const NetworkInfo& i) {
  * @param c Proxy configuration (virtual IP and subnet mask).
  */
 static void on_proxy_config(const LdnHeader& h, const ProxyConfig& c) {
-    if (g_proxy)
+    if (g_proxy) {
         g_proxy->handle_proxy_config(h, c);
+    }
 }
 
 /**
@@ -838,8 +842,9 @@ static void on_proxy_config(const LdnHeader& h, const ProxyConfig& c) {
  * @param r Connect request of the peer.
  */
 static void on_proxy_connect(const LdnHeader& h, const ProxyConnectRequest& r) {
-    if (g_proxy)
+    if (g_proxy) {
         g_proxy->handle_proxy_connect(h, r);
+    }
 }
 
 /**

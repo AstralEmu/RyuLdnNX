@@ -41,9 +41,11 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_PROXY_SOCKET_HPP_
+#define SYSMODULE_SOURCE_BSD_PROXY_SOCKET_HPP_
 
 #include <algorithm>
+#include <atomic>
 #include <stratosphere.hpp>
 #include <array>
 #include <memory>
@@ -177,13 +179,15 @@ public:
     ProxySocket& operator=(const ProxySocket&) = delete;
 
     /**
-     * @brief Move constructor
+     * @brief Non-movable: the socket owns an atomic, a mutex and events.
+     *
+     * Moving was already implicitly deleted because those members are
+     * non-movable. Sockets are owned through std::unique_ptr and never moved.
      */
-    ProxySocket(ProxySocket&&) = default;
-    /// Move assignment (defaulted); same ownership transfer as the move
-    /// constructor.
+    ProxySocket(ProxySocket&&) = delete;
+    /// Move assignment is deleted for the same reason as the constructor.
     /// @return This socket.
-    ProxySocket& operator=(ProxySocket&&) = default;
+    ProxySocket& operator=(ProxySocket&&) = delete;
 
     // =========================================================================
     // Socket State
@@ -593,9 +597,9 @@ private:
     /// @param key Option key, see MakeOptionKey().
     /// @return Pointer to the stored value, or nullptr if the key is absent.
     s32* FindSocketOption(uint32_t key) {
-        const auto it = std::find_if(
-            m_socket_options.begin(),
-            m_socket_options.end(),
+        auto* const it = std::ranges::find_if(
+            m_socket_options,
+
             [key](const auto& entry) {
                 return entry.valid && entry.key == key;
             });
@@ -606,9 +610,9 @@ private:
     /// @param key Option key, see MakeOptionKey().
     /// @return Pointer to the stored value, or nullptr if the key is absent.
     const s32* FindSocketOption(uint32_t key) const {
-        const auto it = std::find_if(
-            m_socket_options.begin(),
-            m_socket_options.end(),
+        const auto* const it = std::ranges::find_if(
+            m_socket_options,
+
             [key](const auto& entry) {
                 return entry.valid && entry.key == key;
             });
@@ -624,9 +628,9 @@ private:
             *existing = value;
             return true;
         }
-        const auto free_slot = std::find_if(
-            m_socket_options.begin(),
-            m_socket_options.end(),
+        auto* const free_slot = std::ranges::find_if(
+            m_socket_options,
+
             [](const auto& entry) { return !entry.valid; });
         if (free_slot == m_socket_options.end()) {
             return false;
@@ -659,10 +663,13 @@ private:
 
     /**
      * @brief Shutdown flags
+     *
+     * Atomic: Shutdown() runs on the IPC thread while a blocked reader polls
+     * the flag from another thread (proven by ThreadSanitizer).
      */
-    bool m_shutdown_read{false};
+    std::atomic<bool> m_shutdown_read{false};
     /// Write side shut down (see m_shutdown_read).
-    bool m_shutdown_write{false};
+    std::atomic<bool> m_shutdown_write{false};
 
     /**
      * @brief Local address (set by Bind)
@@ -684,7 +691,7 @@ private:
      * Producer: network thread via IncomingData. Consumer: game thread via
      * RecvFrom. Full = drop oldest (UDP behavior). Protected by m_queue_mutex.
      */
-    ReceivedPacket m_rx_ring[PROXY_SOCKET_MAX_QUEUE_SIZE];
+    ReceivedPacket m_rx_ring[PROXY_SOCKET_MAX_QUEUE_SIZE]{};
     size_t m_rx_head = 0;   ///< Read index
     size_t m_rx_tail = 0;   ///< Write index
     size_t m_rx_count = 0;  ///< Elements in ring
@@ -773,3 +780,4 @@ private:
 };
 
 }  // namespace ams::mitm::bsd
+#endif  // SYSMODULE_SOURCE_BSD_PROXY_SOCKET_HPP_

@@ -11,17 +11,19 @@
  * primitive behaviourally faithful (same contract, host implementation).
  */
 
-#pragma once
+#ifndef TESTS_STUBS_STRATOSPHERE_HPP_
+#define TESTS_STUBS_STRATOSPHERE_HPP_
 
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -66,7 +68,7 @@ public:
      *
      * @return true on success
      */
-    constexpr bool IsSuccess() const {
+    [[nodiscard]] constexpr bool IsSuccess() const {
         return m_value == 0;
     }
     /**
@@ -74,7 +76,7 @@ public:
      *
      * @return true on failure
      */
-    constexpr bool IsFailure() const {
+    [[nodiscard]] constexpr bool IsFailure() const {
         return m_value != 0;
     }
     /**
@@ -82,7 +84,7 @@ public:
      *
      * @return the code, 0 on success
      */
-    constexpr std::uint32_t GetValue() const {
+    [[nodiscard]] constexpr std::uint32_t GetValue() const {
         return m_value;
     }
 
@@ -97,7 +99,7 @@ private:
  * @return Result holding code 0
  */
 constexpr Result ResultSuccess() {
-    return Result();
+    return {};
 }
 
 namespace os {
@@ -130,12 +132,12 @@ public:
     /// Locks the mutex, after running the matching g_host_before_* test hook
     void lock() {
         if (m_recursive) {
-            if (g_host_before_recursive_lock) {
+            if (g_host_before_recursive_lock != nullptr) {
                 g_host_before_recursive_lock();
             }
             m_recursive_mutex.lock();
         } else {
-            if (g_host_before_plain_lock) {
+            if (g_host_before_plain_lock != nullptr) {
                 g_host_before_plain_lock(this);
             }
             m_mutex.lock();
@@ -254,7 +256,7 @@ public:
      *
      * @return the span in ms
      */
-    std::int64_t GetMilliSeconds() const {
+    [[nodiscard]] std::int64_t GetMilliSeconds() const {
         return m_ms;
     }
     /**
@@ -262,7 +264,7 @@ public:
      *
      * @return the span in ns (ms * 1000000)
      */
-    std::int64_t GetNanoSeconds() const {
+    [[nodiscard]] std::int64_t GetNanoSeconds() const {
         return m_ms * 1000000;
     }
 
@@ -299,14 +301,23 @@ inline TimeSpan ConvertToTimeSpan(Tick tick) {
 using NativeHandle = std::uint32_t;
 
 /// Whether a satisfied wait consumes the event signal (os::EventClearMode)
-enum EventClearMode {
-    EventClearMode_ManualClear,
-    EventClearMode_AutoClear,
+enum class EventClearMode {
+    /// Stays signaled until Clear()
+    ManualClear,
+    /// Consumed by the wait that observes it
+    AutoClear,
 };
+
+/// Stratosphere spelling of EventClearMode::ManualClear
+inline constexpr EventClearMode EventClearMode_ManualClear =
+    EventClearMode::ManualClear;
+/// Stratosphere spelling of EventClearMode::AutoClear
+inline constexpr EventClearMode EventClearMode_AutoClear =
+    EventClearMode::AutoClear;
 
 /// Host shortcut: real waits last (requested ms / divisor), so a test of a
 /// multi-second timeout does not take multiple seconds. 1 = faithful.
-inline std::int64_t g_host_wait_divisor = 1;
+inline std::atomic<std::int64_t> g_host_wait_divisor{1};
 
 /// Test hooks: run on the calling thread right before the operation, with no
 /// stand-in lock held, so a test can script what happens concurrently at that
@@ -360,7 +371,7 @@ public:
      */
     void Signal() {
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::scoped_lock lock(m_mutex);
             m_signaled = true;
             m_generation++;
             m_cv.notify_all();
@@ -369,16 +380,16 @@ public:
         // checked the event just before the signal is already blocked in its
         // wait.
         {
-            std::lock_guard<std::mutex> lock(MultiWaitMutex());
+            std::scoped_lock lock(MultiWaitMutex());
         }
         MultiWaitCv().notify_all();
     }
     /// Clears the signal, after running the g_host_before_event_clear hook
     void Clear() {
-        if (g_host_before_event_clear) {
+        if (g_host_before_event_clear != nullptr) {
             g_host_before_event_clear();
         }
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_signaled = false;
     }
     /**
@@ -397,7 +408,7 @@ public:
      * clear mode), false otherwise
      */
     bool TryConsume() {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (!m_signaled) {
             return false;
         }
@@ -524,9 +535,9 @@ inline void UnlinkAllMultiWaitHolder(MultiWaitType* multi_wait) {
  * @return The holder whose event was consumed, or nullptr if none was ready
  */
 inline MultiWaitHolderType* ConsumeReadyHolder(MultiWaitType* multi_wait) {
-    const auto it = std::find_if(
-        multi_wait->holders.begin(),
-        multi_wait->holders.end(),
+    const auto it = std::ranges::find_if(
+        multi_wait->holders,
+
         [](auto* holder) { return holder->event->TryConsume(); });
     return it != multi_wait->holders.end() ? *it : nullptr;
 }
@@ -544,7 +555,7 @@ inline MultiWaitHolderType* ConsumeReadyHolder(MultiWaitType* multi_wait) {
  */
 inline MultiWaitHolderType* TimedWaitAny(
     MultiWaitType* multi_wait, TimeSpan timeout) {
-    if (g_host_before_timed_wait_any) {
+    if (g_host_before_timed_wait_any != nullptr) {
         g_host_before_timed_wait_any();
     }
     const auto deadline = std::chrono::steady_clock::now() +
@@ -590,7 +601,7 @@ public:
      *
      * @return handle, stable and distinct per instance
      */
-    NativeHandle GetReadableHandle() const {
+    [[nodiscard]] NativeHandle GetReadableHandle() const {
         return m_handle;
     }
 
@@ -599,7 +610,7 @@ public:
      *
      * @return the count
      */
-    unsigned SignalCount() const {
+    [[nodiscard]] unsigned SignalCount() const {
         return m_signal_count;
     }
 
@@ -727,13 +738,16 @@ struct HostThreadExit {};
  * @param thread thread prepared by CreateThread
  */
 inline void StartThread(ThreadType* thread) {
-    if (g_host_before_start_thread) {
+    if (g_host_before_start_thread != nullptr) {
         g_host_before_start_thread(thread->name != nullptr ? thread->name : "");
     }
     thread->thread = std::thread([entry = thread->entry, arg = thread->arg] {
         try {
             entry(arg);
         } catch (const HostThreadExit&) {
+            // The test hook ended this kernel thread: the host thread stops
+            // here, which is what the real DestroyThread would do later.
+            return;
         }
     });
 }
@@ -748,7 +762,7 @@ inline void WaitThread(ThreadType* thread) {
     }
 }
 /// Does nothing: the destructor of ThreadType joins
-inline void DestroyThread(ThreadType*) {}
+inline void DestroyThread(ThreadType* /*unused*/) {}
 
 /// Lowest user-mode priority of the kernel (the host ignores priorities)
 constexpr int LowestThreadPriority = 63;
@@ -778,7 +792,7 @@ inline void (*g_host_before_sleep_thread)(std::int64_t ns) = nullptr;
  * @param ns Requested duration in nanoseconds
  */
 inline void SleepThread(std::int64_t ns) {
-    if (g_host_before_sleep_thread) {
+    if (g_host_before_sleep_thread != nullptr) {
         g_host_before_sleep_thread(ns);
     }
     std::this_thread::sleep_for(
@@ -819,7 +833,8 @@ constexpr int OpenMode_Read = 1;
  * @param out receives the handle
  * @return success or 0x202
  */
-inline Result OpenFile(FileHandle* out, const char*, int) {
+inline Result OpenFile(
+    FileHandle* out, const char* /*unused*/, int /*unused*/) {
     if (g_host_fs.open_fails) {
         return Result(0x202);
     }
@@ -834,7 +849,7 @@ inline Result OpenFile(FileHandle* out, const char*, int) {
  * @param out receives the size, or size_override when >= 0
  * @return success or 0x203
  */
-inline Result GetFileSize(s64* out, FileHandle) {
+inline Result GetFileSize(s64* out, FileHandle /*unused*/) {
     if (g_host_fs.size_fails) {
         return Result(0x203);
     }
@@ -856,7 +871,7 @@ inline Result GetFileSize(s64* out, FileHandle) {
  */
 inline Result ReadFile(
     std::size_t* out_read,
-    FileHandle,
+    FileHandle /*unused*/,
     s64 offset,
     void* buffer,
     std::size_t size) {
@@ -865,9 +880,7 @@ inline Result ReadFile(
     }
     const auto total = static_cast<s64>(g_host_fs.content.size());
     s64 avail = total - offset;
-    if (avail < 0) {
-        avail = 0;
-    }
+    avail = std::max<s64>(avail, 0);
     const std::size_t n = std::min(size, static_cast<std::size_t>(avail));
     std::memcpy(buffer, g_host_fs.content.data() + offset, n);
     *out_read = n;
@@ -875,7 +888,7 @@ inline Result ReadFile(
 }
 
 /// Counts the close in close_count
-inline void CloseFile(FileHandle) {
+inline void CloseFile(FileHandle /*unused*/) {
     ++g_host_fs.close_count;
 }
 
@@ -959,7 +972,7 @@ struct ClientProcessId {
      *
      * @return the process id
      */
-    constexpr os::ProcessId GetValue() const {
+    [[nodiscard]] constexpr os::ProcessId GetValue() const {
         return process_id;
     }
 };
@@ -984,12 +997,12 @@ struct CopyHandle {
      *
      * @return the handle value
      */
-    std::uint32_t GetOsHandle() const {
+    [[nodiscard]] std::uint32_t GetOsHandle() const {
         return handle;
     }
     /// Gives the handle up: the destructor of the real one closes it otherwise.
     void Detach() {
-        handle = 0xFFFFFFFFu;
+        handle = 0xFFFFFFFFU;
         managed = false;
     }
 };
@@ -1051,7 +1064,7 @@ public:
      *
      * @return number of elements
      */
-    std::size_t GetSize() const {
+    [[nodiscard]] std::size_t GetSize() const {
         return m_count;
     }
     /**
@@ -1059,7 +1072,7 @@ public:
      *
      * @return pointer to the first element
      */
-    T* GetPointer() const {
+    [[nodiscard]] T* GetPointer() const {
         return m_data;
     }
     /**
@@ -1102,7 +1115,7 @@ public:
      *
      * @return the size
      */
-    std::size_t GetSize() const {
+    [[nodiscard]] std::size_t GetSize() const {
         return m_size;
     }
     /**
@@ -1110,7 +1123,7 @@ public:
      *
      * @return pointer to the first byte
      */
-    const std::uint8_t* GetPointer() const {
+    [[nodiscard]] const std::uint8_t* GetPointer() const {
         return m_data;
     }
 
@@ -1138,7 +1151,7 @@ public:
      * @param object shared owner of the implementation
      */
     template <class Impl>
-    explicit SharedPointer(std::shared_ptr<Impl> object)
+    explicit SharedPointer(const std::shared_ptr<Impl>& object)
         : m_object(object), m_raw(object.get()) {}
     /**
      * @brief Whether an object is held
@@ -1155,7 +1168,7 @@ public:
      *         with
      */
     template <class Impl>
-    Impl* GetImpl() const {
+    [[nodiscard]] Impl* GetImpl() const {
         return static_cast<Impl*>(m_raw);
     }
     /**
@@ -1163,7 +1176,7 @@ public:
      *
      * @return shared owner of the wrapped object
      */
-    std::shared_ptr<void> Owner() const {
+    [[nodiscard]] std::shared_ptr<void> Owner() const {
         return m_object;
     }
 
@@ -1217,7 +1230,7 @@ namespace impl {
  * @param ... arguments, ignored
  */
 template <class... Ts>
-constexpr void UnusedImpl(const Ts&...) {}
+constexpr void UnusedImpl(const Ts&... /*unused*/) {}
 }  // namespace impl
 
 }  // namespace ams
@@ -1377,7 +1390,7 @@ constexpr Result AsResult(std::uint32_t code) {
  */
 #define AMS_SF_DEFINE_INTERFACE(NS, NAME, METHODS, ID) \
     namespace NS {                                     \
-    class NAME;                                        \
+    struct NAME;                                       \
     template <class T>                                 \
     concept Is##NAME = requires { METHODS(T, 0) };     \
     }
@@ -1446,7 +1459,7 @@ inline std::vector<std::string> g_host_boot_calls;
 /// Raised by AMS_ABORT instead of killing the process, so a test can observe
 /// that an unreachable-in-production branch aborts.
 namespace ams {
-struct HostAbort {};
+struct HostAbort : std::exception {};
 namespace {
 /// Throws HostAbort; a call rather than a throw-expression, so the statement
 /// reads as an ordinary aborting call at every use site.
@@ -1513,7 +1526,7 @@ namespace os {
 /// Kernel page size in bytes
 constexpr std::size_t MemoryPageSize = 0x1000;
 /// Does nothing: the host mutex needs no initialization
-inline void InitializeSdkMutex(SdkMutex*) {}
+inline void InitializeSdkMutex(SdkMutex* /*unused*/) {}
 /**
  * @brief Current thread
  *
@@ -1528,7 +1541,7 @@ inline ThreadType* GetCurrentThread() {
  *
  * @return always 16, priorities are not modelled
  */
-inline int GetThreadCurrentPriority(ThreadType*) {
+inline int GetThreadCurrentPriority(ThreadType* /*unused*/) {
     return 16;
 }
 
@@ -1574,18 +1587,22 @@ inline std::atomic<int> g_host_heap_frees{0};
  * @param size size in bytes
  * @return the block, or null
  */
-inline void* AllocateFromExpHeap(HeapHandle, std::size_t size) {
+inline void* AllocateFromExpHeap(HeapHandle /*unused*/, std::size_t size) {
     ++g_host_heap_allocs;
-    return std::malloc(size);
+    // The heap hands the block to the caller, who releases it through
+    // FreeToExpHeap; the owner is released at that hand-off so the raw
+    // pointer contract stays the same.
+    std::unique_ptr<void, void (*)(void*)> block(std::malloc(size), &std::free);
+    return block.release();
 }
 /**
  * @brief Frees with free and counts the call
  *
  * @param p block returned by AllocateFromExpHeap
  */
-inline void FreeToExpHeap(HeapHandle, void* p) {
+inline void FreeToExpHeap(HeapHandle /*unused*/, void* p) {
     ++g_host_heap_frees;
-    std::free(p);
+    std::unique_ptr<void, void (*)(void*)> block(p, &std::free);
 }
 
 }  // namespace lmem
@@ -1641,7 +1658,11 @@ struct ServiceName {
     template <std::size_t N>
     static constexpr ServiceName Encode(const char (&text)[N]) {
         ServiceName n{};
-        for (std::size_t i = 0; i < N - 1 && i < 8; ++i) {
+        // Stop at the terminator slot or at the last name character,
+        // whichever comes first.
+        const std::size_t limit =
+            std::min<std::size_t>(N - 1, sizeof(n.name) - 1);
+        for (std::size_t i = 0; i < limit; ++i) {
             if (text[i] == '\0') {
                 break;
             }
@@ -1716,9 +1737,13 @@ public:
     inline static std::uint32_t s_session = 0x77;
     /// Client info given to the next accepted session
     inline static sm::MitmProcessInfo s_client{};
+    /// Services handed out by AcknowledgeMitmSession, newest last; the real
+    /// server keeps them in the MITM session table it owns.
+    std::vector<std::shared_ptr<::Service>> acknowledged;
+
     /**
      * @brief Hands out a Service carrying s_session and the client info
-     *        s_client
+     *        s_client, and records it in acknowledged
      *
      * @param out_service receives the forwarded service
      * @param out_info receives the client info
@@ -1728,8 +1753,9 @@ public:
         sm::MitmProcessInfo* out_info) {
         auto service = std::make_shared<::Service>();
         service->session = s_session;
-        *out_service = std::move(service);
+        *out_service = service;
         *out_info = s_client;
+        acknowledged.push_back(service);
     }
 };
 
@@ -1746,22 +1772,26 @@ public:
         /// Service name
         std::string name;
         /// Port index, -1 for a non-MITM object
-        int port_index;
+        int port_index = 0;
         /// Session limit given at registration (0 for MITM)
-        std::size_t max_sessions;
+        std::size_t max_sessions = 0;
     };
     /// Registrations made so far, in order
     std::vector<Registration> registrations;
+    /// Owners of the static objects registered so far
+    std::vector<std::shared_ptr<void>> registered;
     /// Owners of the objects accepted so far
     std::vector<std::shared_ptr<void>> accepted;
+    /// Owners of the forwarding services given to the accepted sessions
+    std::vector<std::shared_ptr<::Service>> forwarded;
     /// Number of LoopProcess calls
     std::atomic<int> loops{0};
     /// Test hook run by LoopProcess (null = off)
     void (*loop_hook)() = nullptr;
     /// Result AcceptMitmImpl returns
-    Result accept_result{};
+    Result accept_result;
     /// Result the Register* methods return
-    Result register_result{};
+    Result register_result;
 
     virtual ~ServerManager() = default;
 
@@ -1779,15 +1809,17 @@ public:
     /**
      * @brief Records a registration with port index -1
      *
+     * @param object object being registered
      * @param name service name
      * @param max_sessions session limit
      * @return register_result
      */
     template <class Interface>
     Result RegisterObjectForServer(
-        SharedPointer<Interface>&&,
+        const SharedPointer<Interface>& object,
         sm::ServiceName name,
         std::size_t max_sessions) {
+        registered.push_back(object.Owner());
         registrations.push_back({name.name, -1, max_sessions});
         return register_result;
     }
@@ -1806,15 +1838,19 @@ public:
     }
 
     /**
-     * @brief Keeps the accepted object alive
+     * @brief Keeps the accepted object and its forwarding session alive
      *
      * @param object object created for the session
+     * @param forward_service session the object forwards to
      * @return accept_result
      */
     template <class Interface>
     Result AcceptMitmImpl(
-        Server*, SharedPointer<Interface> object, std::shared_ptr<::Service>) {
+        Server* /*unused*/,
+        const SharedPointer<Interface>& object,
+        const std::shared_ptr<::Service>& forward_service) {
         accepted.push_back(object.Owner());
+        forwarded.push_back(forward_service);
         return accept_result;
     }
 
@@ -1836,7 +1872,7 @@ protected:
      *
      * @return success
      */
-    virtual Result OnNeedsToAccept(int, Server*) {
+    virtual Result OnNeedsToAccept(int /*unused*/, Server* /*unused*/) {
         return ResultSuccess();
     }
 };
@@ -1846,13 +1882,22 @@ protected:
 }  // namespace ams
 
 /// libnx nifm service lifecycle
-enum NifmServiceType { NifmServiceType_User = 0, NifmServiceType_Admin = 1 };
+enum class NifmServiceType {
+    /// User-mode NIFM session
+    User = 0,
+    /// System NIFM session
+    Admin = 1,
+};
+/// libnx spelling of NifmServiceType::User
+inline constexpr NifmServiceType NifmServiceType_User = NifmServiceType::User;
+/// libnx spelling of NifmServiceType::Admin
+inline constexpr NifmServiceType NifmServiceType_Admin = NifmServiceType::Admin;
 /**
  * @brief Records the call in g_host_boot_calls
  *
  * @return 0, success
  */
-inline std::uint32_t nifmInitialize(NifmServiceType) {
+inline std::uint32_t nifmInitialize(NifmServiceType /*unused*/) {
     g_host_boot_calls.emplace_back("nifmInitialize");
     return 0;
 }
@@ -1860,3 +1905,5 @@ inline std::uint32_t nifmInitialize(NifmServiceType) {
 inline void nifmExit() {
     g_host_boot_calls.emplace_back("nifmExit");
 }
+
+#endif  // TESTS_STUBS_STRATOSPHERE_HPP_

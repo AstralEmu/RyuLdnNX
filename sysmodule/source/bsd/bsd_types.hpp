@@ -29,7 +29,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_BSD_TYPES_HPP_
+#define SYSMODULE_SOURCE_BSD_BSD_TYPES_HPP_
 
 #include <cstdint>
 #include <cstring>
@@ -155,7 +156,7 @@ struct __attribute__((packed)) SockAddrIn {
      */
     /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::IsLdnAddress: this=%p",
     /// args="$x0"}
-    bool IsLdnAddress() const {
+    [[nodiscard]] bool IsLdnAddress() const {
         // Convert from network to host byte order for comparison
         uint32_t host_addr = __builtin_bswap32(sin_addr);
         return ryu_ldn::bsd::IsLdnAddress(host_addr);
@@ -166,7 +167,7 @@ struct __attribute__((packed)) SockAddrIn {
      * @return Port converted from network to host byte order
      */
     /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::GetPort"}
-    uint16_t GetPort() const {
+    [[nodiscard]] uint16_t GetPort() const {
         return __builtin_bswap16(sin_port);
     }
 
@@ -175,7 +176,7 @@ struct __attribute__((packed)) SockAddrIn {
      * @return Address converted from network to host byte order
      */
     /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::GetAddr"}
-    uint32_t GetAddr() const {
+    [[nodiscard]] uint32_t GetAddr() const {
         return __builtin_bswap32(sin_addr);
     }
 };
@@ -450,3 +451,4 @@ enum class BsdCommand : uint32_t {
 };
 
 }  // namespace ryu_ldn::bsd
+#endif  // SYSMODULE_SOURCE_BSD_BSD_TYPES_HPP_

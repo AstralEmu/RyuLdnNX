@@ -19,7 +19,7 @@ using ams::mitm::ldn::IClientProcessMonitor;
  * when it instantiates one per session.
  */
 TEST(the_monitor_can_be_created_and_destroyed) {
-    IClientProcessMonitor* monitor = new IClientProcessMonitor();
+    auto* monitor = new IClientProcessMonitor();
     ASSERT_TRUE(monitor != nullptr);
     delete monitor;
 }

@@ -136,7 +136,11 @@ ClientResult TcpClient::connect(
     m_recv_buffer.reset();
 
     // Enable TCP_NODELAY by default for lower latency
-    m_socket.set_nodelay(true);
+    const SocketResult nodelay = m_socket.set_nodelay(true);
+    if (nodelay != SocketResult::Success) {
+        LOG_WARN(
+            "TCP_NODELAY not applied: %s", socket_result_to_string(nodelay));
+    }
 
     LOG_VERBOSE("TcpClient connected successfully");
     return ClientResult::Success;

@@ -3,7 +3,8 @@
  * @brief Host stand-in for the libnx pieces of <switch/services/bsd.h> the BSD
  * MITM uses.
  */
-#pragma once
+#ifndef TESTS_STUBS_SWITCH_SERVICES_BSD_H_
+#define TESTS_STUBS_SWITCH_SERVICES_BSD_H_
 
 #include <cstdint>
 #include <poll.h>
@@ -13,26 +14,76 @@
 /// Kernel handle value
 using Handle = std::uint32_t;
 /// Handle value meaning "no handle"
-constexpr Handle INVALID_HANDLE = 0xFFFFFFFFu;
+constexpr Handle INVALID_HANDLE = 0xFFFFFFFFU;
 
 /// Buffer attributes of a forwarded call (libnx SfBufferAttr).
-enum SfBufferAttr : std::uint32_t {
-    SfBufferAttr_In = 1u << 0,
-    SfBufferAttr_Out = 1u << 1,
-    SfBufferAttr_HipcMapAlias = 1u << 2,
-    SfBufferAttr_HipcPointer = 1u << 3,
-    SfBufferAttr_FixedSize = 1u << 4,
-    SfBufferAttr_HipcAutoSelect = 1u << 5,
-    SfBufferAttr_HipcMapTransferAllowsNonSecure = 1u << 6,
-    SfBufferAttr_HipcMapTransferAllowsNonDevice = 1u << 7,
+enum class SfBufferAttr : std::uint32_t {
+    /// Input buffer
+    In = 1U << 0,
+    /// Output buffer
+    Out = 1U << 1,
+    /// Type-A/Type-B mapped buffer
+    HipcMapAlias = 1U << 2,
+    /// Pointer buffer
+    HipcPointer = 1U << 3,
+    /// Fixed-size buffer
+    FixedSize = 1U << 4,
+    /// Auto-selected transfer mode
+    HipcAutoSelect = 1U << 5,
+    /// Accepts a non-secure mapping
+    HipcMapTransferAllowsNonSecure = 1U << 6,
+    /// Accepts a non-device mapping
+    HipcMapTransferAllowsNonDevice = 1U << 7,
 };
 
+/// libnx spelling of SfBufferAttr::In
+inline constexpr SfBufferAttr SfBufferAttr_In = SfBufferAttr::In;
+/// libnx spelling of SfBufferAttr::Out
+inline constexpr SfBufferAttr SfBufferAttr_Out = SfBufferAttr::Out;
+/// libnx spelling of SfBufferAttr::HipcMapAlias
+inline constexpr SfBufferAttr SfBufferAttr_HipcMapAlias =
+    SfBufferAttr::HipcMapAlias;
+/// libnx spelling of SfBufferAttr::HipcPointer
+inline constexpr SfBufferAttr SfBufferAttr_HipcPointer =
+    SfBufferAttr::HipcPointer;
+/// libnx spelling of SfBufferAttr::FixedSize
+inline constexpr SfBufferAttr SfBufferAttr_FixedSize = SfBufferAttr::FixedSize;
+/// libnx spelling of SfBufferAttr::HipcAutoSelect
+inline constexpr SfBufferAttr SfBufferAttr_HipcAutoSelect =
+    SfBufferAttr::HipcAutoSelect;
+/// libnx spelling of SfBufferAttr::HipcMapTransferAllowsNonSecure
+inline constexpr SfBufferAttr SfBufferAttr_HipcMapTransferAllowsNonSecure =
+    SfBufferAttr::HipcMapTransferAllowsNonSecure;
+/// libnx spelling of SfBufferAttr::HipcMapTransferAllowsNonDevice
+inline constexpr SfBufferAttr SfBufferAttr_HipcMapTransferAllowsNonDevice =
+    SfBufferAttr::HipcMapTransferAllowsNonDevice;
+
+/**
+ * @brief Combines two buffer attributes, as libnx call sites do with `|`.
+ * @param lhs left attribute
+ * @param rhs right attribute
+ * @return the raw libnx flag bits of both
+ */
+constexpr std::uint32_t operator|(SfBufferAttr lhs, SfBufferAttr rhs) {
+    return static_cast<std::uint32_t>(lhs) | static_cast<std::uint32_t>(rhs);
+}
+
 /// libnx socket/bsd initialization (the host records what it was given).
-enum BsdServiceType : std::uint32_t {
-    BsdServiceType_User = 1u << 0,
-    BsdServiceType_System = 1u << 1,
-    BsdServiceType_Auto = BsdServiceType_User | BsdServiceType_System,
+enum class BsdServiceType : std::uint32_t {
+    /// User-mode BSD service
+    User = 1U << 0,
+    /// System BSD service
+    System = 1U << 1,
+    /// Either service flavor
+    Auto = (1U << 0) | (1U << 1),
 };
+
+/// libnx spelling of BsdServiceType::User
+inline constexpr BsdServiceType BsdServiceType_User = BsdServiceType::User;
+/// libnx spelling of BsdServiceType::System
+inline constexpr BsdServiceType BsdServiceType_System = BsdServiceType::System;
+/// libnx spelling of BsdServiceType::Auto
+inline constexpr BsdServiceType BsdServiceType_Auto = BsdServiceType::Auto;
 
 /// Configuration given to bsdInitialize (libnx BsdInitConfig)
 struct BsdInitConfig {
@@ -124,3 +175,5 @@ inline std::uint32_t socketInitialize(const SocketInitConfig* config) {
 inline void socketExit() {
     g_host_boot_calls.emplace_back("socketExit");
 }
+
+#endif  // TESTS_STUBS_SWITCH_SERVICES_BSD_H_

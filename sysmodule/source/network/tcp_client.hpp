@@ -67,7 +67,8 @@
  * @see Epic 2, Story 2.3 for requirements
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_TCP_CLIENT_HPP_
+#define SYSMODULE_SOURCE_NETWORK_TCP_CLIENT_HPP_
 
 #include <cstdint>
 #include <cstddef>
@@ -540,3 +541,4 @@ private:
 };
 
 }  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_TCP_CLIENT_HPP_

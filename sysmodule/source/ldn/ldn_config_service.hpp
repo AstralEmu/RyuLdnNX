@@ -36,7 +36,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_CONFIG_SERVICE_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_CONFIG_SERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "ldn_types.hpp"
@@ -437,3 +438,4 @@ private:
 };
 
 }  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_CONFIG_SERVICE_HPP_

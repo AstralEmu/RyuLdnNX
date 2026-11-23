@@ -22,7 +22,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_INTERFACES_IBSD_SERVICE_HPP_
+#define SYSMODULE_SOURCE_BSD_INTERFACES_IBSD_SERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "../bsd_types.hpp"
@@ -416,3 +417,4 @@ inline bool ShouldInterceptBsd(const sm::MitmProcessInfo& client_info) {
 }
 
 }  // namespace ams::mitm::bsd
+#endif  // SYSMODULE_SOURCE_BSD_INTERFACES_IBSD_SERVICE_HPP_

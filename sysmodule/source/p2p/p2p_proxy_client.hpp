@@ -40,8 +40,10 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_P2P_P2P_PROXY_CLIENT_HPP_
+#define SYSMODULE_SOURCE_P2P_P2P_PROXY_CLIENT_HPP_
 
+#include <atomic>
 #include <stratosphere.hpp>
 #include "../protocol/types.hpp"
 #include "../protocol/ryu_protocol.hpp"
@@ -332,17 +334,17 @@ private:
 
     // Socket
     /// TCP socket to the host, or -1 when not connected.
-    int m_socket_fd;
+    int m_socket_fd{-1};
     /// True once the TCP connect succeeded; cleared by Disconnect() and when
     /// the receive loop ends.
-    bool m_connected;
+    std::atomic<bool> m_connected;
     /// Set by the destructor so the receive loop stops touching the object.
-    bool m_disposed;
+    std::atomic<bool> m_disposed;
 
     // Authentication state
     /// True once the host's ProxyConfig has been received (authentication
     /// done).
-    bool m_ready;
+    bool m_ready{false};
     /// Broadcast when m_ready changes or the connection drops; waited on by
     /// EnsureProxyReady().
     os::ConditionVariable m_ready_cv;
@@ -359,10 +361,10 @@ private:
     // moment the server told us about the external proxy. Same root cause
     // as the P2pProxyServer/P2pProxySession fix.
     /// Receive thread handle; its stack lives in BSS (see note above).
-    os::ThreadType m_recv_thread{};
+    os::ThreadType m_recv_thread;
     /// True while the receive thread should keep looping; cleared to ask it to
     /// stop.
-    bool m_recv_thread_running;
+    std::atomic<bool> m_recv_thread_running;
 
     // Receive buffer
     /// Size in bytes of m_recv_buffer (64 KB).
@@ -377,3 +379,4 @@ private:
 };
 
 }  // namespace ams::mitm::p2p
+#endif  // SYSMODULE_SOURCE_P2P_P2P_PROXY_CLIENT_HPP_

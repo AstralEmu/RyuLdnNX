@@ -152,7 +152,7 @@ static int g_test_count = 0;
  */
 static void register_test(const char* name, void (*func)()) {
     if (g_test_count < 128) {
-        g_tests[g_test_count++] = {name, func};
+        g_tests[g_test_count++] = {.name = name, .func = func};
     }
 }
 
@@ -220,10 +220,10 @@ TEST(constants_lease_renew_matches_ryujinx) {
  */
 TEST(port_range_is_valid) {
     // Verify all ports in range are valid (< 65536)
-    uint16_t max_port =
+    const uint32_t max_port =
         p2p_constants::P2P_PORT_BASE + p2p_constants::P2P_PORT_RANGE - 1;
-    ASSERT_TRUE(max_port < 65536);
-    ASSERT_EQ(max_port, 39999);
+    ASSERT_TRUE(max_port < 65536U);
+    ASSERT_EQ(max_port, 39999U);
 }
 
 // ============================================================================
@@ -245,7 +245,10 @@ uint32_t parse_ipv4(const char* ip_str) {
         return 0;
     }
 
-    unsigned int a, b, c, d;
+    unsigned int a;
+    unsigned int b;
+    unsigned int c;
+    unsigned int d;
     if (std::sscanf(ip_str, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) {
         return 0;
     }

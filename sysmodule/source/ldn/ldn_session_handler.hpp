@@ -50,7 +50,8 @@
  * @see LdnSession.cs in RyuLDN server for reference
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_SESSION_HANDLER_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_SESSION_HANDLER_HPP_
 
 #include <cstdint>
 #include <cstddef>
@@ -433,7 +434,7 @@ public:
      * @return Current state
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="get_state"}
-    LdnSessionState get_state() const {
+    [[nodiscard]] LdnSessionState get_state() const {
         return m_state;
     }
 
@@ -443,7 +444,7 @@ public:
      * @return true if in Station or AccessPoint state
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="is_in_session"}
-    bool is_in_session() const;
+    [[nodiscard]] bool is_in_session() const;
 
     /**
      * @brief Check if we are the host
@@ -451,7 +452,7 @@ public:
      * @return true if we created the access point
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="is_host"}
-    bool is_host() const {
+    [[nodiscard]] bool is_host() const {
         return m_is_host;
     }
 
@@ -461,21 +462,21 @@ public:
      * @return Number of connected players
      */
     /// @gdb{tag="LDN:SESSION_HANDLER", msg="get_node_count"}
-    uint8_t get_node_count() const;
+    [[nodiscard]] uint8_t get_node_count() const;
 
     /**
      * @brief Get maximum nodes for current session
      *
      * @return Maximum players allowed
      */
-    uint8_t get_max_nodes() const;
+    [[nodiscard]] uint8_t get_max_nodes() const;
 
     /**
      * @brief Get our local node ID
      *
      * @return Our node ID (0-7), or -1 if not in session
      */
-    int8_t get_local_node_id() const {
+    [[nodiscard]] int8_t get_local_node_id() const {
         return m_local_node_id;
     }
 
@@ -493,7 +494,7 @@ public:
      *
      * @return Reference to stored network info (may be stale if not in session)
      */
-    const protocol::NetworkInfo& get_network_info() const {
+    [[nodiscard]] const protocol::NetworkInfo& get_network_info() const {
         return m_network_info;
     }
 
@@ -502,7 +503,7 @@ public:
      *
      * @return Last ping ID for echo response
      */
-    uint8_t get_last_ping_id() const {
+    [[nodiscard]] uint8_t get_last_ping_id() const {
         return m_last_ping_id;
     }
 
@@ -511,7 +512,7 @@ public:
      *
      * @return Session ID assigned by server
      */
-    const protocol::SessionId& get_session_id() const {
+    [[nodiscard]] const protocol::SessionId& get_session_id() const {
         return m_session_id;
     }
 
@@ -520,7 +521,7 @@ public:
      *
      * @return MAC address assigned by server
      */
-    const protocol::MacAddress& get_mac_address() const {
+    [[nodiscard]] const protocol::MacAddress& get_mac_address() const {
         return m_mac_address;
     }
 
@@ -529,7 +530,7 @@ public:
      *
      * @return Current accept policy (only valid for host)
      */
-    protocol::AcceptPolicy get_accept_policy() const {
+    [[nodiscard]] protocol::AcceptPolicy get_accept_policy() const {
         return m_accept_policy;
     }
 
@@ -558,34 +559,35 @@ private:
     // Internal State
     // ========================================================================
 
-    LdnSessionState m_state;  ///< Current session state
-    bool m_is_host;           ///< Whether we are the host
-    int8_t m_local_node_id;   ///< Our node ID (-1 if not assigned)
-    uint8_t m_last_ping_id;   ///< Last ping ID from server
+    LdnSessionState m_state{LdnSessionState::None};  ///< Current session state
+    bool m_is_host{false};       ///< Whether we are the host
+    int8_t m_local_node_id{-1};  ///< Our node ID (-1 if not assigned)
+    uint8_t m_last_ping_id{0};   ///< Last ping ID from server
 
-    protocol::SessionId m_session_id;      ///< Assigned session ID
-    protocol::MacAddress m_mac_address;    ///< Assigned MAC address
+    protocol::SessionId m_session_id{};    ///< Assigned session ID
+    protocol::MacAddress m_mac_address{};  ///< Assigned MAC address
     protocol::NetworkInfo m_network_info;  ///< Current network info
 
-    protocol::AcceptPolicy m_accept_policy;  ///< Current accept policy
+    protocol::AcceptPolicy m_accept_policy{
+        protocol::AcceptPolicy::AcceptAll};  ///< Current accept policy
 
     // Callbacks
     /// Invoked on session state transitions.
-    SessionStateCallback m_state_callback;
+    SessionStateCallback m_state_callback{nullptr};
     /// Invoked when the server pushes updated network info.
-    NetworkUpdatedCallback m_network_updated_callback;
+    NetworkUpdatedCallback m_network_updated_callback{nullptr};
     /// Invoked for each ScanReply entry received.
-    ScanResultCallback m_scan_result_callback;
+    ScanResultCallback m_scan_result_callback{nullptr};
     /// Invoked when ScanReplyEnd closes a scan.
-    ScanCompletedCallback m_scan_completed_callback;
+    ScanCompletedCallback m_scan_completed_callback{nullptr};
     /// Invoked when the server disconnects the session.
-    DisconnectedCallback m_disconnected_callback;
+    DisconnectedCallback m_disconnected_callback{nullptr};
     /// Invoked on a NetworkError packet.
-    ErrorCallback m_error_callback;
+    ErrorCallback m_error_callback{nullptr};
     /// Invoked when the host rejects our join request.
-    RejectedCallback m_rejected_callback;
+    RejectedCallback m_rejected_callback{nullptr};
     /// Invoked when the host changes the accept policy.
-    AcceptPolicyChangedCallback m_accept_policy_changed_callback;
+    AcceptPolicyChangedCallback m_accept_policy_changed_callback{nullptr};
 
     // ========================================================================
     // Internal Methods
@@ -600,3 +602,4 @@ private:
 };
 
 }  // namespace ryu_ldn::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_SESSION_HANDLER_HPP_

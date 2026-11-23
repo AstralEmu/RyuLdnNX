@@ -25,7 +25,9 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdarg>
+#include <cstddef>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -283,7 +285,9 @@ struct Host {
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ::bind(listen_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        const int bound =
+            ::bind(listen_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        ASSERT_TRUE(bound == 0);
         ::listen(listen_fd, 4);
         socklen_t len = sizeof(addr);
         ::getsockname(listen_fd, reinterpret_cast<sockaddr*>(&addr), &len);
@@ -300,7 +304,7 @@ struct Host {
      * @return true when a peer was accepted.
      */
     bool accept_peer() {
-        pollfd p{listen_fd, POLLIN, 0};
+        pollfd p{.fd = listen_fd, .events = POLLIN, .revents = 0};
         if (::poll(&p, 1, 3000) <= 0) {
             return false;
         }
@@ -330,10 +334,10 @@ struct Host {
      * @param n Number of bytes expected.
      * @return The bytes read.
      */
-    std::vector<uint8_t> read_n(size_t n) const {
+    [[nodiscard]] std::vector<uint8_t> read_n(size_t n) const {
         std::vector<uint8_t> out;
         while (out.size() < n) {
-            pollfd p{peer_fd, POLLIN, 0};
+            pollfd p{.fd = peer_fd, .events = POLLIN, .revents = 0};
             if (::poll(&p, 1, 3000) <= 0) {
                 break;
             }
@@ -374,7 +378,7 @@ std::vector<Recorded> g_rec;
  * @param size Payload size in bytes.
  */
 void on_packet(proto::PacketId type, const void* data, size_t size) {
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
+    std::scoped_lock lock(g_rec_mutex);
     const auto* p = static_cast<const uint8_t*>(data);
     g_rec.push_back({type, std::vector<uint8_t>(p, p + size)});
     g_rec_cv.notify_all();
@@ -398,7 +402,7 @@ bool wait_recorded(size_t count, int ms = 3000) {
  * @return Number of entries in g_rec.
  */
 size_t recorded_count() {
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
+    std::scoped_lock lock(g_rec_mutex);
     return g_rec.size();
 }
 
@@ -433,7 +437,7 @@ void reset_world() {
     g_socket_mode = g_nodelay_mode = g_getfl_mode = g_connect_mode = 0;
     g_select_mode = g_soerror_mode = g_send_mode = g_recv_mode = 0;
     ams::os::g_host_create_thread_result = 0;
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
+    std::scoped_lock lock(g_rec_mutex);
     g_rec.clear();
 }
 
@@ -456,6 +460,26 @@ std::vector<uint8_t> packet(
         size,
         written);
     out.resize(written);
+    return out;
+}
+
+/**
+ * @brief Encode a framed packet with a raw wire type byte.
+ *
+ * The type field is a byte on the wire, so handling an unknown type needs a
+ * value that names no PacketId enumerator; writing the byte directly keeps
+ * the test out of the enum's valid range.
+ *
+ * @param wire_type Type byte written to the header.
+ * @param payload Payload bytes.
+ * @param size Payload size.
+ * @return Header plus payload.
+ */
+std::vector<uint8_t> packet(
+    uint8_t wire_type, const void* payload, size_t size) {
+    std::vector<uint8_t> out =
+        packet(proto::PacketId::Initialize, payload, size);
+    out[offsetof(proto::LdnHeader, type)] = wire_type;
     return out;
 }
 
@@ -714,9 +738,9 @@ TEST(ensure_ready_waits_for_the_proxy_config_the_host_sends) {
 
     ASSERT_TRUE(client.IsReady());
     ASSERT_TRUE(client.EnsureProxyReady(1));
-    ASSERT_EQ(client.GetVirtualIp(), 0x0A720002u);
-    ASSERT_EQ(client.GetProxyConfig().proxy_subnet_mask, 0xFFFF0000u);
-    ASSERT_EQ(recorded_count(), 0u);
+    ASSERT_EQ(client.GetVirtualIp(), 0x0A720002U);
+    ASSERT_EQ(client.GetProxyConfig().proxy_subnet_mask, 0xFFFF0000U);
+    ASSERT_EQ(recorded_count(), 0U);
 }
 
 /// @test Verify disconnecting wakes a thread waiting for readiness.
@@ -849,10 +873,10 @@ TEST(every_packet_type_is_dispatched_in_order_from_one_stream) {
 
     ASSERT_TRUE(wait_recorded(4));
     ASSERT_TRUE(client.EnsureProxyReady(1000));
-    ASSERT_EQ(client.GetVirtualIp(), 0x0A720003u);
+    ASSERT_EQ(client.GetVirtualIp(), 0x0A720003U);
 
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
-    ASSERT_EQ(g_rec.size(), 4u);
+    std::scoped_lock lock(g_rec_mutex);
+    ASSERT_EQ(g_rec.size(), 4U);
     ASSERT_TRUE(g_rec[0].type == proto::PacketId::ProxyData);
     ASSERT_EQ(g_rec[0].bytes, data);
     ASSERT_TRUE(g_rec[1].type == proto::PacketId::ProxyConnect);
@@ -892,7 +916,7 @@ TEST(a_client_without_a_callback_still_handles_the_stream) {
     host.write_all(stream);
 
     ASSERT_TRUE(client.EnsureProxyReady(3000));
-    ASSERT_EQ(client.GetVirtualIp(), 0x0A720004u);
+    ASSERT_EQ(client.GetVirtualIp(), 0x0A720004U);
 }
 
 /// @test Verify a payload smaller than its struct is ignored but parsing goes
@@ -929,7 +953,7 @@ TEST(a_payload_smaller_than_its_struct_is_ignored_but_parsing_goes_on) {
 
     ASSERT_TRUE(wait_recorded(1));
     settle();
-    ASSERT_EQ(recorded_count(), 1u);
+    ASSERT_EQ(recorded_count(), 1U);
     ASSERT_FALSE(client.IsReady());
 }
 
@@ -943,9 +967,7 @@ TEST(an_unknown_packet_type_is_skipped) {
     const auto junk = blob(4, 0x99);
     const auto valid = blob(sizeof(proto::ProxyConnectRequest), 0x66);
     std::vector<uint8_t> stream;
-    append(
-        stream,
-        packet(static_cast<proto::PacketId>(0x7F), junk.data(), junk.size()));
+    append(stream, packet(uint8_t{0x7F}, junk.data(), junk.size()));
     append(
         stream,
         packet(proto::PacketId::ProxyConnect, valid.data(), valid.size()));
@@ -969,7 +991,7 @@ TEST(a_truncated_header_a_bad_magic_or_a_truncated_packet_stop_the_parsing) {
     // Fewer bytes than a header.
     host.write_all(std::vector<uint8_t>(good.begin(), good.begin() + 5));
     settle();
-    ASSERT_EQ(recorded_count(), 0u);
+    ASSERT_EQ(recorded_count(), 0U);
 
     // A header whose magic is wrong, followed by a good packet in the same
     // read: the parser gives up on the whole read.
@@ -979,12 +1001,12 @@ TEST(a_truncated_header_a_bad_magic_or_a_truncated_packet_stop_the_parsing) {
     append(stream, good);
     host.write_all(stream);
     settle();
-    ASSERT_EQ(recorded_count(), 0u);
+    ASSERT_EQ(recorded_count(), 0U);
 
     // A header announcing more payload than was received.
     host.write_all(std::vector<uint8_t>(good.begin(), good.end() - 4));
     settle();
-    ASSERT_EQ(recorded_count(), 0u);
+    ASSERT_EQ(recorded_count(), 0U);
 
     // The connection is still usable afterwards.
     host.write_all(good);
@@ -1035,11 +1057,11 @@ TEST(a_receive_error_ends_the_thread_and_an_interruption_does_too) {
 TEST(destroying_a_connected_client_closes_its_connection) {
     reset_world();
     Host host;
-    auto* client = new P2pProxyClient(on_packet);
+    auto client = std::make_unique<P2pProxyClient>(on_packet);
     ASSERT_TRUE(connect_pair(*client, host));
-    delete client;
+    client.reset();  // destroying the client closes its connection
     const auto got = host.read_n(1);
-    ASSERT_EQ(got.size(), 0u);
+    ASSERT_EQ(got.size(), 0U);
 }
 
 /**

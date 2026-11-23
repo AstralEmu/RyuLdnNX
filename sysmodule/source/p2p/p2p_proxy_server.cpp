@@ -331,19 +331,12 @@ void SessionRecvThreadEntry(void* arg) {
  */
 P2pProxyServer::P2pProxyServer(
     MasterSendCallback master_callback, void* user_data)
-    : m_listen_fd(-1),
-      m_private_port(0),
+    : m_private_port(0),
       m_public_port(0),
       m_running(false),
-      m_session_count(0),
-      m_zombie_session_count(0),
-      m_waiting_token_count(0),
-      m_broadcast_address(0),
+
       m_master_callback(master_callback),
-      m_callback_user_data(user_data),
-      m_host_virtual_ip(0),
-      m_host_data_callback(nullptr),
-      m_host_data_user_data(nullptr) {
+      m_callback_user_data(user_data) {
     // Initialize session array to nullptr
     // This is important - we use nullptr to detect empty slots
     for (auto& m_session : m_sessions) {
@@ -544,7 +537,7 @@ bool P2pProxyServer::Start(uint16_t port) {
     os::SetThreadNamePointer(&m_accept_thread, "p2p_accept");
     os::StartThread(&m_accept_thread);
 
-    LOG_INFO("P2P server started on port %u", m_private_port);
+    LOG_INFO("P2P server started on port %u", m_private_port.load());
     return true;
 }
 
@@ -580,12 +573,13 @@ void P2pProxyServer::Stop() {
         // Close Listen Socket
         // =====================================================================
         // This is important! The accept thread is blocked in accept().
-        // Closing the socket will cause accept() to return with an error,
-        // allowing the thread to check m_running and exit cleanly.
+        // Shutting the socket down wakes poll(); the loop also re-checks
+        // m_running every AcceptPollTimeoutMs, so it exits cleanly either way.
+        // The descriptor itself is closed only after the accept thread has
+        // been joined (it still reads m_listen_fd; closing first is a race).
 
         if (m_listen_fd >= 0) {
-            close(m_listen_fd);
-            m_listen_fd = -1;
+            shutdown(m_listen_fd, SHUT_RDWR);
         }
 
         // =====================================================================
@@ -654,6 +648,14 @@ void P2pProxyServer::Stop() {
 
     os::WaitThread(&m_accept_thread);
     os::DestroyThread(&m_accept_thread);
+
+    {
+        std::scoped_lock lock(m_mutex);
+        if (m_listen_fd >= 0) {
+            close(m_listen_fd);
+            m_listen_fd = -1;
+        }
+    }
 
     // The Stop() loop above disconnected the *active* sessions in m_sessions[]
     // and queued them as zombies; wait for their receive threads (their
@@ -765,13 +767,13 @@ uint16_t P2pProxyServer::NatPunch() {
                 LOG_INFO(
                     "UPnP port mapping: %s:%u -> local:%u",
                     external_ip,
-                    m_public_port,
-                    m_private_port);
+                    m_public_port.load(),
+                    m_private_port.load());
             } else {
                 LOG_INFO(
                     "UPnP port mapping: public:%u -> local:%u",
-                    m_public_port,
-                    m_private_port);
+                    m_public_port.load(),
+                    m_private_port.load());
             }
 
             // ================================================================
@@ -814,7 +816,7 @@ void P2pProxyServer::ReleaseNatPunch() {
     LOG_INFO(
         "ReleaseNatPunch: ENTRY (lease_running=%d, public_port=%u)",
         static_cast<int>(m_lease_thread_running.load()),
-        m_public_port);
+        m_public_port.load());
 
     // =========================================================================
     // Stop Lease Renewal Thread
@@ -840,12 +842,14 @@ void P2pProxyServer::ReleaseNatPunch() {
     if (m_public_port != 0) {
         LOG_INFO(
             "ReleaseNatPunch: deleting UPnP mapping for port %u",
-            m_public_port);
+            m_public_port.load());
         auto& mapper = UpnpPortMapper::GetInstance();
         if (mapper.DeletePortMapping(m_public_port)) {
-            LOG_INFO("UPnP port mapping released: %u", m_public_port);
+            LOG_INFO("UPnP port mapping released: %u", m_public_port.load());
         } else {
-            LOG_WARN("Failed to release UPnP port mapping: %u", m_public_port);
+            LOG_WARN(
+                "Failed to release UPnP port mapping: %u",
+                m_public_port.load());
         }
         m_public_port = 0;
     }
@@ -944,12 +948,13 @@ void P2pProxyServer::LeaseRenewalLoop() const {
         auto& mapper = UpnpPortMapper::GetInstance();
         if (mapper.RefreshPortMapping(
                 m_private_port, m_public_port, "ryu_ldn_nx P2P")) {
-            LOG_VERBOSE("UPnP lease renewed for port %u", m_public_port);
+            LOG_VERBOSE("UPnP lease renewed for port %u", m_public_port.load());
         } else {
             // Renewal failed - mapping might expire!
             // We log a warning but don't abort - the connection might
             // still work if we're on the same local network.
-            LOG_WARN("UPnP lease renewal failed for port %u", m_public_port);
+            LOG_WARN(
+                "UPnP lease renewal failed for port %u", m_public_port.load());
         }
     }
 
@@ -1073,9 +1078,9 @@ bool P2pProxyServer::TryRegisterUser(
             // 1. PhysicalIP is all zeros: Allow any client (private IP)
             // 2. PhysicalIP is set: Must match client's IP
 
-            const bool is_private = std::none_of(
-                std::begin(token.physical_ip),
-                std::end(token.physical_ip),
+            const bool is_private = std::ranges::none_of(
+                token.physical_ip,
+
                 [](unsigned char j) { return j != 0; });
 
             bool ip_match = is_private;
@@ -1160,9 +1165,9 @@ bool P2pProxyServer::TryRegisterUser(
                 }
 
                 // Add session to player list
-                const auto free_session = std::find_if(
-                    std::begin(m_sessions),
-                    std::end(m_sessions),
+                auto* const free_session = std::ranges::find_if(
+                    m_sessions,
+
                     [](const auto& s) { return s == nullptr; });
                 if (free_session != std::end(m_sessions)) {
                     free_session->reset(session);
@@ -1313,9 +1318,9 @@ bool P2pProxyServer::BroadcastFromHost(
             }
         }
     } else {
-        const auto target = std::find_if(
-            std::begin(m_sessions),
-            std::end(m_sessions),
+        auto* const target = std::ranges::find_if(
+            m_sessions,
+
             [dest_ip](const auto& s) {
                 return s != nullptr && s->IsAuthenticated() &&
                        s->GetVirtualIpAddress() == dest_ip;
@@ -2059,17 +2064,24 @@ P2pProxySession::P2pProxySession(
     : m_server(server),
       m_socket_fd(socket_fd),
       m_remote_ip(remote_ip),
-      m_virtual_ip(0),
+
       m_connected(true),
-      m_authenticated(false),
-      m_master_closed(false),
-      m_stack_slot(-1) {}
+
+      m_master_closed(false) {}
 
 /**
  * @brief Destructor - ensure disconnection
  */
 P2pProxySession::~P2pProxySession() {
     Disconnect(true);
+    // A started session (slot >= 0) still has its receive thread running: the
+    // shutdown above wakes it, and it must be done with the members and the
+    // descriptor before either is released.
+    while (m_stack_slot >= 0 &&
+           !m_thread_done.load(std::memory_order_acquire)) {
+        svc::SleepThread(TimeSpan::FromMilliSeconds(1).GetNanoSeconds());
+    }
+    CloseSocket();
     // Return the receive-thread stack slot to the global pool so the next
     // peer that connects can reuse it.
     // A session that never started holds -1, which the release ignores.
@@ -2173,23 +2185,30 @@ bool P2pProxySession::Send(const void* data, size_t size) const {
  * If from_master is true, we skip the notification (already handled).
  */
 void P2pProxySession::Disconnect(bool from_master) {
-    if (!m_connected) {
+    if (!m_connected.exchange(false)) {
         return;  // Already disconnected
     }
 
-    m_connected = false;
     m_master_closed = from_master;
 
-    // Close socket
+    // Stop reads and writes; this wakes the receive thread. The descriptor is
+    // closed later by CloseSocket().
     if (m_socket_fd >= 0) {
-        shutdown(m_socket_fd, SHUT_RDWR);  // Stop reads and writes
-        close(m_socket_fd);
-        m_socket_fd = -1;
+        shutdown(m_socket_fd, SHUT_RDWR);
     }
 
     // Notify server (unless this disconnect came from the server itself)
     if (!from_master) {
         m_server->OnSessionDisconnected(this);
+    }
+}
+
+/**
+ * @brief Release the socket descriptor (idempotent)
+ */
+void P2pProxySession::CloseSocket() {
+    if (m_socket_fd >= 0 && !m_fd_closed.exchange(true)) {
+        close(m_socket_fd);
     }
 }
 
@@ -2203,6 +2222,10 @@ void P2pProxySession::Disconnect(bool from_master) {
  * - m_connected is set to false
  */
 void P2pProxySession::ReceiveLoop() {
+    if (m_socket_fd < 0) {
+        LOG_WARN("P2pProxySession::ReceiveLoop: invalid fd %d", m_socket_fd);
+        return;
+    }
     const uint64_t entry_ms = armTicksToNs(armGetSystemTick()) / 1000000ULL;
     LOG_INFO(
         "P2pProxySession::ReceiveLoop: entry, fd=%d, slot=%d, this=%p",
@@ -2247,6 +2270,7 @@ void P2pProxySession::ReceiveLoop() {
 
     // Connection ended - cleanup
     Disconnect(false);
+    CloseSocket();
 }
 
 /**

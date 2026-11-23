@@ -361,7 +361,7 @@ struct MockP2pClient {
      * @brief Tell whether the P2P path can carry data.
      * @return True only when both connected and ready are set.
      */
-    bool IsReady() const {
+    [[nodiscard]] bool IsReady() const {
         return connected && ready;
     }
     /**
@@ -492,8 +492,8 @@ TEST(token_zero_check) {
 
     // Token should be all zeros
     bool all_zero = true;
-    for (size_t i = 0; i < sizeof(config.token); i++) {
-        if (config.token[i] != 0) {
+    for (unsigned char i : config.token) {
+        if (i != 0) {
             all_zero = false;
             break;
         }
@@ -735,6 +735,7 @@ TEST(disconnect_p2p_sets_null) {
     // After disconnect, pointer should be null
     int dummy = 42;
     int* ptr = &dummy;
+    ASSERT_TRUE(ptr != nullptr);
 
     // Simulate disconnect
     ptr = nullptr;
@@ -881,8 +882,7 @@ int main() {
     if (g_tests_passed == g_tests_run) {
         printf("\nAll tests PASSED!\n");
         return 0;
-    } else {
-        printf("\nSome tests FAILED!\n");
-        return 1;
     }
+    printf("\nSome tests FAILED!\n");
+    return 1;
 }

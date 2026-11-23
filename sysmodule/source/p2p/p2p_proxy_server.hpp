@@ -42,7 +42,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_P2P_P2P_PROXY_SERVER_HPP_
+#define SYSMODULE_SOURCE_P2P_P2P_PROXY_SERVER_HPP_
 
 #include <stratosphere.hpp>
 #include <atomic>
@@ -464,11 +465,11 @@ private:
 
     // Server socket
     /// Listening socket fd (negative when not listening)
-    int m_listen_fd;
+    int m_listen_fd{-1};
     /// Local port the server listens on
-    uint16_t m_private_port;
+    std::atomic<uint16_t> m_private_port;
     /// External port mapped through UPnP (0 if none)
-    uint16_t m_public_port;
+    std::atomic<uint16_t> m_public_port;
     // Atomic so the accept thread sees the Stop()-side flip without going
     // through m_mutex (we don't want to take m_mutex on every poll cycle).
     /// True while the server is running
@@ -485,11 +486,11 @@ private:
     // operator new and crashed the sysmodule (DABRT 0x101) the moment a
     // host pressed "create network".
     /// Thread running AcceptLoop()
-    os::ThreadType m_accept_thread{};
+    os::ThreadType m_accept_thread;
 
     // Lease renewal thread (stack: g_p2p_lease_thread_stack in BSS)
     /// Thread running LeaseRenewalLoop()
-    os::ThreadType m_lease_thread{};
+    os::ThreadType m_lease_thread;
     /// True while the lease renewal thread is running. Atomic: the owner
     /// thread flips it to ask for the join, the lease thread polls it.
     std::atomic<bool> m_lease_thread_running{false};
@@ -498,7 +499,7 @@ private:
     /// Authenticated sessions (owning); empty slots are null
     std::unique_ptr<P2pProxySession> m_sessions[MAX_PLAYERS];
     /// Number of authenticated sessions in m_sessions
-    int m_session_count;
+    int m_session_count{0};
 
     /// Started sessions that are still connected, authenticated or not
     /// (non-owning). Stop() uses it to disconnect and wait for the receive
@@ -527,7 +528,7 @@ private:
     /// Disconnected sessions waiting to be freed (owning)
     std::unique_ptr<P2pProxySession> m_zombie_sessions[MAX_ZOMBIE_SESSIONS];
     /// Number of queued entries in m_zombie_sessions
-    int m_zombie_session_count;
+    int m_zombie_session_count{0};
 
     // Waiting tokens for auth
     /// Capacity of the waiting token list
@@ -536,13 +537,13 @@ private:
     ryu_ldn::protocol::ExternalProxyToken
         m_waiting_tokens[MAX_WAITING_TOKENS]{};
     /// Number of used entries in m_waiting_tokens
-    int m_waiting_token_count;
+    int m_waiting_token_count{0};
     /// Signaled when a token is added, to wake authenticating sessions
     os::ConditionVariable m_token_cv;
 
     // Network config
     /// Broadcast address of the LDN subnet (from Configure())
-    uint32_t m_broadcast_address;
+    uint32_t m_broadcast_address{0};
 
     // Master server callback
     /// Callback used to send packets to the master server
@@ -552,11 +553,11 @@ private:
 
     // In-process host self-routing — see SetHostDataCallback() above.
     /// The host's own virtual IP (0 until SetHostVirtualIp is called)
-    uint32_t m_host_virtual_ip;
+    uint32_t m_host_virtual_ip{0};
     /// Sink for packets addressed to the host (may be null)
-    HostProxyDataCallback m_host_data_callback;
+    HostProxyDataCallback m_host_data_callback{nullptr};
     /// User data passed to m_host_data_callback
-    void* m_host_data_user_data;
+    void* m_host_data_user_data{nullptr};
 };
 
 /**
@@ -592,7 +593,7 @@ public:
      * @brief Get assigned virtual IP
      * @return Virtual IP assigned to this session (0 before auth)
      */
-    uint32_t GetVirtualIpAddress() const {
+    [[nodiscard]] uint32_t GetVirtualIpAddress() const {
         return m_virtual_ip;
     }
 
@@ -608,7 +609,7 @@ public:
      * @brief Get remote (physical) IP
      * @return Physical IP of the connected peer
      */
-    uint32_t GetRemoteIp() const {
+    [[nodiscard]] uint32_t GetRemoteIp() const {
         return m_remote_ip;
     }
 
@@ -616,7 +617,7 @@ public:
      * @brief Check if session is authenticated
      * @return true once the peer has been authenticated
      */
-    bool IsAuthenticated() const {
+    [[nodiscard]] bool IsAuthenticated() const {
         return m_authenticated;
     }
 
@@ -653,10 +654,20 @@ public:
     void Disconnect(bool from_master = false);
 
     /**
+     * @brief Release the socket descriptor (idempotent)
+     *
+     * Disconnect() only shuts the socket down, which wakes the receive thread;
+     * closing it there would race with the thread's recv() and could hand the
+     * descriptor number to another socket. Only the receive thread (on exit)
+     * and the destructor (after the thread is done) call this.
+     */
+    void CloseSocket();
+
+    /**
      * @brief Check if session is connected
      * @return true while the peer connection is alive
      */
-    bool IsConnected() const {
+    [[nodiscard]] bool IsConnected() const {
         return m_connected;
     }
 
@@ -725,13 +736,16 @@ private:
     /// Remote (physical) IP address of the client
     uint32_t m_remote_ip;
     /// Virtual IP assigned after authentication
-    uint32_t m_virtual_ip;
-    /// True while the connection is up
-    bool m_connected;
+    uint32_t m_virtual_ip{0};
+    /// True while the connection is up (read by the receive thread, cleared by
+    /// Disconnect() from any thread)
+    std::atomic<bool> m_connected;
     /// True once the client passed token validation
-    bool m_authenticated;
+    bool m_authenticated{false};
     /// True if the disconnect was initiated by the master server
-    bool m_master_closed;
+    std::atomic<bool> m_master_closed;
+    /// Set once the descriptor has been closed (see CloseSocket())
+    std::atomic<bool> m_fd_closed{false};
 
     // Receive thread (stack lives in a BSS pool — see g_p2p_session_stacks
     // in p2p_proxy_server.cpp). Inlining `alignas(0x1000) uint8_t stack[N]`
@@ -740,9 +754,9 @@ private:
     // fixed in P2pProxyServer earlier. Keep it as a slot index so that
     // ~P2pProxySession can return the slot to the pool.
     /// Thread running ReceiveLoop()
-    os::ThreadType m_recv_thread{};
-    int m_stack_slot;  ///< Index in the global session-stack pool, -1 if
-                       ///< unallocated
+    os::ThreadType m_recv_thread;
+    int m_stack_slot{-1};  ///< Index in the global session-stack pool, -1 if
+                           ///< unallocated
 
     // Set by SessionRecvThreadEntry just before the thread function returns,
     // so the server's reaper can spot a zombie session and free it without
@@ -761,3 +775,4 @@ private:
 };
 
 }  // namespace ams::mitm::p2p
+#endif  // SYSMODULE_SOURCE_P2P_P2P_PROXY_SERVER_HPP_

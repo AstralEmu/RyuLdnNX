@@ -9,7 +9,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_NODE_MAPPER_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_NODE_MAPPER_HPP_
 
 #include <stratosphere.hpp>
 #include "ldn_types.hpp"
@@ -124,9 +125,10 @@ public:
     }
 
 private:
-    mutable os::SdkMutex m_mutex;  ///< Thread safety mutex
-    NodeEntry m_nodes[MaxNodes];   ///< Node entries
-    u8 m_local_node_id;            ///< This client's node ID
+    mutable os::SdkMutex m_mutex;   ///< Thread safety mutex
+    NodeEntry m_nodes[MaxNodes]{};  ///< Node entries
+    u8 m_local_node_id{0xFF};       ///< This client's node ID
 };
 
 }  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_NODE_MAPPER_HPP_

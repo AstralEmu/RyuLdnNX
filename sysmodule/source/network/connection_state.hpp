@@ -5,12 +5,13 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_CONNECTION_STATE_HPP_
+#define SYSMODULE_SOURCE_NETWORK_CONNECTION_STATE_HPP_
 
+#include <atomic>
 #include <cstdint>
 
-namespace ryu_ldn {
-namespace network {
+namespace ryu_ldn::network {
 
 /**
  * @brief Connection states for the state machine
@@ -104,7 +105,7 @@ public:
      * @brief Get current connection state
      * @return Current state
      */
-    ConnectionState get_state() const {
+    [[nodiscard]] ConnectionState get_state() const {
         return m_state;
     }
 
@@ -113,13 +114,13 @@ public:
      * @return true if in a connected state
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="is_connected"}
-    bool is_connected() const;
+    [[nodiscard]] bool is_connected() const;
 
     /**
      * @brief Check if fully ready (handshake complete)
      * @return true if in Ready state
      */
-    bool is_ready() const {
+    [[nodiscard]] bool is_ready() const {
         return m_state == ConnectionState::Ready;
     }
 
@@ -128,7 +129,7 @@ public:
      * @return true if transitioning
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="is_transitioning"}
-    bool is_transitioning() const;
+    [[nodiscard]] bool is_transitioning() const;
 
     /**
      * @brief Process an event and perform state transition
@@ -150,7 +151,7 @@ public:
      * @brief Get retry count since last successful connection
      * @return Number of retry attempts
      */
-    uint32_t get_retry_count() const {
+    [[nodiscard]] uint32_t get_retry_count() const {
         return m_retry_count;
     }
 
@@ -183,12 +184,13 @@ public:
     static const char* event_to_string(ConnectionEvent event);
 
 private:
-    /// Current connection state
-    ConnectionState m_state;
+    /// Current connection state (read by the receive thread, written by the
+    /// thread driving the machine)
+    std::atomic<ConnectionState> m_state;
     /// Optional callback invoked on every state change
-    StateChangeCallback m_callback;
+    StateChangeCallback m_callback{nullptr};
     /// Retry attempts made since the last successful connection
-    uint32_t m_retry_count;
+    uint32_t m_retry_count{0};
 
     /**
      * @brief Check if transition is valid
@@ -229,5 +231,5 @@ inline const char* transition_result_to_string(TransitionResult result) {
     }
 }
 
-}  // namespace network
-}  // namespace ryu_ldn
+}  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_CONNECTION_STATE_HPP_

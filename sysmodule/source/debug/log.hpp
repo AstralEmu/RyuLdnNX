@@ -48,7 +48,8 @@
  * @see config/config.hpp for DebugConfig structure
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_DEBUG_LOG_HPP_
+#define SYSMODULE_SOURCE_DEBUG_LOG_HPP_
 
 #include <cstdint>
 #include <cstddef>
@@ -57,6 +58,8 @@
 #ifdef __SWITCH__
 #include <stratosphere/os/os_mutex.hpp>
 #else
+#include <cstdio>
+#include <memory>
 #include <mutex>
 #endif
 
@@ -191,7 +194,7 @@ public:
      * @param index Index from oldest (0) to newest (count-1)
      * @return Message string or nullptr if index invalid
      */
-    const char* get(size_t index) const;
+    [[nodiscard]] const char* get(size_t index) const;
 
     /**
      * @brief Get all messages as a single string
@@ -206,7 +209,7 @@ public:
      * @brief Get number of messages in buffer
      * @return Count of messages currently stored
      */
-    size_t count() const {
+    [[nodiscard]] size_t count() const {
         return m_count;
     }
 
@@ -387,8 +390,14 @@ private:
     char m_log_path[256] = {0};
     /// Recent messages, shown by the overlay.
     LogBuffer m_buffer;
-    /// FILE* on PC, unused on Switch.
+#ifndef __SWITCH__
+    /// Host log stream, owned and closed through std::fclose.
+    std::unique_ptr<std::FILE, decltype(&std::fclose)> m_file{
+        nullptr, &std::fclose};
+#else
+    /// Unused on Switch: file I/O goes through the ams::fs API.
     void* m_file = nullptr;
+#endif
     /// True while the log file is open.
     bool m_file_open = false;
     /// Write offset in the log file, in bytes.
@@ -487,3 +496,4 @@ extern Logger g_logger;
     } while (0)
 
 }  // namespace ryu_ldn::debug
+#endif  // SYSMODULE_SOURCE_DEBUG_LOG_HPP_

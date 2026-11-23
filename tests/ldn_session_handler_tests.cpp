@@ -918,7 +918,7 @@ TEST(session_handler_process_reject_reply_is_noop) {
 
     // RejectReply should not affect state
     LdnHeader header = make_test_header(PacketId::RejectReply, 0);
-    handler.handle_reject_reply(header);
+    ldn::LdnSessionHandler::handle_reject_reply(header);
 
     // Should still be in session
     ASSERT_TRUE(handler.is_in_session());
@@ -1075,14 +1075,10 @@ TEST(repeated_initialize_does_not_notify_state_change_twice) {
     handler.handle_initialize(
         make_test_header(PacketId::Initialize, sizeof(init)), init);
 
-    int notifications = 0;
-    static int* counter;
-    counter = &notifications;
-    handler.set_state_callback(
-        [](ldn::LdnSessionState, ldn::LdnSessionState) { ++*counter; });
+    handler.set_state_callback(on_state_changed);
     handler.handle_initialize(
         make_test_header(PacketId::Initialize, sizeof(init)), init);
-    ASSERT_EQ(notifications, 0);
+    ASSERT_FALSE(g_callback_state.state_changed);
 }
 
 /**

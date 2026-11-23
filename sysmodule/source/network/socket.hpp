@@ -9,8 +9,10 @@
  * Reference: Epic 2, Story 2.2
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_SOCKET_HPP_
+#define SYSMODULE_SOURCE_NETWORK_SOCKET_HPP_
 
+#include <atomic>
 #include <cstdint>
 #include <cstddef>
 
@@ -138,19 +140,19 @@ public:
      * @return true if connected
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="Socket is_connected"}
-    bool is_connected() const;
+    [[nodiscard]] bool is_connected() const;
 
     /**
      * @brief Check if socket is valid (has file descriptor)
      * @return true if valid
      */
-    bool is_valid() const;
+    [[nodiscard]] bool is_valid() const;
 
     /**
      * @brief Get the native socket file descriptor
      * @return File descriptor or -1 if invalid
      */
-    int get_fd() const {
+    [[nodiscard]] int get_fd() const {
         return m_fd;
     }
 
@@ -159,34 +161,35 @@ public:
      * @param non_blocking true for non-blocking, false for blocking
      * @return SocketResult::Success or error
      */
-    SocketResult set_non_blocking(bool non_blocking) const;
+    [[nodiscard]] SocketResult set_non_blocking(bool non_blocking) const;
 
     /**
      * @brief Set TCP_NODELAY option (disable Nagle's algorithm)
      * @param nodelay true to disable Nagle
      * @return SocketResult::Success or error
      */
-    SocketResult set_nodelay(bool nodelay) const;
+    [[nodiscard]] SocketResult set_nodelay(bool nodelay) const;
 
     /**
      * @brief Set socket receive buffer size
      * @param size Buffer size in bytes
      * @return SocketResult::Success or error
      */
-    SocketResult set_recv_buffer_size(int size) const;
+    [[nodiscard]] SocketResult set_recv_buffer_size(int size) const;
 
     /**
      * @brief Set socket send buffer size
      * @param size Buffer size in bytes
      * @return SocketResult::Success or error
      */
-    SocketResult set_send_buffer_size(int size) const;
+    [[nodiscard]] SocketResult set_send_buffer_size(int size) const;
 
 private:
-    /// Native socket descriptor, -1 when the socket is invalid.
-    int m_fd;
-    /// true once connect() has completed successfully.
-    bool m_connected;
+    /// Native socket descriptor, -1 when the socket is invalid. Atomic: the
+    /// receive thread reads it while another thread may close the socket.
+    std::atomic<int> m_fd;
+    /// true once connect() has completed successfully (atomic, see m_fd).
+    std::atomic<bool> m_connected;
 
     /**
      * @brief Create TCP socket
@@ -288,3 +291,4 @@ inline const char* socket_result_to_string(SocketResult result) {
 }
 
 }  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_SOCKET_HPP_

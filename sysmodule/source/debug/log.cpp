@@ -255,7 +255,7 @@ void Logger::log_v(LogLevel level, const char* format, va_list args) {
 #ifdef __SWITCH__
     std::scoped_lock lock(m_mutex);
 #else
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
 #endif
     output_message(message);
 }
@@ -274,9 +274,9 @@ void Logger::flush() {
         }
     }
 #else
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     if (m_file != nullptr) {
-        std::fflush(static_cast<FILE*>(m_file));
+        std::fflush(m_file.get());
     }
 #endif
 }
@@ -328,8 +328,8 @@ void Logger::output_message(const char* message) {
         }
 #else
         if (m_file != nullptr) {
-            std::fprintf(static_cast<FILE*>(m_file), "%s\n", message);
-            std::fflush(static_cast<FILE*>(m_file));
+            std::fprintf(m_file.get(), "%s\n", message);
+            std::fflush(m_file.get());
 
             // Update last write time (simple incrementing counter for
             // non-Switch)
@@ -415,20 +415,18 @@ void Logger::open_file() {
         }
     }
 #else
-    m_file =
-        config::open_stream(m_log_path, O_WRONLY | O_CREAT | O_APPEND, "a");
+    m_file.reset(
+        config::open_stream(m_log_path, O_WRONLY | O_CREAT | O_APPEND, "a"));
 
     if (m_file != nullptr) {
         m_file_open = true;
 
         // Write header only once per session
         if (!m_header_written) {
-            std::fprintf(
-                static_cast<FILE*>(m_file),
-                "\n=== ryu_ldn_nx Log Started ===\n");
+            std::fprintf(m_file.get(), "\n=== ryu_ldn_nx Log Started ===\n");
             m_header_written = true;
         }
-        std::fflush(static_cast<FILE*>(m_file));
+        std::fflush(m_file.get());
 
         // Simple counter for non-Switch (timeout not critical for testing)
         m_last_write_tick++;
@@ -452,9 +450,8 @@ void Logger::close_file() {
     }
 #else
     if (m_file != nullptr) {
-        std::fflush(static_cast<FILE*>(m_file));
-        std::fclose(static_cast<FILE*>(m_file));
-        m_file = nullptr;
+        std::fflush(m_file.get());
+        m_file.reset();
         m_file_open = false;
     }
 #endif
@@ -487,9 +484,10 @@ void Logger::check_idle_timeout() {
         }
     }
 #else
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_file_open)
+    std::scoped_lock lock(m_mutex);
+    if (!m_file_open) {
         return;
+    }
 
     // Non-Switch: always close after check (for testing simplicity)
     // Real timeout only matters on Switch hardware

@@ -21,6 +21,7 @@
  * Integration tests with a mock server would be needed for complete coverage.
  */
 
+#include <stdexcept>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -30,6 +31,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -37,6 +39,38 @@
 
 using namespace ryu_ldn::network;
 using namespace ryu_ldn::protocol;
+
+/**
+ * @brief Observe whether a TcpClient left behind by a move is disconnected.
+ *
+ * Contract: TcpClient's move constructor and move assignment move the socket
+ * out of the source and reset its buffers, so the source reads as disconnected;
+ * only that empty state may be observed. The source is named through std::cref
+ * before the move, so the observation targets the same object without reading
+ * the moved-from variable itself.
+ *
+ * @param client Client whose move already happened.
+ * @return true when the source reads as disconnected.
+ */
+bool moved_from_is_connected(const TcpClient& client) {
+    return client.is_connected();
+}
+
+/**
+ * @brief Build a ClientResult holding a raw value.
+ *
+ * ClientResult's underlying type is int, so any int is a valid value of the
+ * enum; the value given here names no enumerator on purpose, to exercise the
+ * "Unknown" fallback of client_result_to_string().
+ *
+ * @param raw Underlying value to reinterpret.
+ * @return The enum value holding raw.
+ */
+ClientResult unknown_client_result(int raw) {
+    ClientResult result{};
+    std::memcpy(&result, &raw, sizeof(result));
+    return result;
+}
 
 // =============================================================================
 // Test Framework
@@ -56,34 +90,34 @@ static int g_tests_failed = 0;
  * ASSERT throws a message, as failed.
  * @param name Identifier of the test (also printed, stringified).
  */
-#define TEST(name)                            \
-    static void test_##name();                \
-    static struct TestRegister_##name {       \
-        TestRegister_##name() {               \
-            printf("  [TEST] " #name "... "); \
-            fflush(stdout);                   \
-            g_tests_run++;                    \
-            try {                             \
-                test_##name();                \
-                printf("PASS\n");             \
-                g_tests_passed++;             \
-            } catch (const char* msg) {       \
-                printf("FAIL: %s\n", msg);    \
-                g_tests_failed++;             \
-            }                                 \
-        }                                     \
-    } g_test_register_##name;                 \
+#define TEST(name)                               \
+    static void test_##name();                   \
+    static struct TestRegister_##name {          \
+        TestRegister_##name() {                  \
+            printf("  [TEST] " #name "... ");    \
+            fflush(stdout);                      \
+            g_tests_run++;                       \
+            try {                                \
+                test_##name();                   \
+                printf("PASS\n");                \
+                g_tests_passed++;                \
+            } catch (const std::exception& ex) { \
+                printf("FAIL: %s\n", ex.what()); \
+                g_tests_failed++;                \
+            }                                    \
+        }                                        \
+    } g_test_register_##name;                    \
     static void test_##name()
 
 /**
  * @brief Fail the current test (throw) when cond is false.
  * @param cond Expression expected to be true.
  */
-#define ASSERT(cond)                          \
-    do {                                      \
-        if (!(cond)) {                        \
-            throw "Assertion failed: " #cond; \
-        }                                     \
+#define ASSERT(cond)                                              \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            throw std::runtime_error("Assertion failed: " #cond); \
+        }                                                         \
     } while (0)
 
 /**
@@ -91,11 +125,11 @@ static int g_tests_failed = 0;
  * @param a First value.
  * @param b Expected value.
  */
-#define ASSERT_EQ(a, b)                              \
-    do {                                             \
-        if ((a) != (b)) {                            \
-            throw "Assertion failed: " #a " != " #b; \
-        }                                            \
+#define ASSERT_EQ(a, b)                                                  \
+    do {                                                                 \
+        if ((a) != (b)) {                                                \
+            throw std::runtime_error("Assertion failed: " #a " != " #b); \
+        }                                                                \
     } while (0)
 
 /**
@@ -103,11 +137,11 @@ static int g_tests_failed = 0;
  * @param a First value.
  * @param b Value that must differ.
  */
-#define ASSERT_NE(a, b)                              \
-    do {                                             \
-        if ((a) == (b)) {                            \
-            throw "Assertion failed: " #a " == " #b; \
-        }                                            \
+#define ASSERT_NE(a, b)                                                  \
+    do {                                                                 \
+        if ((a) == (b)) {                                                \
+            throw std::runtime_error("Assertion failed: " #a " == " #b); \
+        }                                                                \
     } while (0)
 
 /**
@@ -171,9 +205,11 @@ TEST(move_constructor) {
     socket_init();
 
     TcpClient client1;
+    const std::reference_wrapper<const TcpClient> client1_source =
+        std::cref(client1);
     TcpClient client2(std::move(client1));
 
-    ASSERT_FALSE(client1.is_connected());
+    ASSERT_FALSE(moved_from_is_connected(client1_source.get()));
     ASSERT_FALSE(client2.is_connected());
 }
 
@@ -185,10 +221,12 @@ TEST(move_assignment) {
 
     TcpClient client1;
     TcpClient client2;
+    const std::reference_wrapper<const TcpClient> client1_source =
+        std::cref(client1);
 
     client2 = std::move(client1);
 
-    ASSERT_FALSE(client1.is_connected());
+    ASSERT_FALSE(moved_from_is_connected(client1_source.get()));
     ASSERT_FALSE(client2.is_connected());
 }
 
@@ -558,7 +596,7 @@ TEST(result_to_string_internal_error) {
 
 /// @brief An out-of-range ClientResult value maps to "Unknown".
 TEST(result_to_string_unknown) {
-    ClientResult unknown = static_cast<ClientResult>(9999);
+    auto unknown = unknown_client_result(9999);
     ASSERT(strcmp(client_result_to_string(unknown), "Unknown") == 0);
 }
 
@@ -644,14 +682,20 @@ TEST(multiple_moves_safe) {
     socket_init();
 
     TcpClient client1;
+    const std::reference_wrapper<const TcpClient> client1_source =
+        std::cref(client1);
     TcpClient client2(std::move(client1));
+    const std::reference_wrapper<const TcpClient> client2_source =
+        std::cref(client2);
     TcpClient client3(std::move(client2));
+    const std::reference_wrapper<const TcpClient> client3_source =
+        std::cref(client3);
     TcpClient client4;
     client4 = std::move(client3);
 
-    ASSERT_FALSE(client1.is_connected());
-    ASSERT_FALSE(client2.is_connected());
-    ASSERT_FALSE(client3.is_connected());
+    ASSERT_FALSE(moved_from_is_connected(client1_source.get()));
+    ASSERT_FALSE(moved_from_is_connected(client2_source.get()));
+    ASSERT_FALSE(moved_from_is_connected(client3_source.get()));
     ASSERT_FALSE(client4.is_connected());
 }
 
@@ -733,35 +777,35 @@ TEST(send_connect_private_not_connected) {
  * @test CreateAccessPointPrivateRequest size is correct
  */
 TEST(create_access_point_private_request_size) {
-    ASSERT_EQ(sizeof(CreateAccessPointPrivateRequest), 0x13Cu);  // 316 bytes
+    ASSERT_EQ(sizeof(CreateAccessPointPrivateRequest), 0x13CU);  // 316 bytes
 }
 
 /**
  * @test ConnectPrivateRequest size is correct
  */
 TEST(connect_private_request_size) {
-    ASSERT_EQ(sizeof(ConnectPrivateRequest), 0xBCu);  // 188 bytes
+    ASSERT_EQ(sizeof(ConnectPrivateRequest), 0xBCU);  // 188 bytes
 }
 
 /**
  * @test SecurityParameter size is correct
  */
 TEST(security_parameter_size) {
-    ASSERT_EQ(sizeof(SecurityParameter), 0x20u);  // 32 bytes
+    ASSERT_EQ(sizeof(SecurityParameter), 0x20U);  // 32 bytes
 }
 
 /**
  * @test AddressList size is correct
  */
 TEST(address_list_size) {
-    ASSERT_EQ(sizeof(AddressList), 0x60u);  // 96 bytes
+    ASSERT_EQ(sizeof(AddressList), 0x60U);  // 96 bytes
 }
 
 /**
  * @test AddressEntry size is correct
  */
 TEST(address_entry_size) {
-    ASSERT_EQ(sizeof(AddressEntry), 0x0Cu);  // 12 bytes
+    ASSERT_EQ(sizeof(AddressEntry), 0x0CU);  // 12 bytes
 }
 
 // =============================================================================
@@ -983,11 +1027,17 @@ class Peer {
 public:
     Peer() {
         m_listen = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (m_listen < 0) {
+            throw std::runtime_error("socket failed");
+        }
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         addr.sin_port = 0;
-        ::bind(m_listen, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        if (::bind(m_listen, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) <
+            0) {
+            throw std::runtime_error("bind failed");
+        }
         ::listen(m_listen, 1);
         socklen_t len = sizeof(addr);
         ::getsockname(m_listen, reinterpret_cast<sockaddr*>(&addr), &len);
@@ -1008,7 +1058,7 @@ public:
      * @brief Get the port the peer listens on.
      * @return Listening port in host byte order.
      */
-    uint16_t port() const {
+    [[nodiscard]] uint16_t port() const {
         return m_port;
     }
 
@@ -1024,7 +1074,7 @@ public:
         if (m_conn < 0) {
             return false;
         }
-        timeval tv{2, 0};
+        timeval tv{.tv_sec = 2, .tv_usec = 0};
         ::setsockopt(m_conn, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
         return true;
     }
@@ -1033,7 +1083,7 @@ public:
     /// EOF/timeout).
     /// @param size Number of bytes to read (2 s receive timeout per recv).
     /// @return The bytes read, possibly fewer than `size`.
-    std::vector<uint8_t> read_bytes(size_t size) {
+    std::vector<uint8_t> read_bytes(size_t size) const {
         std::vector<uint8_t> out(size);
         size_t got = 0;
         while (got < size) {
@@ -1072,7 +1122,7 @@ public:
      * @param size Number of bytes in `data`.
      * @return true when all `size` bytes were written.
      */
-    bool write_bytes(const void* data, size_t size) {
+    bool write_bytes(const void* data, size_t size) const {
         return ::send(m_conn, data, size, MSG_NOSIGNAL) ==
                static_cast<ssize_t>(size);
     }
@@ -1088,7 +1138,7 @@ public:
     /// Abort the connection with a RST instead of a FIN (SO_LINGER, 0 s).
     void reset_connection() {
         if (m_conn >= 0) {
-            linger lg{1, 0};
+            linger lg{.l_onoff = 1, .l_linger = 0};
             ::setsockopt(m_conn, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
         }
         close_connection();
@@ -1144,7 +1194,7 @@ static std::vector<uint8_t> make_packet(
         size,
         written);
     if (r != EncodeResult::Success || written != buf.size()) {
-        throw "make_packet: encode_raw failed";
+        throw std::runtime_error("make_packet: encode_raw failed");
     }
     return buf;
 }
@@ -1188,10 +1238,12 @@ TEST(connected_move_assignment_transfers_the_connection) {
     Peer peer;
     TcpClient source;
     CONNECT_PAIR(source, peer);
+    const std::reference_wrapper<const TcpClient> source_observer =
+        std::cref(source);
     TcpClient target;
     target = std::move(source);
     ASSERT_TRUE(target.is_connected());
-    ASSERT_FALSE(source.is_connected());
+    ASSERT_FALSE(moved_from_is_connected(source_observer.get()));
     ASSERT_EQ(target.send_raw("ab", 2), ClientResult::Success);
     ASSERT_EQ(peer.read_bytes(2).size(), static_cast<size_t>(2));
 }
@@ -1311,7 +1363,7 @@ static T patterned(uint8_t seed) {
     T value{};
     auto* bytes = reinterpret_cast<uint8_t*>(&value);
     for (size_t i = 0; i < sizeof(T); ++i) {
-        bytes[i] = static_cast<uint8_t>(seed + 31 * i + 1);
+        bytes[i] = static_cast<uint8_t>(seed + (31 * i) + 1);
     }
     return value;
 }
@@ -1330,14 +1382,16 @@ static bool wire_matches_reference(PacketId id, const T& msg, SendFn send) {
     Peer peer;
     TcpClient client;
     CONNECT_PAIR_BOOL(client, peer);
-    if (send(client, msg) != ClientResult::Success)
+    if (send(client, msg) != ClientResult::Success) {
         return false;
+    }
 
     std::vector<uint8_t> expected(get_packet_size<T>());
     size_t written = 0;
     if (encode(expected.data(), expected.size(), id, msg, written) !=
-        EncodeResult::Success)
+        EncodeResult::Success) {
         return false;
+    }
 
     auto got = peer.read_packet();
     return written == expected.size() && got == expected;
@@ -1817,19 +1871,26 @@ TEST(socket_result_mapping_covers_every_socket_outcome) {
         ClientResult out;
     };
     const Row rows[] = {
-        {SocketResult::Success, ClientResult::Success},
-        {SocketResult::WouldBlock, ClientResult::Success},
-        {SocketResult::Timeout, ClientResult::Timeout},
-        {SocketResult::NotConnected, ClientResult::NotConnected},
-        {SocketResult::AlreadyConnected, ClientResult::AlreadyConnected},
-        {SocketResult::NotInitialized, ClientResult::NotInitialized},
-        {SocketResult::Closed, ClientResult::ConnectionLost},
-        {SocketResult::ConnectionReset, ClientResult::ConnectionLost},
-        {SocketResult::ConnectionRefused, ClientResult::ConnectionFailed},
-        {SocketResult::HostUnreachable, ClientResult::ConnectionFailed},
-        {SocketResult::NetworkDown, ClientResult::ConnectionFailed},
-        {SocketResult::InvalidAddress, ClientResult::ConnectionFailed},
-        {SocketResult::SocketError, ClientResult::InternalError},
+        {.in = SocketResult::Success, .out = ClientResult::Success},
+        {.in = SocketResult::WouldBlock, .out = ClientResult::Success},
+        {.in = SocketResult::Timeout, .out = ClientResult::Timeout},
+        {.in = SocketResult::NotConnected, .out = ClientResult::NotConnected},
+        {.in = SocketResult::AlreadyConnected,
+         .out = ClientResult::AlreadyConnected},
+        {.in = SocketResult::NotInitialized,
+         .out = ClientResult::NotInitialized},
+        {.in = SocketResult::Closed, .out = ClientResult::ConnectionLost},
+        {.in = SocketResult::ConnectionReset,
+         .out = ClientResult::ConnectionLost},
+        {.in = SocketResult::ConnectionRefused,
+         .out = ClientResult::ConnectionFailed},
+        {.in = SocketResult::HostUnreachable,
+         .out = ClientResult::ConnectionFailed},
+        {.in = SocketResult::NetworkDown,
+         .out = ClientResult::ConnectionFailed},
+        {.in = SocketResult::InvalidAddress,
+         .out = ClientResult::ConnectionFailed},
+        {.in = SocketResult::SocketError, .out = ClientResult::InternalError},
     };
     for (const Row& row : rows) {
         ASSERT_EQ(TcpClient::socket_to_client_result(row.in), row.out);

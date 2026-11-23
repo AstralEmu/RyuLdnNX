@@ -10,7 +10,8 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  */
-#pragma once
+#ifndef OVERLAY_SOURCE_APP_OVERLAY_STATE_HPP_
+#define OVERLAY_SOURCE_APP_OVERLAY_STATE_HPP_
 
 #include <cstdio>
 #include <cstring>
@@ -113,3 +114,4 @@ private:
     /// True while there are unsaved setting changes.
     bool m_dirty = false;
 };
+#endif  // OVERLAY_SOURCE_APP_OVERLAY_STATE_HPP_

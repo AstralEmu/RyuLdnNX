@@ -144,14 +144,16 @@ static bool wait_until_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     auto start = std::chrono::steady_clock::now();
     while (true) {
         client.update(now_ms());
-        if (client.is_ready())
+        if (client.is_ready()) {
             return true;
+        }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - start)
                            .count();
-        if (elapsed >= timeout_ms)
+        if (elapsed >= timeout_ms) {
             return false;
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -169,14 +171,16 @@ static bool wait_for_state(
     auto start = std::chrono::steady_clock::now();
     while (true) {
         client.update(now_ms());
-        if (client.get_state() == target)
+        if (client.get_state() == target) {
             return true;
+        }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - start)
                            .count();
-        if (elapsed >= timeout_ms)
+        if (elapsed >= timeout_ms) {
             return false;
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -194,8 +198,9 @@ static void poll_for(RyuLdnClient& client, int ms) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - start)
                            .count();
-        if (elapsed >= ms)
+        if (elapsed >= ms) {
             break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
@@ -256,8 +261,9 @@ static protocol::ScanFilterFull make_scan_filter() {
  */
 static bool connect_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     ClientOpResult result = client.connect(g_host, g_port);
-    if (result != ClientOpResult::Success)
+    if (result != ClientOpResult::Success) {
         return false;
+    }
     return wait_until_ready(client, timeout_ms);
 }
 
@@ -274,10 +280,10 @@ static bool connect_ready(RyuLdnClient& client, int timeout_ms = 8000) {
 bool test_default_config_values() {
     RyuLdnClientConfig cfg;
     ASSERT_TRUE(std::strcmp(cfg.host, "127.0.0.1") == 0);
-    ASSERT_EQ(cfg.port, 30456u);
-    ASSERT_EQ(cfg.connect_timeout_ms, 5000u);
-    ASSERT_EQ(cfg.recv_timeout_ms, 20u);
-    ASSERT_EQ(cfg.ping_interval_ms, 0u);
+    ASSERT_EQ(cfg.port, 30456U);
+    ASSERT_EQ(cfg.connect_timeout_ms, 5000U);
+    ASSERT_EQ(cfg.recv_timeout_ms, 20U);
+    ASSERT_EQ(cfg.ping_interval_ms, 0U);
     ASSERT_TRUE(cfg.auto_reconnect);
     ASSERT_EQ(cfg.passphrase[0], '\0');
     return true;
@@ -291,7 +297,7 @@ bool test_config_from_default_constructor() {
     RyuLdnClient client;
     const auto& cfg = client.get_config();
     ASSERT_TRUE(std::strcmp(cfg.host, "127.0.0.1") == 0);
-    ASSERT_EQ(cfg.port, 30456u);
+    ASSERT_EQ(cfg.port, 30456U);
     return true;
 }
 
@@ -571,7 +577,7 @@ bool test_getters_while_connected() {
     ASSERT_TRUE(client.is_connected());
     ASSERT_TRUE(client.is_ready());
     ASSERT_FALSE(client.is_transitioning());
-    ASSERT_EQ(client.get_retry_count(), 0u);
+    ASSERT_EQ(client.get_retry_count(), 0U);
     ASSERT_EQ(client.get_last_error_code(), protocol::NetworkErrorCode::None);
 
     client.disconnect();
@@ -592,8 +598,8 @@ bool test_getters_while_disconnected() {
     ASSERT_FALSE(client.is_connected());
     ASSERT_FALSE(client.is_ready());
     ASSERT_FALSE(client.is_transitioning());
-    ASSERT_EQ(client.get_retry_count(), 0u);
-    ASSERT_EQ(client.get_last_rtt_ms(), 0u);
+    ASSERT_EQ(client.get_retry_count(), 0U);
+    ASSERT_EQ(client.get_last_rtt_ms(), 0U);
 
     socket_exit();
     return true;
@@ -607,11 +613,11 @@ bool test_getters_while_disconnected() {
 bool test_get_last_rtt_initial() {
     socket_init();
     RyuLdnClient client(make_config());
-    ASSERT_EQ(client.get_last_rtt_ms(), 0u);
+    ASSERT_EQ(client.get_last_rtt_ms(), 0U);
 
     ASSERT_TRUE(connect_ready(client));
     // ping_interval_ms=0 means no client pings, so RTT stays 0
-    ASSERT_EQ(client.get_last_rtt_ms(), 0u);
+    ASSERT_EQ(client.get_last_rtt_ms(), 0U);
 
     client.disconnect();
     socket_exit();
@@ -1171,10 +1177,12 @@ bool test_receive_scan_reply() {
     client.set_packet_callback(
         [](protocol::PacketId id, const uint8_t*, size_t, void* user_data) {
             auto* si = static_cast<ScanInfo*>(user_data);
-            if (id == protocol::PacketId::ScanReply)
+            if (id == protocol::PacketId::ScanReply) {
                 si->scan_reply_count++;
-            if (id == protocol::PacketId::ScanReplyEnd)
+            }
+            if (id == protocol::PacketId::ScanReplyEnd) {
                 si->scan_reply_end_count++;
+            }
         },
         &info);
 
@@ -1206,10 +1214,12 @@ bool test_receive_connected_sync_network() {
     client.set_packet_callback(
         [](protocol::PacketId id, const uint8_t*, size_t, void* user_data) {
             auto* si = static_cast<ServerInfo*>(user_data);
-            if (id == protocol::PacketId::Connected)
+            if (id == protocol::PacketId::Connected) {
                 si->got_connected.store(true);
-            if (id == protocol::PacketId::SyncNetwork)
+            }
+            if (id == protocol::PacketId::SyncNetwork) {
                 si->got_sync_network.store(true);
+            }
         },
         &info);
 
@@ -1299,8 +1309,9 @@ bool test_host_station_full_flow() {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - t0)
                            .count();
-        if (elapsed >= 3000)
+        if (elapsed >= 3000) {
             break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
@@ -1503,8 +1514,9 @@ bool test_client_op_result_to_string_all() {
  */
 static std::string get_compose_file() {
     const char* env = std::getenv("INTEGRATION_COMPOSE_FILE");
-    if (env && env[0] != '\0')
+    if (env && env[0] != '\0') {
         return std::string(env);
+    }
     return "docker-compose.yml";
 }
 
@@ -1516,8 +1528,9 @@ static std::string get_compose_file() {
  */
 static int run_shell(const char* cmd) {
     int ret = std::system(cmd);
-    if (WIFEXITED(ret))
+    if (WIFEXITED(ret)) {
         return WEXITSTATUS(ret);
+    }
     return -1;
 }
 
@@ -1590,8 +1603,9 @@ static bool restart_server(int max_wait_s = 30) {
         rc = run_shell(cmd.c_str());
     }
     for (int i = 0; i < max_wait_s; i++) {
-        if (tcp_check(g_host, g_port, 2))
+        if (tcp_check(g_host, g_port, 2)) {
             return true;
+        }
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     return false;
@@ -1827,19 +1841,21 @@ bool test_backoff_expiry_and_retry() {
     struct BoffFlags {
         std::atomic<int>& boff;
         std::atomic<int>& retry;
-    } flags{backoff_count, retrying_count};
+    } flags{.boff = backoff_count, .retry = retrying_count};
 
     client.set_state_callback(
         [](ConnectionState old_state,
            ConnectionState new_state,
            void* user_data) {
             auto* f = static_cast<BoffFlags*>(user_data);
-            if (new_state == ConnectionState::Backoff)
+            if (new_state == ConnectionState::Backoff) {
                 f->boff++;
+            }
             // Retrying is a transient state — detect it from old_state
             if (old_state == ConnectionState::Retrying ||
-                new_state == ConnectionState::Retrying)
+                new_state == ConnectionState::Retrying) {
                 f->retry++;
+            }
         },
         &flags);
 
@@ -2149,8 +2165,9 @@ bool test_tcpclient_send_receive_roundtrip() {
                 type == protocol::PacketId::Initialize);
             break;
         }
-        if (r == ClientResult::ConnectionLost)
+        if (r == ClientResult::ConnectionLost) {
             break;
+        }
     }
     // Success if we got any packet, or Timeout is acceptable
     // (server may not respond without proper handshake sequence)

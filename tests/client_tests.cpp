@@ -47,10 +47,14 @@
  * Test ClientOpResult and NetworkErrorCode to-string functions.
  */
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <future>
 #include <memory>
+#include <thread>
 
 #include "network/client.hpp"
 #include "network/socket.hpp"
@@ -350,7 +354,9 @@ bool test_construction_with_mock() {
  * @return true if the test passes, false at the first failed assertion
  */
 bool test_multiple_clients() {
-    RyuLdnClient c1, c2, c3;
+    RyuLdnClient c1;
+    RyuLdnClient c2;
+    RyuLdnClient c3;
     ASSERT_EQ(c1.get_state(), ConnectionState::Disconnected);
     ASSERT_EQ(c2.get_state(), ConnectionState::Disconnected);
     ASSERT_EQ(c3.get_state(), ConnectionState::Disconnected);
@@ -710,7 +716,7 @@ bool test_state_callback_on_connect_success() {
     mock->next_connect_result = ClientResult::Success;
     ClientOpResult result = client->connect("127.0.0.1", 30456);
     ASSERT_EQ(result, ClientOpResult::Success);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -731,7 +737,7 @@ bool test_state_callback_on_connect_fail() {
     mock->next_connect_result = ClientResult::ConnectionFailed;
     ClientOpResult result = client->connect("127.0.0.1", 30456);
     ASSERT_EQ(result, ClientOpResult::Success);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -916,7 +922,7 @@ bool test_disconnect_with_callback() {
     client->disconnect();
     ASSERT_EQ(client->get_state(), ConnectionState::Disconnected);
     ASSERT_EQ(mock->disconnect_call_count, 1);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -972,7 +978,7 @@ bool test_update_connected_handshake_fail() {
     client->update(1000);
 
     ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -1000,7 +1006,7 @@ bool test_update_handshaking_timeout() {
     client->update(7000);
 
     ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -1378,7 +1384,7 @@ bool test_send_scan_connection_lost_callback() {
 
     ASSERT_EQ(result, ClientOpResult::SendFailed);
     ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -1850,7 +1856,7 @@ bool test_send_ping_connection_lost_callback() {
     client->update(2000);
 
     ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -1892,7 +1898,7 @@ bool test_send_create_access_point_connection_lost() {
     ClientOpResult result = client->send_create_access_point(req);
     ASSERT_EQ(result, ClientOpResult::SendFailed);
     ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -1916,7 +1922,7 @@ bool test_send_connect_request_connection_lost() {
     ClientOpResult result = client->send_connect(req);
     ASSERT_EQ(result, ClientOpResult::SendFailed);
     ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -2426,7 +2432,7 @@ bool test_send_initialize_passphrase_connection_lost() {
     client->update(1000);
 
     ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
-    ASSERT_TRUE(g_state_changes.size() >= 1);
+    ASSERT_TRUE(!g_state_changes.empty());
     return true;
 }
 
@@ -2956,7 +2962,10 @@ static PacketId g_unexpected_id = PacketId::Initialize;
  * @param id packet id received
  */
 static void count_unexpected_packet(
-    PacketId id, const uint8_t*, size_t, void*) {
+    PacketId id,
+    const uint8_t* /*unused*/,
+    size_t /*unused*/,
+    void* /*unused*/) {
     ++g_unexpected_packets;
     g_unexpected_id = id;
 }
@@ -2989,16 +2998,151 @@ bool test_handshake_unexpected_packet_is_forwarded_and_keeps_waiting() {
     return true;
 }
 
-/**
- * @brief Run all RyuLdnClient unit tests
- *
- * @return 0 when every test passed, 1 otherwise
- */
-int main() {
-    printf("\n========================================\n");
-    printf("  RyuLdnClient Tests - ryu_ldn_nx\n");
-    printf("========================================\n\n");
+// ============================================================================
+// Concurrency (connect/disconnect/update are serialized by m_op_mutex)
+// ============================================================================
 
+/**
+ * @brief connect()/disconnect() racing a looping update() never overlap on
+ * the TCP client (and TSan reports nothing under SANITIZE=thread).
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
+bool test_concurrent_connect_disconnect_update_never_overlap() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    mock->recv_delay_ms = 1;
+
+    std::atomic<bool> stop{false};
+    std::thread updater([&] {
+        uint64_t t = 1000;
+        while (!stop.load()) {
+            client->update(t);
+            t += 10;
+        }
+    });
+    for (int i = 0; i < 200; i++) {
+        client->connect("127.0.0.1", 30456);
+        client->disconnect();
+    }
+    stop = true;
+    updater.join();
+    ASSERT_TRUE(mock->max_active_ops.load() <= 1);
+    return true;
+}
+
+/**
+ * @brief Packet callback re-entering the client through a send_*() call.
+ *
+ * @param id Unused packet id.
+ * @param data Unused payload.
+ * @param size Unused payload size.
+ * @param ud The RyuLdnClient that dispatched the packet.
+ */
+static void ping_response_callback(
+    PacketId id, const uint8_t* data, size_t size, void* ud) {
+    static_cast<void>(id);
+    static_cast<void>(data);
+    static_cast<void>(size);
+    static_cast<RyuLdnClient*>(ud)->send_ping_response(1);
+}
+
+/**
+ * @brief A packet callback calling send_ping_response() from inside update()
+ * finishes (the send path does not take the non-recursive operation lock).
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
+bool test_packet_callback_send_ping_response_does_not_deadlock() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_ready(client.get(), mock, 1000);
+    ASSERT_EQ(client->get_state(), ConnectionState::Ready);
+    client->set_packet_callback(ping_response_callback, client.get());
+    mock->reset_counters();
+
+    push_packet(mock, PacketId::ScanReply, nullptr, 0);
+    auto done = std::async(std::launch::async, [&] { client->update(2000); });
+    if (done.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+        printf("    FAIL: update() deadlocked in the packet callback\n");
+        std::fflush(stdout);
+        std::_Exit(1);  // the stuck thread cannot be joined
+    }
+    done.get();
+    ASSERT_EQ(mock->send_ping_call_count, 1);
+    return true;
+}
+
+/**
+ * @brief disconnect() issued while update() is blocked in a receive returns
+ * within one receive timeout (plus margin), not after the whole backlog.
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
+bool test_disconnect_during_update_returns_within_recv_timeout() {
+    MockTcpClient* mock;
+    auto client = make_client(mock);
+    drive_to_ready(client.get(), mock, 1000);
+    ASSERT_EQ(client->get_state(), ConnectionState::Ready);
+    mock->recv_delay_ms = 20;
+    mock->reset_counters();
+
+    std::atomic<bool> stop{false};
+    std::thread updater([&] {
+        uint64_t t = 2000;
+        while (!stop.load()) {
+            client->update(t);
+            t += 10;
+            // Same cadence as the production receive loop
+            // (ldn_icommunication.cpp: svcSleepThread(1 ms) between ticks);
+            // a spin loop would starve the unfair op mutex, which no real
+            // caller does.
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    while (mock->recv_call_count.load() == 0) {
+        std::this_thread::yield();
+    }
+    auto begin = std::chrono::steady_clock::now();
+    client->disconnect();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - begin);
+    stop = true;
+    updater.join();
+    ASSERT_TRUE(elapsed.count() < 20 + 200);
+    ASSERT_TRUE(!client->is_connected());
+    return true;
+}
+
+/**
+ * @brief connect() in Backoff racing update() in Backoff produces exactly one
+ * additional TCP connect attempt.
+ *
+ * @return true if the test passes, false at the first failed assertion
+ */
+bool test_connect_and_update_in_backoff_try_connect_once() {
+    for (int i = 0; i < 50; i++) {
+        MockTcpClient* mock;
+        auto client = make_client(mock);
+        mock->next_connect_result = ClientResult::ConnectionFailed;
+        client->connect("127.0.0.1", 30456);
+        ASSERT_EQ(client->get_state(), ConnectionState::Backoff);
+        ASSERT_EQ(mock->connect_call_count.load(), 1);
+        client->update(1000);  // starts the backoff timer
+
+        mock->next_connect_result = ClientResult::Success;
+        std::thread updater([&] { client->update(1000000000000ULL); });
+        client->connect("127.0.0.1", 30456);
+        updater.join();
+        ASSERT_EQ(mock->connect_call_count.load(), 2);
+    }
+    return true;
+}
+
+/**
+ * @brief Run the configuration, construction and connection-setup tests.
+ */
+static void run_client_core_tests() {
     printf("Configuration:\n");
     RUN_TEST(test_config_defaults);
     RUN_TEST(test_config_from_app_config);
@@ -3059,7 +3203,12 @@ int main() {
 
     printf("\nDisconnect:\n");
     RUN_TEST(test_disconnect_with_callback);
+}
 
+/**
+ * @brief Run the handshake and update-path tests.
+ */
+static void run_client_handshake_tests() {
     printf("\nHandshake / update paths:\n");
     RUN_TEST(test_update_connected_sends_handshake);
     RUN_TEST(test_update_connected_handshake_fail);
@@ -3088,7 +3237,12 @@ int main() {
     printf("\nconnect() edge cases:\n");
     RUN_TEST(test_connect_no_args);
     RUN_TEST(test_connect_invalid_state);
+}
 
+/**
+ * @brief Run the send-path and backoff tests.
+ */
+static void run_client_send_tests() {
     printf("\nupdate() state paths:\n");
     RUN_TEST(test_update_disconnected_noop);
     RUN_TEST(test_update_disconnecting_transitions);
@@ -3141,7 +3295,12 @@ int main() {
 
     printf("\nBackoff edge cases:\n");
     RUN_TEST(test_update_backoff_expired_no_reconnect_stays);
+}
 
+/**
+ * @brief Run the regression, string-conversion and concurrency tests.
+ */
+static void run_client_regression_tests() {
     printf("\nprocess_packets edge cases:\n");
     RUN_TEST(test_update_ready_no_packets);
     RUN_TEST(test_update_ready_recv_generic_error);
@@ -3167,6 +3326,31 @@ int main() {
     RUN_TEST(test_handshake_sync_network_notifies_state_callback);
     RUN_TEST(test_handshake_server_disconnect_notifies_state_callback);
     RUN_TEST(test_handshake_unexpected_packet_is_forwarded_and_keeps_waiting);
+
+    printf("\nConcurrency:\n");
+    RUN_TEST(test_concurrent_connect_disconnect_update_never_overlap);
+    RUN_TEST(test_packet_callback_send_ping_response_does_not_deadlock);
+    RUN_TEST(test_disconnect_during_update_returns_within_recv_timeout);
+    RUN_TEST(test_connect_and_update_in_backoff_try_connect_once);
+}
+
+/**
+ * @brief Run all RyuLdnClient unit tests
+ *
+ * @return 0 when every test passed, 1 otherwise
+ */
+int main() {
+    printf("\n========================================\n");
+    printf("  RyuLdnClient Tests - ryu_ldn_nx\n");
+    printf("========================================\n\n");
+
+    run_client_core_tests();
+
+    run_client_handshake_tests();
+
+    run_client_send_tests();
+
+    run_client_regression_tests();
 
     printf("\n========================================\n");
     printf(

@@ -330,7 +330,7 @@ Socket::~Socket() {
  * @param other Socket to move from
  */
 Socket::Socket(Socket&& other) noexcept
-    : m_fd(other.m_fd), m_connected(other.m_connected) {
+    : m_fd(other.m_fd.load()), m_connected(other.m_connected.load()) {
     // Invalidate the source socket
     other.m_fd = -1;
     other.m_connected = false;
@@ -351,8 +351,8 @@ Socket& Socket::operator=(Socket&& other) noexcept {
         close();
 
         // Transfer ownership
-        m_fd = other.m_fd;
-        m_connected = other.m_connected;
+        m_fd = other.m_fd.load();
+        m_connected = other.m_connected.load();
 
         // Invalidate source
         other.m_fd = -1;
@@ -514,7 +514,12 @@ SocketResult Socket::connect(
 
     // Connection succeeded - restore blocking mode if we changed it
     if (use_timeout) {
-        set_non_blocking(false);
+        const SocketResult restore = set_non_blocking(false);
+        if (restore != SocketResult::Success) {
+            LOG_WARN(
+                "connect: restoring blocking mode failed: %s",
+                socket_result_to_string(restore));
+        }
     }
 
     // Enable TCP keepalive to detect dead connections on unstable networks.
@@ -930,7 +935,7 @@ SocketResult Socket::wait_ready(uint32_t timeout_ms, bool for_write) {
         LOG_INFO(
             "Socket::wait_ready: peer-side close on fd=%d (revents=0x%X: "
             "%s%s%s) — marking disconnected",
-            m_fd,
+            m_fd.load(),
             static_cast<unsigned>(pfd.revents),
             (pfd.revents & POLLERR) ? "POLLERR " : "",
             (pfd.revents & POLLHUP) ? "POLLHUP " : "",

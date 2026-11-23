@@ -46,10 +46,8 @@ ProxySocket* ProxySocketManager::CreateProxySocket(
     }
 
     // Find first free slot (fd == INVALID_FD)
-    ProxySocketEntry* slot = &*std::find_if(
-        m_sockets.begin(), m_sockets.end(), [](const auto& entry) {
-            return entry.fd == INVALID_FD;
-        });
+    ProxySocketEntry* slot = &*std::ranges::find_if(
+        m_sockets, [](const auto& entry) { return entry.fd == INVALID_FD; });
     // m_socket_count counts exactly the entries whose fd is not INVALID_FD and
     // is below MAX_PROXY_SOCKETS here, so a free slot always exists.
 
@@ -76,21 +74,20 @@ ProxySocket* ProxySocketManager::GetProxySocket(s32 fd) {
 ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(
     s32 fd) {
     // Caller must hold m_mutex
-    const auto it = std::find_if(
-        m_sockets.begin(), m_sockets.end(), [fd](const auto& entry) {
-            return entry.fd != INVALID_FD && entry.fd == fd;
-        });
-    return it != m_sockets.end() ? &*it : nullptr;
+    auto* const it = std::ranges::find_if(m_sockets, [fd](const auto& entry) {
+        return entry.fd != INVALID_FD && entry.fd == fd;
+    });
+    return it != m_sockets.end() ? it : nullptr;
 }
 
 const ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(
     s32 fd) const {
     // Caller must hold m_mutex
-    const auto it = std::find_if(
-        m_sockets.begin(), m_sockets.end(), [fd](const auto& entry) {
+    const auto* const it =
+        std::ranges::find_if(m_sockets, [fd](const auto& entry) {
             return entry.fd != INVALID_FD && entry.fd == fd;
         });
-    return it != m_sockets.end() ? &*it : nullptr;
+    return it != m_sockets.end() ? it : nullptr;
 }
 
 bool ProxySocketManager::IsProxySocket(s32 fd) const {

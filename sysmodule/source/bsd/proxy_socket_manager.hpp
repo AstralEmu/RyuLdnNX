@@ -59,7 +59,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_PROXY_SOCKET_MANAGER_HPP_
+#define SYSMODULE_SOURCE_BSD_PROXY_SOCKET_MANAGER_HPP_
 
 #include <stratosphere.hpp>
 #include <array>
@@ -731,3 +732,4 @@ private:
 };
 
 }  // namespace ams::mitm::bsd
+#endif  // SYSMODULE_SOURCE_BSD_PROXY_SOCKET_MANAGER_HPP_

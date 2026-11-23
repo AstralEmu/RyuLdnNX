@@ -69,19 +69,19 @@
 //=============================================================================
 
 /// Unsigned 8-bit integer, as in libnx types.
-typedef uint8_t u8;
+using u8 = uint8_t;
 /// Unsigned 16-bit integer, as in libnx types.
-typedef uint16_t u16;
+using u16 = uint16_t;
 /// Unsigned 32-bit integer, as in libnx types.
-typedef uint32_t u32;
+using u32 = uint32_t;
 /// Unsigned 64-bit integer, as in libnx types.
-typedef uint64_t u64;
+using u64 = uint64_t;
 /// Signed 32-bit integer, as in libnx types.
-typedef int32_t s32;
+using s32 = int32_t;
 /// Signed 64-bit integer, as in libnx types.
-typedef int64_t s64;
+using s64 = int64_t;
 /// Result code; 0 means success, as in libnx.
-typedef int32_t Result;
+using Result = int32_t;
 
 /**
  * @brief Check a Result for success.
@@ -560,7 +560,7 @@ static int g_tests_passed = 0;
  * @test Verify command IDs start from 0
  */
 TEST(command_ids_start_from_zero) {
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetVersion), 0u);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetVersion), 0U);
 }
 
 /**
@@ -570,35 +570,35 @@ TEST(command_ids_start_from_zero) {
  */
 TEST(command_ids_match_layout) {
     // Sysmodule Status (0-8)
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetVersion), 0u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetConnectionStatus), 1u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::IsServiceActive), 2u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::IsGameActive), 3u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetLdnState), 4u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetSessionInfo), 5u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetLastRtt), 6u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::ForceReconnect), 7u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetActiveProcessId), 8u);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetVersion), 0U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetConnectionStatus), 1U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::IsServiceActive), 2U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::IsGameActive), 3U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetLdnState), 4U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetSessionInfo), 5U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetLastRtt), 6U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::ForceReconnect), 7U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetActiveProcessId), 8U);
 
     // Sysmodule General Settings (9-14)
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetDebugEnabled), 9u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDebugEnabled), 10u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetDebugLevel), 11u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDebugLevel), 12u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SaveConfig), 13u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::ReloadConfig), 14u);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetDebugEnabled), 9U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDebugEnabled), 10U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetDebugLevel), 11U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDebugLevel), 12U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SaveConfig), 13U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::ReloadConfig), 14U);
 
     // Sysmodule Configuration Manager (15-24)
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetServerAddress), 15u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetServerAddress), 16u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetLdnEnabled), 17u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetLdnEnabled), 18u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetDisableP2p), 19u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDisableP2p), 20u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetUsePassphrase), 21u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetUsePassphrase), 22u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetPassphrase), 23u);
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetPassphrase), 24u);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetServerAddress), 15U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetServerAddress), 16U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetLdnEnabled), 17U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetLdnEnabled), 18U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetDisableP2p), 19U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetDisableP2p), 20U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetUsePassphrase), 21U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetUsePassphrase), 22U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::GetPassphrase), 23U);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetPassphrase), 24U);
 }
 
 /**
@@ -637,7 +637,7 @@ TEST(command_ids_get_set_pairing) {
  * @test Verify total command count is 25 (IDs 0-24)
  */
 TEST(command_count_is_25) {
-    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetPassphrase), 24u);
+    ASSERT_EQ(static_cast<u32>(ConfigCmd::SetPassphrase), 24U);
     // Total: 25 defined command IDs (0-24)
 }
 //=============================================================================
@@ -654,7 +654,7 @@ TEST(command_count_is_25) {
  * Total: 68 bytes
  */
 TEST(server_address_ipc_size) {
-    ASSERT_EQ(sizeof(ServerAddressIpc), 68u);
+    ASSERT_EQ(sizeof(ServerAddressIpc), 68U);
 }
 
 /**
@@ -688,11 +688,11 @@ TEST(server_address_ipc_is_pod) {
     src.port = 12345;
     src.padding = 0;
 
-    ServerAddressIpc dst;
+    ServerAddressIpc dst{};
     std::memcpy(&dst, &src, sizeof(ServerAddressIpc));
 
     ASSERT_STREQ(dst.host, "test.server.com");
-    ASSERT_EQ(dst.port, 12345u);
+    ASSERT_EQ(dst.port, 12345U);
 }
 
 //=============================================================================
@@ -703,11 +703,11 @@ TEST(server_address_ipc_is_pod) {
  * @test ConfigResult values match expected codes
  */
 TEST(config_result_values) {
-    ASSERT_EQ(static_cast<u32>(ConfigResult::Success), 0u);
-    ASSERT_EQ(static_cast<u32>(ConfigResult::FileNotFound), 1u);
-    ASSERT_EQ(static_cast<u32>(ConfigResult::ParseError), 2u);
-    ASSERT_EQ(static_cast<u32>(ConfigResult::IoError), 3u);
-    ASSERT_EQ(static_cast<u32>(ConfigResult::InvalidValue), 4u);
+    ASSERT_EQ(static_cast<u32>(ConfigResult::Success), 0U);
+    ASSERT_EQ(static_cast<u32>(ConfigResult::FileNotFound), 1U);
+    ASSERT_EQ(static_cast<u32>(ConfigResult::ParseError), 2U);
+    ASSERT_EQ(static_cast<u32>(ConfigResult::IoError), 3U);
+    ASSERT_EQ(static_cast<u32>(ConfigResult::InvalidValue), 4U);
 }
 
 /**
@@ -715,7 +715,7 @@ TEST(config_result_values) {
  */
 TEST(config_result_success_is_zero) {
     ConfigResult result = ConfigResult::Success;
-    ASSERT_EQ(static_cast<u32>(result), 0u);
+    ASSERT_EQ(static_cast<u32>(result), 0U);
 }
 
 //=============================================================================
@@ -745,7 +745,7 @@ TEST(get_connection_status_returns_ready) {
     Result r = svc.GetConnectionStatus(status);
 
     ASSERT_SUCCESS(r);
-    ASSERT_EQ(status, 0u);
+    ASSERT_EQ(status, 0U);
 }
 
 /**
@@ -758,7 +758,7 @@ TEST(is_service_active_returns_true) {
     Result r = svc.IsServiceActive(active);
 
     ASSERT_SUCCESS(r);
-    ASSERT_EQ(active, 1u);
+    ASSERT_EQ(active, 1U);
 }
 
 //=============================================================================
@@ -835,7 +835,7 @@ TEST(get_server_address_default) {
 
     ASSERT_SUCCESS(r);
     ASSERT_STREQ(addr.host, "ryuldnnx.ddns.net");
-    ASSERT_EQ(addr.port, 30456u);
+    ASSERT_EQ(addr.port, 30456U);
 }
 
 /**
@@ -857,7 +857,7 @@ TEST(server_address_set_get_roundtrip) {
     ASSERT_SUCCESS(r);
 
     ASSERT_STREQ(output.host, "192.168.1.100");
-    ASSERT_EQ(output.port, 9999u);
+    ASSERT_EQ(output.port, 9999U);
 }
 
 /**
@@ -877,7 +877,7 @@ TEST(server_address_max_length_host) {
     ServerAddressIpc output = {};
     svc.GetServerAddress(output);
 
-    ASSERT_EQ(std::strlen(output.host), 63u);
+    ASSERT_EQ(std::strlen(output.host), 63U);
 }
 
 //=============================================================================
@@ -894,7 +894,7 @@ TEST(ldn_enabled_default_true) {
     Result r = svc.GetLdnEnabled(enabled);
 
     ASSERT_SUCCESS(r);
-    ASSERT_EQ(enabled, 1u);
+    ASSERT_EQ(enabled, 1U);
 }
 
 /**
@@ -907,12 +907,12 @@ TEST(ldn_enabled_set_get_roundtrip) {
     svc.SetLdnEnabled(0);
     u32 enabled = 1;
     svc.GetLdnEnabled(enabled);
-    ASSERT_EQ(enabled, 0u);
+    ASSERT_EQ(enabled, 0U);
 
     // Re-enable
     svc.SetLdnEnabled(1);
     svc.GetLdnEnabled(enabled);
-    ASSERT_EQ(enabled, 1u);
+    ASSERT_EQ(enabled, 1U);
 }
 
 /**
@@ -924,7 +924,7 @@ TEST(debug_enabled_default_false) {
 
     svc.GetDebugEnabled(enabled);
 
-    ASSERT_EQ(enabled, 0u);
+    ASSERT_EQ(enabled, 0U);
 }
 
 /**
@@ -937,11 +937,11 @@ TEST(boolean_nonzero_is_true) {
     svc.SetDebugEnabled(42);
     u32 enabled = 0;
     svc.GetDebugEnabled(enabled);
-    ASSERT_EQ(enabled, 1u);
+    ASSERT_EQ(enabled, 1U);
 
     svc.SetDebugEnabled(255);
     svc.GetDebugEnabled(enabled);
-    ASSERT_EQ(enabled, 1u);
+    ASSERT_EQ(enabled, 1U);
 }
 
 //=============================================================================
@@ -957,7 +957,7 @@ TEST(debug_level_default_warning) {
 
     svc.GetDebugLevel(level);
 
-    ASSERT_EQ(level, 1u);
+    ASSERT_EQ(level, 1U);
 }
 
 /**
@@ -983,7 +983,7 @@ TEST(use_passphrase_default_false) {
     u32 enabled = 99;
     Result r = svc.GetUsePassphrase(enabled);
     ASSERT_SUCCESS(r);
-    ASSERT_EQ(enabled, 0u);
+    ASSERT_EQ(enabled, 0U);
 }
 
 /// @test Set/Get of the passphrase-filtering flag round-trips.
@@ -992,11 +992,11 @@ TEST(use_passphrase_set_get_roundtrip) {
     svc.SetUsePassphrase(1);
     u32 enabled = 0;
     svc.GetUsePassphrase(enabled);
-    ASSERT_EQ(enabled, 1u);
+    ASSERT_EQ(enabled, 1U);
 
     svc.SetUsePassphrase(0);
     svc.GetUsePassphrase(enabled);
-    ASSERT_EQ(enabled, 0u);
+    ASSERT_EQ(enabled, 0U);
 }
 
 //=============================================================================
@@ -1009,7 +1009,7 @@ TEST(disable_p2p_default_true) {
     u32 disabled = 0;
     Result r = svc.GetDisableP2p(disabled);
     ASSERT_SUCCESS(r);
-    ASSERT_EQ(disabled, 1u);
+    ASSERT_EQ(disabled, 1U);
 }
 
 /// @test Set/Get of the P2P-disabled flag round-trips.
@@ -1020,12 +1020,12 @@ TEST(disable_p2p_set_get_roundtrip) {
     svc.SetDisableP2p(0);
     u32 disabled = 1;
     svc.GetDisableP2p(disabled);
-    ASSERT_EQ(disabled, 0u);
+    ASSERT_EQ(disabled, 0U);
 
     // Disable P2P (disable_p2p = 1)
     svc.SetDisableP2p(1);
     svc.GetDisableP2p(disabled);
-    ASSERT_EQ(disabled, 1u);
+    ASSERT_EQ(disabled, 1U);
 }
 
 //=============================================================================

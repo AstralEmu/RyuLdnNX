@@ -11,7 +11,8 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  */
-#pragma once
+#ifndef OVERLAY_SOURCE_APP_AUTO_SAVE_CONTROLLER_HPP_
+#define OVERLAY_SOURCE_APP_AUTO_SAVE_CONTROLLER_HPP_
 
 #include <string>
 
@@ -162,3 +163,4 @@ private:
     /// Frames the "Saved!" indicator stays visible (120 frames, 2 s).
     static constexpr u32 ConfirmDurationFrames = 120;
 };
+#endif  // OVERLAY_SOURCE_APP_AUTO_SAVE_CONTROLLER_HPP_

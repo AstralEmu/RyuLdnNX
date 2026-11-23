@@ -497,6 +497,15 @@ int ParseDnsResponse(
 }
 
 /**
+ * @brief Read a big-endian 16-bit field from a DNS message
+ * @param p Pointer to the first of the two bytes.
+ * @return The field value in host order.
+ */
+uint16_t ReadBe16(const uint8_t* p) {
+    return static_cast<uint16_t>((static_cast<unsigned>(p[0]) << 8) | p[1]);
+}
+
+/**
  * @brief Resolve a hostname by sending a UDP DNS query to the configured DNS
  * server.
  * @param hostname  Null-terminated hostname to resolve.
@@ -580,18 +589,12 @@ int ResolveHostnameDns(const char* hostname, uint32_t* out_ips, int max_ips) {
 
     // Diagnostic logging: dump key DNS response fields
     if (recv_len >= static_cast<ssize_t>(DNS_HEADER_SIZE)) {
-        uint16_t resp_id =
-            (static_cast<uint16_t>(resp_buf[0]) << 8) | resp_buf[1];
-        uint16_t resp_fl =
-            (static_cast<uint16_t>(resp_buf[2]) << 8) | resp_buf[3];
-        uint16_t resp_qd =
-            (static_cast<uint16_t>(resp_buf[4]) << 8) | resp_buf[5];
-        uint16_t resp_an =
-            (static_cast<uint16_t>(resp_buf[6]) << 8) | resp_buf[7];
-        uint16_t resp_ns =
-            (static_cast<uint16_t>(resp_buf[8]) << 8) | resp_buf[9];
-        uint16_t resp_ar =
-            (static_cast<uint16_t>(resp_buf[10]) << 8) | resp_buf[11];
+        uint16_t resp_id = ReadBe16(resp_buf + 0);
+        uint16_t resp_fl = ReadBe16(resp_buf + 2);
+        uint16_t resp_qd = ReadBe16(resp_buf + 4);
+        uint16_t resp_an = ReadBe16(resp_buf + 6);
+        uint16_t resp_ns = ReadBe16(resp_buf + 8);
+        uint16_t resp_ar = ReadBe16(resp_buf + 10);
         LOG_INFO(
             "DNS response: %zu bytes, id=0x%04X flags=0x%04X QD=%u AN=%u NS=%u "
             "AR=%u",
@@ -844,12 +847,11 @@ int __wrap_getaddrinfo(
  */
 void __wrap_freeaddrinfo(struct addrinfo* res) {
     while (res != nullptr) {
-        struct addrinfo* next = res->ai_next;
         // res comes from the caller (miniupnpc); the getaddrinfo contract
         // hands ownership back. ai is the first member of AddrinfoStorage,
         // so the node address is the address of the whole malloc block.
-        std::free(reinterpret_cast<AddrinfoStorage*>(res));
-        res = next;
+        StoragePtr owned(reinterpret_cast<AddrinfoStorage*>(res), &std::free);
+        res = owned->ai.ai_next;
     }
 }
 

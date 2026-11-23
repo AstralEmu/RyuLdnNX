@@ -19,7 +19,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_BSD_MITM_SERVICE_HPP_
+#define SYSMODULE_SOURCE_BSD_BSD_MITM_SERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "interfaces/ibsd_mitm_service.hpp"
@@ -772,3 +773,4 @@ private:
 static_assert(ams::mitm::bsd::IsIBsdMitmService<BsdMitmService>);
 
 }  // namespace ams::mitm::bsd
+#endif  // SYSMODULE_SOURCE_BSD_BSD_MITM_SERVICE_HPP_

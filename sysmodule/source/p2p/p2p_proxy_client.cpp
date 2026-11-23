@@ -128,10 +128,9 @@ alignas(os::ThreadStackAlignment) static constinit u8
  * documented with the declaration.
  */
 P2pProxyClient::P2pProxyClient(ProxyPacketCallback packet_callback)
-    : m_socket_fd(-1),
-      m_connected(false),
+    : m_connected(false),
       m_disposed(false),
-      m_ready(false),
+
       m_proxy_config{},
       m_recv_thread_running(false),
       m_packet_callback(packet_callback) {
@@ -365,11 +364,11 @@ void P2pProxyClient::Disconnect() {
     // Stop receive thread
     m_recv_thread_running = false;
 
-    // Close socket to unblock recv()
+    // Unblock recv() without releasing the descriptor: the receive thread
+    // still reads it, so close() waits until that thread has been joined
+    // (closing first races with recv() and risks descriptor reuse).
     if (m_socket_fd >= 0) {
         shutdown(m_socket_fd, SHUT_RDWR);
-        close(m_socket_fd);
-        m_socket_fd = -1;
     }
 
     // Wait for receive thread to finish
@@ -380,6 +379,11 @@ void P2pProxyClient::Disconnect() {
         os::WaitThread(&m_recv_thread);
         os::DestroyThread(&m_recv_thread);
         m_mutex.Lock();
+    }
+
+    if (m_socket_fd >= 0) {
+        close(m_socket_fd);
+        m_socket_fd = -1;
     }
 
     m_connected = false;

@@ -11,7 +11,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_CONFIG_GAME_WHITELIST_HPP_
+#define SYSMODULE_SOURCE_CONFIG_GAME_WHITELIST_HPP_
 
 #include <cstdint>
 
@@ -36,3 +37,4 @@ void LoadWhitelist();
 bool IsGameInWhitelist(uint64_t program_id);
 
 }  // namespace ryu_ldn::config
+#endif  // SYSMODULE_SOURCE_CONFIG_GAME_WHITELIST_HPP_

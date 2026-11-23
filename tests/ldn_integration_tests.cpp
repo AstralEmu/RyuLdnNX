@@ -23,6 +23,7 @@
 #include <queue>
 #include <mutex>
 #include <stdexcept>
+#include <utility>
 
 //=============================================================================
 // Test Framework
@@ -214,16 +215,15 @@ enum class MessageType : u8 {
 class IntegrationStateMachine {
 public:
     /// Starts in CommState::None with the state-change event cleared.
-    IntegrationStateMachine()
-        : m_state(CommState::None), m_event_signaled(false) {}
+    IntegrationStateMachine() = default;
 
     /// @return Current communication state.
-    CommState GetState() const {
+    [[nodiscard]] CommState GetState() const {
         return m_state;
     }
 
     /// @return True if a state change happened since the last ClearEvent().
-    bool IsEventSignaled() const {
+    [[nodiscard]] bool IsEventSignaled() const {
         return m_event_signaled;
     }
     /// Clears the state-change event flag.
@@ -364,7 +364,7 @@ public:
     }
 
     /// @return Reason given to the last SetError(), None if never called.
-    DisconnectReason GetDisconnectReason() const {
+    [[nodiscard]] DisconnectReason GetDisconnectReason() const {
         return m_disconnect_reason;
     }
 
@@ -381,13 +381,13 @@ private:
     }
 
     /// Current state.
-    CommState m_state;
+    CommState m_state{CommState::None};
     /// Process id given to Initialize(), 0 after Finalize().
     u64 m_client_pid = 0;
     /// Reason recorded by SetError().
     DisconnectReason m_disconnect_reason = DisconnectReason::None;
     /// True after a state change until ClearEvent() is called.
-    bool m_event_signaled;
+    bool m_event_signaled{false};
 };
 
 //=============================================================================
@@ -463,8 +463,9 @@ public:
      * @param ipv4 IPv4 address of the node.
      */
     void AddNode(u32 node_id, u32 ipv4) {
-        if (node_id >= MaxNodes)
+        if (node_id >= MaxNodes) {
             return;
+        }
         m_nodes[node_id].ipv4 = ipv4;
         m_nodes[node_id].connected = true;
     }
@@ -474,8 +475,9 @@ public:
      * @param node_id Node index; ignored when >= MaxNodes.
      */
     void RemoveNode(u32 node_id) {
-        if (node_id >= MaxNodes)
+        if (node_id >= MaxNodes) {
             return;
+        }
         m_nodes[node_id].connected = false;
     }
 
@@ -484,9 +486,10 @@ public:
      * @param node_id Node index.
      * @return True if connected, false if out of range or disconnected.
      */
-    bool IsConnected(u32 node_id) const {
-        if (node_id >= MaxNodes)
+    [[nodiscard]] bool IsConnected(u32 node_id) const {
+        if (node_id >= MaxNodes) {
             return false;
+        }
         return m_nodes[node_id].connected;
     }
 
@@ -495,18 +498,20 @@ public:
      * @param node_id Node index.
      * @return Stored address, 0 if node_id is out of range.
      */
-    u32 GetIpv4(u32 node_id) const {
-        if (node_id >= MaxNodes)
+    [[nodiscard]] u32 GetIpv4(u32 node_id) const {
+        if (node_id >= MaxNodes) {
             return 0;
+        }
         return m_nodes[node_id].ipv4;
     }
 
     /// @return Number of nodes currently marked connected.
-    size_t GetConnectedCount() const {
+    [[nodiscard]] size_t GetConnectedCount() const {
         size_t count = 0;
-        for (size_t i = 0; i < MaxNodes; i++) {
-            if (m_nodes[i].connected)
+        for (auto m_node : m_nodes) {
+            if (m_node.connected) {
                 count++;
+            }
         }
         return count;
     }
@@ -516,9 +521,9 @@ public:
      * (set back to the 0xFF not-found marker).
      */
     void Clear() {
-        for (size_t i = 0; i < MaxNodes; i++) {
-            m_nodes[i].ipv4 = 0;
-            m_nodes[i].connected = false;
+        for (auto& m_node : m_nodes) {
+            m_node.ipv4 = 0;
+            m_node.connected = false;
         }
         m_local_node_id = 0xFF;
     }
@@ -528,7 +533,7 @@ public:
         m_local_node_id = id;
     }
     /// @return Local node id, 0xFF while unknown.
-    u8 GetLocalNodeId() const {
+    [[nodiscard]] u8 GetLocalNodeId() const {
         return m_local_node_id;
     }
 
@@ -543,7 +548,7 @@ public:
         Clear();
         for (u8 i = 0; i < info.ldn.node_count && i < MaxNodes; i++) {
             const auto& node = info.ldn.nodes[i];
-            if (node.is_connected) {
+            if (node.is_connected != 0) {
                 m_nodes[node.node_id].ipv4 = node.ipv4_address;
                 m_nodes[node.node_id].connected = true;
             }
@@ -559,7 +564,7 @@ public:
      * true unless target is the sender; otherwise true only if dest
      * equals target.
      */
-    bool ShouldRouteToNode(u32 dest, u32 src, u32 target) const {
+    [[nodiscard]] bool ShouldRouteToNode(u32 dest, u32 src, u32 target) const {
         if (target >= MaxNodes || !m_nodes[target].connected) {
             return false;
         }
@@ -578,9 +583,9 @@ private:
         bool connected;
     };
     /// Node table indexed by node id.
-    NodeEntry m_nodes[MaxNodes];
+    NodeEntry m_nodes[MaxNodes]{};
     /// Node id of the local console, 0xFF when unknown.
-    u8 m_local_node_id;
+    u8 m_local_node_id{};
 };
 
 //=============================================================================
@@ -606,7 +611,7 @@ public:
     static constexpr size_t MaxPackets = 32;
 
     /// Creates an empty buffer.
-    IntegrationProxyBuffer() : m_read_idx(0), m_write_idx(0), m_count(0) {}
+    IntegrationProxyBuffer() = default;
 
     /**
      * @brief Appends a packet at the write position.
@@ -623,7 +628,7 @@ public:
         auto& pkt = m_packets[m_write_idx];
         pkt.header = header;
         pkt.size = size;
-        if (size > 0 && data) {
+        if (size > 0 && data != nullptr) {
             memcpy(pkt.data, data, size);
         }
 
@@ -650,7 +655,7 @@ public:
         const auto& pkt = m_packets[m_read_idx];
         header = pkt.header;
         size = (pkt.size <= max_size) ? pkt.size : max_size;
-        if (size > 0 && data) {
+        if (size > 0 && data != nullptr) {
             memcpy(data, pkt.data, size);
         }
 
@@ -660,11 +665,11 @@ public:
     }
 
     /// @return Number of packets waiting to be read.
-    size_t GetPendingCount() const {
+    [[nodiscard]] size_t GetPendingCount() const {
         return m_count;
     }
     /// @return True if no packet is waiting.
-    bool IsEmpty() const {
+    [[nodiscard]] bool IsEmpty() const {
         return m_count == 0;
     }
     /// Drops every buffered packet.
@@ -676,20 +681,20 @@ private:
     /// One slot of the ring buffer.
     struct Packet {
         /// Routing header of the packet.
-        ProxyDataHeader header;
+        ProxyDataHeader header{};
         /// Payload bytes, valid up to size.
         u8 data[MaxPacketSize];
         /// Number of valid bytes in data.
         size_t size;
     };
     /// Ring buffer storage.
-    Packet m_packets[MaxPackets];
+    Packet m_packets[MaxPackets]{};
     /// Index of the oldest packet.
-    size_t m_read_idx;
+    size_t m_read_idx{0};
     /// Index where the next packet is written.
-    size_t m_write_idx;
+    size_t m_write_idx{0};
     /// Number of packets currently stored.
-    size_t m_count;
+    size_t m_count{0};
 };
 
 //=============================================================================
@@ -707,7 +712,7 @@ public:
     using ResponseHandler = std::function<void(MessageType, const u8*, size_t)>;
 
     /// Creates a server with no connected node and no network.
-    MockServer() : m_next_node_id(0), m_network_created(false) {}
+    MockServer() = default;
 
     /**
      * @brief Registers the callback receiving every server message.
@@ -715,7 +720,7 @@ public:
      * methods; replaces any previous one.
      */
     void SetResponseHandler(ResponseHandler handler) {
-        m_response_handler = handler;
+        m_response_handler = std::move(handler);
     }
 
     /**
@@ -753,8 +758,9 @@ public:
      * Ignored when 8 node ids have already been handed out.
      */
     void SimulatePlayerJoin(u32 ipv4, const char* username) {
-        if (m_next_node_id >= 8)
+        if (m_next_node_id >= 8) {
             return;
+        }
 
         NodeInfo node = {};
         node.ipv4_address = ipv4;
@@ -791,11 +797,13 @@ public:
      */
     void SimulateProxyData(
         u32 src_node, u32 dest_node, const u8* data, size_t size) {
-        if (!m_response_handler)
+        if (!m_response_handler) {
             return;
+        }
 
         std::vector<u8> response(sizeof(ProxyDataHeader) + size);
-        ProxyDataHeader header = {dest_node, src_node};
+        ProxyDataHeader header = {
+            .dest_node_id = dest_node, .src_node_id = src_node};
         memcpy(response.data(), &header, sizeof(header));
         if (size > 0) {
             memcpy(response.data() + sizeof(header), data, size);
@@ -929,7 +937,7 @@ private:
      * @param data Unused.
      * @param size Unused.
      */
-    void HandleDisconnect(const u8* data, size_t size) {
+    static void HandleDisconnect(const u8* data, size_t size) {
         (void)data;
         (void)size;
         // User-initiated disconnect: just acknowledge, don't send Disconnected
@@ -952,8 +960,9 @@ private:
 
     /// Sends the current node list to the handler as a SyncNetwork message.
     void SendSyncNetwork() {
-        if (!m_response_handler)
+        if (!m_response_handler) {
             return;
+        }
 
         NetworkInfo info = {};
         memset(info.network_id, 0x42, 16);
@@ -975,16 +984,16 @@ private:
     /// Nodes of the network currently hosted or joined.
     std::vector<NodeInfo> m_connected_nodes;
     /// Next node id to hand out.
-    u8 m_next_node_id;
+    u8 m_next_node_id{0};
     /// True once a CreateAccessPoint request was handled.
-    bool m_network_created;
+    bool m_network_created{false};
     /// SSID reported by Scan, set by CreateNetworkForScan().
     std::string m_scan_result_ssid;
     /**
-     * Host address reported by Scan and Connect; uninitialized until
+     * Host address reported by Scan and Connect; 0 until
      * CreateNetworkForScan() is called.
      */
-    u32 m_scan_result_host_ip;
+    u32 m_scan_result_host_ip{};
 };
 
 //=============================================================================
@@ -1003,8 +1012,7 @@ public:
      * @param server Server used for every request; its response handler
      * is replaced by the service and it must outlive the service.
      */
-    IntegratedLdnService(MockServer& server)
-        : m_server(server), m_connected(false) {
+    explicit IntegratedLdnService(MockServer& server) : m_server(&server) {
         server.SetResponseHandler(
             [this](MessageType type, const u8* data, size_t size) {
                 HandleServerResponse(type, data, size);
@@ -1036,7 +1044,7 @@ public:
     }
 
     /// @return Current communication state.
-    CommState GetState() const {
+    [[nodiscard]] CommState GetState() const {
         return m_state_machine.GetState();
     }
 
@@ -1081,7 +1089,7 @@ public:
         // Send to server
         std::vector<u8> request(64);
         strncpy(reinterpret_cast<char*>(request.data()), ssid, 32);
-        m_server.ProcessMessage(
+        m_server->ProcessMessage(
             MessageType::CreateAccessPoint, request.data(), request.size());
 
         return m_state_machine.CreateNetwork();
@@ -1130,7 +1138,7 @@ public:
 
         m_scan_results.clear();
         u8 filter[64] = {};  // Empty filter = scan all
-        m_server.ProcessMessage(MessageType::Scan, filter, sizeof(filter));
+        m_server->ProcessMessage(MessageType::Scan, filter, sizeof(filter));
 
         return ResultCode::Success;
     }
@@ -1156,7 +1164,7 @@ public:
             request.data(),
             &m_scan_results[network_index],
             sizeof(NetworkInfo));
-        m_server.ProcessMessage(
+        m_server->ProcessMessage(
             MessageType::Connect, request.data(), request.size());
 
         return m_state_machine.Connect();
@@ -1172,7 +1180,7 @@ public:
         }
 
         u8 request[2] = {};
-        m_server.ProcessMessage(
+        m_server->ProcessMessage(
             MessageType::Disconnect, request, sizeof(request));
 
         return m_state_machine.Disconnect();
@@ -1194,14 +1202,16 @@ public:
             return ResultCode::InvalidState;
         }
 
-        ProxyDataHeader header = {dest_node, m_node_mapper.GetLocalNodeId()};
+        ProxyDataHeader header = {
+            .dest_node_id = dest_node,
+            .src_node_id = m_node_mapper.GetLocalNodeId()};
         std::vector<u8> request(sizeof(header) + size);
         memcpy(request.data(), &header, sizeof(header));
         if (size > 0) {
             memcpy(request.data() + sizeof(header), data, size);
         }
 
-        m_server.ProcessMessage(
+        m_server->ProcessMessage(
             MessageType::ProxyData, request.data(), request.size());
         return ResultCode::Success;
     }
@@ -1222,7 +1232,7 @@ public:
     // === Info Commands ===
 
     /// @return Number of networks found by the last scan.
-    size_t GetScanResultCount() const {
+    [[nodiscard]] size_t GetScanResultCount() const {
         return m_scan_results.size();
     }
 
@@ -1230,22 +1240,22 @@ public:
      * @return Last NetworkInfo pushed by the server (uninitialized before
      * the first SyncNetwork).
      */
-    const NetworkInfo& GetNetworkInfo() const {
+    [[nodiscard]] const NetworkInfo& GetNetworkInfo() const {
         return m_network_info;
     }
 
     /// @return Number of nodes currently connected.
-    size_t GetConnectedNodeCount() const {
+    [[nodiscard]] size_t GetConnectedNodeCount() const {
         return m_node_mapper.GetConnectedCount();
     }
 
     /// @return Reason recorded by the state machine.
-    DisconnectReason GetDisconnectReason() const {
+    [[nodiscard]] DisconnectReason GetDisconnectReason() const {
         return m_state_machine.GetDisconnectReason();
     }
 
     /// @return True if the state changed since the last ClearEvent().
-    bool IsEventSignaled() const {
+    [[nodiscard]] bool IsEventSignaled() const {
         return m_state_machine.IsEventSignaled();
     }
     /// Clears the state-change event flag.
@@ -1289,8 +1299,9 @@ private:
      * incomplete trailing entries are dropped.
      */
     void HandleScanResponse(const u8* data, size_t size) {
-        if (size < 4)
+        if (size < 4) {
             return;
+        }
 
         u32 count;
         memcpy(&count, data, 4);
@@ -1299,7 +1310,7 @@ private:
         size_t offset = 4;
         for (u32 i = 0; i < count && offset + sizeof(NetworkInfo) <= size;
              i++) {
-            NetworkInfo info;
+            NetworkInfo info{};
             memcpy(&info, data + offset, sizeof(NetworkInfo));
             m_scan_results.push_back(info);
             offset += sizeof(NetworkInfo);
@@ -1315,8 +1326,9 @@ private:
      * @param size Payload size; shorter messages are ignored.
      */
     void HandleSyncNetwork(const u8* data, size_t size) {
-        if (size < sizeof(NetworkInfo))
+        if (size < sizeof(NetworkInfo)) {
             return;
+        }
 
         memcpy(&m_network_info, data, sizeof(NetworkInfo));
         m_node_mapper.UpdateFromNetworkInfo(m_network_info);
@@ -1337,10 +1349,11 @@ private:
      * @param size Total size; messages shorter than the header are ignored.
      */
     void HandleProxyDataReceived(const u8* data, size_t size) {
-        if (size < sizeof(ProxyDataHeader))
+        if (size < sizeof(ProxyDataHeader)) {
             return;
+        }
 
-        ProxyDataHeader header;
+        ProxyDataHeader header{};
         memcpy(&header, data, sizeof(header));
 
         const u8* payload = data + sizeof(header);
@@ -1378,8 +1391,8 @@ private:
         m_state_machine.SetError(DisconnectReason::SystemRequest);
     }
 
-    /// Mock server the service talks to.
-    MockServer& m_server;
+    /// Mock server the service talks to; never null and outlives the service.
+    MockServer* m_server;
     /// Tracks the communication state.
     IntegrationStateMachine m_state_machine;
     /// Tracks which nodes are connected.
@@ -1387,11 +1400,11 @@ private:
     /// Holds packets received for this node.
     IntegrationProxyBuffer m_proxy_buffer;
     /// Last NetworkInfo pushed by the server.
-    NetworkInfo m_network_info;
+    NetworkInfo m_network_info{};
     /// Networks found by the last scan.
     std::vector<NetworkInfo> m_scan_results;
     /// True between opening a role and closing it (simulated link).
-    bool m_connected;
+    bool m_connected{false};
 };
 
 //=============================================================================
@@ -1702,12 +1715,12 @@ TEST(proxy_data_receive) {
         sizeof(incoming));
 
     // Receive the data
-    ProxyDataHeader header;
+    ProxyDataHeader header{};
     u8 buffer[256];
     size_t size;
     ASSERT(service.ReceiveProxyData(header, buffer, size, sizeof(buffer)));
     ASSERT_EQ(size, sizeof(incoming));
-    ASSERT_EQ(header.src_node_id, 0u);  // From host
+    ASSERT_EQ(header.src_node_id, 0U);  // From host
 }
 
 /// @brief Verifies a client receives a packet addressed to BroadcastNodeId.
@@ -1727,11 +1740,11 @@ TEST(proxy_data_receive_broadcast) {
     server.SimulateProxyData(0, 0xFFFFFFFF, incoming, sizeof(incoming));
 
     // Should receive broadcast
-    ProxyDataHeader header;
+    ProxyDataHeader header{};
     u8 buffer[256];
     size_t size;
     ASSERT(service.ReceiveProxyData(header, buffer, size, sizeof(buffer)));
-    ASSERT_EQ(header.dest_node_id, 0xFFFFFFFFu);
+    ASSERT_EQ(header.dest_node_id, 0xFFFFFFFFU);
 }
 
 /**
@@ -1756,7 +1769,7 @@ TEST(proxy_data_not_for_us) {
     // Should NOT receive - message not for us
     // In real impl, server wouldn't send to wrong client anyway
     // The packet is filtered by HandleProxyDataReceived checking dest_node_id
-    ProxyDataHeader header;
+    ProxyDataHeader header{};
     u8 buffer[256];
     size_t size;
     bool received =

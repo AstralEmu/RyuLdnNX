@@ -6,6 +6,7 @@
  * requiring the actual Switch environment. Uses mocks for libnx types.
  */
 
+#include <bit>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -17,15 +18,15 @@
 
 // Basic types
 /// Mock of the libnx 8-bit unsigned type.
-typedef uint8_t u8;
+using u8 = uint8_t;
 /// Mock of the libnx 16-bit unsigned type.
-typedef uint16_t u16;
+using u16 = uint16_t;
 /// Mock of the libnx 32-bit unsigned type.
-typedef uint32_t u32;
+using u32 = uint32_t;
 /// Mock of the libnx 64-bit unsigned type.
-typedef uint64_t u64;
+using u64 = uint64_t;
 /// Mock of the libnx Result code (0 means success).
-typedef int32_t Result;
+using Result = int32_t;
 
 /**
  * @brief Mock of the libnx success check.
@@ -39,17 +40,17 @@ typedef int32_t Result;
 #define R_FAILED(res) ((res) != 0)
 
 /// Mock of the libnx Service session structure.
-typedef struct {
+using Service = struct {
     /// Mock service session handle.
     u32 handle;
-} Service;
+};
 
 //=============================================================================
 // Include overlay types (copy from ryu_ldn_ipc.h for testing)
 //=============================================================================
 
 /// Connection status of the sysmodule to the server.
-typedef enum {
+enum class RyuLdnConnectionStatus {
     /// Not connected to the server.
     RyuLdnStatus_Disconnected = 0,
     /// Connection attempt in progress.
@@ -60,10 +61,10 @@ typedef enum {
     RyuLdnStatus_Ready = 3,
     /// Connection failed.
     RyuLdnStatus_Error = 4,
-} RyuLdnConnectionStatus;
+};
 
 /// State of the emulated LDN communication service.
-typedef enum {
+enum class RyuLdnState {
     /// LDN not initialised.
     RyuLdnState_None = 0,
     /// LDN initialised, no role yet.
@@ -78,26 +79,26 @@ typedef enum {
     RyuLdnState_StationConnected = 5,
     /// LDN error state.
     RyuLdnState_Error = 6,
-} RyuLdnState;
+};
 
 /**
  * @brief Session information structure (matches IPC definition)
  *
  * 8 bytes total, same as SessionInfoIpc in sysmodule.
  */
-typedef struct {
+using RyuLdnSessionInfo = struct {
     u8 node_count;     ///< Current number of nodes in session
     u8 max_nodes;      ///< Maximum nodes allowed in session
     u8 local_node_id;  ///< This node's ID in the session
     u8 is_host;        ///< 1 if this node is the host, 0 otherwise
     u8 reserved[4];    ///< Reserved for future use
-} RyuLdnSessionInfo;
+};
 
 /// Handle of the ryu:cfg service session (mock).
-typedef struct {
+using RyuLdnConfigService = struct {
     /// Underlying service session.
     Service s;
-} RyuLdnConfigService;
+};
 
 //=============================================================================
 // Helper functions from main.cpp (extracted for testing)
@@ -110,15 +111,15 @@ typedef struct {
  */
 const char* ConnectionStatusToString(RyuLdnConnectionStatus status) {
     switch (status) {
-        case RyuLdnStatus_Disconnected:
+        case RyuLdnConnectionStatus::RyuLdnStatus_Disconnected:
             return "Disconnected";
-        case RyuLdnStatus_Connecting:
+        case RyuLdnConnectionStatus::RyuLdnStatus_Connecting:
             return "Connecting...";
-        case RyuLdnStatus_Connected:
+        case RyuLdnConnectionStatus::RyuLdnStatus_Connected:
             return "Connected";
-        case RyuLdnStatus_Ready:
+        case RyuLdnConnectionStatus::RyuLdnStatus_Ready:
             return "Ready";
-        case RyuLdnStatus_Error:
+        case RyuLdnConnectionStatus::RyuLdnStatus_Error:
             return "Error";
         default:
             return "Unknown";
@@ -132,19 +133,19 @@ const char* ConnectionStatusToString(RyuLdnConnectionStatus status) {
  */
 const char* LdnStateToString(RyuLdnState state) {
     switch (state) {
-        case RyuLdnState_None:
+        case RyuLdnState::RyuLdnState_None:
             return "None";
-        case RyuLdnState_Initialized:
+        case RyuLdnState::RyuLdnState_Initialized:
             return "Initialized";
-        case RyuLdnState_AccessPoint:
+        case RyuLdnState::RyuLdnState_AccessPoint:
             return "Access Point";
-        case RyuLdnState_AccessPointCreated:
+        case RyuLdnState::RyuLdnState_AccessPointCreated:
             return "Hosting";
-        case RyuLdnState_Station:
+        case RyuLdnState::RyuLdnState_Station:
             return "Station";
-        case RyuLdnState_StationConnected:
+        case RyuLdnState::RyuLdnState_StationConnected:
             return "Connected";
-        case RyuLdnState_Error:
+        case RyuLdnState::RyuLdnState_Error:
             return "Error";
         default:
             return "Unknown";
@@ -170,7 +171,7 @@ void FormatSessionInfo(
             "%d/%d players (%s)",
             info->node_count,
             info->max_nodes,
-            info->is_host ? "Host" : "Client");
+            info->is_host != 0 ? "Host" : "Client");
     }
 }
 
@@ -273,7 +274,9 @@ static int g_tests_passed = 0;
  */
 TEST(status_disconnected_to_string) {
     ASSERT_STREQ(
-        ConnectionStatusToString(RyuLdnStatus_Disconnected), "Disconnected");
+        ConnectionStatusToString(
+            RyuLdnConnectionStatus::RyuLdnStatus_Disconnected),
+        "Disconnected");
 }
 
 /**
@@ -281,37 +284,48 @@ TEST(status_disconnected_to_string) {
  */
 TEST(status_connecting_to_string) {
     ASSERT_STREQ(
-        ConnectionStatusToString(RyuLdnStatus_Connecting), "Connecting...");
+        ConnectionStatusToString(
+            RyuLdnConnectionStatus::RyuLdnStatus_Connecting),
+        "Connecting...");
 }
 
 /**
  * @brief Connected maps to "Connected".
  */
 TEST(status_connected_to_string) {
-    ASSERT_STREQ(ConnectionStatusToString(RyuLdnStatus_Connected), "Connected");
+    ASSERT_STREQ(
+        ConnectionStatusToString(
+            RyuLdnConnectionStatus::RyuLdnStatus_Connected),
+        "Connected");
 }
 
 /**
  * @brief Ready maps to "Ready".
  */
 TEST(status_ready_to_string) {
-    ASSERT_STREQ(ConnectionStatusToString(RyuLdnStatus_Ready), "Ready");
+    ASSERT_STREQ(
+        ConnectionStatusToString(RyuLdnConnectionStatus::RyuLdnStatus_Ready),
+        "Ready");
 }
 
 /**
  * @brief Error maps to "Error".
  */
 TEST(status_error_to_string) {
-    ASSERT_STREQ(ConnectionStatusToString(RyuLdnStatus_Error), "Error");
+    ASSERT_STREQ(
+        ConnectionStatusToString(RyuLdnConnectionStatus::RyuLdnStatus_Error),
+        "Error");
 }
 
 /**
  * @brief An out-of-range status maps to "Unknown".
  */
 TEST(status_unknown_to_string) {
-    ASSERT_STREQ(
-        ConnectionStatusToString(static_cast<RyuLdnConnectionStatus>(7)),
-        "Unknown");
+    // A scoped enum with a fixed underlying type holds any value of that
+    // type; bit_cast builds the out-of-enumerator status without a cast the
+    // EnumCastOutOfRange check would reject.
+    const auto unknown_status = std::bit_cast<RyuLdnConnectionStatus>(7);
+    ASSERT_STREQ(ConnectionStatusToString(unknown_status), "Unknown");
 }
 
 //=============================================================================
@@ -322,56 +336,65 @@ TEST(status_unknown_to_string) {
  * @brief None maps to "None".
  */
 TEST(ldn_state_none_to_string) {
-    ASSERT_STREQ(LdnStateToString(RyuLdnState_None), "None");
+    ASSERT_STREQ(LdnStateToString(RyuLdnState::RyuLdnState_None), "None");
 }
 
 /**
  * @brief Initialized maps to "Initialized".
  */
 TEST(ldn_state_initialized_to_string) {
-    ASSERT_STREQ(LdnStateToString(RyuLdnState_Initialized), "Initialized");
+    ASSERT_STREQ(
+        LdnStateToString(RyuLdnState::RyuLdnState_Initialized), "Initialized");
 }
 
 /**
  * @brief AccessPoint maps to "Access Point".
  */
 TEST(ldn_state_access_point_to_string) {
-    ASSERT_STREQ(LdnStateToString(RyuLdnState_AccessPoint), "Access Point");
+    ASSERT_STREQ(
+        LdnStateToString(RyuLdnState::RyuLdnState_AccessPoint), "Access Point");
 }
 
 /**
  * @brief AccessPointCreated maps to "Hosting".
  */
 TEST(ldn_state_access_point_created_to_string) {
-    ASSERT_STREQ(LdnStateToString(RyuLdnState_AccessPointCreated), "Hosting");
+    ASSERT_STREQ(
+        LdnStateToString(RyuLdnState::RyuLdnState_AccessPointCreated),
+        "Hosting");
 }
 
 /**
  * @brief Station maps to "Station".
  */
 TEST(ldn_state_station_to_string) {
-    ASSERT_STREQ(LdnStateToString(RyuLdnState_Station), "Station");
+    ASSERT_STREQ(LdnStateToString(RyuLdnState::RyuLdnState_Station), "Station");
 }
 
 /**
  * @brief StationConnected maps to "Connected".
  */
 TEST(ldn_state_station_connected_to_string) {
-    ASSERT_STREQ(LdnStateToString(RyuLdnState_StationConnected), "Connected");
+    ASSERT_STREQ(
+        LdnStateToString(RyuLdnState::RyuLdnState_StationConnected),
+        "Connected");
 }
 
 /**
  * @brief Error maps to "Error".
  */
 TEST(ldn_state_error_to_string) {
-    ASSERT_STREQ(LdnStateToString(RyuLdnState_Error), "Error");
+    ASSERT_STREQ(LdnStateToString(RyuLdnState::RyuLdnState_Error), "Error");
 }
 
 /**
  * @brief An out-of-range state maps to "Unknown".
  */
 TEST(ldn_state_unknown_to_string) {
-    ASSERT_STREQ(LdnStateToString(static_cast<RyuLdnState>(7)), "Unknown");
+    // Same reasoning as status_unknown_to_string: bit_cast gives the function
+    // a state that matches no enumerator.
+    const auto unknown_state = std::bit_cast<RyuLdnState>(7);
+    ASSERT_STREQ(LdnStateToString(unknown_state), "Unknown");
 }
 
 //=============================================================================
@@ -539,7 +562,7 @@ TEST(latency_very_high_value) {
  */
 TEST(session_info_structure_size) {
     // Verify structure packing - must be exactly 8 bytes for IPC
-    ASSERT_EQ(sizeof(RyuLdnSessionInfo), 8u);
+    ASSERT_EQ(sizeof(RyuLdnSessionInfo), 8U);
 }
 
 /**
@@ -558,24 +581,27 @@ TEST(session_info_zero_initialized) {
  * @brief The connection status enumerators are 0 to 4 in IPC order.
  */
 TEST(connection_status_enum_values) {
-    ASSERT_EQ(RyuLdnStatus_Disconnected, 0);
-    ASSERT_EQ(RyuLdnStatus_Connecting, 1);
-    ASSERT_EQ(RyuLdnStatus_Connected, 2);
-    ASSERT_EQ(RyuLdnStatus_Ready, 3);
-    ASSERT_EQ(RyuLdnStatus_Error, 4);
+    ASSERT_EQ(
+        static_cast<int>(RyuLdnConnectionStatus::RyuLdnStatus_Disconnected), 0);
+    ASSERT_EQ(
+        static_cast<int>(RyuLdnConnectionStatus::RyuLdnStatus_Connecting), 1);
+    ASSERT_EQ(
+        static_cast<int>(RyuLdnConnectionStatus::RyuLdnStatus_Connected), 2);
+    ASSERT_EQ(static_cast<int>(RyuLdnConnectionStatus::RyuLdnStatus_Ready), 3);
+    ASSERT_EQ(static_cast<int>(RyuLdnConnectionStatus::RyuLdnStatus_Error), 4);
 }
 
 /**
  * @brief The LDN state enumerators are 0 to 6 in IPC order.
  */
 TEST(ldn_state_enum_values) {
-    ASSERT_EQ(RyuLdnState_None, 0);
-    ASSERT_EQ(RyuLdnState_Initialized, 1);
-    ASSERT_EQ(RyuLdnState_AccessPoint, 2);
-    ASSERT_EQ(RyuLdnState_AccessPointCreated, 3);
-    ASSERT_EQ(RyuLdnState_Station, 4);
-    ASSERT_EQ(RyuLdnState_StationConnected, 5);
-    ASSERT_EQ(RyuLdnState_Error, 6);
+    ASSERT_EQ(static_cast<int>(RyuLdnState::RyuLdnState_None), 0);
+    ASSERT_EQ(static_cast<int>(RyuLdnState::RyuLdnState_Initialized), 1);
+    ASSERT_EQ(static_cast<int>(RyuLdnState::RyuLdnState_AccessPoint), 2);
+    ASSERT_EQ(static_cast<int>(RyuLdnState::RyuLdnState_AccessPointCreated), 3);
+    ASSERT_EQ(static_cast<int>(RyuLdnState::RyuLdnState_Station), 4);
+    ASSERT_EQ(static_cast<int>(RyuLdnState::RyuLdnState_StationConnected), 5);
+    ASSERT_EQ(static_cast<int>(RyuLdnState::RyuLdnState_Error), 6);
 }
 
 //=============================================================================
@@ -601,7 +627,7 @@ TEST(format_session_buffer_small) {
  */
 TEST(format_latency_max_u32) {
     char buf[32];
-    FormatLatency(4294967295u, buf, sizeof(buf));
+    FormatLatency(4294967295U, buf, sizeof(buf));
     ASSERT(strlen(buf) > 0);
 }
 

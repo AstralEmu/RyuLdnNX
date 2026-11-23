@@ -39,13 +39,20 @@ int g_nothrow_fail_at =
  * Counts calls and returns nullptr on the g_nothrow_fail_at-th one, mimicking
  * heap exhaustion of the sysmodule's expanded heap.
  * @param size Number of bytes requested.
- * @return malloc(size), or nullptr for the armed failing call.
+ * @return the allocation, or nullptr for the armed failing call.
  */
-void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
+void* operator new(
+    std::size_t size, const std::nothrow_t& /*unused*/) noexcept {
     if (++g_nothrow_calls == g_nothrow_fail_at) {
         return nullptr;
     }
-    return std::malloc(size);
+    // Through the replaceable throwing form, so the default operator delete
+    // that frees the object pairs with the allocator that made it.
+    try {
+        return ::operator new(size);
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 /**
@@ -315,22 +322,22 @@ TEST(the_local_address_is_parsed_to_host_order_and_malformed_ones_give_zero) {
         return;
     }
     UpnpPortMapper& m = UpnpPortMapper::GetInstance();
-    ASSERT_EQ(m.GetLocalIPv4(), 0xC0A80164u);
+    ASSERT_EQ(m.GetLocalIPv4(), 0xC0A80164U);
 
     struct Case {
         const char* lan;
         uint32_t expected;
     };
     const Case cases[] = {
-        {"10.114.0.1", 0x0A720001},
-        {"255.255.255.255", 0xFFFFFFFF},
-        {"256.1.1.1", 0},
-        {"1.256.1.1", 0},
-        {"1.1.256.1", 0},
-        {"1.1.1.256", 0},
-        {"not an address", 0},
-        {"1.2.3", 0},
-        {"", 0},
+        {.lan = "10.114.0.1", .expected = 0x0A720001},
+        {.lan = "255.255.255.255", .expected = 0xFFFFFFFF},
+        {.lan = "256.1.1.1", .expected = 0},
+        {.lan = "1.256.1.1", .expected = 0},
+        {.lan = "1.1.256.1", .expected = 0},
+        {.lan = "1.1.1.256", .expected = 0},
+        {.lan = "not an address", .expected = 0},
+        {.lan = "1.2.3", .expected = 0},
+        {.lan = "", .expected = 0},
     };
     for (const Case& c : cases) {
         m.Cleanup();

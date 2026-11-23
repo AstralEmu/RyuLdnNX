@@ -114,13 +114,17 @@ TEST(the_connection_status_follows_the_ldn_state) {
         ConnectionStatus expected;
     };
     const Case cases[] = {
-        {CommState::None, ConnectionStatus::Disconnected},
-        {CommState::Error, ConnectionStatus::Disconnected},
-        {CommState::Initialized, ConnectionStatus::Connecting},
-        {CommState::AccessPoint, ConnectionStatus::Connected},
-        {CommState::Station, ConnectionStatus::Connected},
-        {CommState::AccessPointCreated, ConnectionStatus::Ready},
-        {CommState::StationConnected, ConnectionStatus::Ready},
+        {.state = CommState::None, .expected = ConnectionStatus::Disconnected},
+        {.state = CommState::Error, .expected = ConnectionStatus::Disconnected},
+        {.state = CommState::Initialized,
+         .expected = ConnectionStatus::Connecting},
+        {.state = CommState::AccessPoint,
+         .expected = ConnectionStatus::Connected},
+        {.state = CommState::Station, .expected = ConnectionStatus::Connected},
+        {.state = CommState::AccessPointCreated,
+         .expected = ConnectionStatus::Ready},
+        {.state = CommState::StationConnected,
+         .expected = ConnectionStatus::Ready},
     };
     for (const Case& c : cases) {
         s.SetLdnState(c.state);

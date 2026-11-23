@@ -34,9 +34,7 @@ namespace ryu_ldn::network {
  * registered and zero retry count.
  */
 ConnectionStateMachine::ConnectionStateMachine()
-    : m_state(ConnectionState::Disconnected),
-      m_callback(nullptr),
-      m_retry_count(0) {}
+    : m_state(ConnectionState::Disconnected) {}
 
 /**
  * @brief Check if currently in a connected state
@@ -403,7 +401,7 @@ void ConnectionStateMachine::force_state(ConnectionState state) {
         "(%s) from state=%d",
         static_cast<int>(state),
         state_to_string(state),
-        static_cast<int>(m_state));
+        static_cast<int>(m_state.load()));
     m_state = state;
 }
 

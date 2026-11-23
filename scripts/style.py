@@ -9,6 +9,9 @@
   * **bypass** -- a marker that hides a violation (the Doxygen cond/private/
     internal commands, placeholder ``@return n/a``, ``clang-format off``): always an
     error, never an exception;
+  * **gate config** -- ``.clang-tidy`` still enables every required check
+    family, makes every warning an error and covers the three checked
+    surfaces: dropping a family is the same bypass as a NOLINT;
   * **documentation** -- Doxygen reports an undocumented member, an
     undocumented parameter or return value, or a malformed comment. Everything
     is documented, private members and tests included.
@@ -69,6 +72,30 @@ _BYPASS = re.compile(
 
 # Compiler flags that switch a diagnostic off or downgrade it again.
 _FLAG_BYPASS = re.compile(r"-Wno-[a-z]|-Wno-error|-fpermissive")
+# The static-analysis gate configuration. Disabling a check there is exactly
+# as much a bypass as a NOLINT, so its invariants are checked here.
+_CLANG_TIDY = ".clang-tidy"
+# Check families the gate must run as a whole (each one is globbed, never
+# enumerated: a new check of the family is picked up on the next run).
+_REQUIRED_FAMILIES = (
+    "clang-analyzer-*",
+    "bugprone-*",
+    "cppcoreguidelines-*",
+    "hicpp-*",
+    "misc-*",
+    "modernize-*",
+    "performance-*",
+    "portability-*",
+    "readability-*",
+)
+# Surfaces the header filter must keep analysing.
+_REQUIRED_SURFACES = ("sysmodule/source", "overlay/source", "tests")
+# Header paths the gate may exclude: fixtures that reimplement system
+# headers on purpose, nothing of the product.
+_ALLOWED_EXCLUDES = ("tests/stubs/system",)
+# The runners of the static-analysis gate: they must take the check set from
+# the versioned configuration, never from a local copy that could drift.
+_RUNNERS = ("scripts/lint.sh", "scripts/tidy-host.sh")
 _BUILD_FILES = (
     "Makefile",
     "tests/Makefile",
@@ -210,6 +237,137 @@ class Style:
                         out.append(
                             f"{path}:{number}: forbidden compiler flag "
                             f"'{found.group(0)}': fix the code instead"
+                        )
+
+        return out
+
+    @staticmethod
+    def _setting(body: str, key: str) -> tuple[int, str]:
+        """Return the line number and value of a top-level setting.
+
+        Args:
+            body: The configuration text, comments already stripped.
+            key: The setting name (e.g. ``WarningsAsErrors``).
+
+        Returns:
+            The 1-based line number inside ``body`` and the value (an empty
+            string when the setting is absent); a folded or literal block
+            (``>-``, ``>``, ``|``) is joined into one line.
+        """
+        lines = body.splitlines()
+
+        for index, text in enumerate(lines):
+            name, _, value = text.partition(":")
+
+            if name.strip() != key:
+                continue
+
+            value = value.strip()
+
+            if value.strip("-") in (">", "|"):
+                gathered: list[str] = []
+
+                for follow in lines[index + 1:]:
+                    if follow.strip() and not follow[:1].isspace():
+                        break
+
+                    gathered.append(follow.strip())
+
+                value = "".join(gathered)
+
+            return index + 1, value
+
+        return 0, ""
+
+    @staticmethod
+    def config_violations() -> list[str]:
+        """Report a static-analysis gate weakened below the project minimum.
+
+        Returns:
+            One ``path:line: ...`` entry per weakened setting.
+        """
+        full = os.path.join(_ROOT, _CLANG_TIDY)
+
+        if not os.path.isfile(full):
+            return [f"{_CLANG_TIDY}:1: the static-analysis gate is missing"]
+
+        with open(full, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+
+        body = "\n".join(
+            line for line in lines if not line.lstrip().startswith("#")
+        )
+        out: list[str] = []
+        number, value = Style._setting(body, "Checks")
+        checks = [
+            check.strip()
+            for check in re.sub(r"\s+", "", value.strip("'\"")).split(",")
+            if check.strip()
+        ]
+
+        if not checks or checks[0] != "-*":
+            out.append(
+                f"{_CLANG_TIDY}:{number or 1}: the check list must start "
+                "with '-*' so that every family below is an explicit choice"
+            )
+
+        for family in _REQUIRED_FAMILIES:
+            if family not in checks:
+                out.append(
+                    f"{_CLANG_TIDY}:{number or 1}: the required check "
+                    f"family '{family}' is disabled"
+                )
+
+        number, value = Style._setting(body, "WarningsAsErrors")
+
+        if value.strip("'\"") != "*":
+            out.append(
+                f"{_CLANG_TIDY}:{number or 1}: every warning must be an "
+                "error (WarningsAsErrors: '*')"
+            )
+
+        number, value = Style._setting(body, "HeaderFilterRegex")
+
+        for surface in _REQUIRED_SURFACES:
+            if surface not in value:
+                out.append(
+                    f"{_CLANG_TIDY}:{number or 1}: the header filter no "
+                    f"longer covers '{surface}'"
+                )
+
+        number, value = Style._setting(body, "ExcludeHeaderFilterRegex")
+
+        for excluded in re.findall(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+", value):
+            if not excluded.startswith(_ALLOWED_EXCLUDES):
+                out.append(
+                    f"{_CLANG_TIDY}:{number or 1}: '{excluded}' is excluded "
+                    "from the gate: fix the code instead"
+                )
+
+        number, value = Style._setting(body, "InheritParentConfig")
+
+        if value.lower() not in ("", "false"):
+            out.append(
+                f"{_CLANG_TIDY}:{number or 1}: the gate must not inherit a "
+                "weaker parent configuration"
+            )
+
+        for runner in _RUNNERS:
+            full = os.path.join(_ROOT, runner)
+
+            if not os.path.isfile(full):
+                out.append(
+                    f"{runner}:1: the static-analysis gate has no runner"
+                )
+
+                continue
+
+            with open(full, encoding="utf-8") as handle:
+                for number, text in enumerate(handle, start=1):
+                    if re.search(r"--(?:checks|config)[= ]", text):
+                        out.append(
+                            f"{runner}:{number}: the check set belongs to "
+                            f"{_CLANG_TIDY}, not to the runner"
                         )
 
         return out
@@ -369,7 +527,8 @@ class Style:
                 return 0
 
         issues = (
-            Style.flag_violations()
+            Style.config_violations()
+            + Style.flag_violations()
             + Style.format_violations(files)
             + Style.width_violations(files)
             + Style.bypass_violations(files)

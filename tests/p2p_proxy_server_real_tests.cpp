@@ -24,11 +24,14 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdio>
 #include <cerrno>
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <thread>
@@ -177,7 +180,7 @@ int __wrap_socket(int domain, int type, int protocol) {
  * @param addr Requested address (only its port is recorded).
  * @return 0 or -1 (errno set).
  */
-int __wrap_bind(int fd, const struct sockaddr* addr, socklen_t) {
+int __wrap_bind(int fd, const struct sockaddr* addr, socklen_t /*unused*/) {
     ++g_bind_calls;
     sockaddr_in requested{};
     std::memcpy(&requested, addr, sizeof(requested));
@@ -326,11 +329,12 @@ ssize_t __wrap_recv(int fd, void* buf, size_t size, int flags) {
  * @return The block; throws std::bad_alloc on failure.
  */
 void* operator new(std::size_t size) {
-    void* p = std::malloc(size);
-    if (p == nullptr) {
+    std::unique_ptr<void, decltype(&std::free)> block(
+        std::malloc(size), &std::free);
+    if (block == nullptr) {
         throw std::bad_alloc();
     }
-    return p;
+    return block.release();
 }
 
 /**
@@ -338,15 +342,17 @@ void* operator new(std::size_t size) {
  * @param size Number of bytes.
  * @return The block, or nullptr on failure.
  */
-void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
+void* operator new(
+    std::size_t size, const std::nothrow_t& /*unused*/) noexcept {
     if (size == sizeof(P2pProxySession) && g_new_fail.exchange(false)) {
         return nullptr;
     }
-    void* p = std::malloc(size);
+    std::unique_ptr<void, decltype(&std::free)> block(
+        std::malloc(size), &std::free);
     if (size == sizeof(P2pProxySession)) {
-        g_last_session = p;
+        g_last_session = block.get();
     }
-    return p;
+    return block.release();
 }
 
 /**
@@ -360,14 +366,14 @@ void operator delete(void* p) noexcept {
             g_freed[i] = p;
         }
     }
-    std::free(p);
+    const std::unique_ptr<void, decltype(&std::free)> block(p, &std::free);
 }
 
 /**
  * @brief Sized delete; forwards to the unsized form.
  * @param p Block to release (may be null).
  */
-void operator delete(void* p, std::size_t) noexcept {
+void operator delete(void* p, std::size_t /*unused*/) noexcept {
     operator delete(p);
 }
 
@@ -431,8 +437,8 @@ int g_user_marker = 0;
  * @param data Packet bytes.
  * @param size Packet size.
  */
-void master_cb(const void* data, size_t size, void*) {
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
+void master_cb(const void* data, size_t size, void* /*unused*/) {
+    std::scoped_lock lock(g_rec_mutex);
     const auto* p = static_cast<const uint8_t*>(data);
     g_master.emplace_back(p, p + size);
     g_rec_cv.notify_all();
@@ -458,7 +464,7 @@ void host_cb(
     const uint8_t* data,
     size_t len,
     void* user) {
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
+    std::scoped_lock lock(g_rec_mutex);
     g_host.push_back(
         {sip,
          sport,
@@ -501,7 +507,7 @@ bool wait_host(size_t count, int ms = 3000) {
  * @return Number of entries in g_host.
  */
 size_t host_count() {
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
+    std::scoped_lock lock(g_rec_mutex);
     return g_host.size();
 }
 
@@ -551,7 +557,7 @@ void reset_world() {
     ams::os::g_host_create_thread_result = 0;
     ams::os::g_host_wait_divisor = 1;
     g_fake_upnp = FakeUpnp{};
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
+    std::scoped_lock lock(g_rec_mutex);
     g_master.clear();
     g_host.clear();
 }
@@ -586,6 +592,26 @@ std::vector<uint8_t> packet(
         size,
         written);
     out.resize(written);
+    return out;
+}
+
+/**
+ * @brief Encode a framed packet with a raw wire type byte.
+ *
+ * The type field is a byte on the wire, so handling an unknown type needs a
+ * value that names no PacketId enumerator; writing the byte directly keeps
+ * the test out of the enum's valid range.
+ *
+ * @param wire_type Type byte written to the header.
+ * @param payload Payload bytes.
+ * @param size Payload size.
+ * @return Header plus payload.
+ */
+std::vector<uint8_t> packet(
+    uint8_t wire_type, const void* payload, size_t size) {
+    std::vector<uint8_t> out =
+        packet(proto::PacketId::Initialize, payload, size);
+    out[offsetof(proto::LdnHeader, type)] = wire_type;
     return out;
 }
 
@@ -688,6 +714,9 @@ std::vector<uint8_t> auth_packet(uint8_t fill) {
  */
 int dial() {
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        return -1;
+    }
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -727,7 +756,7 @@ bool read_exact(int fd, void* out, size_t n, int ms = 3000) {
     auto* p = static_cast<uint8_t*>(out);
     size_t got = 0;
     while (got < n) {
-        pollfd pf{fd, POLLIN, 0};
+        pollfd pf{.fd = fd, .events = POLLIN, .revents = 0};
         if (::poll(&pf, 1, ms) <= 0) {
             return false;
         }
@@ -743,7 +772,7 @@ bool read_exact(int fd, void* out, size_t n, int ms = 3000) {
 /// One packet read from the server.
 struct Received {
     /// Packet type from the header.
-    proto::PacketId type;
+    proto::PacketId type{};
     /// Payload bytes.
     std::vector<uint8_t> payload;
 };
@@ -778,7 +807,7 @@ bool closed_by_server(int fd, int ms = 3000) {
     const auto end =
         std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
     while (std::chrono::steady_clock::now() < end) {
-        pollfd pf{fd, POLLIN, 0};
+        pollfd pf{.fd = fd, .events = POLLIN, .revents = 0};
         if (::poll(&pf, 1, 50) > 0) {
             uint8_t b[256];
             const ssize_t r = ::read(fd, b, sizeof(b));
@@ -796,7 +825,7 @@ bool closed_by_server(int fd, int ms = 3000) {
  * @return true when a poll with no wait reports nothing.
  */
 bool nothing_pending(int fd) {
-    pollfd pf{fd, POLLIN, 0};
+    pollfd pf{.fd = fd, .events = POLLIN, .revents = 0};
     return ::poll(&pf, 1, 0) == 0;
 }
 
@@ -1062,7 +1091,7 @@ TEST(a_joiner_with_a_waiting_token_gets_its_proxy_config) {
     proto::ProxyConfig cfg{};
     std::memcpy(&cfg, r.payload.data(), sizeof(cfg));
     ASSERT_EQ(cfg.proxy_ip, VIP_A);
-    ASSERT_EQ(cfg.proxy_subnet_mask, 0xFFFF0000u);
+    ASSERT_EQ(cfg.proxy_subnet_mask, 0xFFFF0000U);
     ::close(fd);
 }
 
@@ -1244,7 +1273,8 @@ TEST(unicast_proxy_data_reaches_only_its_destination) {
     ASSERT_TRUE(start_server(server));
     const int a = join(server, VIP_A, 0x01);
     const int b = join(server, VIP_B, 0x02);
-    ASSERT_TRUE(a >= 0 && b >= 0);
+    ASSERT_TRUE(a >= 0);
+    ASSERT_TRUE(b >= 0);
     send_all(a, proxy_data(info(VIP_A, 1000, VIP_B, 2000), {1, 2, 3, 4}));
     Received r;
     ASSERT_TRUE(read_packet(b, r));
@@ -1255,7 +1285,7 @@ TEST(unicast_proxy_data_reaches_only_its_destination) {
     ASSERT_EQ(h.info.dest_ipv4, VIP_B);
     ASSERT_EQ(h.info.source_port, 1000);
     ASSERT_EQ(h.info.dest_port, 2000);
-    ASSERT_EQ(body.size(), 4u);
+    ASSERT_EQ(body.size(), 4U);
     ASSERT_EQ(body[3], 4);
     settle();
     ASSERT_TRUE(nothing_pending(a));
@@ -1462,11 +1492,11 @@ TEST(proxy_data_for_the_host_is_handed_to_the_in_process_callback) {
     send_all(a, proxy_data(info(VIP_A, 1000, HOST_VIP, 3000), {5, 6}));
     ASSERT_TRUE(wait_host(1));
     {
-        std::lock_guard<std::mutex> lock(g_rec_mutex);
+        std::scoped_lock lock(g_rec_mutex);
         ASSERT_EQ(g_host[0].src_ip, VIP_A);
         ASSERT_EQ(g_host[0].dst_ip, HOST_VIP);
         ASSERT_EQ(g_host[0].dst_port, 3000);
-        ASSERT_EQ(g_host[0].data.size(), 2u);
+        ASSERT_EQ(g_host[0].data.size(), 2U);
         ASSERT_TRUE(g_host[0].user == &g_user_marker);
     }
     settle();
@@ -1482,12 +1512,12 @@ TEST(proxy_data_for_the_host_is_handed_to_the_in_process_callback) {
     ASSERT_TRUE(read_packet(b, r));
     settle();
     ASSERT_EQ(
-        host_count(), 2u);  // a unicast to another joiner is not for the host
+        host_count(), 2U);  // a unicast to another joiner is not for the host
 
     server.SetHostDataCallback(nullptr, nullptr);
     send_all(a, proxy_data(info(VIP_A, 1000, HOST_VIP, 3000), {1}));
     settle();
-    ASSERT_EQ(host_count(), 2u);
+    ASSERT_EQ(host_count(), 2U);
     ::close(a);
     ::close(b);
 }
@@ -1506,7 +1536,7 @@ TEST(a_spoofed_source_never_reaches_the_host) {
     send_all(a, proxy_data(info(VIP_B, 1000, BROADCAST, 3000), {1}));
     send_all(a, proxy_data(info(VIP_B, 1000, 0xc0a800ff, 3000), {1}));
     settle();
-    ASSERT_EQ(host_count(), 0u);
+    ASSERT_EQ(host_count(), 0U);
     ::close(a);
 }
 
@@ -1519,7 +1549,7 @@ TEST(without_a_host_virtual_ip_only_broadcasts_reach_the_host) {
     const int a = join(server, VIP_A, 0x01);
     send_all(a, proxy_data(info(VIP_A, 1, 0, 2), {1}));
     settle();
-    ASSERT_EQ(host_count(), 0u);
+    ASSERT_EQ(host_count(), 0U);
     send_all(a, proxy_data(info(VIP_A, 1, BROADCAST, 2), {1}));
     ASSERT_TRUE(wait_host(1));
     ::close(a);
@@ -1556,7 +1586,7 @@ TEST(broadcast_from_host_reaches_every_joiner) {
     ASSERT_TRUE(read_packet(a, r));
     ASSERT_TRUE(parse_proxy_data(r, got, data));
     ASSERT_EQ(got.info.source_ipv4, HOST_VIP);
-    ASSERT_EQ(data.size(), 3u);
+    ASSERT_EQ(data.size(), 3U);
     ASSERT_TRUE(read_packet(b, r));
 
     h.info = info(HOST_VIP, 1000, 0xc0a800ff, 2000);  // legacy broadcast
@@ -1617,7 +1647,7 @@ TEST(a_departing_joiner_is_reported_to_the_master) {
     const int a = join(server, VIP_A, 0x01);
     ::close(a);
     ASSERT_TRUE(wait_master(1));
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
+    std::scoped_lock lock(g_rec_mutex);
     proto::LdnHeader h{};
     std::memcpy(&h, g_master[0].data(), sizeof(h));
     ASSERT_TRUE(
@@ -1677,8 +1707,8 @@ TEST(stopping_the_server_disconnects_the_joiners_without_notifying_the_master) {
     ASSERT_TRUE(closed_by_server(a));
     ::close(a);
     settle();
-    std::lock_guard<std::mutex> lock(g_rec_mutex);
-    ASSERT_EQ(g_master.size(), 0u);
+    std::scoped_lock lock(g_rec_mutex);
+    ASSERT_EQ(g_master.size(), 0U);
 }
 
 /// @test Verify stop waits for a receive thread that is slow to end.
@@ -1705,16 +1735,20 @@ TEST(stop_cannot_queue_a_session_when_the_zombie_pool_is_full) {
     P2pProxyServer server;
     ASSERT_TRUE(start_server(server));
     for (int i = 0; i < P2pProxyServer::MAX_PLAYERS * 2; ++i) {
-        server.OnSessionDisconnected(new P2pProxySession(&server, -1, 0));
+        auto session = std::make_unique<P2pProxySession>(&server, -1, 0);
+        P2pProxySession* const raw = session.get();
+        server.OnSessionDisconnected(raw);
+        ASSERT_EQ(session.release(), raw);  // the zombie queue owns it now
     }
     const int a = join(server, VIP_A, 0x01);
     ASSERT_TRUE(a >= 0);
     auto* live = static_cast<P2pProxySession*>(g_last_session.load());
+    std::unique_ptr<P2pProxySession> live_owner(live);
     server.Stop();  // no queue slot: the session is disconnected but cannot be
                     // handed over
     ASSERT_FALSE(live->IsConnected());
-    settle();     // its receive thread ends on its own
-    delete live;  // the owner of last resort frees it
+    settle();            // its receive thread ends on its own
+    live_owner.reset();  // the owner of last resort frees it
     ::close(a);
 }
 
@@ -1726,13 +1760,17 @@ TEST(a_registered_session_ending_with_a_full_pool_is_left_alive) {
     const int a = join(server, VIP_A, 0x01);
     ASSERT_TRUE(a >= 0);
     auto* live = static_cast<P2pProxySession*>(g_last_session.load());
+    std::unique_ptr<P2pProxySession> live_owner(live);
     for (int i = 0; i < P2pProxyServer::MAX_PLAYERS * 2; ++i) {
-        server.OnSessionDisconnected(new P2pProxySession(&server, -1, 0));
+        auto session = std::make_unique<P2pProxySession>(&server, -1, 0);
+        P2pProxySession* const raw = session.get();
+        server.OnSessionDisconnected(raw);
+        ASSERT_EQ(session.release(), raw);  // the zombie queue owns it now
     }
     ::close(a);  // its receive thread ends and reports it to a full pool
     settle();
     ASSERT_FALSE(live->IsConnected());
-    delete live;  // the owner of last resort frees it
+    live_owner.reset();  // the owner of last resort frees it
 }
 
 /// @test Verify a session that ends by itself is reaped.
@@ -1755,22 +1793,27 @@ TEST(reaping_never_frees_a_session_whose_thread_has_not_finished) {
     P2pProxyServer server;
     // A session that was queued but whose receive thread never ran stands for
     // one that is still unwinding: its thread has not flagged completion.
-    auto* running = new P2pProxySession(&server, -1, 0);
-    server.OnSessionDisconnected(running);
+    auto running = std::make_unique<P2pProxySession>(&server, -1, 0);
+    P2pProxySession* const running_ptr = running.get();
+    server.OnSessionDisconnected(running_ptr);
+    ASSERT_EQ(running.release(), running_ptr);  // the server owns it now
 
     int pair[2];
     ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, pair), 0);
-    auto* finished = new P2pProxySession(&server, pair[0], 0);
+    auto finished = std::make_unique<P2pProxySession>(&server, pair[0], 0);
+    P2pProxySession* const finished_ptr = finished.get();
     finished->Start();
     ::close(pair[1]);  // the thread ends and queues the session itself
+    // The receive thread hands it to the zombie queue.
+    ASSERT_EQ(finished.release(), finished_ptr);
     track_reset();
     ASSERT_TRUE(wait_until([&] {
         server.ReapZombieSessions();
-        return was_freed(finished);
+        return was_freed(finished_ptr);
     }));
-    ASSERT_FALSE(was_freed(running));
+    ASSERT_FALSE(was_freed(running_ptr));
     server.ReapZombieSessions();
-    ASSERT_FALSE(was_freed(running));
+    ASSERT_FALSE(was_freed(running_ptr));
     g_track = false;
 }
 
@@ -1778,15 +1821,17 @@ TEST(reaping_never_frees_a_session_whose_thread_has_not_finished) {
 TEST(a_full_zombie_pool_drops_the_new_session_pointer) {
     reset_world();
     P2pProxyServer server;
-    std::vector<P2pProxySession*> queued;
+    std::vector<P2pProxySession*> queued;  // observer of the server-owned ones
     for (int i = 0; i < P2pProxyServer::MAX_PLAYERS * 2; ++i) {
-        queued.push_back(new P2pProxySession(&server, -1, 0));
-        server.OnSessionDisconnected(queued.back());
+        auto session = std::make_unique<P2pProxySession>(&server, -1, 0);
+        queued.push_back(session.get());
+        server.OnSessionDisconnected(session.get());
+        ASSERT_EQ(session.release(), queued.back());  // the queue owns it
     }
-    auto* overflow = new P2pProxySession(&server, -1, 0);
+    auto overflow = std::make_unique<P2pProxySession>(&server, -1, 0);
     server.OnSessionDisconnected(
-        overflow);  // the pool refuses it: it is the caller's again
-    delete overflow;
+        overflow.get());  // the pool refuses it: it is the caller's again
+    overflow.reset();
     track_reset();
     server.ReapZombieSessions();
     for (const auto* s : queued) {
@@ -1798,12 +1843,13 @@ TEST(a_full_zombie_pool_drops_the_new_session_pointer) {
 /// @test Verify a session with no stack slot left is marked disconnected.
 TEST(a_session_with_no_stack_slot_left_is_marked_disconnected) {
     reset_world();
-    std::vector<P2pProxySession*> holders;
+    std::vector<std::unique_ptr<P2pProxySession>> holders;
     P2pProxyServer server;
     int pairs[P2pProxyServer::MAX_PLAYERS + 1][2];
     for (int i = 0; i < P2pProxyServer::MAX_PLAYERS; ++i) {
         ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, pairs[i]), 0);
-        holders.push_back(new P2pProxySession(&server, pairs[i][0], 0));
+        holders.push_back(
+            std::make_unique<P2pProxySession>(&server, pairs[i][0], 0));
         holders.back()->Start();
     }
     ASSERT_EQ(
@@ -1813,9 +1859,9 @@ TEST(a_session_with_no_stack_slot_left_is_marked_disconnected) {
     P2pProxySession starved(&server, pairs[P2pProxyServer::MAX_PLAYERS][0], 0);
     starved.Start();
     ASSERT_FALSE(starved.IsConnected());
-    for (auto* s : holders) {
+    for (auto& s : holders) {
         s->Disconnect(true);  // from the owner: no report to the server
-        delete s;             // joins the receive thread, returns the slot
+        s.reset();            // joins the receive thread, returns the slot
     }
     // The peers close only now: closing them first would let each receive
     // thread report itself to the server and hand the session to its zombie
@@ -1835,8 +1881,8 @@ TEST(a_disconnected_session_does_not_send) {
     reset_world();
     P2pProxyServer server;
     P2pProxySession never_connected(&server, -1, 0x7F000001);
-    ASSERT_EQ(never_connected.GetRemoteIp(), 0x7F000001u);
-    ASSERT_EQ(never_connected.GetVirtualIpAddress(), 0u);
+    ASSERT_EQ(never_connected.GetRemoteIp(), 0x7F000001U);
+    ASSERT_EQ(never_connected.GetVirtualIpAddress(), 0U);
     ASSERT_FALSE(never_connected.IsAuthenticated());
     const uint8_t b[1] = {1};
     ASSERT_FALSE(never_connected.Send(b, 1));
@@ -1927,7 +1973,7 @@ TEST(malformed_input_is_ignored_or_ends_the_session) {
     // an unknown packet type is skipped, the packet behind it is processed
     fd = join(server, VIP_A, 0x01);
     std::vector<uint8_t> two;
-    append(two, packet(static_cast<proto::PacketId>(200), "xy", 2));
+    append(two, packet(uint8_t{200}, "xy", 2));
     append(two, proxy_data(info(VIP_A, 1, VIP_B, 2), {3}));
     send_all(fd, two);
     Received r;

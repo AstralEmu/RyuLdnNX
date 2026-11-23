@@ -29,7 +29,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_CONFIG_CONFIG_MANAGER_HPP_
+#define SYSMODULE_SOURCE_CONFIG_CONFIG_MANAGER_HPP_
 
 #include "config.hpp"
 #include <cstdint>
@@ -97,7 +98,7 @@ public:
      * @brief Check if initialized
      * @return true once Initialize() has been called.
      */
-    bool IsInitialized() const {
+    [[nodiscard]] bool IsInitialized() const {
         return m_initialized;
     }
 
@@ -106,7 +107,7 @@ public:
      * @return Reference to the in-memory config, valid for the singleton's
      *         lifetime.
      */
-    const Config& GetConfig() const {
+    [[nodiscard]] const Config& GetConfig() const {
         return m_config;
     }
 
@@ -136,7 +137,7 @@ public:
      * @brief Get server host
      * @return NUL-terminated host name, owned by the manager.
      */
-    const char* GetServerHost() const {
+    [[nodiscard]] const char* GetServerHost() const {
         return m_config.server.host;
     }
 
@@ -152,7 +153,7 @@ public:
      * @brief Get server port
      * @return TCP port of the Ryujinx LDN server.
      */
-    uint16_t GetServerPort() const {
+    [[nodiscard]] uint16_t GetServerPort() const {
         return m_config.server.port;
     }
 
@@ -171,7 +172,7 @@ public:
      * @brief Get LDN enabled state
      * @return true when LDN interception is enabled.
      */
-    bool GetLdnEnabled() const {
+    [[nodiscard]] bool GetLdnEnabled() const {
         return m_config.ldn.enabled;
     }
 
@@ -187,7 +188,7 @@ public:
      * @return NUL-terminated passphrase, empty when none is set; owned by
      *         the manager.
      */
-    const char* GetPassphrase() const {
+    [[nodiscard]] const char* GetPassphrase() const {
         return m_config.ldn.passphrase;
     }
 
@@ -207,7 +208,7 @@ public:
      * @brief Get use_passphrase state
      * @return true when rooms are filtered by passphrase.
      */
-    bool GetUsePassphrase() const {
+    [[nodiscard]] bool GetUsePassphrase() const {
         return m_config.ldn.use_passphrase;
     }
 
@@ -230,7 +231,7 @@ public:
      * @brief Get debug enabled state
      * @return true when debug logging is enabled.
      */
-    bool GetDebugEnabled() const {
+    [[nodiscard]] bool GetDebugEnabled() const {
         return m_config.debug.enabled;
     }
 
@@ -245,7 +246,7 @@ public:
      * @brief Get debug log level
      * @return Log level, 0 to 3.
      */
-    uint32_t GetDebugLevel() const {
+    [[nodiscard]] uint32_t GetDebugLevel() const {
         return m_config.debug.level;
     }
 
@@ -272,17 +273,17 @@ public:
      * @brief Check if config has unsaved changes
      * @return true when a setter ran since the last Save() or Reload().
      */
-    bool HasUnsavedChanges() const {
+    [[nodiscard]] bool HasUnsavedChanges() const {
         return m_dirty;
     }
-
-private:
-    ConfigManager() = default;
-    ~ConfigManager() = default;
 
     // Non-copyable
     ConfigManager(const ConfigManager&) = delete;
     ConfigManager& operator=(const ConfigManager&) = delete;
+
+private:
+    ConfigManager() = default;
+    ~ConfigManager() = default;
 
     /**
      * @brief Invoke the change callback if one is registered.
@@ -304,3 +305,4 @@ private:
 };
 
 }  // namespace ryu_ldn::config
+#endif  // SYSMODULE_SOURCE_CONFIG_CONFIG_MANAGER_HPP_

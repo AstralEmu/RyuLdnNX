@@ -930,6 +930,22 @@ bool test_no_growth_multiplier() {
 // ============================================================================
 
 /**
+ * @brief Build a RetryResult holding a raw value.
+ *
+ * RetryResult has a fixed uint8_t underlying type, so any uint8_t is a valid
+ * value of the enum; the one built here names no enumerator on purpose, to
+ * exercise the "Unknown" fallback of retry_result_to_string().
+ *
+ * @param raw Underlying value to reinterpret.
+ * @return The enum value holding raw.
+ */
+RetryResult unknown_retry_result(uint8_t raw) {
+    RetryResult result{};
+    std::memcpy(&result, &raw, sizeof(result));
+    return result;
+}
+
+/**
  * @brief Verifies retry_result_to_string() names both RetryResult values and
  *        returns "Unknown" for an out-of-range value
  *
@@ -942,7 +958,7 @@ bool test_retry_result_to_string() {
         retry_result_to_string(RetryResult::MaxRetriesReached),
         "MaxRetriesReached");
     ASSERT_STREQ(
-        retry_result_to_string(static_cast<RetryResult>(99)), "Unknown");
+        retry_result_to_string(unknown_retry_result(uint8_t{99})), "Unknown");
     return true;
 }
 

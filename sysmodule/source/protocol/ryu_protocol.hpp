@@ -12,7 +12,8 @@
  * @license MIT
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_PROTOCOL_RYU_PROTOCOL_HPP_
+#define SYSMODULE_SOURCE_PROTOCOL_RYU_PROTOCOL_HPP_
 
 #include "types.hpp"
 #include <cstring>
@@ -208,7 +209,7 @@ inline EncodeResult encode_raw(
         encode_header(buffer, type, static_cast<int32_t>(data_size));
 
     // Write data
-    if (data && data_size > 0) {
+    if (data != nullptr && data_size > 0) {
         std::memcpy(buffer + offset, data, data_size);
     }
 
@@ -260,7 +261,7 @@ inline EncodeResult encode_passphrase(
     size_t& out_size) {
     PassphraseMessage msg{};
     std::memset(msg.passphrase, 0, sizeof(msg.passphrase));
-    if (passphrase && passphrase_len > 0) {
+    if (passphrase != nullptr && passphrase_len > 0) {
         size_t copy_len = passphrase_len < 128 ? passphrase_len : 128;
         std::memcpy(msg.passphrase, passphrase, copy_len);
     }
@@ -547,7 +548,7 @@ inline DecodeResult decode_header(
  */
 inline DecodeResult check_complete_packet(
     const uint8_t* buffer, size_t buffer_size, size_t& packet_size) {
-    LdnHeader header;
+    LdnHeader header{};
     DecodeResult result = decode_header(buffer, buffer_size, header);
     if (result != DecodeResult::Success) {
         packet_size = 0;
@@ -569,7 +570,7 @@ inline DecodeResult check_complete_packet(
  * @return PacketId from header
  */
 inline PacketId get_packet_type(const uint8_t* buffer) {
-    LdnHeader header;
+    LdnHeader header{};
     std::memcpy(&header, buffer, sizeof(LdnHeader));
     return static_cast<PacketId>(header.type);
 }
@@ -580,7 +581,7 @@ inline PacketId get_packet_type(const uint8_t* buffer) {
  * @return Payload size from header
  */
 inline int32_t get_payload_size(const uint8_t* buffer) {
-    LdnHeader header;
+    LdnHeader header{};
     std::memcpy(&header, buffer, sizeof(LdnHeader));
     return header.data_size;
 }
@@ -663,7 +664,7 @@ DecodeResult decode_with_data(
     std::memcpy(&payload, buffer + sizeof(LdnHeader), sizeof(T));
 
     // Calculate extra data
-    const size_t total_payload = static_cast<size_t>(header.data_size);
+    const auto total_payload = static_cast<size_t>(header.data_size);
     if (total_payload > sizeof(T)) {
         extra_size = total_payload - sizeof(T);
         // The offset is returned rather than a pointer: the caller applies it
@@ -1108,3 +1109,4 @@ inline const char* packet_id_to_string(PacketId id) {
 }
 
 }  // namespace ryu_ldn::protocol
+#endif  // SYSMODULE_SOURCE_PROTOCOL_RYU_PROTOCOL_HPP_

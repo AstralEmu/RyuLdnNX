@@ -41,23 +41,7 @@ namespace ryu_ldn::ldn {
  * All handler pointers are initialized to nullptr. Packets received
  * before handlers are registered will be silently ignored.
  */
-PacketDispatcher::PacketDispatcher()
-    : m_initialize_handler(nullptr),
-      m_connected_handler(nullptr),
-      m_sync_network_handler(nullptr),
-      m_scan_reply_handler(nullptr),
-      m_scan_reply_end_handler(nullptr),
-      m_disconnect_handler(nullptr),
-      m_ping_handler(nullptr),
-      m_network_error_handler(nullptr),
-      m_proxy_config_handler(nullptr),
-      m_proxy_connect_handler(nullptr),
-      m_proxy_connect_reply_handler(nullptr),
-      m_proxy_data_handler(nullptr),
-      m_proxy_disconnect_handler(nullptr),
-      m_reject_handler(nullptr),
-      m_reject_reply_handler(nullptr),
-      m_accept_policy_handler(nullptr) {}
+PacketDispatcher::PacketDispatcher() = default;
 
 // ============================================================================
 // Handler Registration

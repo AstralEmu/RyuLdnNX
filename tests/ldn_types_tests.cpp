@@ -134,84 +134,84 @@ static int g_tests_failed = 0;
  * @brief MacAddress is 6 bytes.
  */
 TEST(protocol_mac_address_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::MacAddress), 6u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::MacAddress), 6U);
 }
 
 /**
  * @brief Ssid is 34 bytes.
  */
 TEST(protocol_ssid_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::Ssid), 34u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::Ssid), 34U);
 }
 
 /**
  * @brief SessionId is 16 bytes.
  */
 TEST(protocol_session_id_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::SessionId), 16u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::SessionId), 16U);
 }
 
 /**
  * @brief IntentId is 16 bytes.
  */
 TEST(protocol_intent_id_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::IntentId), 16u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::IntentId), 16U);
 }
 
 /**
  * @brief NetworkId is 32 bytes.
  */
 TEST(protocol_network_id_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::NetworkId), 32u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::NetworkId), 32U);
 }
 
 /**
  * @brief NodeInfo is 64 bytes.
  */
 TEST(protocol_node_info_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::NodeInfo), 64u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::NodeInfo), 64U);
 }
 
 /**
  * @brief CommonNetworkInfo is 48 bytes.
  */
 TEST(protocol_common_network_info_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::CommonNetworkInfo), 48u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::CommonNetworkInfo), 48U);
 }
 
 /**
  * @brief LdnNetworkInfo is 0x430 bytes.
  */
 TEST(protocol_ldn_network_info_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::LdnNetworkInfo), 0x430u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::LdnNetworkInfo), 0x430U);
 }
 
 /**
  * @brief NetworkInfo is 0x480 bytes.
  */
 TEST(protocol_network_info_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::NetworkInfo), 0x480u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::NetworkInfo), 0x480U);
 }
 
 /**
  * @brief SecurityConfig is 68 bytes.
  */
 TEST(protocol_security_config_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::SecurityConfig), 68u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::SecurityConfig), 68U);
 }
 
 /**
  * @brief UserConfig is 48 bytes.
  */
 TEST(protocol_user_config_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::UserConfig), 48u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::UserConfig), 48U);
 }
 
 /**
  * @brief NetworkConfig is 32 bytes.
  */
 TEST(protocol_network_config_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::NetworkConfig), 32u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::NetworkConfig), 32U);
 }
 
 /**
@@ -220,14 +220,14 @@ TEST(protocol_network_config_size) {
 TEST(protocol_scan_filter_full_size) {
     ASSERT_EQ(
         sizeof(ryu_ldn::protocol::ScanFilterFull),
-        0x60u);  // 96 bytes with Pack=8 alignment
+        0x60U);  // 96 bytes with Pack=8 alignment
 }
 
 /**
  * @brief ConnectRequest is 0x500 bytes.
  */
 TEST(protocol_connect_request_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::ConnectRequest), 0x500u);  // 1280 bytes
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::ConnectRequest), 0x500U);  // 1280 bytes
 }
 
 /**
@@ -237,7 +237,7 @@ TEST(protocol_connect_request_size) {
 TEST(protocol_create_access_point_request_size) {
     // SecurityConfig(0x44) + UserConfig(0x30) + NetworkConfig(0x20) +
     // RyuNetworkConfig(0x28) = 0xBC
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::CreateAccessPointRequest), 0xBCu);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::CreateAccessPointRequest), 0xBCU);
 }
 
 // ============================================================================
@@ -288,7 +288,7 @@ TEST(session_id_not_zero_after_set) {
  */
 TEST(ssid_default_empty) {
     ryu_ldn::protocol::Ssid ssid{};
-    ASSERT_EQ(ssid.length, 0u);
+    ASSERT_EQ(ssid.length, 0U);
 }
 
 /**
@@ -300,7 +300,7 @@ TEST(ssid_set_name) {
     ssid.length = static_cast<uint8_t>(strlen(name));
     memcpy(ssid.name, name, ssid.length);
 
-    ASSERT_EQ(ssid.length, 11u);
+    ASSERT_EQ(ssid.length, 11U);
     ASSERT_EQ(memcmp(ssid.name, "TestNetwork", 11), 0);
 }
 
@@ -317,7 +317,7 @@ TEST(intent_id_fields) {
     id.scene_id = 42;
 
     ASSERT_EQ(id.local_communication_id, 0x0100000000001234ULL);
-    ASSERT_EQ(id.scene_id, 42u);
+    ASSERT_EQ(id.scene_id, 42U);
 }
 
 // ============================================================================
@@ -334,8 +334,8 @@ TEST(network_id_structure) {
     nid.session_id.data[0] = 0xAB;
 
     ASSERT_EQ(nid.intent_id.local_communication_id, 0x0100000000001234ULL);
-    ASSERT_EQ(nid.intent_id.scene_id, 1u);
-    ASSERT_EQ(nid.session_id.data[0], 0xABu);
+    ASSERT_EQ(nid.intent_id.scene_id, 1U);
+    ASSERT_EQ(nid.session_id.data[0], 0xABU);
 }
 
 // ============================================================================
@@ -351,8 +351,8 @@ TEST(security_config_passphrase) {
     cfg.passphrase_size = 8;
     memcpy(cfg.passphrase, "password", 8);
 
-    ASSERT_EQ(cfg.security_mode, 1u);
-    ASSERT_EQ(cfg.passphrase_size, 8u);
+    ASSERT_EQ(cfg.security_mode, 1U);
+    ASSERT_EQ(cfg.passphrase_size, 8U);
     ASSERT_EQ(memcmp(cfg.passphrase, "password", 8), 0);
 }
 
@@ -387,9 +387,9 @@ TEST(network_config_fields) {
     cfg.local_communication_version = 1;
 
     ASSERT_EQ(cfg.intent_id.local_communication_id, 0x0100000000005678ULL);
-    ASSERT_EQ(cfg.channel, 6u);
-    ASSERT_EQ(cfg.node_count_max, 8u);
-    ASSERT_EQ(cfg.local_communication_version, 1u);
+    ASSERT_EQ(cfg.channel, 6U);
+    ASSERT_EQ(cfg.node_count_max, 8U);
+    ASSERT_EQ(cfg.local_communication_version, 1U);
 }
 
 // ============================================================================
@@ -406,7 +406,7 @@ TEST(node_info_fields) {
     node.is_connected = 1;
     memcpy(node.user_name, "HostPlayer", 11);
 
-    ASSERT_EQ(node.ipv4_address, 0x0A720001u);
+    ASSERT_EQ(node.ipv4_address, 0x0A720001U);
     ASSERT_EQ(node.node_id, 0);
     ASSERT_EQ(node.is_connected, 1);
     ASSERT_STREQ(node.user_name, "HostPlayer");
@@ -427,12 +427,12 @@ TEST(scan_filter_full_fields) {
     filter.ssid.length = 4;
     memcpy(filter.ssid.name, "Test", 4);
 
-    ASSERT_EQ(filter.flag, 0x01u);
-    ASSERT_EQ(filter.network_type, 2u);
+    ASSERT_EQ(filter.flag, 0x01U);
+    ASSERT_EQ(filter.network_type, 2U);
     ASSERT_EQ(
         filter.network_id.intent_id.local_communication_id,
         0x0100000000001234ULL);
-    ASSERT_EQ(filter.ssid.length, 4u);
+    ASSERT_EQ(filter.ssid.length, 4U);
 }
 
 // ============================================================================
@@ -462,8 +462,8 @@ TEST(connect_request_structure) {
     req.network_info.network_id.intent_id.local_communication_id =
         0x0100000000001234ULL;
 
-    ASSERT_EQ(req.security_config.security_mode, 1u);
-    ASSERT_EQ(req.local_communication_version, 1u);
+    ASSERT_EQ(req.security_config.security_mode, 1U);
+    ASSERT_EQ(req.local_communication_version, 1U);
     ASSERT_EQ(
         req.network_info.network_id.intent_id.local_communication_id,
         0x0100000000001234ULL);
@@ -493,9 +493,9 @@ TEST(create_access_point_request_structure) {
     req.network_config.node_count_max = 4;
     req.network_config.local_communication_version = 1;
 
-    ASSERT_EQ(req.security_config.security_mode, 2u);
+    ASSERT_EQ(req.security_config.security_mode, 2U);
     ASSERT_STREQ(req.user_config.user_name, "Host");
-    ASSERT_EQ(req.network_config.node_count_max, 4u);
+    ASSERT_EQ(req.network_config.node_count_max, 4U);
 }
 
 // ============================================================================
@@ -522,7 +522,7 @@ TEST(ldn_network_info_nodes) {
     info.nodes[1].ipv4_address = 0x0A720002;
     memcpy(info.nodes[1].user_name, "Client", 7);
 
-    ASSERT_EQ(info.node_count, 2u);
+    ASSERT_EQ(info.node_count, 2U);
     ASSERT_EQ(info.nodes[0].node_id, 0);
     ASSERT_EQ(info.nodes[1].node_id, 1);
     ASSERT_STREQ(info.nodes[0].user_name, "Host");
@@ -539,9 +539,9 @@ TEST(ldn_network_info_advertise_data) {
     info.advertise_data_size = sizeof(adv_data);
     memcpy(info.advertise_data, adv_data, sizeof(adv_data));
 
-    ASSERT_EQ(info.advertise_data_size, 4u);
-    ASSERT_EQ(info.advertise_data[0], 0x01u);
-    ASSERT_EQ(info.advertise_data[3], 0x04u);
+    ASSERT_EQ(info.advertise_data_size, 4U);
+    ASSERT_EQ(info.advertise_data[0], 0x01U);
+    ASSERT_EQ(info.advertise_data[3], 0x04U);
 }
 
 // ============================================================================
@@ -567,10 +567,10 @@ TEST(common_network_info_fields) {
     info.link_level = 3;  // Signal strength indicator (0-3)
     info.network_type = 2;
 
-    ASSERT_EQ(info.mac_address.data[0], 0x12u);
+    ASSERT_EQ(info.mac_address.data[0], 0x12U);
     ASSERT_EQ(info.channel, 36);
-    ASSERT_EQ(info.link_level, 3u);
-    ASSERT_EQ(info.network_type, 2u);
+    ASSERT_EQ(info.link_level, 3U);
+    ASSERT_EQ(info.network_type, 2U);
 }
 
 // ============================================================================
@@ -603,7 +603,7 @@ TEST(network_info_complete_structure) {
         info.network_id.intent_id.local_communication_id,
         0x0100000000001234ULL);
     ASSERT_EQ(info.common.channel, 6);
-    ASSERT_EQ(info.ldn.node_count_max, 8u);
+    ASSERT_EQ(info.ldn.node_count_max, 8U);
 }
 
 // ============================================================================
@@ -614,7 +614,7 @@ TEST(network_info_complete_structure) {
  * @brief ProxyDataHeader is 0x14 (20) bytes.
  */
 TEST(proxy_data_header_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::ProxyDataHeader), 0x14u);  // 20 bytes
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::ProxyDataHeader), 0x14U);  // 20 bytes
 }
 
 /**
@@ -629,9 +629,9 @@ TEST(proxy_data_header_fields) {
     header.info.protocol = ryu_ldn::protocol::ProtocolType::Udp;
     header.data_length = 100;
 
-    ASSERT_EQ(header.info.source_ipv4, 0xC0A80101u);
-    ASSERT_EQ(header.info.dest_ipv4, 0xC0A80102u);
-    ASSERT_EQ(header.data_length, 100u);
+    ASSERT_EQ(header.info.source_ipv4, 0xC0A80101U);
+    ASSERT_EQ(header.info.dest_ipv4, 0xC0A80102U);
+    ASSERT_EQ(header.data_length, 100U);
 }
 
 // ============================================================================
@@ -642,7 +642,7 @@ TEST(proxy_data_header_fields) {
  * @brief SecurityParameter is 0x20 (32) bytes.
  */
 TEST(protocol_security_parameter_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::SecurityParameter), 0x20u);  // 32 bytes
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::SecurityParameter), 0x20U);  // 32 bytes
 }
 
 /**
@@ -657,17 +657,17 @@ TEST(protocol_security_parameter_fields) {
     param.session_id[0] = 0xAB;
     param.session_id[15] = 0xCD;
 
-    ASSERT_EQ(param.data[0], 0x12u);
-    ASSERT_EQ(param.data[15], 0x34u);
-    ASSERT_EQ(param.session_id[0], 0xABu);
-    ASSERT_EQ(param.session_id[15], 0xCDu);
+    ASSERT_EQ(param.data[0], 0x12U);
+    ASSERT_EQ(param.data[15], 0x34U);
+    ASSERT_EQ(param.session_id[0], 0xABU);
+    ASSERT_EQ(param.session_id[15], 0xCDU);
 }
 
 /**
  * @brief AddressEntry is 0x0C (12) bytes.
  */
 TEST(protocol_address_entry_size) {
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::AddressEntry), 0x0Cu);  // 12 bytes
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::AddressEntry), 0x0CU);  // 12 bytes
 }
 
 /**
@@ -680,9 +680,9 @@ TEST(protocol_address_entry_fields) {
     entry.mac_address.data[5] = 0x78;
     entry.reserved = 0;
 
-    ASSERT_EQ(entry.ipv4_address, 0x0A720001u);
-    ASSERT_EQ(entry.mac_address.data[0], 0x12u);
-    ASSERT_EQ(entry.mac_address.data[5], 0x78u);
+    ASSERT_EQ(entry.ipv4_address, 0x0A720001U);
+    ASSERT_EQ(entry.mac_address.data[0], 0x12U);
+    ASSERT_EQ(entry.mac_address.data[5], 0x78U);
 }
 
 /**
@@ -690,7 +690,7 @@ TEST(protocol_address_entry_fields) {
  */
 TEST(protocol_address_list_size) {
     ASSERT_EQ(
-        sizeof(ryu_ldn::protocol::AddressList), 0x60u);  // 96 bytes (8 * 12)
+        sizeof(ryu_ldn::protocol::AddressList), 0x60U);  // 96 bytes (8 * 12)
 }
 
 /**
@@ -705,8 +705,8 @@ TEST(protocol_address_list_fields) {
     list.addresses[7].ipv4_address = 0x0A720008;
     list.addresses[7].mac_address.data[0] = 0x88;
 
-    ASSERT_EQ(list.addresses[0].ipv4_address, 0x0A720001u);
-    ASSERT_EQ(list.addresses[7].ipv4_address, 0x0A720008u);
+    ASSERT_EQ(list.addresses[0].ipv4_address, 0x0A720001U);
+    ASSERT_EQ(list.addresses[7].ipv4_address, 0x0A720008U);
 }
 
 /**
@@ -717,7 +717,7 @@ TEST(protocol_create_access_point_private_request_size) {
     // SecurityConfig(0x44) + SecurityParameter(0x20) + UserConfig(0x30) +
     // NetworkConfig(0x20) + AddressList(0x60) + RyuNetworkConfig(0x28)
     ASSERT_EQ(
-        sizeof(ryu_ldn::protocol::CreateAccessPointPrivateRequest), 0x13Cu);
+        sizeof(ryu_ldn::protocol::CreateAccessPointPrivateRequest), 0x13CU);
 }
 
 /**
@@ -750,12 +750,12 @@ TEST(protocol_create_access_point_private_request_fields) {
     req.ryu_network_config.address_family = 2;  // IPv4
     req.ryu_network_config.external_proxy_port = 30456;
 
-    ASSERT_EQ(req.security_config.security_mode, 2u);
-    ASSERT_EQ(req.security_parameter.data[0], 0xAAu);
-    ASSERT_EQ(req.security_parameter.session_id[0], 0xBBu);
+    ASSERT_EQ(req.security_config.security_mode, 2U);
+    ASSERT_EQ(req.security_parameter.data[0], 0xAAU);
+    ASSERT_EQ(req.security_parameter.session_id[0], 0xBBU);
     ASSERT_STREQ(req.user_config.user_name, "PrivateHost");
-    ASSERT_EQ(req.network_config.node_count_max, 8u);
-    ASSERT_EQ(req.address_list.addresses[0].ipv4_address, 0x0A720001u);
+    ASSERT_EQ(req.network_config.node_count_max, 8U);
+    ASSERT_EQ(req.address_list.addresses[0].ipv4_address, 0x0A720001U);
 }
 
 /**
@@ -765,7 +765,7 @@ TEST(protocol_connect_private_request_size) {
     // 0xBC = 188 bytes
     // SecurityConfig(0x44) + SecurityParameter(0x20) + UserConfig(0x30) +
     // u32(4) + u32(4) + NetworkConfig(0x20)
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::ConnectPrivateRequest), 0xBCu);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::ConnectPrivateRequest), 0xBCU);
 }
 
 /**
@@ -795,12 +795,12 @@ TEST(protocol_connect_private_request_fields) {
     req.network_config.intent_id.local_communication_id = 0x0100000000005678ULL;
     req.network_config.node_count_max = 4;
 
-    ASSERT_EQ(req.security_config.security_mode, 2u);
-    ASSERT_EQ(req.security_parameter.data[0], 0xCCu);
-    ASSERT_EQ(req.security_parameter.session_id[0], 0xDDu);
+    ASSERT_EQ(req.security_config.security_mode, 2U);
+    ASSERT_EQ(req.security_parameter.data[0], 0xCCU);
+    ASSERT_EQ(req.security_parameter.session_id[0], 0xDDU);
     ASSERT_STREQ(req.user_config.user_name, "PrivateClient");
-    ASSERT_EQ(req.local_communication_version, 1u);
-    ASSERT_EQ(req.network_config.node_count_max, 4u);
+    ASSERT_EQ(req.local_communication_version, 1U);
+    ASSERT_EQ(req.network_config.node_count_max, 4U);
 }
 
 // ============================================================================
@@ -812,7 +812,7 @@ TEST(protocol_connect_private_request_fields) {
  */
 TEST(protocol_external_proxy_config_size) {
     ASSERT_EQ(
-        sizeof(ryu_ldn::protocol::ExternalProxyConfig), 0x26u);  // 38 bytes
+        sizeof(ryu_ldn::protocol::ExternalProxyConfig), 0x26U);  // 38 bytes
 }
 
 /**
@@ -828,9 +828,9 @@ TEST(protocol_external_proxy_config_fields) {
     cfg.token[0] = 0xAA;
 
     ASSERT_EQ(cfg.proxy_ip[0], static_cast<uint8_t>('1'));
-    ASSERT_EQ(cfg.address_family, 2u);
-    ASSERT_EQ(cfg.proxy_port, 30456u);
-    ASSERT_EQ(cfg.token[0], 0xAAu);
+    ASSERT_EQ(cfg.address_family, 2U);
+    ASSERT_EQ(cfg.proxy_port, 30456U);
+    ASSERT_EQ(cfg.token[0], 0xAAU);
 }
 
 /**
@@ -838,7 +838,7 @@ TEST(protocol_external_proxy_config_fields) {
  */
 TEST(protocol_external_proxy_token_size) {
     ASSERT_EQ(
-        sizeof(ryu_ldn::protocol::ExternalProxyToken), 0x28u);  // 40 bytes
+        sizeof(ryu_ldn::protocol::ExternalProxyToken), 0x28U);  // 40 bytes
 }
 
 /**
@@ -852,9 +852,9 @@ TEST(protocol_external_proxy_token_fields) {
     tok.physical_ip[0] = '1';
     tok.address_family = 2;  // IPv4
 
-    ASSERT_EQ(tok.virtual_ip, 0x0A720001u);
-    ASSERT_EQ(tok.token[0], 0xBBu);
-    ASSERT_EQ(tok.address_family, 2u);
+    ASSERT_EQ(tok.virtual_ip, 0x0A720001U);
+    ASSERT_EQ(tok.token[0], 0xBBU);
+    ASSERT_EQ(tok.address_family, 2U);
 }
 
 /**
@@ -863,7 +863,7 @@ TEST(protocol_external_proxy_token_fields) {
 TEST(protocol_external_proxy_connection_state_size) {
     ASSERT_EQ(
         sizeof(ryu_ldn::protocol::ExternalProxyConnectionState),
-        0x08u);  // 8 bytes
+        0x08U);  // 8 bytes
 }
 
 /**
@@ -875,8 +875,8 @@ TEST(protocol_external_proxy_connection_state_fields) {
     state.ip_address = 0x0A720001;
     state.connected = 1;
 
-    ASSERT_EQ(state.ip_address, 0x0A720001u);
-    ASSERT_EQ(state.connected, 1u);
+    ASSERT_EQ(state.ip_address, 0x0A720001U);
+    ASSERT_EQ(state.connected, 1U);
 }
 
 /**
@@ -884,7 +884,7 @@ TEST(protocol_external_proxy_connection_state_fields) {
  */
 TEST(protocol_set_accept_policy_request_size) {
     // Must be 1 byte to match Ryujinx/Server
-    ASSERT_EQ(sizeof(ryu_ldn::protocol::SetAcceptPolicyRequest), 1u);
+    ASSERT_EQ(sizeof(ryu_ldn::protocol::SetAcceptPolicyRequest), 1U);
 }
 
 /**
@@ -894,7 +894,7 @@ TEST(protocol_set_accept_policy_request_fields) {
     ryu_ldn::protocol::SetAcceptPolicyRequest req{};
     req.accept_policy = 2;  // BlackList
 
-    ASSERT_EQ(req.accept_policy, 2u);
+    ASSERT_EQ(req.accept_policy, 2U);
 }
 
 // ============================================================================

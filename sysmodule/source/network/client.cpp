@@ -49,7 +49,6 @@
 #include <switch.h>
 #else
 #include <random>
-#include <algorithm>
 #endif
 
 namespace ryu_ldn::network {
@@ -410,6 +409,7 @@ ClientOpResult RyuLdnClient::connect() {
  * @return ClientOpResult indicating success or failure
  */
 ClientOpResult RyuLdnClient::connect(const char* host, uint16_t port) {
+    std::scoped_lock op_lock(m_op_mutex);
     LOG_INFO("Connecting to %s:%u", host ? host : m_config.host, port);
 
     // Check if already connected or connecting
@@ -467,6 +467,7 @@ ClientOpResult RyuLdnClient::connect(const char* host, uint16_t port) {
  * Sends disconnect message (if connected) and closes connection.
  */
 void RyuLdnClient::disconnect() {
+    std::scoped_lock op_lock(m_op_mutex);
     LOG_INFO("Disconnecting from server");
 
     // Send disconnect message if we're ready
@@ -549,6 +550,7 @@ void RyuLdnClient::handle_connected_state(uint64_t current_time_ms) {
  * passed as @p current_time_ms (documented on the declaration).
  */
 void RyuLdnClient::update(uint64_t current_time_ms) {
+    std::scoped_lock op_lock(m_op_mutex);
     m_last_update_time_ms = current_time_ms;
     ConnectionState state = m_state_machine.get_state();
 

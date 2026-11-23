@@ -10,7 +10,8 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  */
-#pragma once
+#ifndef OVERLAY_SOURCE_VIEWS_SETTINGS_ADVANCED_SETTINGS_GUI_HPP_
+#define OVERLAY_SOURCE_VIEWS_SETTINGS_ADVANCED_SETTINGS_GUI_HPP_
 
 #include <tesla.hpp>
 
@@ -72,3 +73,4 @@ private:
     /// Frames since the last periodic server address refresh.
     u32 m_refreshCounter = 0;
 };
+#endif  // OVERLAY_SOURCE_VIEWS_SETTINGS_ADVANCED_SETTINGS_GUI_HPP_

@@ -125,35 +125,35 @@ static ProxyInfo make_test_proxy_info(
 /// Records the proxy handler callbacks that ran and their last arguments.
 static struct CallbackState {
     /// Callback state: config received.
-    bool config_received;
+    bool config_received = false;
     /// Callback state: proxy ip.
-    uint32_t proxy_ip;
+    uint32_t proxy_ip = 0;
     /// Callback state: proxy subnet mask.
-    uint32_t proxy_subnet_mask;
+    uint32_t proxy_subnet_mask = 0;
 
     /// Callback state: connect received.
-    bool connect_received;
+    bool connect_received = false;
     /// Callback state: connect info.
-    ProxyInfo connect_info;
+    ProxyInfo connect_info{};
 
     /// Callback state: connect reply received.
-    bool connect_reply_received;
+    bool connect_reply_received = false;
     /// Callback state: connect reply info.
-    ProxyInfo connect_reply_info;
+    ProxyInfo connect_reply_info{};
 
     /// Callback state: data received.
-    bool data_received;
+    bool data_received = false;
     /// Callback state: data info.
-    ProxyInfo data_info;
+    ProxyInfo data_info{};
     /// Callback state: data payload.
     std::vector<uint8_t> data_payload;
 
     /// Callback state: disconnect received.
-    bool disconnect_received;
+    bool disconnect_received = false;
     /// Callback state: disconnect info.
-    ProxyInfo disconnect_info;
+    ProxyInfo disconnect_info{};
     /// Callback state: disconnect reason.
-    int32_t disconnect_reason;
+    int32_t disconnect_reason = 0;
 
     /// Clears every flag and recorded argument.
     void reset() {
@@ -576,7 +576,7 @@ TEST(proxy_handler_tcp_and_udp_separate) {
 /// Test fixture value: saturation callbacks.
 static int g_saturation_callbacks = 0;
 /// Test helper: on saturation connect.
-static void on_saturation_connect(const ProxyInfo&) {
+static void on_saturation_connect(const ProxyInfo& /*unused*/) {
     ++g_saturation_callbacks;
 }
 

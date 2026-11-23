@@ -7,6 +7,7 @@
  * file exercises the production source.
  */
 
+#include <bit>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -202,18 +203,14 @@ TEST(the_callback_sees_each_change_with_old_new_and_user_data) {
     sm.OpenStation();  // invalid: no callback
 
     ASSERT_EQ(g_seen.size(), static_cast<size_t>(11));
-    ASSERT_TRUE(
-        g_seen[0].from == CommState::None &&
-        g_seen[0].to == CommState::Initialized);
-    ASSERT_TRUE(
-        g_seen[2].from == CommState::AccessPoint &&
-        g_seen[2].to == CommState::AccessPointCreated);
-    ASSERT_TRUE(
-        g_seen[9].from == CommState::Initialized &&
-        g_seen[9].to == CommState::Error);
-    ASSERT_TRUE(
-        g_seen[10].from == CommState::Error &&
-        g_seen[10].to == CommState::None);
+    ASSERT_EQ(g_seen[0].from, CommState::None);
+    ASSERT_EQ(g_seen[0].to, CommState::Initialized);
+    ASSERT_EQ(g_seen[2].from, CommState::AccessPoint);
+    ASSERT_EQ(g_seen[2].to, CommState::AccessPointCreated);
+    ASSERT_EQ(g_seen[9].from, CommState::Initialized);
+    ASSERT_EQ(g_seen[9].to, CommState::Error);
+    ASSERT_EQ(g_seen[10].from, CommState::Error);
+    ASSERT_EQ(g_seen[10].to, CommState::None);
     for (const Seen& s : g_seen) {
         ASSERT_TRUE(s.user == &token);
     }
@@ -253,10 +250,13 @@ TEST(state_and_result_names_cover_every_value_and_unknown) {
     ASSERT_TRUE(
         std::strcmp(
             LdnStateMachine::StateToString(CommState::Error), "Error") == 0);
+    // bit_cast builds the out-of-enumerator state without a cast the
+    // EnumCastOutOfRange check would reject; the enum type itself accepts any
+    // value of its fixed underlying type.
+    const auto unknown_state = std::bit_cast<CommState>(99U);
     ASSERT_TRUE(
-        std::strcmp(
-            LdnStateMachine::StateToString(static_cast<CommState>(99)),
-            "Unknown") == 0);
+        std::strcmp(LdnStateMachine::StateToString(unknown_state), "Unknown") ==
+        0);
 
     ASSERT_TRUE(
         std::strcmp(LdnStateMachine::ResultToString(R::Success), "Success") ==
@@ -269,10 +269,11 @@ TEST(state_and_result_names_cover_every_value_and_unknown) {
         std::strcmp(
             LdnStateMachine::ResultToString(R::AlreadyInState),
             "AlreadyInState") == 0);
+    // bit_cast, as for unknown_state: a result that matches no enumerator.
+    const auto unknown_result = std::bit_cast<R>(99);
     ASSERT_TRUE(
         std::strcmp(
-            LdnStateMachine::ResultToString(static_cast<R>(99)), "Unknown") ==
-        0);
+            LdnStateMachine::ResultToString(unknown_result), "Unknown") == 0);
 }
 
 /// @brief Print the totals.

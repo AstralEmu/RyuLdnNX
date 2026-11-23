@@ -22,7 +22,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_INTERFACES_IBSD_MITM_SERVICE_HPP_
+#define SYSMODULE_SOURCE_BSD_INTERFACES_IBSD_MITM_SERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "../bsd_types.hpp"
@@ -496,3 +497,4 @@
 // Define the MITM interface with a unique ID
 AMS_SF_DEFINE_MITM_INTERFACE(
     ams::mitm::bsd, IBsdMitmService, AMS_RYU_BSD_MITM_SERVICE, 0xB5D50C81)
+#endif  // SYSMODULE_SOURCE_BSD_INTERFACES_IBSD_MITM_SERVICE_HPP_

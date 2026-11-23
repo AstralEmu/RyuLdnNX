@@ -56,7 +56,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef OVERLAY_SOURCE_RYU_LDN_IPC_H_
+#define OVERLAY_SOURCE_RYU_LDN_IPC_H_
 #include <switch.h>
 
 #ifdef __cplusplus
@@ -168,15 +169,6 @@ Result ryuLdnGetConnectionStatus(
     RyuLdnConfigService* s, RyuLdnConnectionStatus* status);
 
 /**
- * @brief Check if sysmodule is active
- *
- * @param s Configuration service
- * @param active Output: 1 if active, 0 otherwise
- * @return Result code
- */
-Result ryuLdnIsServiceActive(RyuLdnConfigService* s, u32* active);
-
-/**
  * @brief Check if a game is actively using LDN
  *
  * @param s Configuration service
@@ -202,32 +194,6 @@ Result ryuLdnGetLdnState(RyuLdnConfigService* s, RyuLdnState* state);
  * @return Result code
  */
 Result ryuLdnGetSessionInfo(RyuLdnConfigService* s, RyuLdnSessionInfo* info);
-
-/**
- * @brief Get last measured round-trip time
- *
- * @param s Configuration service
- * @param rtt_ms Output RTT in milliseconds
- * @return Result code
- */
-Result ryuLdnGetLastRtt(RyuLdnConfigService* s, u32* rtt_ms);
-
-/**
- * @brief Request the MITM service to reconnect
- *
- * @param s Configuration service
- * @return Result code
- */
-Result ryuLdnForceReconnect(RyuLdnConfigService* s);
-
-/**
- * @brief Get process ID of the active game
- *
- * @param s Configuration service
- * @param pid Output process ID (0 if no game active)
- * @return Result code
- */
-Result ryuLdnGetActiveProcessId(RyuLdnConfigService* s, u64* pid);
 
 //=============================================================================
 // Sysmodule General Settings Commands (9-14)
@@ -300,17 +266,6 @@ Result ryuLdnReloadConfig(RyuLdnConfigService* s, RyuLdnConfigResult* result);
  * @return Result code
  */
 Result ryuLdnGetServerAddress(RyuLdnConfigService* s, char* host, u16* port);
-
-/**
- * @brief Set server address
- *
- * @param s Configuration service
- * @param host Server hostname
- * @param port Server port
- * @return Result code
- */
-Result ryuLdnSetServerAddress(
-    RyuLdnConfigService* s, const char* host, u16 port);
 
 /**
  * @brief Get LDN enabled state
@@ -391,14 +346,7 @@ Result ryuLdnGetPassphrase(RyuLdnConfigService* s, char* passphrase);
  */
 Result ryuLdnSetPassphrase(RyuLdnConfigService* s, const char* passphrase);
 
-/**
- * @brief Convert LDN state to human-readable string
- *
- * @param state LDN state value
- * @return Static string describing the state
- */
-const char* ryuLdnStateToString(RyuLdnState state);
-
 #ifdef __cplusplus
 }
 #endif
+#endif  // OVERLAY_SOURCE_RYU_LDN_IPC_H_

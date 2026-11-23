@@ -126,7 +126,7 @@ static int g_test_count = 0;
  */
 static void register_test(const char* name, void (*func)()) {
     if (g_test_count < 128) {
-        g_tests[g_test_count++] = {name, func};
+        g_tests[g_test_count++] = {.name = name, .func = func};
     }
 }
 
@@ -157,13 +157,13 @@ public:
      * @brief Get the path of the temporary file.
      * @return NUL-terminated path, valid for the object's lifetime.
      */
-    const char* path() const {
+    [[nodiscard]] const char* path() const {
         return m_path;
     }
 
 private:
     /// Path of the temporary file.
-    char m_path[256];
+    char m_path[256]{};
 };
 
 // ============================================================================
@@ -186,7 +186,7 @@ TEST(default_values) {
 
     // Debug defaults
     ASSERT_EQ(config.debug.enabled, false);
-    ASSERT_EQ(config.debug.level, 1u);
+    ASSERT_EQ(config.debug.level, 1U);
 
     // LDN passphrase filtering default
     ASSERT_EQ(config.ldn.use_passphrase, false);
@@ -267,7 +267,7 @@ TEST(parse_debug_section) {
 
     ASSERT_EQ(result, ConfigResult::Success);
     ASSERT_EQ(config.debug.enabled, true);
-    ASSERT_EQ(config.debug.level, 3u);
+    ASSERT_EQ(config.debug.level, 3U);
 }
 
 /**
@@ -372,7 +372,7 @@ TEST(passphrase_truncated) {
     ConfigResult result = load_config(file.path(), config);
 
     ASSERT_EQ(result, ConfigResult::Success);
-    ASSERT_EQ(strlen(config.ldn.passphrase), 64u);
+    ASSERT_EQ(strlen(config.ldn.passphrase), 64U);
 }
 
 /**
@@ -392,7 +392,7 @@ TEST(host_truncated) {
     ConfigResult result = load_config(file.path(), config);
 
     ASSERT_EQ(result, ConfigResult::Success);
-    ASSERT_EQ(strlen(config.server.host), 128u);
+    ASSERT_EQ(strlen(config.server.host), 128U);
 }
 
 /**
@@ -427,7 +427,7 @@ TEST(full_config_example) {
     ASSERT_EQ(config.ldn.use_passphrase, false);
     ASSERT_EQ(config.ldn.disable_p2p, false);
     ASSERT_EQ(config.debug.enabled, true);
-    ASSERT_EQ(config.debug.level, 2u);
+    ASSERT_EQ(config.debug.level, 2U);
 }
 
 // ============================================================================
@@ -490,7 +490,7 @@ TEST(save_config_preserves_values) {
     ASSERT_EQ(loaded.ldn.use_passphrase, true);
     ASSERT_EQ(loaded.ldn.disable_p2p, false);
     ASSERT_EQ(loaded.debug.enabled, true);
-    ASSERT_EQ(loaded.debug.level, 3u);
+    ASSERT_EQ(loaded.debug.level, 3U);
 
     std::remove(path);
 }
@@ -717,7 +717,7 @@ TEST(open_stream_creates_file_without_world_write) {
 
     struct stat info{};
     ASSERT_EQ(stat(path, &info), 0);
-    ASSERT_EQ(info.st_mode & (S_IWGRP | S_IWOTH), 0u);
+    ASSERT_EQ(info.st_mode & (S_IWGRP | S_IWOTH), 0U);
     std::remove(path);
 }
 

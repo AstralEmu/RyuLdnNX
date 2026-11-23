@@ -38,7 +38,8 @@
  * @see protocol/types.hpp for ProxyInfo, ProxyDataHeader structures
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_PROXY_HANDLER_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_PROXY_HANDLER_HPP_
 
 #include <cstdint>
 #include <cstddef>
@@ -128,7 +129,7 @@ struct ProxyConnection {
      * @param proto Transport protocol (TCP or UDP)
      * @return true if every field equals the stored connection
      */
-    bool matches(
+    [[nodiscard]] bool matches(
         uint32_t src_ip,
         uint16_t src_port,
         uint32_t dst_ip,
@@ -145,7 +146,7 @@ struct ProxyConnection {
      * @param info Proxy info carrying the endpoints and protocol
      * @return true if every field equals the stored connection
      */
-    bool matches(const protocol::ProxyInfo& info) const {
+    [[nodiscard]] bool matches(const protocol::ProxyInfo& info) const {
         return matches(
             info.source_ipv4,
             info.source_port,
@@ -348,7 +349,7 @@ public:
      *
      * @return true if ProxyConfig has been received
      */
-    bool is_configured() const {
+    [[nodiscard]] bool is_configured() const {
         return m_configured;
     }
 
@@ -357,7 +358,7 @@ public:
      *
      * @return Proxy server IP address (0 if not configured)
      */
-    uint32_t get_proxy_ip() const {
+    [[nodiscard]] uint32_t get_proxy_ip() const {
         return m_proxy_ip;
     }
 
@@ -366,7 +367,7 @@ public:
      *
      * @return Proxy subnet mask (0 if not configured)
      */
-    uint32_t get_proxy_subnet_mask() const {
+    [[nodiscard]] uint32_t get_proxy_subnet_mask() const {
         return m_proxy_subnet_mask;
     }
 
@@ -375,7 +376,7 @@ public:
      *
      * @return Count of entries in connection table
      */
-    size_t get_connection_count() const {
+    [[nodiscard]] size_t get_connection_count() const {
         return m_connection_count;
     }
 
@@ -389,7 +390,7 @@ public:
      * @param proto Protocol type (default UDP)
      * @return true if connection exists in table
      */
-    bool has_connection(
+    [[nodiscard]] bool has_connection(
         uint32_t src_ip,
         uint16_t src_port,
         uint32_t dest_ip,
@@ -414,25 +415,26 @@ private:
     // Internal State
     // ========================================================================
 
-    bool m_configured;             ///< Whether ProxyConfig received
-    uint32_t m_proxy_ip;           ///< Configured proxy IP
-    uint32_t m_proxy_subnet_mask;  ///< Configured subnet mask
+    bool m_configured{false};         ///< Whether ProxyConfig received
+    uint32_t m_proxy_ip{0};           ///< Configured proxy IP
+    uint32_t m_proxy_subnet_mask{0};  ///< Configured subnet mask
 
     /// Fixed-size connection table (no dynamic allocation).
     std::array<ProxyConnection, MAX_PROXY_CONNECTIONS> m_connections;
-    size_t m_connection_count;  ///< Number of active entries in m_connections
+    size_t m_connection_count{
+        0};  ///< Number of active entries in m_connections
 
     // Callbacks
     /// Invoked when a ProxyConfig packet is handled
-    ProxyConfigCallback m_config_callback;
+    ProxyConfigCallback m_config_callback{nullptr};
     /// Invoked when a ProxyConnect packet is handled
-    ProxyConnectCallback m_connect_callback;
+    ProxyConnectCallback m_connect_callback{nullptr};
     /// Invoked when a ProxyConnectReply packet is handled
-    ProxyConnectReplyCallback m_connect_reply_callback;
+    ProxyConnectReplyCallback m_connect_reply_callback{nullptr};
     /// Invoked when a ProxyData packet is handled
-    ProxyDataCallback m_data_callback;
+    ProxyDataCallback m_data_callback{nullptr};
     /// Invoked when a ProxyDisconnect packet is handled
-    ProxyDisconnectCallback m_disconnect_callback;
+    ProxyDisconnectCallback m_disconnect_callback{nullptr};
 
     // ========================================================================
     // Internal Methods
@@ -456,3 +458,4 @@ private:
 };
 
 }  // namespace ryu_ldn::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_PROXY_HANDLER_HPP_

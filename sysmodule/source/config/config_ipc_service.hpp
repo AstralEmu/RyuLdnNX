@@ -11,7 +11,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_CONFIG_CONFIG_IPC_SERVICE_HPP_
+#define SYSMODULE_SOURCE_CONFIG_CONFIG_IPC_SERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "config.hpp"
@@ -630,3 +631,4 @@ public:
 };
 
 }  // namespace ryu_ldn::ipc
+#endif  // SYSMODULE_SOURCE_CONFIG_CONFIG_IPC_SERVICE_HPP_

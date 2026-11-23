@@ -95,7 +95,7 @@ bool on_data(
     uint32_t dip,
     uint16_t dp,
     bsdt::ProtocolType p,
-    const void*,
+    const void* /*unused*/,
     size_t len) {
     g.data.push_back({sip, sp, dip, dp, p, len});
     return g.data_result;
@@ -261,7 +261,7 @@ constexpr uint32_t IP_B = 0x0A720002;
  * @return a new, unbound UDP proxy socket
  */
 ProxySocket make_udp() {
-    return ProxySocket(bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp);
+    return {bsdt::SocketType::Dgram, bsdt::ProtocolType::Udp};
 }
 /**
  * @brief Test helper: make tcp.
@@ -269,7 +269,7 @@ ProxySocket make_udp() {
  * @return a new, unbound TCP proxy socket
  */
 ProxySocket make_tcp() {
-    return ProxySocket(bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp);
+    return {bsdt::SocketType::Stream, bsdt::ProtocolType::Tcp};
 }
 
 /**
@@ -699,7 +699,7 @@ TEST(a_full_receive_queue_drops_the_oldest_datagram) {
     reset_world();
     ProxySocket s = make_udp();
     for (size_t i = 0; i < PROXY_SOCKET_MAX_QUEUE_SIZE + 1; i++) {
-        const uint8_t tag = static_cast<uint8_t>(i);
+        const auto tag = static_cast<uint8_t>(i);
         s.IncomingData(&tag, 1, peer(IP_B, 6000));
     }
     ASSERT_EQ(s.GetPendingDataSize(), PROXY_SOCKET_MAX_QUEUE_SIZE);
@@ -776,7 +776,8 @@ TEST(a_verbose_logger_gets_a_hex_dump_of_the_first_bytes) {
 TEST(setsockopt_toggles_broadcast_and_accepts_the_common_options) {
     reset_world();
     ProxySocket s = make_udp();
-    const s32 on = 1, off = 0;
+    const s32 on = 1;
+    const s32 off = 0;
     const s32 sol = static_cast<s32>(bsdt::SocketOptionLevel::Socket);
     const s32 bc = static_cast<s32>(bsdt::SocketOption::Broadcast);
 
@@ -1026,9 +1027,11 @@ TEST(two_blocked_acceptors_one_connection_only_one_wins) {
     ProxySocket s = make_tcp();
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
     ASSERT_TRUE(s.Listen(4).IsSuccess());
-    std::atomic<int> winners{0}, losers{0};
+    std::atomic<int> winners{0};
+    std::atomic<int> losers{0};
     auto body = [&] { (s.Accept(nullptr) != nullptr ? winners : losers)++; };
-    std::thread a(body), b(body);
+    std::thread a(body);
+    std::thread b(body);
     sleep_ms(200);  // both are blocked on the event
     s.IncomingConnection(request_from(IP_B, 6000));
     a.join();
@@ -1042,6 +1045,22 @@ TEST(two_blocked_acceptors_one_connection_only_one_wins) {
 // ---------------------------------------------------------------------------
 
 /**
+ * @brief Build a ShutdownHow holding a raw value.
+ *
+ * ShutdownHow has a fixed int32_t underlying type, so any int32_t is a valid
+ * value of the enum; the one built here names no enumerator on purpose, to
+ * exercise the rejection path in Shutdown().
+ *
+ * @param raw Underlying value to reinterpret.
+ * @return The enum value holding raw.
+ */
+bsdt::ShutdownHow unknown_shutdown_how(int32_t raw) {
+    bsdt::ShutdownHow how{};
+    std::memcpy(&how, &raw, sizeof(how));
+    return how;
+}
+
+/**
  * @brief Test case: shutdown sets the requested directions and refuses unknown
  *   ones.
  */
@@ -1050,8 +1069,7 @@ TEST(shutdown_sets_the_requested_directions_and_refuses_unknown_ones) {
     ProxySocket s = make_udp();
     ASSERT_TRUE(s.Bind(local(IP_A, 5000)).IsSuccess());
     ASSERT_EQ(
-        errval(s.Shutdown(static_cast<bsdt::ShutdownHow>(7))),
-        errno_of(Errno::Inval));
+        errval(s.Shutdown(unknown_shutdown_how(7))), errno_of(Errno::Inval));
     ASSERT_TRUE(s.Shutdown(bsdt::ShutdownHow::Write).IsSuccess());
     uint8_t buf[2];
     ASSERT_EQ(s.SendTo("x", 1, 0, peer(IP_B, 6000)), neg(Errno::Inval));
@@ -1487,6 +1505,7 @@ TEST(broadcast_reaches_every_socket_of_the_subnet_on_that_port) {
 TEST(a_delivery_is_capped_at_eight_sockets) {
     reset_world();
     std::vector<ProxySocket*> sockets;
+    sockets.reserve(10);
     for (s32 fd = 0; fd < 10; fd++) {
         sockets.push_back(bound_udp(fd, 5000, 0));
     }

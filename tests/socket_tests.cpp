@@ -22,6 +22,7 @@
  * ```
  */
 
+#include <stdexcept>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -42,6 +43,53 @@
 
 using namespace ryu_ldn::network;
 
+/**
+ * @brief Observe whether a moved-from Socket is in its documented empty state.
+ *
+ * Contract: Socket::Socket(Socket&&) and Socket::operator=(Socket&&) leave the
+ * source invalid after the move (descriptor -1, disconnected); only that empty
+ * state may be observed. The source is named through std::cref before the
+ * move, so the observation targets the same object without reading the
+ * moved-from variable itself.
+ *
+ * @param socket Socket whose move already happened.
+ * @return true when the source reads as invalid.
+ */
+bool moved_from_is_valid(const Socket& socket) {
+    return socket.is_valid();
+}
+
+/**
+ * @brief Observe the descriptor of a moved-from Socket.
+ *
+ * Contract: a move leaves the source with descriptor -1; no other field of a
+ * moved-from Socket may be observed. The source is named through std::cref
+ * before the move, so the observation targets the same object without reading
+ * the moved-from variable itself.
+ *
+ * @param socket Socket whose move already happened.
+ * @return The source descriptor, -1 after a move.
+ */
+int moved_from_fd(const Socket& socket) {
+    return socket.get_fd();
+}
+
+/**
+ * @brief Build a SocketResult holding a raw value.
+ *
+ * SocketResult's underlying type is int, so any int is a valid value of the
+ * enum; the value given here names no enumerator on purpose, to exercise the
+ * "Unknown" fallback of socket_result_to_string().
+ *
+ * @param raw Underlying value to reinterpret.
+ * @return The enum value holding raw.
+ */
+SocketResult unknown_socket_result(int raw) {
+    SocketResult result{};
+    std::memcpy(&result, &raw, sizeof(result));
+    return result;
+}
+
 // =============================================================================
 // Test Framework (minimal, same as other test files)
 // =============================================================================
@@ -59,23 +107,23 @@ static int g_tests_failed = 0;
  *
  * @param name test identifier, without the test_ prefix
  */
-#define TEST(name)                            \
-    static void test_##name();                \
-    static struct TestRegister_##name {       \
-        TestRegister_##name() {               \
-            printf("  [TEST] " #name "... "); \
-            fflush(stdout);                   \
-            g_tests_run++;                    \
-            try {                             \
-                test_##name();                \
-                printf("PASS\n");             \
-                g_tests_passed++;             \
-            } catch (const char* msg) {       \
-                printf("FAIL: %s\n", msg);    \
-                g_tests_failed++;             \
-            }                                 \
-        }                                     \
-    } g_test_register_##name;                 \
+#define TEST(name)                               \
+    static void test_##name();                   \
+    static struct TestRegister_##name {          \
+        TestRegister_##name() {                  \
+            printf("  [TEST] " #name "... ");    \
+            fflush(stdout);                      \
+            g_tests_run++;                       \
+            try {                                \
+                test_##name();                   \
+                printf("PASS\n");                \
+                g_tests_passed++;                \
+            } catch (const std::exception& ex) { \
+                printf("FAIL: %s\n", ex.what()); \
+                g_tests_failed++;                \
+            }                                    \
+        }                                        \
+    } g_test_register_##name;                    \
     static void test_##name()
 
 /**
@@ -83,11 +131,11 @@ static int g_tests_failed = 0;
  *
  * @param cond expression expected to be true
  */
-#define ASSERT(cond)                          \
-    do {                                      \
-        if (!(cond)) {                        \
-            throw "Assertion failed: " #cond; \
-        }                                     \
+#define ASSERT(cond)                                              \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            throw std::runtime_error("Assertion failed: " #cond); \
+        }                                                         \
     } while (0)
 
 /**
@@ -96,11 +144,11 @@ static int g_tests_failed = 0;
  * @param a actual value
  * @param b expected value
  */
-#define ASSERT_EQ(a, b)                              \
-    do {                                             \
-        if ((a) != (b)) {                            \
-            throw "Assertion failed: " #a " != " #b; \
-        }                                            \
+#define ASSERT_EQ(a, b)                                                  \
+    do {                                                                 \
+        if ((a) != (b)) {                                                \
+            throw std::runtime_error("Assertion failed: " #a " != " #b); \
+        }                                                                \
     } while (0)
 
 /**
@@ -109,11 +157,11 @@ static int g_tests_failed = 0;
  * @param a first value
  * @param b value it must differ from
  */
-#define ASSERT_NE(a, b)                              \
-    do {                                             \
-        if ((a) == (b)) {                            \
-            throw "Assertion failed: " #a " == " #b; \
-        }                                            \
+#define ASSERT_NE(a, b)                                                  \
+    do {                                                                 \
+        if ((a) == (b)) {                                                \
+            throw std::runtime_error("Assertion failed: " #a " == " #b); \
+        }                                                                \
     } while (0)
 
 /**
@@ -245,15 +293,17 @@ TEST(socket_move_constructor) {
     socket_init();
 
     Socket sock1;
+    const std::reference_wrapper<const Socket> sock1_source = std::cref(sock1);
+
     // We can't connect without a server, but we can test move semantics
     // by checking that the fd transfers correctly
 
     Socket sock2(std::move(sock1));
 
     // Both should be invalid since sock1 was never connected
-    ASSERT_FALSE(sock1.is_valid());
+    ASSERT_FALSE(moved_from_is_valid(sock1_source.get()));
     ASSERT_FALSE(sock2.is_valid());
-    ASSERT_EQ(sock1.get_fd(), -1);
+    ASSERT_EQ(moved_from_fd(sock1_source.get()), -1);
     ASSERT_EQ(sock2.get_fd(), -1);
 }
 
@@ -267,10 +317,11 @@ TEST(socket_move_assignment) {
 
     Socket sock1;
     Socket sock2;
+    const std::reference_wrapper<const Socket> sock1_source = std::cref(sock1);
 
     sock2 = std::move(sock1);
 
-    ASSERT_FALSE(sock1.is_valid());
+    ASSERT_FALSE(moved_from_is_valid(sock1_source.get()));
     ASSERT_FALSE(sock2.is_valid());
 }
 
@@ -403,7 +454,7 @@ TEST(send_not_connected) {
     SocketResult result = sock.send(data, sizeof(data), sent);
 
     ASSERT_EQ(result, SocketResult::NotConnected);
-    ASSERT_EQ(sent, 0u);
+    ASSERT_EQ(sent, 0U);
 }
 
 /**
@@ -473,7 +524,7 @@ TEST(recv_not_connected) {
     SocketResult result = sock.recv(buffer, sizeof(buffer), received, 0);
 
     ASSERT_EQ(result, SocketResult::NotConnected);
-    ASSERT_EQ(received, 0u);
+    ASSERT_EQ(received, 0U);
 }
 
 /**
@@ -675,7 +726,7 @@ TEST(result_to_string_closed) {
  * @test Unknown result returns "Unknown"
  */
 TEST(result_to_string_unknown) {
-    SocketResult unknown = static_cast<SocketResult>(9999);
+    auto unknown = unknown_socket_result(9999);
     ASSERT(strcmp(socket_result_to_string(unknown), "Unknown") == 0);
 }
 
@@ -758,12 +809,13 @@ TEST(port_max) {
     // Should fail with refused/timeout, not invalid
     ASSERT_NE(result, SocketResult::Success);
     // The result should be a connection error, not a validation error
-    ASSERT(
+    const bool is_connection_error =
         result == SocketResult::ConnectionRefused ||
         result == SocketResult::ConnectionReset ||
         result == SocketResult::Timeout ||
         result == SocketResult::HostUnreachable ||
-        result == SocketResult::SocketError);
+        result == SocketResult::SocketError;
+    ASSERT(is_connection_error);
 }
 
 /**
@@ -923,8 +975,8 @@ TEST(result_to_string_all_values) {
     // Unknown value
     ASSERT_TRUE(
         std::strcmp(
-            socket_result_to_string(static_cast<SocketResult>(99)),
-            "Unknown") == 0);
+            socket_result_to_string(unknown_socket_result(99)), "Unknown") ==
+        0);
 }
 
 /**
@@ -964,10 +1016,11 @@ TEST(errno_to_result_all_mappings) {
  */
 static uint16_t create_local_listener(int& server_fd) {
     server_fd = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0)
+    if (server_fd < 0) {
         return 0;
+    }
 
-    struct sockaddr_in addr;
+    struct sockaddr_in addr{};
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -1025,7 +1078,7 @@ TEST(set_nodelay_valid) {
     SocketResult cr = sock.connect("127.0.0.1", port, 2000);
 
     // Accept the connection (regardless of connect result, drain the listener)
-    struct sockaddr_in client_addr;
+    struct sockaddr_in client_addr{};
     socklen_t client_len = sizeof(client_addr);
     int accepted = ::accept(
         server_fd,
@@ -1040,8 +1093,9 @@ TEST(set_nodelay_valid) {
         ASSERT_EQ(result, SocketResult::Success);
     }
 
-    if (accepted >= 0)
+    if (accepted >= 0) {
         ::close(accepted);
+    }
     ::close(server_fd);
     sock.close();
 }
@@ -1058,7 +1112,7 @@ TEST(set_recv_buffer_size_valid) {
     Socket sock;
     SocketResult cr = sock.connect("127.0.0.1", port, 2000);
 
-    struct sockaddr_in client_addr;
+    struct sockaddr_in client_addr{};
     socklen_t client_len = sizeof(client_addr);
     int accepted = ::accept(
         server_fd,
@@ -1070,8 +1124,9 @@ TEST(set_recv_buffer_size_valid) {
         ASSERT_EQ(result, SocketResult::Success);
     }
 
-    if (accepted >= 0)
+    if (accepted >= 0) {
         ::close(accepted);
+    }
     ::close(server_fd);
     sock.close();
 }
@@ -1088,7 +1143,7 @@ TEST(set_send_buffer_size_valid) {
     Socket sock;
     SocketResult cr = sock.connect("127.0.0.1", port, 2000);
 
-    struct sockaddr_in client_addr;
+    struct sockaddr_in client_addr{};
     socklen_t client_len = sizeof(client_addr);
     int accepted = ::accept(
         server_fd,
@@ -1100,8 +1155,9 @@ TEST(set_send_buffer_size_valid) {
         ASSERT_EQ(result, SocketResult::Success);
     }
 
-    if (accepted >= 0)
+    if (accepted >= 0) {
         ::close(accepted);
+    }
     ::close(server_fd);
     sock.close();
 }
@@ -1118,7 +1174,7 @@ TEST(set_non_blocking_valid) {
     Socket sock;
     SocketResult cr = sock.connect("127.0.0.1", port, 2000);
 
-    struct sockaddr_in client_addr;
+    struct sockaddr_in client_addr{};
     socklen_t client_len = sizeof(client_addr);
     int accepted = ::accept(
         server_fd,
@@ -1133,8 +1189,9 @@ TEST(set_non_blocking_valid) {
         ASSERT_EQ(result, SocketResult::Success);
     }
 
-    if (accepted >= 0)
+    if (accepted >= 0) {
         ::close(accepted);
+    }
     ::close(server_fd);
     sock.close();
 }
@@ -1151,7 +1208,7 @@ TEST(send_recv_connected) {
     Socket sock;
     SocketResult cr = sock.connect("127.0.0.1", port, 2000);
 
-    struct sockaddr_in client_addr;
+    struct sockaddr_in client_addr{};
     socklen_t client_len = sizeof(client_addr);
     int accepted = ::accept(
         server_fd,
@@ -1187,8 +1244,9 @@ TEST(send_recv_connected) {
         ASSERT_TRUE(received > 0);
     }
 
-    if (accepted >= 0)
+    if (accepted >= 0) {
         ::close(accepted);
+    }
     ::close(server_fd);
     sock.close();
 }
@@ -1237,18 +1295,18 @@ enum Fn {
  *        return instead of reaching libc
  */
 struct Fault {
-    /// fault pending
-    bool armed;
+    /// value returned instead of calling libc
+    long ret;
     /// number of calls to let through before failing
     int skip;
     /// errno to set (when ret < 0)
     int err;
-    /// value returned instead of calling libc
-    long ret;
-    /// getsockopt only: succeed and write out_int to *optval
-    bool set_out;
     /// value written to *optval when set_out is true
     int out_int;
+    /// fault pending
+    bool armed;
+    /// getsockopt only: succeed and write out_int to *optval
+    bool set_out;
 };
 
 /// Pending fault of each intercepted function
@@ -1263,7 +1321,13 @@ Fault g_fault[FN_COUNT];
  * @param ret value returned instead of calling libc
  */
 void arm(Fn fn, int err, int skip = 0, long ret = -1) {
-    g_fault[fn] = Fault{true, skip, err, ret, false, 0};
+    g_fault[fn] = Fault{
+        .ret = ret,
+        .skip = skip,
+        .err = err,
+        .out_int = 0,
+        .armed = true,
+        .set_out = false};
 }
 
 /**
@@ -1273,7 +1337,13 @@ void arm(Fn fn, int err, int skip = 0, long ret = -1) {
  * @param value errno value written to the option
  */
 void arm_so_error(int value) {
-    g_fault[FN_GETSOCKOPT] = Fault{true, 0, 0, 0, true, value};
+    g_fault[FN_GETSOCKOPT] = Fault{
+        .ret = 0,
+        .skip = 0,
+        .err = 0,
+        .out_int = value,
+        .armed = true,
+        .set_out = true};
 }
 
 /**
@@ -1286,15 +1356,17 @@ void arm_so_error(int value) {
  */
 bool take(Fn fn) {
     Fault& f = g_fault[fn];
-    if (!f.armed)
+    if (!f.armed) {
         return false;
+    }
     if (f.skip > 0) {
         --f.skip;
         return false;
     }
     f.armed = false;
-    if (f.ret < 0)
+    if (f.ret < 0) {
         errno = f.err;
+    }
     return true;
 }
 
@@ -1330,8 +1402,9 @@ extern "C" {
  * @return the descriptor, or the injected value
  */
 int socket(int d, int t, int p) noexcept {
-    if (take(FN_SOCKET))
+    if (take(FN_SOCKET)) {
         return static_cast<int>(g_fault[FN_SOCKET].ret);
+    }
     static auto fn = real<int (*)(int, int, int)>("socket");
     return fn(d, t, p);
 }
@@ -1349,8 +1422,9 @@ int fcntl(int fd, int cmd, ...) {
     va_start(ap, cmd);
     void* arg = va_arg(ap, void*);
     va_end(ap);
-    if (take(FN_FCNTL))
+    if (take(FN_FCNTL)) {
         return static_cast<int>(g_fault[FN_FCNTL].ret);
+    }
     static auto fn = real<int (*)(int, int, void*)>("fcntl");
     return fn(fd, cmd, arg);
 }
@@ -1367,8 +1441,9 @@ int fcntl(int fd, int cmd, ...) {
  * @return 0 or -1, or the injected value
  */
 int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
-    if (take(FN_SETSOCKOPT))
+    if (take(FN_SETSOCKOPT)) {
         return static_cast<int>(g_fault[FN_SETSOCKOPT].ret);
+    }
     static auto fn =
         real<int (*)(int, int, int, const void*, socklen_t)>("setsockopt");
     return fn(fd, l, n, v, len);
@@ -1409,8 +1484,9 @@ int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
  * @return the libc result, or the injected value
  */
 int poll(struct pollfd* fds, nfds_t n, int t) {
-    if (take(FN_POLL))
+    if (take(FN_POLL)) {
         return static_cast<int>(g_fault[FN_POLL].ret);
+    }
     static auto fn = real<int (*)(struct pollfd*, nfds_t, int)>("poll");
     return fn(fds, n, t);
 }
@@ -1426,8 +1502,9 @@ int poll(struct pollfd* fds, nfds_t n, int t) {
  * @return bytes sent, or the injected value
  */
 ssize_t send(int fd, const void* b, size_t n, int f) {
-    if (take(FN_SEND))
+    if (take(FN_SEND)) {
         return g_fault[FN_SEND].ret;
+    }
     static auto fn = real<ssize_t (*)(int, const void*, size_t, int)>("send");
     return fn(fd, b, n, f);
 }
@@ -1443,8 +1520,9 @@ ssize_t send(int fd, const void* b, size_t n, int f) {
  * @return bytes received, or the injected value
  */
 ssize_t recv(int fd, void* b, size_t n, int f) {
-    if (take(FN_RECV))
+    if (take(FN_RECV)) {
         return g_fault[FN_RECV].ret;
+    }
     static auto fn = real<ssize_t (*)(int, void*, size_t, int)>("recv");
     return fn(fd, b, n, f);
 }
@@ -1471,23 +1549,30 @@ struct LoopPeer {
 
     LoopPeer() {
         listen_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (listen_fd < 0) {
+            throw std::runtime_error("socket failed");
+        }
         sockaddr_in a{};
         a.sin_family = AF_INET;
         a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        if (bind(listen_fd, reinterpret_cast<sockaddr*>(&a), sizeof(a)) < 0)
-            throw "bind failed";
-        if (listen(listen_fd, 4) < 0)
-            throw "listen failed";
+        if (bind(listen_fd, reinterpret_cast<sockaddr*>(&a), sizeof(a)) < 0) {
+            throw std::runtime_error("bind failed");
+        }
+        if (listen(listen_fd, 4) < 0) {
+            throw std::runtime_error("listen failed");
+        }
         socklen_t l = sizeof(a);
         getsockname(listen_fd, reinterpret_cast<sockaddr*>(&a), &l);
         port = ntohs(a.sin_port);
     }
 
     ~LoopPeer() {
-        if (accepted >= 0)
+        if (accepted >= 0) {
             ::close(accepted);
-        if (listen_fd >= 0)
+        }
+        if (listen_fd >= 0) {
             ::close(listen_fd);
+        }
     }
 
     /**
@@ -1495,12 +1580,14 @@ struct LoopPeer {
      * a message on timeout or failure
      */
     void accept_one() {
-        pollfd p{listen_fd, POLLIN, 0};
-        if (::poll(&p, 1, 2000) != 1)
-            throw "no pending connection";
+        pollfd p{.fd = listen_fd, .events = POLLIN, .revents = 0};
+        if (::poll(&p, 1, 2000) != 1) {
+            throw std::runtime_error("no pending connection");
+        }
         accepted = ::accept(listen_fd, nullptr, nullptr);
-        if (accepted < 0)
-            throw "accept failed";
+        if (accepted < 0) {
+            throw std::runtime_error("accept failed");
+        }
     }
 };
 
@@ -1534,8 +1621,9 @@ SocketResult recv_nowait(Socket& sock, uint8_t* buf, size_t size, size_t& got) {
     SocketResult r = SocketResult::WouldBlock;
     for (int i = 0; i < 400 && r == SocketResult::WouldBlock; ++i) {
         r = sock.recv(buf, size, got, 0);
-        if (r == SocketResult::WouldBlock)
+        if (r == SocketResult::WouldBlock) {
             usleep(5000);
+        }
     }
     return r;
 }

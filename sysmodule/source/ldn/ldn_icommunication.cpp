@@ -254,12 +254,8 @@ static_assert(
 static_assert(sizeof(ScanFilter) == 0x60, "sizeof(ScanFilter) should be 0x60");
 
 ICommunicationService::ICommunicationService(ncm::ProgramId program_id)
-    : m_error_state(0),
-      m_client_process_id(0),
-      m_network_info{},
-      m_disconnect_reason(DisconnectReason::None),
-      m_ipv4_address(0),
-      m_subnet_mask(0),
+    : m_network_info{},
+
       m_server_client(
           ryu_ldn::network::RyuLdnClientConfig(ryu_ldn::ipc::g_config)),
       m_server_connected(false),
@@ -268,31 +264,21 @@ ICommunicationService::ICommunicationService(ncm::ProgramId program_id)
       m_error_event(os::EventClearMode_ManualClear),
       m_reject_event(os::EventClearMode_AutoClear),
       m_handshake_event(os::EventClearMode_AutoClear),
-      m_last_response_id(ryu_ldn::protocol::PacketId::Initialize),
-      m_scan_results{},
-      m_scan_result_count(0),
-      m_advertise_data{},
-      m_advertise_data_size(0),
-      m_game_version{},
-      m_network_connected(false),
-      m_prev_node_connected{},
-      m_last_network_error(ryu_ldn::protocol::NetworkErrorCode::None),
+
       m_use_p2p_proxy(!ryu_ldn::ipc::g_config.ldn.disable_p2p),
       m_proxy_config{},
       m_external_proxy_config{},
       m_p2p_client(nullptr),
       m_p2p_server(nullptr),
-      m_p2p_connect_thread{},
+
       m_p2p_connect_thread_active{false},
       m_inactivity_timeout(
           NetworkTimeout::DEFAULT_IDLE_TIMEOUT_MS,
           &ICommunicationService::OnInactivityTimeout),
-      m_recv_thread{},
+
       m_recv_thread_running(false),
-      m_recv_thread_stopped(false),
-      m_program_id(program_id),
-      m_local_communication_id(0),
-      m_expected_scene_id(0) {
+
+      m_program_id(program_id) {
     LOG_INFO(
         "ICommunicationService created with program_id=0x%016lx",
         m_program_id.value);
@@ -470,10 +456,13 @@ ICommunicationService::~ICommunicationService() {
     m_client_process_id = 0;
     m_error_state = 0;
     std::memset(&m_network_info, 0, sizeof(m_network_info));
-    m_ipv4_address = 0;
-    m_subnet_mask = 0;
-    m_network_connected = false;
-    m_disconnect_reason = DisconnectReason::None;
+    {
+        std::scoped_lock lock(m_shared_mutex);
+        m_ipv4_address = 0;
+        m_subnet_mask = 0;
+        m_network_connected = false;
+        m_disconnect_reason = DisconnectReason::None;
+    }
 
     // FIX v6-v7 (#44): Count active IPC sessions to detect game exit.
     // When the game dies, Atmosphere closes all ldn:u/bsd:u sessions.
@@ -496,16 +485,16 @@ ICommunicationService::~ICommunicationService() {
 
 Result ICommunicationService::ConnectToServer() {
     // Check if already connected and connection is still alive
-    if (m_server_connected && m_server_client.is_ready()) {
+    if (m_server_connected.load() && m_server_client.is_ready()) {
         LOG_VERBOSE("Already connected to server");
         R_SUCCEED();
     }
 
     // If m_server_connected is true but connection died, clean up first
-    if (m_server_connected && !m_server_client.is_ready()) {
+    if (m_server_connected.load() && !m_server_client.is_ready()) {
         LOG_INFO("Previous connection dead, reconnecting...");
         m_server_client.disconnect();
-        m_server_connected = false;
+        m_server_connected.store(false);
     }
 
     LOG_INFO("Connecting to RyuLdn server...");
@@ -599,7 +588,7 @@ Result ICommunicationService::ConnectToServer() {
         }
     }
 
-    m_server_connected = true;
+    m_server_connected.store(true);
 
     // Register this service for BSD MITM callback
     {
@@ -619,7 +608,7 @@ void ICommunicationService::DisconnectFromServer() {
     // Disconnect P2P proxy first if connected
     DisconnectP2pProxy();
 
-    if (m_server_connected) {
+    if (m_server_connected.exchange(false)) {
         LOG_INFO("Disconnecting from RyuLdn server");
 
         // Unregister BSD MITM callback
@@ -639,8 +628,6 @@ void ICommunicationService::DisconnectFromServer() {
         // RegisterClient) This is safe to do now because we're disconnecting
         // from LDN
         mitm::bsd::BsdMitmService::CleanupAbandonedServices();
-
-        m_server_connected = false;
     }
 
     // Always close the TCP connection, even when m_server_connected is false.
@@ -656,7 +643,7 @@ void ICommunicationService::DisconnectFromServer() {
 }
 
 bool ICommunicationService::IsServerConnected() const {
-    return m_server_connected && m_server_client.is_ready();
+    return m_server_connected.load() && m_server_client.is_ready();
 }
 
 // ============================================================================
@@ -674,7 +661,10 @@ Result ICommunicationService::Initialize(
     R_UNLESS(result == StateTransitionResult::Success, MAKERESULT(0x10, 1));
 
     // Reset disconnect reason on fresh initialization
-    m_disconnect_reason = DisconnectReason::None;
+    {
+        std::scoped_lock lock(m_shared_mutex);
+        m_disconnect_reason = DisconnectReason::None;
+    }
 
     // Update shared state for overlay
     auto& shared_state = SharedState::GetInstance();
@@ -744,8 +734,11 @@ Result ICommunicationService::Finalize() {
 
     // Clear network state
     std::memset(&m_network_info, 0, sizeof(m_network_info));
-    m_ipv4_address = 0;
-    m_subnet_mask = 0;
+    {
+        std::scoped_lock lock(m_shared_mutex);
+        m_ipv4_address = 0;
+        m_subnet_mask = 0;
+    }
     m_expected_scene_id = 0;
 
     R_SUCCEED();
@@ -759,7 +752,7 @@ Result ICommunicationService::GetState(ams::sf::Out<u32> state) const {
     // No update() call needed — the receive thread processes packets
     // asynchronously and updates state via HandleServerPacket + events.
 
-    auto current_state = m_state_machine.GetState();
+    const auto current_state = m_state_machine.GetState();
     LOG_INFO(
         "GetState() called, returning state=%u (%s)",
         static_cast<u32>(current_state),
@@ -767,9 +760,14 @@ Result ICommunicationService::GetState(ams::sf::Out<u32> state) const {
     state.SetValue(static_cast<u32>(current_state));
 
     // If error_state is set and we have a disconnect reason, return error
+    DisconnectReason reason;
+    {
+        std::scoped_lock lock(m_shared_mutex);
+        reason = m_disconnect_reason;
+    }
     if (m_error_state != 0) {
-        if (m_disconnect_reason != DisconnectReason::None) {
-            R_RETURN(MAKERESULT(0x10, static_cast<u32>(m_disconnect_reason)));
+        if (reason != DisconnectReason::None) {
+            R_RETURN(MAKERESULT(0x10, static_cast<u32>(reason)));
         }
     }
 
@@ -794,16 +792,23 @@ Result ICommunicationService::GetIpv4Address(
     // If connected to RyuLdn server and we have a proxy config, return the
     // virtual IP This is critical for LDN communication - the game needs to use
     // the proxy IP
-    if (m_server_connected && m_proxy_config.proxy_ip != 0) {
+    u32 proxy_ip;
+    u32 proxy_mask;
+    {
+        std::scoped_lock lock(m_shared_mutex);
+        proxy_ip = m_proxy_config.proxy_ip;
+        proxy_mask = m_proxy_config.proxy_subnet_mask;
+    }
+    if (m_server_connected.load() && proxy_ip != 0) {
         // Return the virtual IP assigned by the server (like Ryujinx LdnProxy)
         // proxy_ip is already in host byte order (e.g., 0x0A720001
         // = 10.114.0.1)
-        address.SetValue(m_proxy_config.proxy_ip);
-        mask.SetValue(m_proxy_config.proxy_subnet_mask);
+        address.SetValue(proxy_ip);
+        mask.SetValue(proxy_mask);
         LOG_VERBOSE(
             "GetIpv4Address: returning proxy IP 0x%08X, mask 0x%08X",
-            m_proxy_config.proxy_ip,
-            m_proxy_config.proxy_subnet_mask);
+            proxy_ip,
+            proxy_mask);
         R_SUCCEED();
     }
 
@@ -828,6 +833,7 @@ Result ICommunicationService::GetIpv4Address(
 
 Result ICommunicationService::GetDisconnectReason(
     ams::sf::Out<u32> reason) const {
+    std::scoped_lock lock(m_shared_mutex);
     reason.SetValue(static_cast<u32>(m_disconnect_reason));
     R_SUCCEED();
 }
@@ -859,17 +865,17 @@ Result ICommunicationService::AttachStateChangeEvent(
 Result ICommunicationService::GetNetworkInfoLatestUpdate(
     ams::sf::Out<NetworkInfo> buffer,
     ams::sf::OutArray<NodeLatestUpdate> pUpdates) {
+    // Hold the shared mutex for the whole call: the node snapshot, the
+    // log and m_prev_node_connected must see one consistent state. This
+    // function never calls into the client, so the lock order holds.
+    std::scoped_lock lock(m_shared_mutex);
     LOG_INFO(
         "GetNetworkInfoLatestUpdate() called, node_count=%u, "
         "update_buf_size=%zu",
         m_network_info.ldn.nodeCount,
         pUpdates.GetSize());
 
-    // Snapshot m_network_info under the shared mutex
-    {
-        std::scoped_lock lock(m_shared_mutex);
-        buffer.SetValue(m_network_info);
-    }
+    buffer.SetValue(m_network_info);
 
     // Report node state changes since last call
     if (pUpdates.GetSize() > 0) {
@@ -985,7 +991,8 @@ Result ICommunicationService::Scan(
     // Force LocalCommunicationId filter to ensure we only receive rooms for
     // this game Some games don't set this flag, causing the server to return
     // ALL rooms from ALL games
-    scan_filter.flag = filter.flag | ScanFilterFlag_LocalCommunicationId;
+    scan_filter.flag =
+        filter.flag | static_cast<u32>(ScanFilterFlag::LocalCommunicationId);
     scan_filter.network_type = filter.networkType;
 
     // Copy network ID (use potentially replaced local_comm_id)
@@ -1394,15 +1401,21 @@ Result ICommunicationService::CreateNetwork(const CreateNetworkConfig& data) {
     // when its handshake completes; the values match anyway.
     constexpr uint32_t kPredictedHostIp = 0x0A720001;      // 10.114.0.1
     constexpr uint32_t kPredictedSubnetMask = 0xFFFF0000;  // /16
-    if (m_use_p2p_proxy && m_ipv4_address == 0) {
-        m_ipv4_address = kPredictedHostIp;
-        m_subnet_mask = kPredictedSubnetMask;
-        m_proxy_config.proxy_ip = kPredictedHostIp;
-        m_proxy_config.proxy_subnet_mask = kPredictedSubnetMask;
+    bool preset_ip = false;
+    if (m_use_p2p_proxy) {
+        std::scoped_lock lock(m_shared_mutex);
+        if (m_ipv4_address == 0) {
+            m_ipv4_address = kPredictedHostIp;
+            m_subnet_mask = kPredictedSubnetMask;
+            m_proxy_config.proxy_ip = kPredictedHostIp;
+            m_proxy_config.proxy_subnet_mask = kPredictedSubnetMask;
 
-        auto& socket_manager = mitm::bsd::ProxySocketManager::GetInstance();
-        socket_manager.SetLocalIp(kPredictedHostIp);
-
+            auto& socket_manager = mitm::bsd::ProxySocketManager::GetInstance();
+            socket_manager.SetLocalIp(kPredictedHostIp);
+            preset_ip = true;
+        }
+    }
+    if (preset_ip) {
         LOG_INFO(
             "CreateNetwork: pre-set host virtual IP 0x%08X (P2P async will "
             "confirm)",
@@ -1683,8 +1696,11 @@ Result ICommunicationService::Disconnect() {
         }
     }
 
-    m_network_connected = false;
-    m_disconnect_reason = DisconnectReason::User;
+    {
+        std::scoped_lock lock(m_shared_mutex);
+        m_network_connected = false;
+        m_disconnect_reason = DisconnectReason::User;
+    }
 
     // Refresh inactivity timeout after leaving network (like Ryujinx)
     m_inactivity_timeout.RefreshTimeout();
@@ -3085,10 +3101,8 @@ void ICommunicationService::HandleExternalProxyConnect(
     }
 
     // Store P2P proxy config
-    m_proxy_config = client->GetProxyConfig();
-    LOG_INFO(
-        "P2P connection established: virtual_ip=0x%08X",
-        m_proxy_config.proxy_ip);
+    const auto& cfg = client->GetProxyConfig();
+    LOG_INFO("P2P connection established: virtual_ip=0x%08X", cfg.proxy_ip);
 
     // Mirror the master-server PacketId::ProxyConfig handler
     // (ldn_icommunication.cpp, case ProxyConfig). In RELAY mode the master
@@ -3107,16 +3121,22 @@ void ICommunicationService::HandleExternalProxyConnect(
     // Forgetting the first two on the P2P path made the game stay on the
     // "Création de partie privée" loading screen because GetIpv4Address
     // returned 0 and the game treated the network as not yet usable.
-    m_ipv4_address = m_proxy_config.proxy_ip;
-    m_subnet_mask = m_proxy_config.proxy_subnet_mask;
+    {
+        // One critical section so GetIpv4Address never sees a torn
+        // (ip, mask) pair. No client call is made while it is held.
+        std::scoped_lock lock(m_shared_mutex);
+        m_proxy_config = cfg;
+        m_ipv4_address = cfg.proxy_ip;
+        m_subnet_mask = cfg.proxy_subnet_mask;
+    }
 
     auto& socket_manager = mitm::bsd::ProxySocketManager::GetInstance();
-    socket_manager.SetLocalIp(m_proxy_config.proxy_ip);
+    socket_manager.SetLocalIp(cfg.proxy_ip);
     LOG_INFO(
         "ProxySocketManager: local IP set to 0x%08X (via P2P), "
         "m_ipv4_address=0x%08X",
-        m_proxy_config.proxy_ip,
-        m_ipv4_address);
+        cfg.proxy_ip,
+        cfg.proxy_ip);
 }
 
 void ICommunicationService::DisconnectP2pProxy() {

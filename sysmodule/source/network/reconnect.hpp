@@ -56,12 +56,12 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_RECONNECT_HPP_
+#define SYSMODULE_SOURCE_NETWORK_RECONNECT_HPP_
 
 #include <cstdint>
 
-namespace ryu_ldn {
-namespace network {
+namespace ryu_ldn::network {
 
 // =============================================================================
 // Reconnection default constants
@@ -104,7 +104,7 @@ struct ReconnectConfig {
      * This is the delay used after the first failure.
      * Default: 1000ms (1 second)
      */
-    uint32_t initial_delay_ms;
+    uint32_t initial_delay_ms{RECONNECT_INITIAL_DELAY_MS};
 
     /**
      * @brief Maximum delay cap (milliseconds)
@@ -113,7 +113,7 @@ struct ReconnectConfig {
      * how many retries have occurred.
      * Default: 30000ms (30 seconds)
      */
-    uint32_t max_delay_ms;
+    uint32_t max_delay_ms{RECONNECT_MAX_DELAY_MS};
 
     /**
      * @brief Multiplier for exponential growth
@@ -123,7 +123,7 @@ struct ReconnectConfig {
      * Stored as fixed-point: 200 = 2.0x, 150 = 1.5x
      * Default: 200 (2.0x multiplier)
      */
-    uint16_t multiplier_percent;
+    uint16_t multiplier_percent{RECONNECT_MULTIPLIER_PERCENT};
 
     /**
      * @brief Jitter percentage for randomization
@@ -133,7 +133,7 @@ struct ReconnectConfig {
      * Set to 0 to disable jitter.
      * Default: 10 (10% jitter)
      */
-    uint8_t jitter_percent;
+    uint8_t jitter_percent{RECONNECT_JITTER_PERCENT};
 
     /**
      * @brief Maximum number of retry attempts (0 = disabled, no auto-reconnect)
@@ -142,7 +142,7 @@ struct ReconnectConfig {
      * this many attempts. Use 0 to disable auto-reconnect entirely.
      * Default: 0 (disabled)
      */
-    uint16_t max_retries;
+    uint16_t max_retries{RECONNECT_MAX_RETRIES_DEFAULT};
 
     /**
      * @brief Number of fast retries before exponential backoff begins
@@ -151,7 +151,7 @@ struct ReconnectConfig {
      * retry often succeeds. Use a short fixed delay for these initial
      * attempts to recover quickly from transient failures.
      */
-    uint8_t fast_retries;
+    uint8_t fast_retries{RECONNECT_FAST_RETRIES};
 
     /**
      * @brief Delay for fast retries (milliseconds)
@@ -159,7 +159,7 @@ struct ReconnectConfig {
      * Used for the first `fast_retries` attempts before switching
      * to exponential backoff.
      */
-    uint32_t fast_delay_ms;
+    uint32_t fast_delay_ms{RECONNECT_FAST_DELAY_MS};
 
     /**
      * @brief Default constructor with sensible defaults
@@ -172,14 +172,7 @@ struct ReconnectConfig {
      * - Infinite retries
      * - 1 fast retry at 200ms
      */
-    ReconnectConfig()
-        : initial_delay_ms(RECONNECT_INITIAL_DELAY_MS),
-          max_delay_ms(RECONNECT_MAX_DELAY_MS),
-          multiplier_percent(RECONNECT_MULTIPLIER_PERCENT),
-          jitter_percent(RECONNECT_JITTER_PERCENT),
-          max_retries(RECONNECT_MAX_RETRIES_DEFAULT),
-          fast_retries(RECONNECT_FAST_RETRIES),
-          fast_delay_ms(RECONNECT_FAST_DELAY_MS) {}
+    ReconnectConfig() = default;
 };
 
 /**
@@ -246,7 +239,7 @@ public:
      * @return Delay in milliseconds before next retry
      */
     /// @gdb{tag="NETWORK:CONNECTION", msg="Getting next backoff delay"}
-    uint32_t get_next_delay_ms() const;
+    [[nodiscard]] uint32_t get_next_delay_ms() const;
 
     /**
      * @brief Get delay with jitter applied
@@ -257,7 +250,7 @@ public:
      * @param seed Random seed for jitter calculation (e.g., tick count)
      * @return Delay in milliseconds with jitter applied
      */
-    uint32_t get_next_delay_ms_with_jitter(uint32_t seed) const;
+    [[nodiscard]] uint32_t get_next_delay_ms_with_jitter(uint32_t seed) const;
 
     /**
      * @brief Check if retry should be attempted
@@ -269,7 +262,7 @@ public:
      * @return RetryResult::MaxRetriesReached if limit exceeded
      */
     /// @gdb{tag="NETWORK:CONNECTION", msg="Should we retry?"}
-    RetryResult should_retry() const;
+    [[nodiscard]] RetryResult should_retry() const;
 
     /**
      * @brief Record a connection failure
@@ -294,7 +287,7 @@ public:
      *
      * @return Number of retries since last reset
      */
-    uint32_t get_retry_count() const {
+    [[nodiscard]] uint32_t get_retry_count() const {
         return m_retry_count;
     }
 
@@ -303,7 +296,7 @@ public:
      *
      * @return Current delay in milliseconds
      */
-    uint32_t get_current_delay_ms() const {
+    [[nodiscard]] uint32_t get_current_delay_ms() const {
         return m_current_delay_ms;
     }
 
@@ -313,7 +306,7 @@ public:
      * @return Reference to current configuration
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="ReconnectManager get_config"}
-    const ReconnectConfig& get_config() const {
+    [[nodiscard]] const ReconnectConfig& get_config() const {
         return m_config;
     }
 
@@ -359,5 +352,5 @@ inline const char* retry_result_to_string(RetryResult result) {
     }
 }
 
-}  // namespace network
-}  // namespace ryu_ldn
+}  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_RECONNECT_HPP_

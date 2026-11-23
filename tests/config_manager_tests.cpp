@@ -107,7 +107,7 @@ static int g_test_count = 0;
  */
 static void register_test(const char* name, void (*func)()) {
     if (g_test_count < 128) {
-        g_tests[g_test_count++] = {name, func};
+        g_tests[g_test_count++] = {.name = name, .func = func};
     }
 }
 
@@ -261,7 +261,7 @@ TEST(generate_random_passphrase_rejects_null_and_undersized_buffers) {
     ASSERT_EQ(buf[0], 'x');
     GenerateRandomPassphrase(buf, sizeof(buf));
     ASSERT_TRUE(IsValidPassphrase(buf));
-    ASSERT_EQ(std::strlen(buf), 16u);
+    ASSERT_EQ(std::strlen(buf), 16U);
 }
 
 /** @brief Test case: initialize with missing file. */
@@ -502,7 +502,9 @@ TEST(generate_random_passphrase_format) {
 
 /** @brief Test case: generate random passphrase varies. */
 TEST(generate_random_passphrase_varies) {
-    char p1[32], p2[32], p3[32];
+    char p1[32];
+    char p2[32];
+    char p3[32];
     GenerateRandomPassphrase(p1, sizeof(p1));
     GenerateRandomPassphrase(p2, sizeof(p2));
     GenerateRandomPassphrase(p3, sizeof(p3));
@@ -555,9 +557,9 @@ TEST(get_default_debug_level) {
 TEST(set_debug_level) {
     ConfigManager::Instance().Initialize("/tmp/nonexistent.ini");
     ConfigManager::Instance().SetDebugLevel(3);
-    ASSERT_EQ(ConfigManager::Instance().GetDebugLevel(), 3u);
+    ASSERT_EQ(ConfigManager::Instance().GetDebugLevel(), 3U);
     ConfigManager::Instance().SetDebugLevel(0);
-    ASSERT_EQ(ConfigManager::Instance().GetDebugLevel(), 0u);
+    ASSERT_EQ(ConfigManager::Instance().GetDebugLevel(), 0U);
 }
 
 /** @brief Test case: set debug level clamps to max. */
@@ -712,7 +714,7 @@ TEST(load_debug_settings_from_file) {
     ConfigManager::Instance().Initialize(g_test_config_path);
 
     ASSERT_TRUE(ConfigManager::Instance().GetDebugEnabled());
-    ASSERT_EQ(ConfigManager::Instance().GetDebugLevel(), 3u);
+    ASSERT_EQ(ConfigManager::Instance().GetDebugLevel(), 3U);
 
     remove_test_config_file();
 }

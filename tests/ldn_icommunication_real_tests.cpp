@@ -27,6 +27,8 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <ranges>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -98,11 +100,19 @@ public:
     /// thread.
     FakeServer() {
         m_listen = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (m_listen < 0) {
+            throw std::runtime_error("FakeServer: socket() failed");
+        }
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         addr.sin_port = 0;
-        ::bind(m_listen, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        if (::bind(
+                m_listen, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) !=
+            0) {
+            ::close(m_listen);
+            throw std::runtime_error("FakeServer: bind() failed");
+        }
         ::listen(m_listen, 4);
         socklen_t len = sizeof(addr);
         ::getsockname(m_listen, reinterpret_cast<sockaddr*>(&addr), &len);
@@ -128,7 +138,7 @@ public:
      * @brief Get the port the server listens on.
      * @return The OS-assigned loopback port.
      */
-    std::uint16_t port() const {
+    [[nodiscard]] std::uint16_t port() const {
         return m_port;
     }
 
@@ -137,7 +147,7 @@ public:
      * @param handler Script called after the built-in handshake answer.
      */
     void set_handler(Handler handler) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_handler = std::move(handler);
     }
 
@@ -189,7 +199,7 @@ public:
                 written) != proto::EncodeResult::Success) {
             return false;
         }
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return m_conn >= 0 &&
                ::send(m_conn, buf.data(), written, MSG_NOSIGNAL) ==
                    static_cast<ssize_t>(written);
@@ -209,7 +219,7 @@ public:
 
     /// Cut the connection from the server side (the client sees EOF).
     void drop() {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_conn >= 0) {
             ::shutdown(m_conn, SHUT_RDWR);
         }
@@ -220,7 +230,7 @@ public:
      * @return true while a client connection is open.
      */
     bool has_client() {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return m_conn >= 0;
     }
 
@@ -244,7 +254,7 @@ public:
      * @return Number of packets of that type.
      */
     std::size_t count(proto::PacketId id) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return count_locked(id);
     }
 
@@ -255,10 +265,10 @@ public:
      *         packet had no body).
      */
     std::vector<std::uint8_t> last(proto::PacketId id) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        for (auto it = m_received.rbegin(); it != m_received.rend(); ++it) {
-            if (it->first == id) {
-                return it->second;
+        std::scoped_lock lock(m_mutex);
+        for (auto& it : std::ranges::reverse_view(m_received)) {
+            if (it.first == id) {
+                return it.second;
             }
         }
         return {};
@@ -270,7 +280,7 @@ private:
      * @param id Packet id to count.
      * @return Number of packets of that type.
      */
-    std::size_t count_locked(proto::PacketId id) const {
+    [[nodiscard]] std::size_t count_locked(proto::PacketId id) const {
         std::size_t n = 0;
         for (const auto& p : m_received) {
             n += (p.first == id) ? 1 : 0;
@@ -280,7 +290,7 @@ private:
 
     /// Close the client connection, if any.
     void close_connection() {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_conn >= 0) {
             ::close(m_conn);
             m_conn = -1;
@@ -294,10 +304,10 @@ private:
      * @param size Number of bytes to read.
      * @return true when size bytes were read; false on timeout, EOF or error.
      */
-    bool read_full(int fd, std::uint8_t* out, std::size_t size) {
+    static bool read_full(int fd, std::uint8_t* out, std::size_t size) {
         std::size_t got = 0;
         while (got < size) {
-            pollfd p{fd, POLLIN, 0};
+            pollfd p{.fd = fd, .events = POLLIN, .revents = 0};
             if (::poll(&p, 1, 1000) <= 0) {
                 return false;
             }
@@ -321,14 +331,14 @@ private:
         while (!m_stop) {
             int conn;
             {
-                std::lock_guard<std::mutex> lock(m_mutex);
+                std::scoped_lock lock(m_mutex);
                 conn = m_conn;
             }
             if (conn < 0) {
-                pollfd p{m_listen, POLLIN, 0};
+                pollfd p{.fd = m_listen, .events = POLLIN, .revents = 0};
                 if (::poll(&p, 1, 20) > 0) {
                     const int accepted = ::accept(m_listen, nullptr, nullptr);
-                    std::lock_guard<std::mutex> lock(m_mutex);
+                    std::scoped_lock lock(m_mutex);
                     m_conn = accepted;
                 }
                 continue;
@@ -337,7 +347,7 @@ private:
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
                 continue;
             }
-            pollfd p{conn, POLLIN, 0};
+            pollfd p{.fd = conn, .events = POLLIN, .revents = 0};
             if (::poll(&p, 1, 20) <= 0) {
                 continue;
             }
@@ -374,7 +384,7 @@ private:
     void dispatch(proto::PacketId id, const std::vector<std::uint8_t>& body) {
         Handler handler;
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
+            std::scoped_lock lock(m_mutex);
             m_received.emplace_back(id, body);
             handler = m_handler;
         }
@@ -456,14 +466,14 @@ struct Env {
      * @brief Access the service.
      * @return The service.
      */
-    lm::ICommunicationService& operator*() {
+    lm::ICommunicationService& operator*() const {
         return *svc;
     }
     /**
      * @brief Access the service members.
      * @return The service.
      */
-    lm::ICommunicationService* operator->() {
+    lm::ICommunicationService* operator->() const {
         return svc.get();
     }
 };
@@ -534,7 +544,9 @@ lm::ScanFilter make_filter() {
  * @param id Type of the packet the server just received.
  */
 void host_script(
-    FakeServer& server, proto::PacketId id, const std::vector<std::uint8_t>&) {
+    FakeServer& server,
+    proto::PacketId id,
+    const std::vector<std::uint8_t>& /*unused*/) {
     if (id == proto::PacketId::CreateAccessPoint) {
         proto::ProxyConfig config{};
         config.proxy_ip = HOST_VIP;
@@ -706,7 +718,7 @@ void run_start_gate(const char* thread_name) {
     }
     std::function<void()> action;
     {
-        std::lock_guard<std::mutex> lock(g_start_gate.mutex);
+        std::scoped_lock lock(g_start_gate.mutex);
         action = std::move(g_start_gate.action);
         g_start_gate.action = nullptr;
     }
@@ -720,7 +732,7 @@ void run_start_gate(const char* thread_name) {
  * @param action Action to run once at the next thread start.
  */
 void arm_start_gate(std::function<void()> action) {
-    std::lock_guard<std::mutex> lock(g_start_gate.mutex);
+    std::scoped_lock lock(g_start_gate.mutex);
     g_start_gate.action = std::move(action);
 }
 
@@ -734,7 +746,7 @@ void arm_start_gate(std::function<void()> action) {
 void run_hook(HookSlot& slot) {
     std::function<bool()> action;
     {
-        std::lock_guard<std::mutex> lock(slot.mutex);
+        std::scoped_lock lock(slot.mutex);
         if (!slot.action || slot.owner != std::this_thread::get_id()) {
             return;
         }
@@ -742,7 +754,7 @@ void run_hook(HookSlot& slot) {
         slot.action = nullptr;
     }
     if (!action()) {
-        std::lock_guard<std::mutex> lock(slot.mutex);
+        std::scoped_lock lock(slot.mutex);
         if (!slot.action) {
             slot.action = std::move(action);
         }
@@ -758,13 +770,13 @@ public:
      * @param action Action to run; returns true when done, false to stay armed.
      */
     ScopedHook(HookSlot& slot, std::function<bool()> action) : m_slot(slot) {
-        std::lock_guard<std::mutex> lock(m_slot.mutex);
+        std::scoped_lock lock(m_slot.mutex);
         m_slot.action = std::move(action);
         m_slot.owner = std::this_thread::get_id();
     }
     /// Disarm the slot.
     ~ScopedHook() {
-        std::lock_guard<std::mutex> lock(m_slot.mutex);
+        std::scoped_lock lock(m_slot.mutex);
         m_slot.action = nullptr;
     }
     /// Not copyable: owns the arming of one slot.
@@ -808,7 +820,7 @@ bool let_the_handshake_play_out(Env& env) {
  * @return The script, to install with set_handler().
  */
 FakeServer::Handler delayed_host_script(
-    int delay_ms, std::vector<proto::PacketId> before, int gap_ms) {
+    int delay_ms, const std::vector<proto::PacketId>& before, int gap_ms) {
     return [=](FakeServer& server,
                proto::PacketId id,
                const std::vector<std::uint8_t>& body) {
@@ -843,7 +855,7 @@ TEST(initialize_moves_to_initialized_and_registers_the_game) {
     ASSERT_TRUE(env->Initialize(process(4242)).IsSuccess());
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Initialized));
     ASSERT_TRUE(lm::SharedState::GetInstance().IsGameActive());
-    ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 4242u);
+    ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 4242U);
 }
 
 /// A second Initialize fails with the bad-state result.
@@ -868,7 +880,7 @@ TEST(finalize_returns_to_none_and_clears_the_shared_state) {
     ASSERT_TRUE(env->Finalize().IsSuccess());
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::None));
     ASSERT_FALSE(lm::SharedState::GetInstance().IsGameActive());
-    ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 0u);
+    ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 0U);
 }
 
 /// A second Finalize also succeeds.
@@ -885,7 +897,7 @@ TEST(initialize_can_be_repeated_after_finalize) {
     ASSERT_TRUE(env->Initialize(process(1)).IsSuccess());
     ASSERT_TRUE(env->Finalize().IsSuccess());
     ASSERT_TRUE(env->Initialize(process(2)).IsSuccess());
-    ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 2u);
+    ASSERT_EQ(lm::SharedState::GetInstance().GetLdnPid(), 2U);
 }
 
 /// Creating a service adds one active IPC session to the shared state and
@@ -930,7 +942,7 @@ TEST(the_disconnect_reason_starts_at_none) {
     std::uint32_t reason = 99;
     ASSERT_TRUE(env->GetDisconnectReason(ams::sf::Out<std::uint32_t>(reason))
                     .IsSuccess());
-    ASSERT_EQ(reason, 0u);
+    ASSERT_EQ(reason, 0U);
 }
 
 /// Outside a network the security parameter random bytes, the channel and
@@ -942,8 +954,8 @@ TEST(the_security_parameter_and_network_config_of_an_empty_network_are_zero) {
     ASSERT_TRUE(
         env->GetSecurityParameter(ams::sf::Out<lm::SecurityParameter>(param))
             .IsSuccess());
-    for (std::size_t i = 0; i < sizeof(param.unkRandom); ++i) {
-        ASSERT_EQ(param.unkRandom[i], 0);
+    for (const auto byte : param.unkRandom) {
+        ASSERT_EQ(byte, 0);
     }
     lm::NetworkConfig config{};
     std::memset(&config, 0xAA, sizeof(config));
@@ -976,8 +988,8 @@ TEST(the_ipv4_address_falls_back_to_the_system_network_configuration) {
                        ams::sf::Out<std::uint32_t>(address),
                        ams::sf::Out<std::uint32_t>(mask))
                     .IsSuccess());
-    ASSERT_EQ(address, 0xC0A80119u);
-    ASSERT_EQ(mask, 0xFFFFFF00u);
+    ASSERT_EQ(address, 0xC0A80119U);
+    ASSERT_EQ(mask, 0xFFFFFF00U);
 }
 
 /// A failing system network query is returned as is and the outputs are left
@@ -992,8 +1004,8 @@ TEST(a_failing_system_network_query_is_passed_through) {
         ams::sf::Out<std::uint32_t>(mask));
     g_host_nifm_result = 0;
     ASSERT_EQ(rc.GetValue(), MAKERESULT(0xCD, 3));
-    ASSERT_EQ(address, 0x12345678u);
-    ASSERT_EQ(mask, 0x9ABCDEF0u);
+    ASSERT_EQ(address, 0x12345678U);
+    ASSERT_EQ(mask, 0x9ABCDEF0U);
 }
 
 /// For an empty network every latest-update entry has no state change and
@@ -1169,8 +1181,8 @@ TEST(advertise_data_and_accept_policy_are_kept_locally_outside_a_network) {
     ASSERT_TRUE(env->SetAdvertiseData(ams::sf::InAutoSelectBuffer(nullptr, 0))
                     .IsSuccess());
     ASSERT_TRUE(env->SetStationAcceptPolicy(1).IsSuccess());
-    ASSERT_EQ(env.server.count(proto::PacketId::SetAdvertiseData), 0u);
-    ASSERT_EQ(env.server.count(proto::PacketId::SetAcceptPolicy), 0u);
+    ASSERT_EQ(env.server.count(proto::PacketId::SetAdvertiseData), 0U);
+    ASSERT_EQ(env.server.count(proto::PacketId::SetAcceptPolicy), 0U);
 }
 
 // =============================================================================
@@ -1213,7 +1225,7 @@ TEST(opening_a_station_twice_keeps_the_existing_connection) {
     ASSERT_TRUE(open_station(env));
     ASSERT_TRUE(env->CloseStation().IsSuccess());
     ASSERT_TRUE(env->OpenStation().IsSuccess());
-    ASSERT_EQ(env.server.count(proto::PacketId::Initialize), 1u);
+    ASSERT_EQ(env.server.count(proto::PacketId::Initialize), 1U);
 }
 
 /**
@@ -1316,11 +1328,11 @@ TEST(scan_returns_every_network_the_server_reports) {
     ASSERT_TRUE(open_station(env));
     lm::NetworkInfo results[8];
     std::uint32_t count = 0;
-    ASSERT_EQ(run_scan(env, results, 8, make_filter(), count), 0u);
-    ASSERT_EQ(count, 2u);
+    ASSERT_EQ(run_scan(env, results, 8, make_filter(), count), 0U);
+    ASSERT_EQ(count, 2U);
     ASSERT_EQ(results[1].common.channel, 1);
     ASSERT_EQ(results[0].networkId.intentId.localCommunicationId, GAME_ID);
-    ASSERT_EQ(env.server.count(proto::PacketId::Scan), 1u);
+    ASSERT_EQ(env.server.count(proto::PacketId::Scan), 1U);
 }
 
 /**
@@ -1333,8 +1345,8 @@ TEST(scan_keeps_at_most_eight_results) {
     ASSERT_TRUE(open_station(env));
     lm::NetworkInfo results[16];
     std::uint32_t count = 0;
-    ASSERT_EQ(run_scan(env, results, 16, make_filter(), count), 0u);
-    ASSERT_EQ(count, 8u);
+    ASSERT_EQ(run_scan(env, results, 16, make_filter(), count), 0U);
+    ASSERT_EQ(count, 8U);
 }
 
 /**
@@ -1346,8 +1358,8 @@ TEST(scan_is_bounded_by_the_caller_buffer) {
     ASSERT_TRUE(open_station(env));
     lm::NetworkInfo results[3];
     std::uint32_t count = 0;
-    ASSERT_EQ(run_scan(env, results, 3, make_filter(), count), 0u);
-    ASSERT_EQ(count, 3u);
+    ASSERT_EQ(run_scan(env, results, 3, make_filter(), count), 0U);
+    ASSERT_EQ(count, 3U);
 }
 
 /**
@@ -1362,8 +1374,8 @@ TEST(scan_rewrites_the_scene_id_of_the_replies_to_the_filtered_one) {
     std::uint32_t count = 0;
     lm::ScanFilter filter = make_filter();
     filter.networkId.intentId.sceneId = 0x42;
-    ASSERT_EQ(run_scan(env, results, 2, filter, count), 0u);
-    ASSERT_EQ(count, 1u);
+    ASSERT_EQ(run_scan(env, results, 2, filter, count), 0U);
+    ASSERT_EQ(count, 1U);
     ASSERT_EQ(results[0].networkId.intentId.sceneId, 0x42);
 }
 
@@ -1380,8 +1392,8 @@ TEST(scan_with_a_wildcard_local_id_asks_for_the_running_game) {
     lm::ScanFilter filter = make_filter();
     filter.networkId.intentId.localCommunicationId =
         static_cast<std::uint64_t>(-1);
-    ASSERT_EQ(run_scan(env, results, 2, filter, count), 0u);
-    ASSERT_EQ(count, 1u);
+    ASSERT_EQ(run_scan(env, results, 2, filter, count), 0U);
+    ASSERT_EQ(count, 1U);
 }
 
 /**
@@ -1414,8 +1426,8 @@ TEST(scan_returns_nothing_when_the_server_stays_silent) {
     ASSERT_TRUE(open_station(env));
     lm::NetworkInfo results[2];
     std::uint32_t count = 5;
-    ASSERT_EQ(run_scan(env, results, 2, make_filter(), count), 0u);
-    ASSERT_EQ(count, 0u);
+    ASSERT_EQ(run_scan(env, results, 2, make_filter(), count), 0U);
+    ASSERT_EQ(count, 0U);
 }
 
 /**
@@ -1433,7 +1445,7 @@ TEST(scan_private_behaves_like_scan) {
                        0,
                        make_filter())
                     .IsSuccess());
-    ASSERT_EQ(count, 2u);
+    ASSERT_EQ(count, 2U);
 }
 
 /**
@@ -1449,7 +1461,7 @@ TEST(scan_reports_a_dropped_connection_as_a_send_failure) {
     // The receive thread notices the EOF on its own; once it did, the client
     // is no longer connected and Scan is refused.
     ASSERT_TRUE(eventually(
-        [&] { return run_scan(env, results, 2, make_filter(), count) != 0u; }));
+        [&] { return run_scan(env, results, 2, make_filter(), count) != 0U; }));
     ASSERT_TRUE(env->Finalize().IsSuccess());
 }
 
@@ -1465,7 +1477,7 @@ TEST(the_inactivity_timeout_disconnects_an_idle_station) {
     // A finished scan arms the inactivity timeout.
     lm::NetworkInfo results[2];
     std::uint32_t count = 0;
-    ASSERT_EQ(run_scan(env, results, 2, make_filter(), count), 0u);
+    ASSERT_EQ(run_scan(env, results, 2, make_filter(), count), 0U);
     // NetworkTimeout counts real time (6 s), not the divided waits.
     ASSERT_TRUE(eventually([&] { return !env.server.has_client(); }, 12000));
     ASSERT_TRUE(env->Finalize().IsSuccess());
@@ -1545,7 +1557,7 @@ TEST(advertise_data_and_accept_policy_reach_the_server_once_hosting) {
     ASSERT_EQ(advertise.size(), sizeof(data));
     ASSERT_EQ(std::memcmp(advertise.data(), data, sizeof(data)), 0);
     const auto policy = env.server.last(proto::PacketId::SetAcceptPolicy);
-    ASSERT_EQ(policy.size(), 1u);
+    ASSERT_EQ(policy.size(), 1U);
     ASSERT_EQ(policy[0], 2);
 }
 
@@ -1756,7 +1768,9 @@ namespace {
  * @param id Type of the packet the server just received.
  */
 void join_script(
-    FakeServer& server, proto::PacketId id, const std::vector<std::uint8_t>&) {
+    FakeServer& server,
+    proto::PacketId id,
+    const std::vector<std::uint8_t>& /*unused*/) {
     if (id == proto::PacketId::Connect ||
         id == proto::PacketId::ConnectPrivate) {
         const lm::NetworkInfo info = make_info(2);
@@ -1881,7 +1895,7 @@ TEST(rejecting_a_node_succeeds_when_the_server_acknowledges) {
     ASSERT_EQ(payload.size(), sizeof(proto::RejectRequest));
     proto::RejectRequest request{};
     std::memcpy(&request, payload.data(), sizeof(request));
-    ASSERT_EQ(request.node_id, 3u);
+    ASSERT_EQ(request.node_id, 3U);
     ASSERT_EQ(
         request.disconnect_reason,
         static_cast<std::uint32_t>(lm::DisconnectReason::Rejected));
@@ -2053,7 +2067,7 @@ TEST(a_port_unreachable_error_turns_the_p2p_path_off_without_failing_requests) {
     std::uint32_t count = 0;
     // The service is still alive and answers requests.
     ASSERT_TRUE(eventually(
-        [&] { return run_scan(env, results, 2, make_filter(), count) == 0u; }));
+        [&] { return run_scan(env, results, 2, make_filter(), count) == 0U; }));
 }
 
 /**
@@ -2111,8 +2125,109 @@ TEST(a_proxy_config_updates_the_virtual_address) {
         env->GetIpv4Address(
             ams::sf::Out<std::uint32_t>(address),
             ams::sf::Out<std::uint32_t>(mask));
-        return address == 0x0A720005u;
+        return address == 0x0A720005U;
     }));
+}
+
+/**
+ * @brief GetIpv4Address never reports a torn pair while the server keeps
+ *        replacing the proxy configuration: the address always comes with
+ *        its own mask.
+ */
+TEST(the_virtual_address_and_mask_are_never_torn_by_concurrent_proxy_configs) {
+    Env env;
+    ASSERT_TRUE(open_station(env));
+    constexpr std::uint32_t IP_A = 0x0A720005;
+    constexpr std::uint32_t MASK_A = 0xFFFF0000;
+    constexpr std::uint32_t IP_B = 0x0A730006;
+    constexpr std::uint32_t MASK_B = 0xFF000000;
+    std::atomic<bool> sender_done{false};
+    std::thread sender([&] {
+        for (int i = 0; i < 500; ++i) {
+            proto::ProxyConfig config{};
+            config.proxy_ip = (i % 2 == 0) ? IP_A : IP_B;
+            config.proxy_subnet_mask = (i % 2 == 0) ? MASK_A : MASK_B;
+            env.server.send(proto::PacketId::ProxyConfig, config);
+        }
+        sender_done = true;
+    });
+    bool torn = false;
+    std::size_t seen = 0;
+    // The receive thread applies the packets after the sender is done, so
+    // keep observing until a pair was seen (bounded by a deadline).
+    constexpr auto OBSERVE_DEADLINE = std::chrono::seconds(10);
+    const auto deadline = std::chrono::steady_clock::now() + OBSERVE_DEADLINE;
+    while ((!sender_done.load() || seen == 0) &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::uint32_t address = 0;
+        std::uint32_t mask = 0;
+        env->GetIpv4Address(
+            ams::sf::Out<std::uint32_t>(address),
+            ams::sf::Out<std::uint32_t>(mask));
+        if (address == IP_A) {
+            torn = torn || mask != MASK_A;
+            ++seen;
+        } else if (address == IP_B) {
+            torn = torn || mask != MASK_B;
+            ++seen;
+        }
+    }
+    sender.join();
+    ASSERT_FALSE(torn);
+    ASSERT_TRUE(seen > 0);
+}
+
+/**
+ * @brief GetNetworkInfoLatestUpdate returns a snapshot whose node count
+ *        matches the connected nodes of that same snapshot while SyncNetwork
+ *        packets replace the network.
+ */
+TEST(the_latest_update_snapshot_is_consistent_during_network_syncs) {
+    Env env;
+    ASSERT_TRUE(host_a_network(env));
+    std::atomic<bool> sender_done{false};
+    std::thread sender([&] {
+        for (int i = 0; i < 500; ++i) {
+            const lm::NetworkInfo next = make_info((i % 2 == 0) ? 1 : 3);
+            env.server.send(proto::PacketId::SyncNetwork, &next, sizeof(next));
+        }
+        sender_done = true;
+    });
+    bool inconsistent = false;
+    while (!sender_done.load()) {
+        lm::NetworkInfo info{};
+        lm::NodeLatestUpdate updates[8];
+        env->GetNetworkInfoLatestUpdate(
+            ams::sf::Out<lm::NetworkInfo>(info),
+            ams::sf::OutArray<lm::NodeLatestUpdate>(updates, 8));
+        std::uint8_t connected = 0;
+        for (const auto& node : info.ldn.nodes) {
+            if (node.isConnected != 0) {
+                ++connected;
+            }
+        }
+        inconsistent = inconsistent || connected != info.ldn.nodeCount;
+    }
+    sender.join();
+    ASSERT_FALSE(inconsistent);
+}
+
+/**
+ * @brief Destroying the service without Finalize while the connection is
+ *        down and retrying does not hang beyond one connect timeout.
+ */
+TEST(destroying_the_service_without_finalize_during_a_backoff_returns_in_time) {
+    constexpr int CONNECT_TIMEOUT_MS = 5000;  // client.cpp CONNECT_TIMEOUT_MS
+    constexpr int MARGIN_MS = 2000;
+    Env env;
+    ASSERT_TRUE(open_station(env));
+    env.server.answer_handshake(false);
+    env.server.drop();
+    const auto begin = std::chrono::steady_clock::now();
+    env.svc.reset();
+    ASSERT_TRUE(
+        std::chrono::steady_clock::now() - begin <
+        std::chrono::milliseconds(CONNECT_TIMEOUT_MS + MARGIN_MS));
 }
 
 /**
@@ -2173,10 +2288,18 @@ public:
     /// Bind a loopback listener on an OS-assigned port.
     P2pHost() {
         m_listen = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (m_listen < 0) {
+            throw std::runtime_error("P2pHost: socket() failed");
+        }
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        ::bind(m_listen, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+        if (::bind(
+                m_listen, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) !=
+            0) {
+            ::close(m_listen);
+            throw std::runtime_error("P2pHost: bind() failed");
+        }
         ::listen(m_listen, 4);
         socklen_t len = sizeof(addr);
         ::getsockname(m_listen, reinterpret_cast<sockaddr*>(&addr), &len);
@@ -2199,7 +2322,7 @@ public:
      * @brief Port the listener is bound to.
      * @return TCP port on 127.0.0.1.
      */
-    std::uint16_t port() const {
+    [[nodiscard]] std::uint16_t port() const {
         return m_port;
     }
 
@@ -2222,7 +2345,7 @@ public:
     /// Abort the connection: the peer gets a RST instead of an orderly FIN.
     void reset_peer() {
         if (m_peer >= 0) {
-            const linger abort_on_close{1, 0};
+            const linger abort_on_close{.l_onoff = 1, .l_linger = 0};
             ::setsockopt(
                 m_peer,
                 SOL_SOCKET,
@@ -2239,7 +2362,7 @@ public:
      * @return true when a peer was accepted.
      */
     bool accept_peer(int timeout_ms = 3000) {
-        pollfd p{m_listen, POLLIN, 0};
+        pollfd p{.fd = m_listen, .events = POLLIN, .revents = 0};
         if (::poll(&p, 1, timeout_ms) <= 0) {
             return false;
         }
@@ -2272,7 +2395,7 @@ public:
      * @param size Size of payload in bytes.
      * @return true when the packet was written.
      */
-    bool send(proto::PacketId id, const void* payload, std::size_t size) {
+    bool send(proto::PacketId id, const void* payload, std::size_t size) const {
         std::vector<std::uint8_t> buf(sizeof(proto::LdnHeader) + size);
         std::size_t written = 0;
         if (proto::encode_raw(
@@ -2312,7 +2435,7 @@ private:
     bool read_full(std::uint8_t* out, std::size_t size) {
         std::size_t got = 0;
         while (got < size) {
-            pollfd p{m_peer, POLLIN, 0};
+            pollfd p{.fd = m_peer, .events = POLLIN, .revents = 0};
             if (m_peer < 0 || ::poll(&p, 1, 3000) <= 0) {
                 return false;
             }
@@ -2514,11 +2637,11 @@ TEST(a_station_follows_the_master_named_proxy_and_takes_the_host_address) {
                        ams::sf::Out<std::uint32_t>(address),
                        ams::sf::Out<std::uint32_t>(mask))
                     .IsSuccess());
-    ASSERT_EQ(address, 0x0A720009u);
+    ASSERT_EQ(address, 0x0A720009U);
     ASSERT_EQ(mask, VIP_MASK);
     ASSERT_EQ(
         ams::mitm::bsd::ProxySocketManager::GetInstance().GetLocalIp(),
-        0x0A720009u);
+        0x0A720009U);
 }
 
 /**
@@ -2604,9 +2727,9 @@ TEST(proxy_data_sent_by_a_game_goes_to_the_p2p_host_not_to_the_master) {
     ASSERT_EQ(body.size(), sizeof(proto::ProxyDataHeader) + 3);
     proto::ProxyDataHeader header{};
     std::memcpy(&header, body.data(), sizeof(header));
-    ASSERT_EQ(header.info.dest_ipv4, 0x0A720001u);
+    ASSERT_EQ(header.info.dest_ipv4, 0x0A720001U);
     ASSERT_EQ(header.info.dest_port, static_cast<std::uint16_t>(7001));
-    ASSERT_EQ(header.data_length, 3u);
+    ASSERT_EQ(header.data_length, 3U);
     ASSERT_EQ(body[sizeof(header)], 9);
     ASSERT_EQ(env.server.count(proto::PacketId::ProxyData), via_master);
 }
@@ -2768,7 +2891,7 @@ TEST(hosting_with_p2p_announces_the_server_and_serves_joiners_through_it) {
     ASSERT_TRUE(body.size() >= sizeof(proto::CreateAccessPointRequest));
     proto::CreateAccessPointRequest request{};
     std::memcpy(&request, body.data(), sizeof(request));
-    ASSERT_EQ(request.ryu_network_config.address_family, 2u);
+    ASSERT_EQ(request.ryu_network_config.address_family, 2U);
     const std::uint16_t port = announced_p2p_port(env);
     ASSERT_TRUE(port != 0);
 
@@ -2915,7 +3038,7 @@ TEST(
     env.server.answer_handshake(true);
     ASSERT_TRUE(env->OpenStation().IsSuccess());
     ASSERT_TRUE(eventually(
-        [&] { return run_scan(env, results, 2, make_filter(), count) == 0u; }));
+        [&] { return run_scan(env, results, 2, make_filter(), count) == 0U; }));
 }
 
 // =============================================================================
@@ -2933,7 +3056,7 @@ TEST(scan_reports_a_failed_send) {
     lm::NetworkInfo results[2];
     std::uint32_t count = 0;
     ASSERT_EQ(run_scan(env, results, 2, make_filter(), count), RC_SEND_FAILED);
-    ASSERT_EQ(count, 0u);
+    ASSERT_EQ(count, 0U);
 }
 
 /**
@@ -3070,9 +3193,9 @@ TEST(pings_before_the_handshake_ends_are_not_echoed) {
     ASSERT_TRUE(open_station(env));
     // The client is not Ready yet when the echo is requested, so it cannot
     // be sent (RyuLdnClient::send_ping_response needs the Ready state).
-    ASSERT_EQ(env.server.count(proto::PacketId::Ping), 0u);
+    ASSERT_EQ(env.server.count(proto::PacketId::Ping), 0U);
     ASSERT_TRUE(round_trip(env));
-    ASSERT_EQ(env.server.count(proto::PacketId::Ping), 1u);
+    ASSERT_EQ(env.server.count(proto::PacketId::Ping), 1U);
     ASSERT_EQ(env.server.last(proto::PacketId::Ping)[1], 0xB0);
 }
 
@@ -3087,12 +3210,12 @@ TEST(a_station_reopened_after_a_server_drop_reconnects) {
     lm::NetworkInfo results[2];
     std::uint32_t count = 0;
     ASSERT_TRUE(eventually(
-        [&] { return run_scan(env, results, 2, make_filter(), count) != 0u; }));
+        [&] { return run_scan(env, results, 2, make_filter(), count) != 0U; }));
     ASSERT_TRUE(env->CloseStation().IsSuccess());
     ASSERT_TRUE(env->OpenStation().IsSuccess());
     ASSERT_EQ(get_state(*env), state_of(lm::CommState::Station));
     ASSERT_TRUE(eventually(
-        [&] { return run_scan(env, results, 2, make_filter(), count) == 0u; }));
+        [&] { return run_scan(env, results, 2, make_filter(), count) == 0U; }));
 }
 
 /**
@@ -3528,6 +3651,9 @@ public:
      */
     explicit PortHog(std::uint16_t port) {
         m_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (m_fd < 0) {
+            throw std::runtime_error("PortHog: socket() failed");
+        }
         const int on = 1;
         ::setsockopt(m_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
         sockaddr_in addr{};
@@ -3567,7 +3693,8 @@ constexpr int P2P_PORT_COUNT = 10;
  * @return The allocation, or nullptr when failure was injected or the
  *         allocation failed.
  */
-void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
+void* operator new(
+    std::size_t size, const std::nothrow_t& /*unused*/) noexcept {
     if (nothrow_must_fail(size)) {
         return nullptr;
     }
@@ -3588,7 +3715,7 @@ void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
 void* operator new(
     std::size_t size,
     std::align_val_t alignment,
-    const std::nothrow_t&) noexcept {
+    const std::nothrow_t& /*unused*/) noexcept {
     if (nothrow_must_fail(size)) {
         return nullptr;
     }
@@ -3634,6 +3761,7 @@ TEST(a_host_without_a_free_p2p_port_creates_the_network_through_the_relay) {
     // Every port of the range is held here or still in TIME_WAIT from an
     // earlier test (which blocks the server's plain bind just the same).
     std::vector<std::unique_ptr<PortHog>> hogs;
+    hogs.reserve(static_cast<std::size_t>(P2P_PORT_COUNT));
     for (int i = 0; i < P2P_PORT_COUNT; ++i) {
         hogs.push_back(
             std::make_unique<PortHog>(

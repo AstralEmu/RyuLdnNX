@@ -80,6 +80,7 @@ services:
     working_dir: /workspace/tests
     environment:
       - COVERAGE
+      - SANITIZE
       - HOME=/tmp
     command: make clean test
 
@@ -121,6 +122,17 @@ services:
       context: .
       dockerfile: lint.Dockerfile
     entrypoint: ["/bin/bash", "/workspace/scripts/cppcheck.sh"]
+
+  # clang-tidy (.clang-tidy checks) over the sysmodule sources and the host
+  # unit tests, headers included; any finding fails:
+  #   docker compose run --rm tidy-host [file.cpp ...]
+  tidy-host:
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
+    build:
+      context: .
+      dockerfile: lint.Dockerfile
+    entrypoint: ["/bin/bash", "/workspace/scripts/tidy-host.sh"]
 
   # Formatting + Doxygen-completeness gate (scripts/style.py), run in the lint
   # image so the clang-format version is pinned. Extra args reach style.py:

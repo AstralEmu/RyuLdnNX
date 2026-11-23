@@ -130,7 +130,7 @@ void reset_net() {
  *
  * @return the descriptor, or -1 with errno EMFILE
  */
-extern "C" int socket(int, int, int) {
+extern "C" int socket(int /*unused*/, int /*unused*/, int /*unused*/) {
     if (g_net.socket_fails) {
         errno = EMFILE;
         return -1;
@@ -145,7 +145,12 @@ extern "C" int socket(int, int, int) {
  *
  * @return 0
  */
-extern "C" int setsockopt(int, int, int, const void*, socklen_t) {
+extern "C" int setsockopt(
+    int /*unused*/,
+    int /*unused*/,
+    int /*unused*/,
+    const void* /*unused*/,
+    socklen_t /*unused*/) {
     return 0;
 }
 
@@ -159,12 +164,12 @@ extern "C" int setsockopt(int, int, int, const void*, socklen_t) {
  * @return len, or -1 with errno ENETUNREACH
  */
 extern "C" ssize_t sendto(
-    int,
+    int /*unused*/,
     const void* buf,
     size_t len,
-    int,
+    int /*unused*/,
     const struct sockaddr* to,
-    socklen_t) {
+    socklen_t /*unused*/) {
     if (g_net.sendto_fails) {
         errno = ENETUNREACH;
         return -1;
@@ -185,7 +190,12 @@ extern "C" ssize_t sendto(
  * @return bytes copied, or the scripted value
  */
 extern "C" ssize_t recvfrom(
-    int, void* buf, size_t len, int, struct sockaddr*, socklen_t*) {
+    int /*unused*/,
+    void* buf,
+    size_t len,
+    int /*unused*/,
+    struct sockaddr* /*unused*/,
+    socklen_t* /*unused*/) {
     if (g_net.recv_result != -2) {
         return g_net.recv_result;
     }
@@ -361,7 +371,7 @@ TEST(a_null_result_pointer_is_a_system_error) {
  */
 TEST(a_call_without_node_and_service_is_refused) {
     reset_net();
-    struct addrinfo* res = reinterpret_cast<struct addrinfo*>(0x1);
+    auto* res = reinterpret_cast<struct addrinfo*>(0x1);
     ASSERT_EQ(__wrap_getaddrinfo(nullptr, nullptr, nullptr, &res), EAI_NONAME);
     ASSERT_TRUE(res == nullptr);
 }
@@ -536,9 +546,9 @@ TEST(the_query_is_a_recursive_a_question_for_the_encoded_name) {
     ASSERT_EQ(g_net.last_server, htonl(0x08080808));
 
     // The query id advances for every query.
-    const uint16_t first = static_cast<uint16_t>((q[0] << 8) | q[1]);
+    const auto first = static_cast<uint16_t>((q[0] << 8) | q[1]);
     resolve("www.example.com", answer({a_record(1, 2, 3, 4)}));
-    const uint16_t second =
+    const auto second =
         static_cast<uint16_t>((g_net.last_query[0] << 8) | g_net.last_query[1]);
     ASSERT_EQ(static_cast<uint16_t>(second - first), static_cast<uint16_t>(1));
 }
