@@ -19,7 +19,11 @@ STRICT_WARNINGS := -Wpedantic -Wshadow -Wconversion -Wsign-conversion \
     -Wformat=2 -Wuseless-cast -Wduplicated-cond -Wlogical-op \
     -Woverloaded-virtual -Wnon-virtual-dtor -Wimplicit-fallthrough
 CXXFLAGS += $(STRICT_WARNINGS) -Werror
-LDFLAGS += -no-pie
+# Independent-position executable with full RELRO (read-only GOT, eager
+# binding) so the host test binaries carry the same hardening as a distro
+# build. The libc interposers of the suites keep working: the full suite passes
+# as PIE (see Technique-Changelog).
+LDFLAGS += -pie -Wl,-z,relro,-z,now
 
 # Compile-time and library hardening, always on: libstdc++ container and
 # string assertions, stack protector, stack clash protection, and the
