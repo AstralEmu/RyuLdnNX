@@ -8,6 +8,8 @@
 - Needs the owner: decide whether those deletions and removals are intended (then a commit message with `Regress-Accept:` globs for docs/** and _bmad/** and the listed symbols), and whether those shell fallbacks in hooks are acceptable.
 - Hook fallbacks: fixed in hooks/lib.sh, hooks/docs-pre-commit and .claude/hooks/block-hook-skip.sh (only exit status 1 tolerated). Still to apply by the owner in hooks/pre-commit (his file): lines 18-21, 47, 76, 78, 92, same idiom `|| [ $? -eq 1 ]`.
 - Push refused by pre-push (2026-11-23): 'chore/post-audit-fixes' is 323 commits behind origin/chore/post-audit-fixes (tip 6d65213, author MH13-YT; local is 369 ahead; merge-base 40a1713). `git merge-tree --write-tree HEAD origin/chore/post-audit-fixes` reports 158 conflicts (mostly tests/, add/add and content). regress-guard now passes (trailers). No force push, no rewrite: the owner decides how the two histories are reconciled (merge with conflict resolution, or a new branch/PR from the local line).
+- Divergence detail: `git cherry HEAD origin/chore/post-audit-fixes | cut -c1 | sort | uniq -c` prints `236 -` ('-' = remote commit already present in the local branch as an equivalent patch, '+' = only on the remote). `git diff --shortstat HEAD origin/chore/post-audit-fixes`: 273 files, +26173/-49782. 82da6e7 (the old baseline tip) is an ancestor-side commit present locally.
+- CodeQL 3 alerts: concluded as skip per the owner's rule (fix only if the ryuldn protocol stays untouched): 2 come from the vendored AMS_SF_DEFINE_INTERFACE macro, 1 from the extractor (see the CodeQL section).
 
 ## Owner actions needed (2026-11-23)
 
