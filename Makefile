@@ -69,6 +69,9 @@ tidy-host: hooks-check ## clang-tidy (.clang-tidy) on host-built sources, tests 
 cppcheck: hooks-check ## cppcheck gate, any finding fails (docker compose run --rm cppcheck)
 	$(DOCKER_COMPOSE) run --rm cppcheck
 
+fuzz: hooks-check ## libFuzzer on the protocol and INI parsers, 60 s each (docker compose run --rm fuzz)
+	$(DOCKER_COMPOSE) run --rm -e FUZZ_SECONDS=$(or $(FUZZ_SECONDS),60) fuzz
+
 style: hooks-check ## Formatting + Doxygen-completeness gate (docker compose run --rm style)
 	$(DOCKER_COMPOSE) run --rm style
 

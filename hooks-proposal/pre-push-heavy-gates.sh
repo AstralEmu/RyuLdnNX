@@ -27,3 +27,4 @@ run_gate "host suites with coverage" docker compose run -T --rm -e COVERAGE=1 te
 run_gate "AddressSanitizer + UBSan" docker compose run -T --rm -e SANITIZE=address,undefined test
 run_gate "ThreadSanitizer" docker compose run -T --rm -e SANITIZE=thread test
 run_gate "devkitA64 build" docker compose run -T --rm build
+run_gate "libFuzzer (protocol, INI)" docker compose run -T --rm fuzz

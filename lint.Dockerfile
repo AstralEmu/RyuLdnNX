@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg && \
     echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-21 main" \
         > /etc/apt/sources.list.d/llvm21.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends clang-21 clang-tidy-21 clang-format-21 && \
+    apt-get install -y --no-install-recommends clang-21 libclang-rt-21-dev clang-tidy-21 clang-format-21 && \
     ln -sf /usr/bin/clang++-21 /usr/local/bin/clang++ && \
     ln -sf /usr/bin/clang-tidy-21 /usr/local/bin/clang-tidy && \
     ln -sf /usr/bin/clang-format-21 /usr/local/bin/clang-format && \
