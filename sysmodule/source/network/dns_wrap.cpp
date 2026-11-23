@@ -549,7 +549,12 @@ int ResolveHostnameDns(const char* hostname, uint32_t* out_ips, int max_ips) {
     struct timeval tv{};
     tv.tv_sec = DNS_RECEIVE_TIMEOUT_SEC;
     tv.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    // Without the timeout a lost reply would block recvfrom() forever, so a
+    // socket that cannot take it is not usable.
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        close(sock);
+        return -EAI_FAIL;
+    }
 
     // Step 5: Send query to DNS server
     struct sockaddr_in dns_addr{};

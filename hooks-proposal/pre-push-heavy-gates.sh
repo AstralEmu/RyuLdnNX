@@ -6,9 +6,9 @@
 # would raise must fail here, before the push. Everything runs through
 # `docker compose` (see the wiki page Handoff-Dev-Flow). No override, no skip.
 #
-# Gates that are not wired yet (CodeQL helper scripts, fuzz targets,
-# -Wthread-safety, gitleaks, osv-scanner) are listed in BLOCKED.md and in the
-# wiki page Handoff-Gate-Placement; add each line below when its gate exists.
+# Gates that are not wired yet (CodeQL without a local bundle, -Wthread-safety)
+# are listed in BLOCKED.md and in the wiki page Handoff-Gate-Placement; add
+# each line below when its gate exists.
 
 run_gate() {
 	label=$1
@@ -28,3 +28,4 @@ run_gate "AddressSanitizer + UBSan" docker compose run -T --rm -e SANITIZE=addre
 run_gate "ThreadSanitizer" docker compose run -T --rm -e SANITIZE=thread test
 run_gate "devkitA64 build" docker compose run -T --rm build
 run_gate "libFuzzer (protocol, INI)" docker compose run -T --rm fuzz
+run_gate "secrets (gitleaks, whole history)" docker compose run -T --rm secrets

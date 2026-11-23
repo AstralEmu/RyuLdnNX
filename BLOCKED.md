@@ -8,7 +8,6 @@
 ## Owner actions needed (2026-11-23)
 
 - `_FORTIFY_SOURCE=3` dropped from tests/Makefile: GCC 12.2 raises a false `-Wstringop-overflow` (tests/protocol_tests.cpp:680, :1837 via sysmodule/source/protocol/packet_buffer.hpp:128). Real fix needs a newer GCC in the test image.
-- `scripts/codeql-create.sh` and `scripts/codeql-analyze.sh` swallow command failures through forced-success constructs; protected path for the agent, owner must fix or delete them.
 - Untracked stray `sysmodule/source/ldn/ldn_icommunication.cpp.bak`: owner to delete.
 - `hooks/pre-commit` is modified in the working tree; the owner commits it.
 - Untracked stray `tests/_probe_move.cpp` (my use-after-move probe): deleting it from the shell is refused by `.claude/hooks/guard-no-test-deletion.py`; owner to delete it, never commit it.
@@ -59,3 +58,11 @@ flawfinder (level >= 3, build-logs/flawfinder.log): `srand(time)` + `rand()` gen
 
 - Two identical refusals when recording the -fanalyzer measurement in the wiki: `BLOCKED by regress-guard: error swallowed by added line` (the `style_staged=` assignment), in the owner's uncommitted edit of the pre-commit hook (visible in the working-tree diff of that file), not in my change; an earlier record with the same edit passed.
 - Staged and ready: wiki (5 pages, -fanalyzer measurement) and repo (this file). Unblock: the owner records the hook edit, or records these two with the trailer `Regress-Accept: <hook path>:style_staged`.
+
+## CodeQL: 3 alerts left on sysmodule/source (2026-11-23)
+
+Measured with `scripts/codeql.sh` (database of `make -C tests COVERAGE=1 test` + the cross build, `.github/codeql-config.yml`, filtered by paths-ignore): 4 alerts at the start, 3 after fixing `cpp/useless-expression` at `sysmodule/source/network/dns_wrap.cpp:552` (setsockopt result is now checked; a failure closes the socket and returns EAI_FAIL; test `transport_failures_are_retryable` covers it, 49/49 suites pass, build-logs/test-all.log). Left:
+- `cpp/unused-local-variable` `sysmodule/source/ldn/interfaces/iclient_process_monitor.hpp:35` and `sysmodule/source/config/config_ipc_service.hpp:456`: the variable `args` is declared inside the vendored `AMS_SF_DEFINE_INTERFACE` expansion (Atmosphere-libs libvapours `util_optional.hpp:141,248` and `util_typed_storage.hpp:58` raise the same alert, excluded as third party). The macro is the only way to declare an IPC interface; no source-level fix without editing the submodule.
+- `cpp/unused-static-function` `sysmodule/source/config/config.cpp:152` `parse_uint32`: the function has a caller (`process_debug_key`, :274) in both builds. Proven with QL on the database: two `parse_uint32` entities exist (one per compilation, #53 aarch64 and #61 host), one has 1 call, the other 0, and `process_debug_key` exists once with 2 calls. Looks like the extractor linking the call of the second compilation to the first entity; not proven. No code change removes it without removing a used function.
+- Suite: the config uses `security-and-quality`, a superset of `security-extended`; GitHub's default setup uses the same file, so the local result is the one CI will see. The bundle is not in the repo: set `CODEQL_HOME` to an extracted `codeql-bundle-linux64` (no checksum asset exists for it, so the download is unverified).
+- Not added to hooks-proposal/pre-push-heavy-gates.sh: the gate exits 1 until these 3 are resolved.

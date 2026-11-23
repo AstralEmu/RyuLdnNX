@@ -104,6 +104,8 @@ struct FakeNet {
     bool socket_fails = false;
     /// When true, sendto() fails with ENETUNREACH
     bool sendto_fails = false;
+    /// When true, setsockopt() fails with ENOPROTOOPT
+    bool setsockopt_fails = false;
     /// -2: return the scripted response; otherwise returned as is
     ssize_t recv_result = -2;
     /// Bytes returned by recvfrom() when recv_result is -2
@@ -141,9 +143,10 @@ extern "C" int socket(int /*unused*/, int /*unused*/, int /*unused*/) {
 }
 
 /**
- * @brief Fake setsockopt() that accepts every option
+ * @brief Fake setsockopt(): accepts every option, or fails when
+ *        g_net.setsockopt_fails
  *
- * @return 0
+ * @return 0, or -1 with errno ENOPROTOOPT
  */
 extern "C" int setsockopt(
     int /*unused*/,
@@ -151,6 +154,10 @@ extern "C" int setsockopt(
     int /*unused*/,
     const void* /*unused*/,
     socklen_t /*unused*/) {
+    if (g_net.setsockopt_fails) {
+        errno = ENOPROTOOPT;
+        return -1;
+    }
     return 0;
 }
 
@@ -683,7 +690,8 @@ TEST(a_message_that_is_not_a_response_is_retryable) {
 }
 
 /**
- * @brief Verifies a failed socket gives EAI_FAIL, while a failed send, a
+ * @brief Verifies a failed socket or a failed receive-timeout option gives
+ *        EAI_FAIL, while a failed send, a
  *        receive error, an empty receive and a message shorter than a header
  *        give EAI_AGAIN.
  */
@@ -693,6 +701,12 @@ TEST(transport_failures_are_retryable) {
     ASSERT_EQ(
         resolve("www.example.com", {}).rc,
         EAI_FAIL);  // no socket: not worth retrying
+
+    reset_net();
+    g_net.setsockopt_fails = true;
+    ASSERT_EQ(
+        resolve("www.example.com", {}).rc,
+        EAI_FAIL);  // no receive timeout: the reply wait could never end
 
     reset_net();
     g_net.sendto_fails = true;

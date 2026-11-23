@@ -42,7 +42,7 @@ PID ?=
 # to pin a digest: ACTIONLINT_IMAGE=rhysd/actionlint@sha256:...
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.7
 
-.PHONY: build test clean dist lint cppcheck tidy-host style style-fix shell debug help hooks hooks-check workflow-lint docs
+.PHONY: build test clean dist lint cppcheck tidy-host style style-fix shell debug help hooks hooks-check workflow-lint docs fuzz secrets
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} \
@@ -68,6 +68,9 @@ tidy-host: hooks-check ## clang-tidy (.clang-tidy) on host-built sources, tests 
 
 cppcheck: hooks-check ## cppcheck gate, any finding fails (docker compose run --rm cppcheck)
 	$(DOCKER_COMPOSE) run --rm cppcheck
+
+secrets: hooks-check ## gitleaks over the repository history, any finding fails (docker compose run --rm secrets)
+	$(DOCKER_COMPOSE) run --rm secrets
 
 fuzz: hooks-check ## libFuzzer on the protocol and INI parsers, 60 s each (docker compose run --rm fuzz)
 	$(DOCKER_COMPOSE) run --rm -e FUZZ_SECONDS=$(or $(FUZZ_SECONDS),60) fuzz

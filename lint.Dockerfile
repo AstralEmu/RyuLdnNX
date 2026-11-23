@@ -33,6 +33,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg && \
     clang-tidy --version && \
     clang-format --version
 
+# Secret scanning: gitleaks, the same detector GitHub's secret scanning
+# stands in front of. Pinned version, archive chosen from the build
+# architecture, and the download is checked against the release's own
+# checksum file before it is unpacked.
+ARG GITLEAKS_VERSION=8.30.1
+RUN set -eu; \
+    case "$(dpkg --print-architecture)" in \
+        amd64) garch=x64 ;; \
+        arm64) garch=arm64 ;; \
+        *) echo "gitleaks: unsupported architecture" >&2; exit 1 ;; \
+    esac; \
+    file="gitleaks_${GITLEAKS_VERSION}_linux_${garch}.tar.gz"; \
+    base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"; \
+    curl -fsSL -o "/tmp/${file}" "${base}/${file}"; \
+    curl -fsSL -o /tmp/gitleaks-checksums.txt \
+        "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"; \
+    cd /tmp; \
+    grep -E "  ${file}\$" gitleaks-checksums.txt | sha256sum -c -; \
+    tar -xzf "${file}" -C /usr/local/bin gitleaks; \
+    rm -f "${file}" gitleaks-checksums.txt; \
+    gitleaks version
+
 # Security and workflow analysers (maintained, standard tools). They live in a
 # dedicated virtualenv so pip never touches the system interpreter packages.
 RUN apt-get update && \

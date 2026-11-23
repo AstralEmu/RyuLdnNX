@@ -123,6 +123,16 @@ services:
       dockerfile: lint.Dockerfile
     entrypoint: ["/bin/bash", "/workspace/scripts/cppcheck.sh"]
 
+  # Secret scanning: gitleaks over the repository history, any finding fails:
+  #   docker compose run --rm secrets
+  secrets:
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
+    build:
+      context: .
+      dockerfile: lint.Dockerfile
+    entrypoint: ["/bin/bash", "/workspace/scripts/secrets.sh"]
+
   # libFuzzer targets (tests/fuzz) on the protocol reassembly and the INI
   # parser, built and run with clang 21 in the lint image; any crash,
   # sanitizer report or timeout fails:
