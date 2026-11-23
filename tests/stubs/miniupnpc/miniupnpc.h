@@ -177,9 +177,9 @@ inline UPNPDev* upnpDiscover(
  */
 inline void freeUPNPDevlist(UPNPDev* devlist) {
     ++g_fake_upnp.devlist_frees;
-    // The real API releases the calloc'ed node; the owner keeps that pairing
-    // explicit while the caller-facing signature stays the C one.
-    std::unique_ptr<UPNPDev, void (*)(void*)> release(devlist, &std::free);
+    // The real API releases the whole calloc'ed list; std::free accepts
+    // nullptr, so the caller-facing C signature needs no null guard.
+    std::free(devlist);
 }
 
 /**

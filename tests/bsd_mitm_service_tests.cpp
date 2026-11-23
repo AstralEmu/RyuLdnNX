@@ -2,15 +2,17 @@
  * @file bsd_mitm_service_tests.cpp
  * @brief Unit tests for the real BsdMitmService (bsd/bsd_mitm_service.cpp)
  *
- * The service source is included into this translation unit (unity build) so
- * the tests can reach its file-local tables (socket tracking, PID counts,
- * abandoned forward services) and stage the exact states the code defends
- * against. The real bsd:u is played by host_mitm::g_dispatch_hook (see
- * stubs/stratosphere/sf/sf_mitm_dispatch.h): every forwarded call is recorded
- * (command id, input struct, buffers, flags) and answered with a canned reply.
- * The proxy sockets are the real ProxySocketManager / ProxySocket.
+ * The service source is linked as its own translation unit through the
+ * bsd_mitm_service_internal.hpp test seam, which exposes its file-local tables
+ * (socket tracking, PID counts, abandoned forward services) so the tests can
+ * stage the exact states the code defends against. The real bsd:u is played by
+ * host_mitm::g_dispatch_hook (see stubs/stratosphere/sf/sf_mitm_dispatch.h):
+ * every forwarded call is recorded (command id, input struct, buffers, flags)
+ * and answered with a canned reply. The proxy sockets are the real
+ * ProxySocketManager / ProxySocket.
  */
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -18,7 +20,7 @@
 
 #include "test_harness.hpp"
 #include "config/game_whitelist.hpp"
-#include "bsd/bsd_mitm_service.cpp"
+#include "bsd/bsd_mitm_service_internal.hpp"
 
 namespace sut = ams::mitm::bsd;
 namespace bsdt = ryu_ldn::bsd;

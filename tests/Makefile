@@ -370,21 +370,30 @@ $(TARGET_LDN_MITM_SERVICE): ldn_mitm_service_tests.o ldn_mitm_service.o ldn_icom
 $(TARGET_LDN_ICOMMUNICATION_REAL): ldn_icommunication.o ldn_shared_state.o ldn_client_process_monitor.o ldn_state_machine.o ldn_node_mapper.o ldn_proxy_buffer.o ldn_network_timeout.o config_ipc_service.o config_manager.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o p2p_proxy_client.o p2p_proxy_server.o upnp_port_mapper.o client.o tcp_client.o socket.o connection_state.o reconnect.o dns_wrap.o log.o config.o ldn_icommunication_real_tests.o
 	$(CXX) $(LDFLAGS) -pthread -o $@ $^
 
-# BsdMitmService tests: bsd/bsd_mitm_service.cpp is #included by the test (unity
-# build) to reach its file-local tables; the real proxy socket stack is linked,
-# bsd:u is a recording fake. Test object last (static-initializer order).
-$(TARGET_BSD_MITM_SERVICE): ldn_shared_state.o game_whitelist.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o log.o config.o bsd_mitm_service_tests.o
+# BsdMitmService tests: bsd/bsd_mitm_service.cpp is its own translation unit,
+# reached through the bsd_mitm_service_internal.hpp test seam. bsd_mitm_service.o
+# must come BEFORE bsd_mitm_service_tests.o: TEST() runs each test from a static
+# initializer, so the service's tracking tables and mutexes must be constructed
+# first. The real proxy socket stack is linked, bsd:u is a recording fake. Test
+# object last.
+$(TARGET_BSD_MITM_SERVICE): bsd_mitm_service.o ldn_shared_state.o game_whitelist.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o log.o config.o bsd_mitm_service_tests.o
 	$(CXX) $(LDFLAGS) -pthread -o $@ $^
 
-# Boot tests: main.cpp is #included by the test (unity build) to reach its
-# file-local server managers, heap and socket configuration. The real services
-# it registers are linked; the SF server and the libnx boot calls are host
-# stand-ins that record what they were given. Test object last.
-$(TARGET_MAIN): ldn_mitm_service.o bsd_mitm_service.o ldn_icommunication.o ldn_shared_state.o ldn_client_process_monitor.o ldn_state_machine.o ldn_node_mapper.o ldn_proxy_buffer.o ldn_network_timeout.o game_whitelist.o config_ipc_service.o config_manager.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o p2p_proxy_client.o p2p_proxy_server.o upnp_port_mapper.o client.o tcp_client.o socket.o connection_state.o reconnect.o dns_wrap.o log.o config.o main_tests.o
+# Boot tests: main.cpp is its own translation unit, reached through the
+# main_internal.hpp test seam. main.o must come BEFORE main_tests.o: TEST()
+# runs each test from a static initializer, so main.cpp's server managers and
+# heap must be constructed first. The real services it registers are linked;
+# the SF server and the libnx boot calls are host stand-ins that record what
+# they were given. Test object last.
+$(TARGET_MAIN): ldn_mitm_service.o bsd_mitm_service.o ldn_icommunication.o ldn_shared_state.o ldn_client_process_monitor.o ldn_state_machine.o ldn_node_mapper.o ldn_proxy_buffer.o ldn_network_timeout.o game_whitelist.o config_ipc_service.o config_manager.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o p2p_proxy_client.o p2p_proxy_server.o upnp_port_mapper.o client.o tcp_client.o socket.o connection_state.o reconnect.o dns_wrap.o log.o config.o main.o main_instantiations.o main_tests.o
 	$(CXX) $(LDFLAGS) -pthread -o $@ $^
 
 # Compile test sources
 %.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+# Compile the sysmodule entry point as a normal test translation unit.
+main.o: ../sysmodule/source/main.cpp ../sysmodule/source/main_internal.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Compile implementation sources
@@ -460,7 +469,8 @@ p2p_proxy_client.o: ../sysmodule/source/p2p/p2p_proxy_client.cpp
 p2p_proxy_server.o: ../sysmodule/source/p2p/p2p_proxy_server.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-bsd_mitm_service.o: ../sysmodule/source/bsd/bsd_mitm_service.cpp
+bsd_mitm_service.o: ../sysmodule/source/bsd/bsd_mitm_service.cpp \
+	../sysmodule/source/bsd/bsd_mitm_service_internal.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 ldn_mitm_service.o: ../sysmodule/source/ldn/ldn_mitm_service.cpp
@@ -778,6 +788,14 @@ clean:
 #---------------------------------------------------------------------------------
 # Dependencies
 #---------------------------------------------------------------------------------
+main_tests.o: main_tests.cpp ../sysmodule/source/main_internal.hpp
+
+main_instantiations.o: main_instantiations.cpp \
+	../sysmodule/source/main_internal.hpp
+
+bsd_mitm_service_tests.o: bsd_mitm_service_tests.cpp \
+	../sysmodule/source/bsd/bsd_mitm_service_internal.hpp
+
 protocol_tests.o: protocol_tests.cpp \
 	../sysmodule/source/protocol/types.hpp \
 	../sysmodule/source/protocol/ryu_protocol.hpp \

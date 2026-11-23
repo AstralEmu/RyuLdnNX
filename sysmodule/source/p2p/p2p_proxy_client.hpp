@@ -361,7 +361,7 @@ private:
     // moment the server told us about the external proxy. Same root cause
     // as the P2pProxyServer/P2pProxySession fix.
     /// Receive thread handle; its stack lives in BSS (see note above).
-    os::ThreadType m_recv_thread;
+    os::ThreadType m_recv_thread{};
     /// True while the receive thread should keep looping; cleared to ask it to
     /// stop.
     std::atomic<bool> m_recv_thread_running;

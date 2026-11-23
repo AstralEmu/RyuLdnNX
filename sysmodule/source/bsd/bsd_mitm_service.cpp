@@ -49,6 +49,7 @@
 
 #include <algorithm>
 #include "bsd_mitm_service.hpp"
+#include "bsd_mitm_service_internal.hpp"
 #include "proxy_socket_manager.hpp"
 #include "bsd_types.hpp"
 #include "../debug/log.hpp"
@@ -67,109 +68,32 @@ extern "C" {
 namespace ams::mitm::bsd {
 
 // =============================================================================
-// Static-allocation constants
+// Static-allocation state
 // =============================================================================
+// The caps (MAX_*) and the entry types live in
+// bsd_mitm_service_internal.hpp, which the host tests include. The tables
+// and the find helpers the tests drive are defined here with external
+// linkage; the mutexes and the helpers no test touches stay internal to
+// this translation unit.
 
-constexpr size_t MAX_SOCKET_INFO = 128;  ///< Cap for g_socket_info entries
-constexpr size_t MAX_MITM_PIDS =
-    32;  ///< Cap for g_mitm_pid_count entries (raised from 16 — a multi-session
-         ///< sysmodule can exceed 16 concurrent PIDs)
-constexpr size_t MAX_ABANDONED_SERVICES =
-    32;  ///< Cap for g_abandoned_forward_services (raised from 16 — defensive
-         ///< against session bursts)
+/// Global socket info tracking table (fixed-size flat array).
+std::array<SocketInfoEntry, MAX_SOCKET_INFO> g_socket_info{};
 
-// =============================================================================
-// Socket Type/Protocol Tracking
-// =============================================================================
-
-/**
- * @brief Info stored for each socket created via Socket()
- *
- * We need to track this because when Bind/Connect is called later,
- * we need to know the socket type and protocol to create the ProxySocket.
- */
-struct SocketInfo {
-    /// Socket type (stream or datagram) requested in Socket().
-    ryu_ldn::bsd::SocketType type;
-    /// Protocol (TCP or UDP) requested in Socket().
-    ryu_ldn::bsd::ProtocolType protocol;
-    /// True if this socket is an LDN proxy socket.
-    bool is_proxy;
-    /// SO_BROADCAST option (tracked before proxy creation).
-    bool broadcast;
-    /// Session ID that owns this socket (for cleanup on session close).
-    u32 session_id;
-};
-
-/**
- * @brief Socket info tracking table — fixed-size flat array.
- *
- * Maps file descriptor to socket info. This is needed because Socket()
- * creates the fd but Bind/Connect happens later, and we need the socket
- * type/protocol to create the ProxySocket.
- *
- * NOTE: This is a global static shared across all MITM clients. Access
- * must be protected by g_socket_info_mutex. Different client processes
- * may have the same fd values, but since we're in the sysmodule context,
- * fd collisions are handled by the fact that each BsdMitmService instance
- * forwards to a different real service session.
- */
-struct SocketInfoEntry {
-    /// File descriptor key, -1 when the slot is free.
-    s32 fd = -1;
-    /// Tracked type/protocol/proxy state of the fd.
-    SocketInfo info{};
-    /// True when the slot is in use.
-    bool valid = false;
-};
-/**
- * @brief Global socket info tracking table (fixed-size flat array).
- *
- * @role Maps every fd created via the BSD MITM `Socket()` to its SocketInfo so
- *       later `Bind`/`Connect` calls can recover the type/protocol and decide
- *       whether to wrap the fd in a ProxySocket for LDN tunneling.
- * @modified_by `BsdMitmService` member functions in this file (Socket, Bind,
- *              Connect, Close, plus session cleanup) via
- * `FindOrCreateSocketInfoEntry` and `EraseSocketInfoEntry` — all under
- * g_socket_info_mutex.
- * @thread_safety Protected by g_socket_info_mutex. Every reader and writer in
- *                this file takes `std::scoped_lock lock(g_socket_info_mutex)`
- *                before touching the array; the only exception is the proxy
- *                socket close path, which copies entries out under the mutex
- *                and then closes the proxy socket *without* holding it to
- *                avoid lock-order inversion.
- */
-static std::array<SocketInfoEntry, MAX_SOCKET_INFO> g_socket_info{};
-
-/**
- * @brief Mutex protecting g_socket_info
- *
- * Must be held when reading or modifying g_socket_info.
- */
+/// Mutex protecting g_socket_info.
 static os::Mutex g_socket_info_mutex{false};
 
-/**
- * @brief Find a socket info entry by fd (caller must hold g_socket_info_mutex)
- * @param fd File descriptor to look up.
- * @return The valid entry for @p fd, or nullptr if none is tracked.
- */
-static SocketInfoEntry* FindSocketInfoEntry(s32 fd) {
+// Contract documented in bsd_mitm_service_internal.hpp. The caller must hold
+// g_socket_info_mutex.
+SocketInfoEntry* FindSocketInfoEntry(s32 fd) {
     auto* const it = std::ranges::find_if(
         g_socket_info,
         [fd](const auto& entry) { return entry.valid && entry.fd == fd; });
     return it != g_socket_info.end() ? it : nullptr;
 }
 
-/**
- * @brief Find an existing socket info entry or allocate a new one.
- *
- * Caller must hold g_socket_info_mutex. Returns nullptr if the table is full.
- *
- * @param fd File descriptor to look up or register.
- * @return The entry for @p fd (a new entry has default-initialized info), or
- *         nullptr when the table is full.
- */
-static SocketInfoEntry* FindOrCreateSocketInfoEntry(s32 fd) {
+// Contract documented in bsd_mitm_service_internal.hpp. The caller must hold
+// g_socket_info_mutex; a new entry has default-initialized info.
+SocketInfoEntry* FindOrCreateSocketInfoEntry(s32 fd) {
     if (SocketInfoEntry* existing = FindSocketInfoEntry(fd)) {
         return existing;
     }
@@ -198,50 +122,15 @@ static void EraseSocketInfoEntry(SocketInfoEntry* entry) {
     entry->valid = false;
 }
 
-/**
- * @brief Map of PIDs to session count for BSD MITM — fixed-size flat array.
- *
- * Tracks how many BSD sessions have been intercepted per process.
- * We intercept ALL BSD sessions from whitelisted games because some games
- * (like Mario Kart 8) may use multiple sessions for different operations.
- * Value: number of BSD sessions intercepted for this PID.
- */
-struct MitmPidEntry {
-    /// Process id key.
-    u64 pid = 0;
-    /// Number of BSD sessions intercepted for this pid.
-    u32 count = 0;
-    /// True when the slot is in use.
-    bool valid = false;
-};
-/**
- * @brief Global per-PID BSD session counter table (fixed-size flat array).
- *
- * @role Tracks how many BSD sessions have been intercepted per process so the
- *       MITM can keep intercepting ALL BSD sessions from whitelisted games
- *       (some games, e.g. Mario Kart 8, open several bsd:u sessions).
- * @modified_by `BsdMitmService` constructor and destructor paths via
- *              `FindOrCreateMitmPidEntry` and direct count increments, all
- *              under g_mitm_pids_mutex.
- * @thread_safety Protected by g_mitm_pids_mutex. Every access in this file
- *                is wrapped in `std::scoped_lock lock(g_mitm_pids_mutex)`.
- */
-static std::array<MitmPidEntry, MAX_MITM_PIDS> g_mitm_pid_count{};
+/// Global per-PID BSD session counter table (fixed-size flat array).
+std::array<MitmPidEntry, MAX_MITM_PIDS> g_mitm_pid_count{};
 
-/**
- * @brief Mutex protecting g_mitm_pid_count.
- *
- * Held by any code that reads or mutates g_mitm_pid_count (see the
- * `std::scoped_lock lock(g_mitm_pids_mutex)` sites in this file).
- */
+/// Mutex protecting g_mitm_pid_count.
 static os::Mutex g_mitm_pids_mutex{false};
 
-/**
- * @brief Find a mitm pid entry by pid (caller must hold g_mitm_pids_mutex)
- * @param pid Process id to look up.
- * @return The valid entry for @p pid, or nullptr if none exists.
- */
-static MitmPidEntry* FindMitmPidEntry(u64 pid) {
+// Contract documented in bsd_mitm_service_internal.hpp. The caller must hold
+// g_mitm_pids_mutex.
+MitmPidEntry* FindMitmPidEntry(u64 pid) {
     auto* const it = std::ranges::find_if(
         g_mitm_pid_count,
 
@@ -274,49 +163,12 @@ static MitmPidEntry* FindOrCreateMitmPidEntry(u64 pid) {
     return free_slot;
 }
 
-/**
- * @brief List of abandoned forward services (sessions that never got
- * RegisterClient) — fixed-size flat array.
- *
- * When a BSD MITM session is closed without ever receiving RegisterClient,
- * we move its forward_service here instead of closing it. This prevents
- * a system freeze that occurs when closing an unregistered bsd:u session.
- *
- * These services will be cleaned up when the game process exits or when
- * we explicitly clean them (e.g., on LDN disconnect).
- */
-struct AbandonedServiceEntry {
-    /// Kept-alive forward service of the abandoned session.
-    std::shared_ptr<::Service> service;
-    /// True when the slot is in use.
-    bool valid = false;
-};
-/**
- * @brief Global table of abandoned forward services (fixed-size flat array).
- *
- * @role When a BSD MITM session is closed without ever receiving
- *       `RegisterClient`, its forward_service is moved here instead of being
- *       closed, to avoid the system freeze that closing an unregistered
- *       bsd:u session triggers. Entries are cleaned up on game process exit
- *       or on explicit LDN-disconnect cleanup.
- * @modified_by `BsdMitmService` destructor / cleanup paths in this file
- *              (e.g. `CleanupAbandonedServices`, the destructor's forward
- *              service abandonment path) — all under
- * g_abandoned_services_mutex.
- * @thread_safety Protected by g_abandoned_services_mutex. Every reader and
- *                writer in this file takes
- *                `std::scoped_lock lock(g_abandoned_services_mutex)` first.
- */
-static std::array<AbandonedServiceEntry, MAX_ABANDONED_SERVICES>
+/// Global table of abandoned forward services (fixed-size flat array).
+std::array<AbandonedServiceEntry, MAX_ABANDONED_SERVICES>
     g_abandoned_forward_services{};
 
-/**
- * @brief Mutex protecting g_abandoned_forward_services.
- *
- * Held by any code that reads or mutates g_abandoned_forward_services (see the
- * `std::scoped_lock lock(g_abandoned_services_mutex)` sites in this file).
- */
-static os::Mutex g_abandoned_services_mutex{false};
+/// Mutex protecting g_abandoned_forward_services.
+os::Mutex g_abandoned_services_mutex{false};
 
 // =============================================================================
 // Constructor / Destructor

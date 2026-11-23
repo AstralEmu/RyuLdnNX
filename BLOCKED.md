@@ -15,13 +15,17 @@
 ## clang-tidy findings not fixable in sysmodule/source (2026-11-23)
 
 - `/usr/include/.../sys/socket.h` + `sys/poll.h` readability-inconsistent-declaration-parameter-name: the "definition seen here" notes all point to tests/socket_tests.cpp:1404,1443,1463,1486,1504,1522 and tests/dns_wrap_tests.cpp:166,192 (forbidden path), none to sysmodule/overlay.
-- `sysmodule/source/bsd/bsd_mitm_service.cpp:749` `sf::CopyHandle&& transfer_memory`: with `std::move` -> hicpp/performance-move-const-arg ("trivially-copyable"); with `std::forward`/`static_cast` -> cppcoreguidelines-rvalue-reference-param-not-moved. Cause: tests/stubs CopyHandle is trivially copyable, the real one is not (move needed on target). The signature is fixed by the IPC macros (ibsd_mitm_service.hpp:66). Left with std::move.
-- `p2p_proxy_client.cpp:620` and `p2p_proxy_server.cpp:2239` clang-analyzer-unix.BlockInCriticalSection: notes show "Entering critical section here" at tests/stubs/stratosphere.hpp:143 (stub Mutex::lock) and no exit after the scoped_lock/unique_lock destructor (stub unlock() re-branches on m_recursive after the g_host_before_plain_lock(this) callback). Stub is in tests/ (forbidden); lock_guard/unique_lock variants tried, same result.
+- `bsd_mitm_service.cpp:749` std::move: FIXED 2026-11-23 (owner decision): tests/stubs CopyHandle is move-only like the real one; hicpp-move-const-arg absent from tidy-host.
+- `p2p_proxy_client.cpp:620` and `p2p_proxy_server.cpp:2239` clang-analyzer-unix.BlockInCriticalSection: notes show "Entering critical section here" at tests/stubs/stratosphere.hpp:143 (stub Mutex::lock) and no exit after the scoped_lock/unique_lock destructor (stub unlock() re-branches on m_recursive after the g_host_before_plain_lock(this) callback). lock_guard/unique_lock variants tried, same result. 2026-11-23: stub edit now authorised; `const bool m_recursive` tried (hypothesis: analyzer loses the field across opaque calls), same 2 findings, reverted. Cause still unproven.
 
-## clang-tidy: bugprone-suspicious-include (2026-11-23)
+## clang-tidy: bugprone-suspicious-include (2026-11-23) - RESOLVED
 
-- `tests/main_tests.cpp:21` (`#include "main.cpp"`) and `tests/bsd_mitm_service_tests.cpp:21` (`#include "bsd/bsd_mitm_service.cpp"`) are deliberate unity builds (see the comments above `$(TARGET_MAIN)` and `$(TARGET_BSD_MITM_SERVICE)` in tests/Makefile) that reach file-local state (`g_socket_info`, `g_mitm_pid_count`, server managers, heap).
-- Real fix: an internal test-seam header exposing that state from the sources, which changes Switch-side translation units; not done without a behaviour-preserving proof. Owner decision needed.
+- The unity includes are gone: `sysmodule/source/main_internal.hpp` and `sysmodule/source/bsd/bsd_mitm_service_internal.hpp` expose the file-local state, and tests/Makefile links the sources as their own translation units (source `.o` before the test `.o`). `test` rc=0 (49/49 suites) per Handoff-Current-State.
+
+## clang-tidy: performance-unnecessary-value-param on the AMS interface macro (2026-11-23)
+
+- `docker compose run --rm lint` still exits 1 with one finding: `sysmodule/source/ldn/interfaces/iservice.hpp:49:38` (`out` of `AMS_SF_DEFINE_MITM_INTERFACE` copied; `ams::sf::Out<>` by value is the stratosphere signature that the generated interface and every handler must match). Fixing it means changing the signature on the Switch side, unprovable without a hardware run; no NOLINT allowed. Owner decision needed.
+- The 4 `cppcoreguidelines-pro-type-member-init` findings (`m_p2p_connect_thread`, `m_recv_thread` x3, `m_accept_thread`, `m_lease_thread`) are fixed with `os::ThreadType m_x{};` in the headers.
 
 ## -Wthread-safety not wired (2026-11-23)
 

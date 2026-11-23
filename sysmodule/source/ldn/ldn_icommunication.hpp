@@ -611,7 +611,7 @@ private:
     // mid-handshake. Now that the receive thread is dedicated and never
     // blocks on P2P connect, this stays for compatibility.
     /// Worker thread running the async ExternalProxy connect
-    os::ThreadType m_p2p_connect_thread;
+    os::ThreadType m_p2p_connect_thread{};
     /// True while the connect worker is running
     std::atomic<bool> m_p2p_connect_thread_active{false};
     /// True once m_p2p_connect_thread was created (so it can be joined)
@@ -625,7 +625,7 @@ private:
     // them via HandleServerPacket immediately, like NetCoreServer's OnReceived
     // callback in Ryujinx. IPC handlers no longer call update(); they wait on
     // os::Event (via TimedWaitAny) which the receive thread signals.
-    os::ThreadType m_recv_thread;  ///< Receive thread (replaces old bg thread)
+    os::ThreadType m_recv_thread{};  ///< Receive thread (replaces bg thread)
     std::atomic<bool> m_recv_thread_running;  ///< Receive thread running flag
 
     // Mutex protecting shared state written by the receive thread and read

@@ -486,11 +486,11 @@ private:
     // operator new and crashed the sysmodule (DABRT 0x101) the moment a
     // host pressed "create network".
     /// Thread running AcceptLoop()
-    os::ThreadType m_accept_thread;
+    os::ThreadType m_accept_thread{};
 
     // Lease renewal thread (stack: g_p2p_lease_thread_stack in BSS)
     /// Thread running LeaseRenewalLoop()
-    os::ThreadType m_lease_thread;
+    os::ThreadType m_lease_thread{};
     /// True while the lease renewal thread is running. Atomic: the owner
     /// thread flips it to ask for the join, the lease thread polls it.
     std::atomic<bool> m_lease_thread_running{false};
@@ -754,7 +754,7 @@ private:
     // fixed in P2pProxyServer earlier. Keep it as a slot index so that
     // ~P2pProxySession can return the slot to the pool.
     /// Thread running ReceiveLoop()
-    os::ThreadType m_recv_thread;
+    os::ThreadType m_recv_thread{};
     int m_stack_slot{-1};  ///< Index in the global session-stack pool, -1 if
                            ///< unallocated
 

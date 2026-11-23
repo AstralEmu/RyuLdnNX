@@ -985,6 +985,24 @@ struct CopyHandle {
     /// Whether the real one would close the handle on destruction
     bool managed = false;
     CopyHandle() = default;
+    /// Non-copyable like the real one: a handle has a single owner.
+    CopyHandle(const CopyHandle&) = delete;
+    /**
+     * @brief Non-copyable like the real one: a handle has a single owner.
+     *
+     * @return Nothing, the operator is deleted.
+     */
+    CopyHandle& operator=(const CopyHandle&) = delete;
+    /// Movable like the real one.
+    CopyHandle(CopyHandle&&) = default;
+    /**
+     * @brief Movable like the real one.
+     *
+     * @return This handle, after taking the moved handle.
+     */
+    CopyHandle& operator=(CopyHandle&&) = default;
+    /// Trivial: the stub never closes the handle.
+    ~CopyHandle() = default;
     /**
      * @brief Wraps a handle
      *
@@ -1868,9 +1886,12 @@ protected:
     /**
      * @brief Default accept handler, overridable by a test
      *
+     * @param port_index index of the port with a pending session
+     * @param server server the session belongs to
      * @return success
      */
-    virtual Result OnNeedsToAccept(int /*unused*/, Server* /*unused*/) {
+    virtual Result OnNeedsToAccept(
+        [[maybe_unused]] int port_index, [[maybe_unused]] Server* server) {
         return ResultSuccess();
     }
 };

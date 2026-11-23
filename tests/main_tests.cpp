@@ -2,12 +2,13 @@
  * @file main_tests.cpp
  * @brief Host tests of the sysmodule boot code (sysmodule/source/main.cpp)
  *
- * main.cpp is pulled in with an include directive (unity build): its server
- * managers, heap and socket configuration are file-local. The services it
- * registers are the real ones; the libnx boot calls and the SF server are the
- * host stand-ins of tests/stubs, which record what the boot code gave them.
- * That includes the global operator new/delete of main.cpp: every allocation of
- * this test binary goes through the sysmodule heap wrappers.
+ * main.cpp is linked as its own translation unit through the test seam of
+ * main_internal.hpp, which declares its server managers, heap and socket
+ * configuration. The services it registers are the real ones; the libnx boot
+ * calls and the SF server are the host stand-ins of tests/stubs, which record
+ * what the boot code gave them. That includes the global operator new/delete
+ * of main.cpp: every allocation of this test binary goes through the sysmodule
+ * heap wrappers.
  */
 
 #include "test_harness.hpp"
@@ -18,11 +19,14 @@
 #include <unistd.h>
 #include <utility>
 
-#include "main.cpp"
+#include "main_internal.hpp"
 
 namespace fsys = std::filesystem;
 namespace boot = ams;
 namespace lm = ams::lmem;
+
+// The explicit instantiations of the stub server manager live in
+// main_instantiations.cpp.
 
 namespace {
 
@@ -121,14 +125,14 @@ TEST(the_malloc_buffer_is_handed_to_the_global_allocator_at_startup) {
     ASSERT_TRUE(g_host_boot_calls[0] == "InitializeAllocator");
     ASSERT_TRUE(
         boot::init::g_host_allocator_buffer ==
-        static_cast<void*>(boot::g_malloc_buffer));
+        static_cast<void*>(boot::internal::g_malloc_buffer));
     ASSERT_EQ(
         boot::init::g_host_allocator_size, static_cast<size_t>(1024 * 1024));
 }
 
 /** @brief Test case: socket buffers match documented sizes and bsd config. */
 TEST(socket_buffers_match_documented_sizes_and_bsd_config) {
-    const auto& socket = boot::LibnxSocketInitConfig;
+    const auto& socket = boot::internal::LibnxSocketInitConfig;
     ASSERT_EQ(socket.tcp_tx_buf_size, 0x800U);
     ASSERT_EQ(socket.tcp_rx_buf_size, 0x1000U);
     ASSERT_EQ(socket.tcp_tx_buf_max_size, 0x2000U);
@@ -141,13 +145,16 @@ TEST(socket_buffers_match_documented_sizes_and_bsd_config) {
 
     // 4 x page-aligned (max tcp tx + max tcp rx + udp tx + udp rx = 0x8000)
     ASSERT_EQ(
-        sizeof(boot::g_socket_tmem_buffer), static_cast<size_t>(4 * 0x8000));
+        sizeof(boot::internal::g_socket_tmem_buffer),
+        static_cast<size_t>(4 * 0x8000));
 
-    const auto& bsd = boot::LibnxBsdInitConfig;
+    const auto& bsd = boot::internal::LibnxBsdInitConfig;
     ASSERT_EQ(bsd.version, 1U);
     ASSERT_TRUE(
-        bsd.tmem_buffer == static_cast<void*>(boot::g_socket_tmem_buffer));
-    ASSERT_EQ(bsd.tmem_buffer_size, sizeof(boot::g_socket_tmem_buffer));
+        bsd.tmem_buffer ==
+        static_cast<void*>(boot::internal::g_socket_tmem_buffer));
+    ASSERT_EQ(
+        bsd.tmem_buffer_size, sizeof(boot::internal::g_socket_tmem_buffer));
     ASSERT_EQ(bsd.tcp_tx_buf_size, socket.tcp_tx_buf_size);
     ASSERT_EQ(bsd.tcp_rx_buf_size, socket.tcp_rx_buf_size);
     ASSERT_EQ(bsd.tcp_tx_buf_max_size, socket.tcp_tx_buf_max_size);
@@ -238,11 +245,12 @@ TEST(boot_initializes_services_in_order_with_the_documented_socket_setup) {
     ASSERT_TRUE(ams::fs::g_host_fs_free == &boot::mitm::Deallocate);
     ASSERT_FALSE(ams::fs::g_host_fs_auto_abort);
 
-    ASSERT_TRUE(g_host_bsd_config == &boot::LibnxBsdInitConfig);
+    ASSERT_TRUE(g_host_bsd_config == &boot::internal::LibnxBsdInitConfig);
     ASSERT_EQ(
-        g_host_bsd_sessions, boot::LibnxSocketInitConfig.num_bsd_sessions);
+        g_host_bsd_sessions,
+        boot::internal::LibnxSocketInitConfig.num_bsd_sessions);
     ASSERT_TRUE(g_host_bsd_type == BsdServiceType_System);
-    ASSERT_TRUE(g_host_socket_config == &boot::LibnxSocketInitConfig);
+    ASSERT_TRUE(g_host_socket_config == &boot::internal::LibnxSocketInitConfig);
 
     // the default configuration was written to the SD card
     ASSERT_TRUE(fsys::exists("sdmc:/config/ryu_ldn_nx/config.ini"));
