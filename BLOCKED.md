@@ -88,3 +88,10 @@ only integer parameter type allowed for a literal operator). google-runtime-int 
 
 Untracked owner file (never committed): google-build-using-namespace at :7 and
 clang-analyzer-cplusplus.Move at :12/:16. Owner deletes it.
+
+## Total blockage proof (tick 2026-11-23)
+
+Open tickets: none in `todo`. `tk list` shows L1, L3-L11 all in `review` (awaiting owner close).
+Push (L9/L10): `git rev-list --left-right --count HEAD...origin/chore/post-audit-fixes` -> `371	323`;
+pre-push refuses a branch behind its remote; the fix is a merge (158 conflicts) or a new branch/PR,
+both owner decisions. L11: needs owner decision (see above).
