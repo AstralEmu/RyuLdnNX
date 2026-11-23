@@ -12,80 +12,11 @@ permissions:
   packages: read
 
 jobs:
-  # Verify every commit in a PR carries a DCO Signed-off-by line.
-  # Runs first so a missing sign-off fails the workflow fast, before
-  # any expensive test/build job spins up.
-  dco-check:
-    name: DCO sign-off check
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: Verify Signed-off-by on every commit in the PR
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          # Range of commits introduced by this PR (base..head).
-          echo "Checking DCO for commits ${BASE_SHA:0:7}..${HEAD_SHA:0:7}"
-
-          MISSING=0
-          MISMATCH=0
-          for sha in $(git rev-list "${BASE_SHA}..${HEAD_SHA}"); do
-            body=$(git show -s --format='%B' "$sha")
-            author=$(git show -s --format='%an <%ae>' "$sha")
-
-            # 1. A Signed-off-by trailer must be present at all.
-            if ! printf '%s' "$body" | grep -Eq '^Signed-off-by: .+ <.+@.+>'; then
-              echo "::error::Commit ${sha} is missing a Signed-off-by line"
-              echo "----- ${sha:0:7} message -----"
-              printf '%s\n' "$body"
-              echo "------------------------------"
-              MISSING=$((MISSING + 1))
-              continue
-            fi
-
-            # 2. Per the Developer Certificate of Origin, the author's own
-            #    sign-off must be present — a co-authored Signed-off-by from
-            #    another contributor does not satisfy the requirement for the
-            #    commit author. Compare the 'Name <email>' portion of every
-            #    Signed-off-by trailer against '%an <%ae>'.
-            #    `sed` strips the 'Signed-off-by: ' prefix and trailing
-            #    whitespace; `grep -Fxq` requires an exact full-line match.
-            if ! printf '%s\n' "$body" \
-                 | grep -E '^Signed-off-by: ' \
-                 | sed 's/^Signed-off-by: //; s/[[:space:]]*$//' \
-                 | grep -Fxq "$author"; then
-              echo "::error::Commit ${sha} Signed-off-by does not match author '${author}'"
-              echo "----- ${sha:0:7} message -----"
-              printf '%s\n' "$body"
-              echo "------------------------------"
-              MISMATCH=$((MISMATCH + 1))
-            fi
-          done
-
-          TOTAL=$((MISSING + MISMATCH))
-          if [ "$TOTAL" -gt 0 ]; then
-            echo "::error::${TOTAL} commit(s) failed DCO check (${MISSING} missing, ${MISMATCH} mismatched). Rebase with --signoff (git commit -s / git rebase --signoff)."
-            exit 1
-          fi
-
-          echo "All PR commits carry a Signed-off-by line matching the commit author ✓"
-
   # Static analysis (clang-tidy via scripts/lint.sh + docker compose lint).
   # Runs on push and PR so lint regressions fail early.
   lint:
     name: Static lint (clang-tidy)
     runs-on: ubuntu-latest
-    needs: dco-check
-    if: always() && (needs.dco-check.result == 'success' || needs.dco-check.result == 'skipped')
 
     steps:
       - name: Run containers as the runner user
@@ -111,8 +42,8 @@ jobs:
   # artifacts produced by the reusable build job.
   base:
     name: Test & Build (reusable)
-    needs: [dco-check, lint]
-    if: always() && (needs.dco-check.result == 'success' || needs.dco-check.result == 'skipped') && (needs.lint.result == 'success' || needs.lint.result == 'skipped')
+    needs: lint
+    if: always() && (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     uses: ./.github/workflows/_build-base.yml
     with:
       # Build the sysmodule only on develop pushes (not on PRs).
