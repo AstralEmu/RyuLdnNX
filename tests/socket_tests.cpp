@@ -1440,7 +1440,8 @@ int interposed_socket(int d, int t, int p) noexcept {
 int fcntl(int fd, int cmd, ...) {
     va_list ap;
     va_start(ap, cmd);
-    void* arg = va_arg(ap, void*);
+    using VoidPtr = void*;
+    void* arg = va_arg(ap, VoidPtr);
     va_end(ap);
     if (take(Fn::Fcntl)) {
         return static_cast<int>(g_fault[fn_index(Fn::Fcntl)].ret);
