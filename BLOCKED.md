@@ -4,6 +4,8 @@
 - Wiki push denied: `git -C ../RyuLdnNX.wiki push` -> `remote: Permission to AstralEmu/RyuLdnNX.wiki.git denied to REMOVED. ... 403` (wiki origin is https://github.com/AstralEmu/RyuLdnNX.wiki.git, code origin is git@github-ethiquema:Ethiquema/ryu_ldn_nx.git).
 - Code not pushed either: the owner asked for wiki and code to be pushed together.
 - Needs the owner: credentials or the correct wiki remote.
+- Code push also refused by regress-guard (push mode, 42 commits ahead of origin/chore/post-audit-fixes, 2026-11-23): `git push` -> "BLOCKED by regress-guard: regression detected against the baseline", 573 findings, none waivable by me without a blanket Regress-Accept (a gate bypass). Breakdown: ~540 = deletion of the old docs/ site (docs/package-lock.json 438, docs/package.json, docs/scripts/generate-api-docs.mjs, docs/tsconfig.json, _bmad/*); 14 "error swallowed" findings on shell fallbacks (grep/git exit status forced to success) inside command substitutions of hooks/pre-commit, hooks/docs-pre-commit, hooks/lib.sh, .claude/hooks/block-hook-skip.sh; ~8 symbol removals (ProxySocket::PopFrontPacket, ProxySocketManager::FindSocketByDestination, ICommunicationService::SetGameVersion, LdnStateMachine::IsValidTransition/TransitionTo, ReceivedPacket...). The one non-waivable item, tests/socket_tests.cpp no longer parses, is FIXED (va_arg type alias, suite 100% green).
+- Needs the owner: decide whether those deletions and removals are intended (then a commit message with `Regress-Accept:` globs for docs/** and _bmad/** and the listed symbols), and whether those shell fallbacks in hooks are acceptable.
 
 ## Owner actions needed (2026-11-23)
 
