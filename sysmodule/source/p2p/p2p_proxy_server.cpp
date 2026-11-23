@@ -2234,9 +2234,9 @@ void P2pProxySession::ReceiveLoop() {
         static_cast<void*>(this));
     ryu_ldn::debug::g_logger.flush();
     uint64_t last_recv_ms = entry_ms;
+    const int fd = m_socket_fd;  // immutable, validated above
     while (m_connected) {
-        ssize_t received =
-            recv(m_socket_fd, m_recv_buffer, RECV_BUFFER_SIZE, 0);
+        ssize_t received = recv(fd, m_recv_buffer, RECV_BUFFER_SIZE, 0);
 
         const uint64_t now_ms = armTicksToNs(armGetSystemTick()) / 1000000ULL;
         if (received <= 0) {

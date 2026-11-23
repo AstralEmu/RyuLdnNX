@@ -83,7 +83,7 @@ public:
      * @brief Destructor
      */
     /// @gdb{tag="LDN:STATE", msg="LdnStateMachine: destructor"}
-    ~LdnStateMachine();
+    ~LdnStateMachine() = default;
 
     // Non-copyable
     LdnStateMachine(const LdnStateMachine&) = delete;

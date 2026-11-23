@@ -633,15 +633,16 @@ ConfigResult ensure_config_exists(const char* path) {
 // =============================================================================
 
 ConfigResult load_config(const char* path, Config& config) {
-    FILE* file = std::fopen(path, "r");
-    if (!file) {
+    const std::unique_ptr<std::FILE, decltype(&std::fclose)> file(
+        open_stream(path, O_RDONLY, "r"), &std::fclose);
+    if (file == nullptr) {
         return ConfigResult::FileNotFound;
     }
 
     char line[512];
     Section current_section = Section::None;
 
-    while (std::fgets(line, sizeof(line), file)) {
+    while (std::fgets(line, sizeof(line), file.get()) != nullptr) {
         // Remove trailing whitespace/newlines
         trim_end(line);
 
@@ -666,7 +667,7 @@ ConfigResult load_config(const char* path, Config& config) {
         // Parse key=value (lines outside a known section are dropped by the
         // `default` arm of the switch below)
         char* eq_pos = std::strchr(line, '=');
-        if (!eq_pos) {
+        if (eq_pos == nullptr) {
             continue;  // No '=' found, skip line
         }
 
@@ -703,7 +704,6 @@ ConfigResult load_config(const char* path, Config& config) {
         }
     }
 
-    std::fclose(file);
     return ConfigResult::Success;
 }
 
@@ -714,14 +714,16 @@ ConfigResult save_config(const char* path, const Config& config) {
     safe_strcpy(dir_path, path, sizeof(dir_path) - 1);
 
     char* last_slash = std::strrchr(dir_path, '/');
-    if (last_slash) {
+    if (last_slash != nullptr) {
         *last_slash = '\0';
         // Create directory (mkdir -p equivalent)
         mkdir(dir_path, 0755);
     }
 
-    FILE* file = open_stream(path, O_WRONLY | O_CREAT | O_TRUNC, "w");
-    if (!file) {
+    const std::unique_ptr<std::FILE, decltype(&std::fclose)> out(
+        open_stream(path, O_WRONLY | O_CREAT | O_TRUNC, "w"), &std::fclose);
+    FILE* file = out.get();
+    if (file == nullptr) {
         return ConfigResult::IoError;
     }
 
@@ -755,15 +757,14 @@ ConfigResult save_config(const char* path, const Config& config) {
         file, "; Log level (0=errors, 1=warnings, 2=info, 3=verbose)\n");
     std::fprintf(file, "level = %u\n", config.debug.level);
 
-    std::fclose(file);
     return ConfigResult::Success;
 }
 
 ConfigResult ensure_config_exists(const char* path) {
     // Try to open file to check if it exists
-    FILE* file = std::fopen(path, "r");
-    if (file) {
-        std::fclose(file);
+    if (const std::unique_ptr<std::FILE, decltype(&std::fclose)> existing(
+            open_stream(path, O_RDONLY, "r"), &std::fclose);
+        existing != nullptr) {
         return ConfigResult::Success;  // File already exists
     }
 

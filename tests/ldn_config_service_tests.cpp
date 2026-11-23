@@ -6,6 +6,7 @@
  * runs on the real SharedState and ConfigManager singletons.
  */
 
+#include <bit>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -318,7 +319,7 @@ TEST(every_config_file_result_maps_to_its_ipc_counterpart) {
     ASSERT_TRUE(
         LdnConfigService::ToIpcResult(Src::IoError) == ConfigResult::IoError);
     ASSERT_TRUE(
-        LdnConfigService::ToIpcResult(static_cast<Src>(99)) ==
+        LdnConfigService::ToIpcResult(std::bit_cast<Src>(99)) ==
         ConfigResult::IoError);
 }
 

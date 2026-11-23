@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <utility>
 
 // ============================================================================
 // Test Framework (minimal standalone)
@@ -198,7 +199,7 @@ public:
      * @param cb Called with the error code and disconnect reason.
      */
     void SetErrorCallback(ErrorCallback cb) {
-        m_error_callback = cb;
+        m_error_callback = std::move(cb);
     }
     /**
      * @brief Register the state-change observer (may be nullptr).
@@ -206,7 +207,7 @@ public:
      * @param cb Called with the new state on every SetState().
      */
     void SetStateCallback(StateCallback cb) {
-        m_state_callback = cb;
+        m_state_callback = std::move(cb);
     }
 
     // ========================================================================
@@ -293,10 +294,8 @@ public:
                 return false;
 
             case CommState::Error:
-                // Already in error state
-                return false;
-
             default:
+                // Already in error state, or nothing to signal
                 return false;
         }
     }

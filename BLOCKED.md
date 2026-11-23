@@ -12,3 +12,9 @@
 - Untracked stray `sysmodule/source/ldn/ldn_icommunication.cpp.bak`: owner to delete.
 - `hooks/pre-commit` is modified in the working tree; the owner commits it.
 - Untracked stray `tests/_probe_move.cpp` (my use-after-move probe): deleting it from the shell is refused by `.claude/hooks/guard-no-test-deletion.py`; owner to delete it, never commit it.
+
+## clang-tidy findings not fixable in sysmodule/source (2026-11-23)
+
+- `/usr/include/.../sys/socket.h` + `sys/poll.h` readability-inconsistent-declaration-parameter-name: the "definition seen here" notes all point to tests/socket_tests.cpp:1404,1443,1463,1486,1504,1522 and tests/dns_wrap_tests.cpp:166,192 (forbidden path), none to sysmodule/overlay.
+- `sysmodule/source/bsd/bsd_mitm_service.cpp:749` `sf::CopyHandle&& transfer_memory`: with `std::move` -> hicpp/performance-move-const-arg ("trivially-copyable"); with `std::forward`/`static_cast` -> cppcoreguidelines-rvalue-reference-param-not-moved. Cause: tests/stubs CopyHandle is trivially copyable, the real one is not (move needed on target). The signature is fixed by the IPC macros (ibsd_mitm_service.hpp:66). Left with std::move.
+- `p2p_proxy_client.cpp:620` and `p2p_proxy_server.cpp:2239` clang-analyzer-unix.BlockInCriticalSection: notes show "Entering critical section here" at tests/stubs/stratosphere.hpp:143 (stub Mutex::lock) and no exit after the scoped_lock/unique_lock destructor (stub unlock() re-branches on m_recursive after the g_host_before_plain_lock(this) callback). Stub is in tests/ (forbidden); lock_guard/unique_lock variants tried, same result.

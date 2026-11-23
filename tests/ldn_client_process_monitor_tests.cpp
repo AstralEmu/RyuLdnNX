@@ -7,6 +7,7 @@
  */
 
 #include <cstdio>
+#include <memory>
 
 #include "test_harness.hpp"
 #include "ldn/ldn_client_process_monitor.hpp"
@@ -19,9 +20,9 @@ using ams::mitm::ldn::IClientProcessMonitor;
  * when it instantiates one per session.
  */
 TEST(the_monitor_can_be_created_and_destroyed) {
-    auto* monitor = new IClientProcessMonitor();
+    auto monitor = std::make_unique<IClientProcessMonitor>();
     ASSERT_TRUE(monitor != nullptr);
-    delete monitor;
+    monitor.reset();
 }
 
 /**

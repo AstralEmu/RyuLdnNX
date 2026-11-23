@@ -63,6 +63,7 @@
 #include <cstring>
 #include <cstdint>
 #include <array>
+#include <cstddef>
 
 //=============================================================================
 // Mock Switch/libnx types for testing
@@ -291,7 +292,7 @@ public:
      * @param[out] out Receives the null-terminated version.
      * @return Always 0.
      */
-    Result GetVersion(std::array<char, 32>& out) {
+    static Result GetVersion(std::array<char, 32>& out) {
         static constexpr const char* VERSION = "1.0.0";
         std::memset(out.data(), 0, out.size());
         safe_strcpy(out.data(), VERSION, out.size() - 1);
@@ -304,7 +305,7 @@ public:
      * @param[out] out Receives 0 (ready).
      * @return Always 0.
      */
-    Result GetConnectionStatus(u32& out) {
+    static Result GetConnectionStatus(u32& out) {
         out = 0;  // Always ready
         R_SUCCEED();
     }
@@ -315,7 +316,7 @@ public:
      * @param[out] out Receives the null-terminated passphrase.
      * @return Always 0.
      */
-    Result GetPassphrase(std::array<char, 64>& out) {
+    static Result GetPassphrase(std::array<char, 64>& out) {
         std::memset(out.data(), 0, out.size());
         safe_strcpy(out.data(), g_mock_config.ldn.passphrase, out.size() - 1);
         R_SUCCEED();
@@ -326,7 +327,7 @@ public:
      * @param passphrase New passphrase.
      * @return Always 0.
      */
-    Result SetPassphrase(const std::array<char, 64>& passphrase) {
+    static Result SetPassphrase(const std::array<char, 64>& passphrase) {
         safe_strcpy(g_mock_config.ldn.passphrase, passphrase.data(), 64);
         R_SUCCEED();
     }
@@ -337,7 +338,7 @@ public:
      * @param[out] out Receives the address.
      * @return Always 0.
      */
-    Result GetServerAddress(ServerAddressIpc& out) {
+    static Result GetServerAddress(ServerAddressIpc& out) {
         std::memset(&out, 0, sizeof(out));
         safe_strcpy(out.host, g_mock_config.server.host, sizeof(out.host) - 1);
         out.port = g_mock_config.server.port;
@@ -349,7 +350,7 @@ public:
      * @param address New address.
      * @return Always 0.
      */
-    Result SetServerAddress(const ServerAddressIpc& address) {
+    static Result SetServerAddress(const ServerAddressIpc& address) {
         safe_strcpy(g_mock_config.server.host, address.host, 127);
         g_mock_config.server.port = address.port;
         R_SUCCEED();
@@ -361,7 +362,7 @@ public:
      * @param[out] out Receives 1 when enabled, else 0.
      * @return Always 0.
      */
-    Result GetLdnEnabled(u32& out) {
+    static Result GetLdnEnabled(u32& out) {
         out = g_mock_config.ldn.enabled ? 1 : 0;
         R_SUCCEED();
     }
@@ -371,7 +372,7 @@ public:
      * @param enabled Non-zero to enable.
      * @return Always 0.
      */
-    Result SetLdnEnabled(u32 enabled) {
+    static Result SetLdnEnabled(u32 enabled) {
         g_mock_config.ldn.enabled = (enabled != 0);
         R_SUCCEED();
     }
@@ -382,7 +383,7 @@ public:
      * @param[out] out Receives 1 when enabled, else 0.
      * @return Always 0.
      */
-    Result GetDebugEnabled(u32& out) {
+    static Result GetDebugEnabled(u32& out) {
         out = g_mock_config.debug.enabled ? 1 : 0;
         R_SUCCEED();
     }
@@ -392,7 +393,7 @@ public:
      * @param enabled Non-zero to enable.
      * @return Always 0.
      */
-    Result SetDebugEnabled(u32 enabled) {
+    static Result SetDebugEnabled(u32 enabled) {
         g_mock_config.debug.enabled = (enabled != 0);
         R_SUCCEED();
     }
@@ -403,7 +404,7 @@ public:
      * @param[out] out Receives the level.
      * @return Always 0.
      */
-    Result GetDebugLevel(u32& out) {
+    static Result GetDebugLevel(u32& out) {
         out = g_mock_config.debug.level;
         R_SUCCEED();
     }
@@ -413,7 +414,7 @@ public:
      * @param level New level.
      * @return Always 0.
      */
-    Result SetDebugLevel(u32 level) {
+    static Result SetDebugLevel(u32 level) {
         g_mock_config.debug.level = level;
         R_SUCCEED();
     }
@@ -424,7 +425,7 @@ public:
      * @param[out] out Receives 1.
      * @return Always 0.
      */
-    Result IsServiceActive(u32& out) {
+    static Result IsServiceActive(u32& out) {
         out = 1;
         R_SUCCEED();
     }
@@ -435,7 +436,7 @@ public:
      * @param[out] out Receives 1 when on, else 0.
      * @return Always 0.
      */
-    Result GetUsePassphrase(u32& out) {
+    static Result GetUsePassphrase(u32& out) {
         out = g_mock_config.ldn.use_passphrase ? 1 : 0;
         R_SUCCEED();
     }
@@ -445,7 +446,7 @@ public:
      * @param enabled Non-zero to enable.
      * @return Always 0.
      */
-    Result SetUsePassphrase(u32 enabled) {
+    static Result SetUsePassphrase(u32 enabled) {
         g_mock_config.ldn.use_passphrase = (enabled != 0);
         R_SUCCEED();
     }
@@ -456,7 +457,7 @@ public:
      * @param[out] out Receives 1 when disabled, else 0.
      * @return Always 0.
      */
-    Result GetDisableP2p(u32& out) {
+    static Result GetDisableP2p(u32& out) {
         out = g_mock_config.ldn.disable_p2p ? 1 : 0;
         R_SUCCEED();
     }
@@ -466,7 +467,7 @@ public:
      * @param disabled Non-zero to disable P2P.
      * @return Always 0.
      */
-    Result SetDisableP2p(u32 disabled) {
+    static Result SetDisableP2p(u32 disabled) {
         g_mock_config.ldn.disable_p2p = (disabled != 0);
         R_SUCCEED();
     }
@@ -661,22 +662,14 @@ TEST(server_address_ipc_size) {
  * @test ServerAddressIpc field offsets are correct
  */
 TEST(server_address_ipc_layout) {
-    ServerAddressIpc addr = {};
-
     // Verify host is at offset 0
-    ASSERT_EQ(
-        reinterpret_cast<char*>(&addr.host) - reinterpret_cast<char*>(&addr),
-        0);
+    ASSERT_EQ(offsetof(ServerAddressIpc, host), 0);
 
     // Verify port is at offset 64
-    ASSERT_EQ(
-        reinterpret_cast<char*>(&addr.port) - reinterpret_cast<char*>(&addr),
-        64);
+    ASSERT_EQ(offsetof(ServerAddressIpc, port), 64);
 
     // Verify padding is at offset 66
-    ASSERT_EQ(
-        reinterpret_cast<char*>(&addr.padding) - reinterpret_cast<char*>(&addr),
-        66);
+    ASSERT_EQ(offsetof(ServerAddressIpc, padding), 66);
 }
 
 /**
@@ -726,10 +719,9 @@ TEST(config_result_success_is_zero) {
  * @test GetVersion returns valid version string
  */
 TEST(get_version_returns_string) {
-    mock::MockConfigService svc;
     std::array<char, 32> version = {};
 
-    Result r = svc.GetVersion(version);
+    Result r = mock::MockConfigService::GetVersion(version);
 
     ASSERT_SUCCESS(r);
     ASSERT_STREQ(version.data(), "1.0.0");
@@ -739,10 +731,9 @@ TEST(get_version_returns_string) {
  * @test GetConnectionStatus returns 0 (ready)
  */
 TEST(get_connection_status_returns_ready) {
-    mock::MockConfigService svc;
     u32 status = 99;
 
-    Result r = svc.GetConnectionStatus(status);
+    Result r = mock::MockConfigService::GetConnectionStatus(status);
 
     ASSERT_SUCCESS(r);
     ASSERT_EQ(status, 0U);
@@ -752,10 +743,9 @@ TEST(get_connection_status_returns_ready) {
  * @test IsServiceActive returns 1
  */
 TEST(is_service_active_returns_true) {
-    mock::MockConfigService svc;
     u32 active = 0;
 
-    Result r = svc.IsServiceActive(active);
+    Result r = mock::MockConfigService::IsServiceActive(active);
 
     ASSERT_SUCCESS(r);
     ASSERT_EQ(active, 1U);
@@ -769,11 +759,10 @@ TEST(is_service_active_returns_true) {
  * @test GetPassphrase returns empty string by default
  */
 TEST(get_passphrase_default_empty) {
-    mock::MockConfigService svc;
     std::array<char, 64> passphrase = {};
     passphrase[0] = 'X';  // Pre-fill to verify it gets cleared
 
-    Result r = svc.GetPassphrase(passphrase);
+    Result r = mock::MockConfigService::GetPassphrase(passphrase);
 
     ASSERT_SUCCESS(r);
     ASSERT_STREQ(passphrase.data(), "");
@@ -783,17 +772,15 @@ TEST(get_passphrase_default_empty) {
  * @test SetPassphrase/GetPassphrase roundtrip
  */
 TEST(passphrase_set_get_roundtrip) {
-    mock::MockConfigService svc;
-
     // Set passphrase
     std::array<char, 64> input = {};
     std::strncpy(input.data(), "mysecret", input.size());
-    Result r = svc.SetPassphrase(input);
+    Result r = mock::MockConfigService::SetPassphrase(input);
     ASSERT_SUCCESS(r);
 
     // Get passphrase
     std::array<char, 64> output = {};
-    r = svc.GetPassphrase(output);
+    r = mock::MockConfigService::GetPassphrase(output);
     ASSERT_SUCCESS(r);
 
     ASSERT_STREQ(output.data(), "mysecret");
@@ -803,20 +790,18 @@ TEST(passphrase_set_get_roundtrip) {
  * @test SetPassphrase with empty string clears passphrase
  */
 TEST(passphrase_set_empty_clears) {
-    mock::MockConfigService svc;
-
     // Set non-empty first
     std::array<char, 64> input = {};
     std::strncpy(input.data(), "secret", input.size());
-    svc.SetPassphrase(input);
+    mock::MockConfigService::SetPassphrase(input);
 
     // Clear with empty string
     std::array<char, 64> empty = {};
-    svc.SetPassphrase(empty);
+    mock::MockConfigService::SetPassphrase(empty);
 
     // Verify cleared
     std::array<char, 64> output = {};
-    svc.GetPassphrase(output);
+    mock::MockConfigService::GetPassphrase(output);
     ASSERT_STREQ(output.data(), "");
 }
 
@@ -828,10 +813,9 @@ TEST(passphrase_set_empty_clears) {
  * @test GetServerAddress returns defaults
  */
 TEST(get_server_address_default) {
-    mock::MockConfigService svc;
     ServerAddressIpc addr = {};
 
-    Result r = svc.GetServerAddress(addr);
+    Result r = mock::MockConfigService::GetServerAddress(addr);
 
     ASSERT_SUCCESS(r);
     ASSERT_STREQ(addr.host, "ryuldnnx.ddns.net");
@@ -842,18 +826,16 @@ TEST(get_server_address_default) {
  * @test SetServerAddress/GetServerAddress roundtrip
  */
 TEST(server_address_set_get_roundtrip) {
-    mock::MockConfigService svc;
-
     // Set address
     ServerAddressIpc input = {};
     std::strncpy(input.host, "192.168.1.100", sizeof(input.host));
     input.port = 9999;
-    Result r = svc.SetServerAddress(input);
+    Result r = mock::MockConfigService::SetServerAddress(input);
     ASSERT_SUCCESS(r);
 
     // Get address
     ServerAddressIpc output = {};
-    r = svc.GetServerAddress(output);
+    r = mock::MockConfigService::GetServerAddress(output);
     ASSERT_SUCCESS(r);
 
     ASSERT_STREQ(output.host, "192.168.1.100");
@@ -864,18 +846,16 @@ TEST(server_address_set_get_roundtrip) {
  * @test SetServerAddress with max-length hostname
  */
 TEST(server_address_max_length_host) {
-    mock::MockConfigService svc;
-
     ServerAddressIpc input = {};
     // Fill with 63 chars (max for null-terminated 64-byte buffer)
     std::memset(input.host, 'a', 63);
     input.host[63] = '\0';
     input.port = 1234;
 
-    svc.SetServerAddress(input);
+    mock::MockConfigService::SetServerAddress(input);
 
     ServerAddressIpc output = {};
-    svc.GetServerAddress(output);
+    mock::MockConfigService::GetServerAddress(output);
 
     ASSERT_EQ(std::strlen(output.host), 63U);
 }
@@ -888,10 +868,9 @@ TEST(server_address_max_length_host) {
  * @test LdnEnabled default is true
  */
 TEST(ldn_enabled_default_true) {
-    mock::MockConfigService svc;
     u32 enabled = 0;
 
-    Result r = svc.GetLdnEnabled(enabled);
+    Result r = mock::MockConfigService::GetLdnEnabled(enabled);
 
     ASSERT_SUCCESS(r);
     ASSERT_EQ(enabled, 1U);
@@ -901,17 +880,15 @@ TEST(ldn_enabled_default_true) {
  * @test SetLdnEnabled/GetLdnEnabled roundtrip
  */
 TEST(ldn_enabled_set_get_roundtrip) {
-    mock::MockConfigService svc;
-
     // Disable
-    svc.SetLdnEnabled(0);
+    mock::MockConfigService::SetLdnEnabled(0);
     u32 enabled = 1;
-    svc.GetLdnEnabled(enabled);
+    mock::MockConfigService::GetLdnEnabled(enabled);
     ASSERT_EQ(enabled, 0U);
 
     // Re-enable
-    svc.SetLdnEnabled(1);
-    svc.GetLdnEnabled(enabled);
+    mock::MockConfigService::SetLdnEnabled(1);
+    mock::MockConfigService::GetLdnEnabled(enabled);
     ASSERT_EQ(enabled, 1U);
 }
 
@@ -919,10 +896,9 @@ TEST(ldn_enabled_set_get_roundtrip) {
  * @test DebugEnabled default is false
  */
 TEST(debug_enabled_default_false) {
-    mock::MockConfigService svc;
     u32 enabled = 1;
 
-    svc.GetDebugEnabled(enabled);
+    mock::MockConfigService::GetDebugEnabled(enabled);
 
     ASSERT_EQ(enabled, 0U);
 }
@@ -931,16 +907,14 @@ TEST(debug_enabled_default_false) {
  * @test Non-zero values for Set are treated as true
  */
 TEST(boolean_nonzero_is_true) {
-    mock::MockConfigService svc;
-
     // Any non-zero should enable
-    svc.SetDebugEnabled(42);
+    mock::MockConfigService::SetDebugEnabled(42);
     u32 enabled = 0;
-    svc.GetDebugEnabled(enabled);
+    mock::MockConfigService::GetDebugEnabled(enabled);
     ASSERT_EQ(enabled, 1U);
 
-    svc.SetDebugEnabled(255);
-    svc.GetDebugEnabled(enabled);
+    mock::MockConfigService::SetDebugEnabled(255);
+    mock::MockConfigService::GetDebugEnabled(enabled);
     ASSERT_EQ(enabled, 1U);
 }
 
@@ -952,10 +926,9 @@ TEST(boolean_nonzero_is_true) {
  * @test DebugLevel default is 1 (Warning)
  */
 TEST(debug_level_default_warning) {
-    mock::MockConfigService svc;
     u32 level = 99;
 
-    svc.GetDebugLevel(level);
+    mock::MockConfigService::GetDebugLevel(level);
 
     ASSERT_EQ(level, 1U);
 }
@@ -964,12 +937,10 @@ TEST(debug_level_default_warning) {
  * @test SetDebugLevel/GetDebugLevel roundtrip
  */
 TEST(debug_level_set_get_roundtrip) {
-    mock::MockConfigService svc;
-
     for (u32 i = 0; i <= 3; i++) {
-        svc.SetDebugLevel(i);
+        mock::MockConfigService::SetDebugLevel(i);
         u32 level = 99;
-        svc.GetDebugLevel(level);
+        mock::MockConfigService::GetDebugLevel(level);
         ASSERT_EQ(level, i);
     }
 }
@@ -979,23 +950,21 @@ TEST(debug_level_set_get_roundtrip) {
 
 /// @test Passphrase filtering is off by default.
 TEST(use_passphrase_default_false) {
-    mock::MockConfigService svc;
     u32 enabled = 99;
-    Result r = svc.GetUsePassphrase(enabled);
+    Result r = mock::MockConfigService::GetUsePassphrase(enabled);
     ASSERT_SUCCESS(r);
     ASSERT_EQ(enabled, 0U);
 }
 
 /// @test Set/Get of the passphrase-filtering flag round-trips.
 TEST(use_passphrase_set_get_roundtrip) {
-    mock::MockConfigService svc;
-    svc.SetUsePassphrase(1);
+    mock::MockConfigService::SetUsePassphrase(1);
     u32 enabled = 0;
-    svc.GetUsePassphrase(enabled);
+    mock::MockConfigService::GetUsePassphrase(enabled);
     ASSERT_EQ(enabled, 1U);
 
-    svc.SetUsePassphrase(0);
-    svc.GetUsePassphrase(enabled);
+    mock::MockConfigService::SetUsePassphrase(0);
+    mock::MockConfigService::GetUsePassphrase(enabled);
     ASSERT_EQ(enabled, 0U);
 }
 
@@ -1005,26 +974,23 @@ TEST(use_passphrase_set_get_roundtrip) {
 
 /// @test P2P is disabled by default.
 TEST(disable_p2p_default_true) {
-    mock::MockConfigService svc;
     u32 disabled = 0;
-    Result r = svc.GetDisableP2p(disabled);
+    Result r = mock::MockConfigService::GetDisableP2p(disabled);
     ASSERT_SUCCESS(r);
     ASSERT_EQ(disabled, 1U);
 }
 
 /// @test Set/Get of the P2P-disabled flag round-trips.
 TEST(disable_p2p_set_get_roundtrip) {
-    mock::MockConfigService svc;
-
     // Enable P2P (disable_p2p = 0)
-    svc.SetDisableP2p(0);
+    mock::MockConfigService::SetDisableP2p(0);
     u32 disabled = 1;
-    svc.GetDisableP2p(disabled);
+    mock::MockConfigService::GetDisableP2p(disabled);
     ASSERT_EQ(disabled, 0U);
 
     // Disable P2P (disable_p2p = 1)
-    svc.SetDisableP2p(1);
-    svc.GetDisableP2p(disabled);
+    mock::MockConfigService::SetDisableP2p(1);
+    mock::MockConfigService::GetDisableP2p(disabled);
     ASSERT_EQ(disabled, 1U);
 }
 

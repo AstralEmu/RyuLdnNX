@@ -49,6 +49,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <bit>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1425,7 +1426,9 @@ bool test_client_op_result_all_to_string() {
         client_op_result_to_string(ClientOpResult::InternalError),
         "InternalError");
     ASSERT_STREQ(
-        client_op_result_to_string(static_cast<ClientOpResult>(99)), "Unknown");
+        client_op_result_to_string(
+            std::bit_cast<ClientOpResult>(static_cast<uint8_t>(99))),
+        "Unknown");
     return true;
 }
 
@@ -1711,10 +1714,11 @@ bool test_handle_packet_disconnect() {
     client->update(2000);
 
     // Disconnect event moves state to Disconnecting (not Disconnected directly)
-    ASSERT_TRUE(
+    const bool state_ok =
         client->get_state() == ConnectionState::Disconnecting ||
         client->get_state() == ConnectionState::Disconnected ||
-        client->get_state() == ConnectionState::Backoff);
+        client->get_state() == ConnectionState::Backoff;
+    ASSERT_TRUE(state_ok);
     return true;
 }
 
@@ -2538,10 +2542,10 @@ bool test_update_backoff_expired_no_reconnect_stays() {
     // BackoffExpired → Retrying, try_connect fails → ConnectFailed → Backoff
     // but no start_backoff means m_backoff_start_time_ms stays at previous
     // value. Actually let's just check the state.
-    ASSERT_TRUE(
-        client->get_state() == ConnectionState::Backoff ||
-        client->get_state() == ConnectionState::Retrying ||
-        client->get_state() == ConnectionState::Disconnected);
+    const bool state_ok = client->get_state() == ConnectionState::Backoff ||
+                          client->get_state() == ConnectionState::Retrying ||
+                          client->get_state() == ConnectionState::Disconnected;
+    ASSERT_TRUE(state_ok);
     return true;
 }
 

@@ -716,7 +716,7 @@ void Main() {
 
     R_ABORT_UNLESS(
         cfg::g_config_server_manager.RegisterObjectForServer(
-            std::move(config_service), ConfigServiceName, cfg::MaxSessions));
+            config_service, ConfigServiceName, cfg::MaxSessions));
     LOG_INFO("Config service ryu:cfg registered successfully");
 
     // Create config service thread

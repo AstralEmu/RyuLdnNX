@@ -13,8 +13,6 @@ namespace ams::mitm::ldn {
 LdnStateMachine::LdnStateMachine()
     : m_state_event(os::EventClearMode_AutoClear, true) {}
 
-LdnStateMachine::~LdnStateMachine() = default;
-
 // ============================================================================
 // State Queries
 // ============================================================================

@@ -7,7 +7,10 @@
 
 #include "config/config.hpp"
 
+#include <bit>
 #include <cstdio>
+#include <memory>
+#include <type_traits>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -132,6 +135,17 @@ static void register_test(const char* name, void (*func)()) {
 
 // Helper to create temp config file
 /**
+ * @brief Build an enum value that is deliberately outside the declared range.
+ * @tparam E Enumeration type.
+ * @param raw Raw underlying value to reinterpret.
+ * @return The enumerator-less value of type E.
+ */
+template <typename E>
+static E invalid_enum(std::underlying_type_t<E> raw) {
+    return std::bit_cast<E>(raw);
+}
+
+/**
  * @brief RAII temporary INI file under /tmp, removed on destruction.
  */
 class TempConfigFile {
@@ -140,7 +154,7 @@ public:
      * @brief Create the file with the given content.
      * @param content Text written to the file.
      */
-    TempConfigFile(const char* content) {
+    explicit TempConfigFile(const char* content) {
         snprintf(m_path, sizeof(m_path), "/tmp/test_config_%d.ini", rand());
         std::ofstream f(m_path);
         if (f.is_open()) {
@@ -591,7 +605,7 @@ TEST(every_config_result_has_its_own_name) {
         config_result_to_string(ConfigResult::ParseError), "ParseError");
     ASSERT_STREQ(config_result_to_string(ConfigResult::IoError), "IoError");
     ASSERT_STREQ(
-        config_result_to_string(static_cast<ConfigResult>(99)), "Unknown");
+        config_result_to_string(invalid_enum<ConfigResult>(99)), "Unknown");
 }
 
 /**
@@ -711,9 +725,10 @@ TEST(save_config_reports_io_error_when_the_file_cannot_be_created) {
 TEST(open_stream_creates_file_without_world_write) {
     char path[256];
     snprintf(path, sizeof(path), "/tmp/test_open_stream_%d.txt", rand());
-    std::FILE* stream = open_stream(path, O_WRONLY | O_CREAT | O_TRUNC, "w");
+    std::unique_ptr<std::FILE, int (*)(std::FILE*)> stream(
+        open_stream(path, O_WRONLY | O_CREAT | O_TRUNC, "w"), &std::fclose);
     ASSERT_TRUE(stream != nullptr);
-    std::fclose(stream);
+    stream.reset();
 
     struct stat info{};
     ASSERT_EQ(stat(path, &info), 0);

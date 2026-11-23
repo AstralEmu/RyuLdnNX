@@ -732,7 +732,7 @@ private:
     /// Parent server (not owned)
     P2pProxyServer* m_server;
     /// Connected client socket fd
-    int m_socket_fd;
+    const int m_socket_fd;
     /// Remote (physical) IP address of the client
     uint32_t m_remote_ip;
     /// Virtual IP assigned after authentication

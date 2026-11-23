@@ -12,6 +12,7 @@
 #include "config/config_manager.hpp"
 
 #include <cstdio>
+#include <fstream>
 #include <cstring>
 #include <cstdlib>
 #include <stdexcept>
@@ -126,22 +127,22 @@ static void create_test_config_file() {
         "/tmp/config_manager_test_%d.ini",
         rand());
 
-    FILE* f = fopen(g_test_config_path, "w");
-    if (f) {
-        fprintf(f, "[server]\n");
-        fprintf(f, "host = test.example.com\n");
-        fprintf(f, "port = 12345\n");
-        fprintf(f, "\n");
-        fprintf(f, "[ldn]\n");
-        fprintf(f, "enabled = 1\n");
-        fprintf(f, "use_passphrase = 0\n");
-        fprintf(f, "passphrase = \n");
-        fprintf(f, "disable_p2p = 1\n");
-        fprintf(f, "\n");
-        fprintf(f, "[debug]\n");
-        fprintf(f, "enabled = 1\n");
-        fprintf(f, "level = 3\n");
-        fclose(f);
+    std::ofstream f(g_test_config_path);
+    if (f.is_open()) {
+        f << "[server]\n";
+        f << "host = test.example.com\n";
+        f << "port = 12345\n";
+        f << "\n";
+        f << "[ldn]\n";
+        f << "enabled = 1\n";
+        f << "use_passphrase = 0\n";
+        f << "passphrase = \n";
+        f << "disable_p2p = 1\n";
+        f << "\n";
+        f << "[debug]\n";
+        f << "enabled = 1\n";
+        f << "level = 3\n";
+        f.close();
     }
 }
 
@@ -270,7 +271,7 @@ TEST(initialize_with_missing_file) {
     bool result = ConfigManager::Instance().Initialize(
         "/tmp/nonexistent_config_12345.ini");
     // Should still succeed with defaults
-    ASSERT_TRUE(result || !result);  // Just ensure no crash
+    ASSERT_TRUE(result);
 }
 
 /** @brief Test case: initialize with valid file. */

@@ -203,7 +203,7 @@ void FormatPassphraseMasked(const char* passphrase, char* buf, size_t bufSize) {
  * @return "Enabled" or "Disabled".
  */
 const char* FormatBoolSetting(u32 value) {
-    return value ? "Enabled" : "Disabled";
+    return value != 0 ? "Enabled" : "Disabled";
 }
 
 // Format timeout value

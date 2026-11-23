@@ -29,6 +29,7 @@
 #include <cerrno>
 #include <vector>
 #include <functional>
+#include <memory>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -292,18 +293,18 @@ TEST(socket_multiple_instances) {
 TEST(socket_move_constructor) {
     socket_init();
 
-    Socket sock1;
-    const std::reference_wrapper<const Socket> sock1_source = std::cref(sock1);
+    const auto sock1 = std::make_unique<Socket>();
+    const Socket& sock1_source = *sock1;
 
     // We can't connect without a server, but we can test move semantics
     // by checking that the fd transfers correctly
 
-    Socket sock2(std::move(sock1));
+    Socket sock2(std::move(*sock1));
 
     // Both should be invalid since sock1 was never connected
-    ASSERT_FALSE(moved_from_is_valid(sock1_source.get()));
+    ASSERT_FALSE(moved_from_is_valid(sock1_source));
     ASSERT_FALSE(sock2.is_valid());
-    ASSERT_EQ(moved_from_fd(sock1_source.get()), -1);
+    ASSERT_EQ(moved_from_fd(sock1_source), -1);
     ASSERT_EQ(sock2.get_fd(), -1);
 }
 
@@ -315,13 +316,13 @@ TEST(socket_move_constructor) {
 TEST(socket_move_assignment) {
     socket_init();
 
-    Socket sock1;
+    const auto sock1 = std::make_unique<Socket>();
+    const Socket& sock1_source = *sock1;
     Socket sock2;
-    const std::reference_wrapper<const Socket> sock1_source = std::cref(sock1);
 
-    sock2 = std::move(sock1);
+    sock2 = std::move(*sock1);
 
-    ASSERT_FALSE(moved_from_is_valid(sock1_source.get()));
+    ASSERT_FALSE(moved_from_is_valid(sock1_source));
     ASSERT_FALSE(sock2.is_valid());
 }
 
@@ -1271,24 +1272,34 @@ namespace {
  * @brief Libc functions the fault injector can intercept, used as an index into
  *        g_fault
  */
-enum Fn {
+enum class Fn {
     /// socket()
-    FN_SOCKET,
+    Socket,
     /// fcntl()
-    FN_FCNTL,
+    Fcntl,
     /// setsockopt()
-    FN_SETSOCKOPT,
+    Setsockopt,
     /// getsockopt()
-    FN_GETSOCKOPT,
+    Getsockopt,
     /// poll()
-    FN_POLL,
+    Poll,
     /// send()
-    FN_SEND,
+    Send,
     /// recv()
-    FN_RECV,
+    Recv,
     /// Number of functions (array size), not a function
-    FN_COUNT
+    Count
 };
+
+/**
+ * @brief Index of an intercepted function in g_fault
+ *
+ * @param fn function
+ * @return its slot
+ */
+constexpr size_t fn_index(Fn fn) {
+    return static_cast<size_t>(fn);
+}
 
 /**
  * @brief One armed fault: what the next call(s) of an intercepted function
@@ -1310,7 +1321,7 @@ struct Fault {
 };
 
 /// Pending fault of each intercepted function
-Fault g_fault[FN_COUNT];
+Fault g_fault[fn_index(Fn::Count)];
 
 /**
  * @brief Arms one fault on one function
@@ -1321,7 +1332,7 @@ Fault g_fault[FN_COUNT];
  * @param ret value returned instead of calling libc
  */
 void arm(Fn fn, int err, int skip = 0, long ret = -1) {
-    g_fault[fn] = Fault{
+    g_fault[fn_index(fn)] = Fault{
         .ret = ret,
         .skip = skip,
         .err = err,
@@ -1337,7 +1348,7 @@ void arm(Fn fn, int err, int skip = 0, long ret = -1) {
  * @param value errno value written to the option
  */
 void arm_so_error(int value) {
-    g_fault[FN_GETSOCKOPT] = Fault{
+    g_fault[fn_index(Fn::Getsockopt)] = Fault{
         .ret = 0,
         .skip = 0,
         .err = 0,
@@ -1351,11 +1362,11 @@ void arm_so_error(int value) {
  *        then disarms and sets errno
  *
  * @param fn function being called
- * @return true if the call must fail (use g_fault[fn].ret), false to forward it
- *         to libc
+ * @return true if the call must fail (use g_fault[fn_index(fn)].ret), false to
+ * forward it to libc
  */
 bool take(Fn fn) {
-    Fault& f = g_fault[fn];
+    Fault& f = g_fault[fn_index(fn)];
     if (!f.armed) {
         return false;
     }
@@ -1393,8 +1404,8 @@ F real(const char* name) {
 extern "C" {
 
 /**
- * @brief Interposed socket(): fails when FN_SOCKET is armed, otherwise forwards
- *        to libc
+ * @brief Interposed socket(): fails when Fn::Socket is armed, otherwise
+ * forwards to libc
  *
  * @param d domain
  * @param t type
@@ -1402,15 +1413,15 @@ extern "C" {
  * @return the descriptor, or the injected value
  */
 int socket(int d, int t, int p) noexcept {
-    if (take(FN_SOCKET)) {
-        return static_cast<int>(g_fault[FN_SOCKET].ret);
+    if (take(Fn::Socket)) {
+        return static_cast<int>(g_fault[fn_index(Fn::Socket)].ret);
     }
     static auto fn = real<int (*)(int, int, int)>("socket");
     return fn(d, t, p);
 }
 
 /**
- * @brief Interposed fcntl(): fails when FN_FCNTL is armed, otherwise forwards
+ * @brief Interposed fcntl(): fails when Fn::Fcntl is armed, otherwise forwards
  *        to libc
  *
  * @param fd descriptor
@@ -1422,15 +1433,15 @@ int fcntl(int fd, int cmd, ...) {
     va_start(ap, cmd);
     void* arg = va_arg(ap, void*);
     va_end(ap);
-    if (take(FN_FCNTL)) {
-        return static_cast<int>(g_fault[FN_FCNTL].ret);
+    if (take(Fn::Fcntl)) {
+        return static_cast<int>(g_fault[fn_index(Fn::Fcntl)].ret);
     }
     static auto fn = real<int (*)(int, int, void*)>("fcntl");
     return fn(fd, cmd, arg);
 }
 
 /**
- * @brief Interposed setsockopt(): fails when FN_SETSOCKOPT is armed, otherwise
+ * @brief Interposed setsockopt(): fails when Fn::Setsockopt is armed, otherwise
  *        forwards to libc
  *
  * @param fd descriptor
@@ -1441,8 +1452,8 @@ int fcntl(int fd, int cmd, ...) {
  * @return 0 or -1, or the injected value
  */
 int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
-    if (take(FN_SETSOCKOPT)) {
-        return static_cast<int>(g_fault[FN_SETSOCKOPT].ret);
+    if (take(Fn::Setsockopt)) {
+        return static_cast<int>(g_fault[fn_index(Fn::Setsockopt)].ret);
     }
     static auto fn =
         real<int (*)(int, int, int, const void*, socklen_t)>("setsockopt");
@@ -1450,8 +1461,8 @@ int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
 }
 
 /**
- * @brief Interposed getsockopt(): fails when FN_GETSOCKOPT is armed, or reports
- *        an injected SO_ERROR, otherwise forwards to libc
+ * @brief Interposed getsockopt(): fails when Fn::Getsockopt is armed, or
+ * reports an injected SO_ERROR, otherwise forwards to libc
  *
  * @param fd descriptor
  * @param l option level
@@ -1461,21 +1472,21 @@ int setsockopt(int fd, int l, int n, const void* v, socklen_t len) noexcept {
  * @return 0 or -1, or the injected value
  */
 int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
-    bool inject = take(FN_GETSOCKOPT);
-    if (inject && !g_fault[FN_GETSOCKOPT].set_out) {
-        return static_cast<int>(g_fault[FN_GETSOCKOPT].ret);
+    bool inject = take(Fn::Getsockopt);
+    if (inject && !g_fault[fn_index(Fn::Getsockopt)].set_out) {
+        return static_cast<int>(g_fault[fn_index(Fn::Getsockopt)].ret);
     }
     static auto fn =
         real<int (*)(int, int, int, void*, socklen_t*)>("getsockopt");
     int r = fn(fd, l, n, v, len);
     if (inject) {
-        *static_cast<int*>(v) = g_fault[FN_GETSOCKOPT].out_int;
+        *static_cast<int*>(v) = g_fault[fn_index(Fn::Getsockopt)].out_int;
     }
     return r;
 }
 
 /**
- * @brief Interposed poll(): fails when FN_POLL is armed, otherwise forwards to
+ * @brief Interposed poll(): fails when Fn::Poll is armed, otherwise forwards to
  *        libc
  *
  * @param fds descriptors to watch
@@ -1484,15 +1495,15 @@ int getsockopt(int fd, int l, int n, void* v, socklen_t* len) noexcept {
  * @return the libc result, or the injected value
  */
 int poll(struct pollfd* fds, nfds_t n, int t) {
-    if (take(FN_POLL)) {
-        return static_cast<int>(g_fault[FN_POLL].ret);
+    if (take(Fn::Poll)) {
+        return static_cast<int>(g_fault[fn_index(Fn::Poll)].ret);
     }
     static auto fn = real<int (*)(struct pollfd*, nfds_t, int)>("poll");
     return fn(fds, n, t);
 }
 
 /**
- * @brief Interposed send(): fails when FN_SEND is armed, otherwise forwards to
+ * @brief Interposed send(): fails when Fn::Send is armed, otherwise forwards to
  *        libc
  *
  * @param fd descriptor
@@ -1502,15 +1513,15 @@ int poll(struct pollfd* fds, nfds_t n, int t) {
  * @return bytes sent, or the injected value
  */
 ssize_t send(int fd, const void* b, size_t n, int f) {
-    if (take(FN_SEND)) {
-        return g_fault[FN_SEND].ret;
+    if (take(Fn::Send)) {
+        return g_fault[fn_index(Fn::Send)].ret;
     }
     static auto fn = real<ssize_t (*)(int, const void*, size_t, int)>("send");
     return fn(fd, b, n, f);
 }
 
 /**
- * @brief Interposed recv(): fails when FN_RECV is armed, otherwise forwards to
+ * @brief Interposed recv(): fails when Fn::Recv is armed, otherwise forwards to
  *        libc
  *
  * @param fd descriptor
@@ -1520,8 +1531,8 @@ ssize_t send(int fd, const void* b, size_t n, int f) {
  * @return bytes received, or the injected value
  */
 ssize_t recv(int fd, void* b, size_t n, int f) {
-    if (take(FN_RECV)) {
-        return g_fault[FN_RECV].ret;
+    if (take(Fn::Recv)) {
+        return g_fault[fn_index(Fn::Recv)].ret;
     }
     static auto fn = real<ssize_t (*)(int, void*, size_t, int)>("recv");
     return fn(fd, b, n, f);
@@ -1656,7 +1667,7 @@ TEST(connect_twice_reports_already_connected) {
 TEST(connect_fails_when_socket_creation_fails) {
     FaultGuard g;
     ASSERT_EQ(socket_init(), SocketResult::Success);
-    arm(FN_SOCKET, EMFILE);
+    arm(Fn::Socket, EMFILE);
     Socket sock;
     ASSERT_EQ(sock.connect("127.0.0.1", 1, 1000), SocketResult::SocketError);
     ASSERT_FALSE(sock.is_valid());
@@ -1677,7 +1688,7 @@ TEST(connect_reuses_a_descriptor_left_by_a_failed_send) {
     CONNECT_LOCAL(sock, peer, 2000);
     uint8_t byte = 1;
     size_t sent = 0;
-    arm(FN_SEND, EPIPE);
+    arm(Fn::Send, EPIPE);
     ASSERT_EQ(sock.send(&byte, 1, sent), SocketResult::SocketError);
     ASSERT_FALSE(sock.is_connected());
     ASSERT_TRUE(sock.is_valid());
@@ -1701,7 +1712,7 @@ TEST(connect_fails_when_nonblocking_mode_cannot_be_set) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
     Socket sock;
-    arm(FN_FCNTL, EBADF);
+    arm(Fn::Fcntl, EBADF);
     ASSERT_EQ(
         sock.connect("127.0.0.1", peer.port, 1000), SocketResult::SocketError);
     ASSERT_FALSE(sock.is_valid());
@@ -1716,7 +1727,7 @@ TEST(connect_fails_when_so_error_cannot_be_read) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
     Socket sock;
-    arm(FN_GETSOCKOPT, EBADF);
+    arm(Fn::Getsockopt, EBADF);
     ASSERT_EQ(
         sock.connect("127.0.0.1", peer.port, 1000), SocketResult::SocketError);
     ASSERT_FALSE(sock.is_valid());
@@ -1765,7 +1776,7 @@ TEST(connect_succeeds_without_keepalive_when_it_cannot_be_enabled) {
     ASSERT_EQ(socket_init(), SocketResult::Success);
     LoopPeer peer;
     Socket sock;
-    arm(FN_SETSOCKOPT, ENOPROTOOPT);
+    arm(Fn::Setsockopt, ENOPROTOOPT);
     ASSERT_EQ(
         sock.connect("127.0.0.1", peer.port, 1000), SocketResult::Success);
     ASSERT_TRUE(sock.is_connected());
@@ -1811,7 +1822,7 @@ TEST(send_treats_a_zero_byte_result_as_a_closed_connection) {
     CONNECT_LOCAL(sock, peer, 2000);
     uint8_t byte = 1;
     size_t sent = 99;
-    arm(FN_SEND, 0, 0, 0);
+    arm(Fn::Send, 0, 0, 0);
     ASSERT_EQ(sock.send(&byte, 1, sent), SocketResult::Closed);
     ASSERT_EQ(sent, static_cast<size_t>(0));
     ASSERT_FALSE(sock.is_connected());
@@ -1828,7 +1839,7 @@ TEST(send_all_waits_for_writability_after_would_block) {
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
     uint8_t payload[] = {1, 2, 3, 4};
-    arm(FN_SEND, EAGAIN);  // first send blocks, the retry goes through
+    arm(Fn::Send, EAGAIN);  // first send blocks, the retry goes through
     ASSERT_EQ(sock.send_all(payload, sizeof(payload)), SocketResult::Success);
     uint8_t got[4] = {};
     ASSERT_EQ(
@@ -1848,8 +1859,8 @@ TEST(send_all_returns_the_wait_error_when_writability_cannot_be_awaited) {
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
     uint8_t payload[] = {1};
-    arm(FN_SEND, EAGAIN);
-    arm(FN_POLL, EINTR);
+    arm(Fn::Send, EAGAIN);
+    arm(Fn::Poll, EINTR);
     ASSERT_EQ(
         sock.send_all(payload, sizeof(payload)), SocketResult::SocketError);
 }
@@ -1923,7 +1934,7 @@ TEST(recv_non_blocking_reports_a_connection_error) {
     CONNECT_LOCAL(sock, peer, 2000);
     uint8_t buf[16];
     size_t got = 0;
-    arm(FN_RECV, ECONNRESET);
+    arm(Fn::Recv, ECONNRESET);
     ASSERT_EQ(
         sock.recv(buf, sizeof(buf), got, 0), SocketResult::ConnectionReset);
     ASSERT_FALSE(sock.is_connected());
@@ -1974,10 +1985,10 @@ TEST(recv_blocking_reports_would_block_and_connection_errors) {
     CONNECT_LOCAL(sock, peer, 2000);
     uint8_t buf[16];
     size_t got = 0;
-    arm(FN_RECV, EAGAIN);
+    arm(Fn::Recv, EAGAIN);
     ASSERT_EQ(sock.recv(buf, sizeof(buf), got, -1), SocketResult::WouldBlock);
     ASSERT_TRUE(sock.is_connected());
-    arm(FN_RECV, ECONNRESET);
+    arm(Fn::Recv, ECONNRESET);
     ASSERT_EQ(
         sock.recv(buf, sizeof(buf), got, -1), SocketResult::ConnectionReset);
     ASSERT_FALSE(sock.is_connected());
@@ -1997,9 +2008,9 @@ TEST(set_non_blocking_reports_fcntl_failures) {
     LoopPeer peer;
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
-    arm(FN_FCNTL, EBADF);  // F_GETFL fails
+    arm(Fn::Fcntl, EBADF);  // F_GETFL fails
     ASSERT_EQ(sock.set_non_blocking(true), SocketResult::SocketError);
-    arm(FN_FCNTL, EBADF, 1);  // F_GETFL passes, F_SETFL fails
+    arm(Fn::Fcntl, EBADF, 1);  // F_GETFL passes, F_SETFL fails
     ASSERT_EQ(sock.set_non_blocking(true), SocketResult::SocketError);
 }
 
@@ -2013,11 +2024,11 @@ TEST(option_setters_report_setsockopt_failures) {
     LoopPeer peer;
     Socket sock;
     CONNECT_LOCAL(sock, peer, 2000);
-    arm(FN_SETSOCKOPT, ENOPROTOOPT);
+    arm(Fn::Setsockopt, ENOPROTOOPT);
     ASSERT_EQ(sock.set_nodelay(true), SocketResult::SocketError);
-    arm(FN_SETSOCKOPT, ENOPROTOOPT);
+    arm(Fn::Setsockopt, ENOPROTOOPT);
     ASSERT_EQ(sock.set_recv_buffer_size(4096), SocketResult::SocketError);
-    arm(FN_SETSOCKOPT, ENOPROTOOPT);
+    arm(Fn::Setsockopt, ENOPROTOOPT);
     ASSERT_EQ(sock.set_send_buffer_size(4096), SocketResult::SocketError);
 }
 
@@ -2033,7 +2044,7 @@ TEST(wait_ready_failure_is_propagated_by_recv) {
     CONNECT_LOCAL(sock, peer, 2000);
     uint8_t buf[16];
     size_t got = 0;
-    arm(FN_POLL, EINTR);
+    arm(Fn::Poll, EINTR);
     ASSERT_EQ(sock.recv(buf, sizeof(buf), got, 100), SocketResult::SocketError);
 }
 

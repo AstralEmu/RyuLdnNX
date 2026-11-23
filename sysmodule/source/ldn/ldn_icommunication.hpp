@@ -495,14 +495,29 @@ private:
 
 private:
     LdnStateMachine m_state_machine;  ///< Thread-safe state machine
+
+    // Scalar state, grouped by size to avoid alignment padding (declared
+    // before the large members; none of these appears in the constructor
+    // initializer list, so the order is free).
     u64 m_error_state{0};             ///< Error state flag
     u64 m_client_process_id{0};       ///< Client game process ID
-
-    NetworkInfo m_network_info;  ///< Current network info
+    u64 m_local_communication_id{0};  ///< LocalCommunicationId from NACP
+    size_t m_scan_result_count{0};    ///< Number of scan results
+    size_t m_advertise_data_size{0};  ///< Size of advertise data
+    u32 m_ipv4_address{0};            ///< Assigned IPv4 address
+    u32 m_subnet_mask{0};             ///< Subnet mask
     DisconnectReason m_disconnect_reason{
         DisconnectReason::None};  ///< Last disconnect reason
-    u32 m_ipv4_address{0};        ///< Assigned IPv4 address
-    u32 m_subnet_mask{0};         ///< Subnet mask
+    ryu_ldn::protocol::PacketId m_last_response_id{
+        ryu_ldn::protocol::PacketId::Initialize};  ///< Last received packet ID
+    ryu_ldn::protocol::NetworkErrorCode m_last_network_error{
+        ryu_ldn::protocol::NetworkErrorCode::None};  ///< Last error from server
+    u16 m_expected_scene_id{0};       ///< Expected sceneId from Scan filter
+    bool m_network_connected{false};  ///< True when in active network session
+    bool m_p2p_connect_thread_initialized{false};  ///< P2P thread created
+    bool m_recv_thread_stopped{false};  ///< True if Finalize() stopped recv
+
+    NetworkInfo m_network_info;  ///< Current network info
 
     ryu_ldn::network::RyuLdnClient
         m_server_client;                   ///< Server communication client
@@ -548,33 +563,26 @@ private:
     os::Event m_reject_event;  ///< Signaled when reject reply received
     os::Event
         m_handshake_event;  ///< Signaled when RyuLdnClient reaches Ready state
-    ryu_ldn::protocol::PacketId m_last_response_id{
-        ryu_ldn::protocol::PacketId::Initialize};  ///< Last received packet ID
 
     // Scan results buffer (reduced to save ~18KB of memory)
     static constexpr size_t MAX_SCAN_RESULTS =
         8;  ///< Max networks from scan (reduced from 24)
     NetworkInfo m_scan_results[MAX_SCAN_RESULTS]{};  ///< Scan results buffer
-    size_t m_scan_result_count{0};                   ///< Number of scan results
 
     // Advertise data buffer
     uint8_t m_advertise_data[384]{};  ///< Stored advertise data
-    size_t m_advertise_data_size{0};  ///< Size of advertise data
 
     // Game version (like Ryujinx _gameVersion)
     uint8_t
         m_game_version[16]{};  ///< Game version string for CreateAccessPoint
 
     // Network connected flag (like Ryujinx _networkConnected)
-    bool m_network_connected{false};  ///< True when in active network session
 
     // Node state tracking for GetNetworkInfoLatestUpdate
     bool m_prev_node_connected[NodeCountMax]{};  ///< Previous connected state
                                                  ///< of each node
 
     // Last network error (like Ryujinx _lastError)
-    ryu_ldn::protocol::NetworkErrorCode m_last_network_error{
-        ryu_ldn::protocol::NetworkErrorCode::None};  ///< Last error from server
 
     // P2P Proxy support (like Ryujinx _useP2pProxy, _connectedProxy,
     // _hostedProxy, Config)
@@ -607,7 +615,6 @@ private:
     /// True while the connect worker is running
     std::atomic<bool> m_p2p_connect_thread_active{false};
     /// True once m_p2p_connect_thread was created (so it can be joined)
-    bool m_p2p_connect_thread_initialized = false;
     /// ExternalProxy config handed to the connect worker
     ryu_ldn::protocol::ExternalProxyConfig m_pending_p2p_config{};
 
@@ -620,9 +627,6 @@ private:
     // os::Event (via TimedWaitAny) which the receive thread signals.
     os::ThreadType m_recv_thread;  ///< Receive thread (replaces old bg thread)
     std::atomic<bool> m_recv_thread_running;  ///< Receive thread running flag
-    bool m_recv_thread_stopped{
-        false};  ///< True if Finalize() already
-                 ///< stopped+destroyed the receive thread
 
     // Mutex protecting shared state written by the receive thread and read
     // by IPC handlers: m_network_info, m_network_connected, m_scan_results,
@@ -687,11 +691,7 @@ private:
 
     // Program ID for LocalCommunicationId replacement (like Ryujinx NeedsRealId
     // handling)
-    ncm::ProgramId m_program_id;      ///< Client program ID (title ID)
-    u64 m_local_communication_id{0};  ///< LocalCommunicationId from NACP (for
-                                      ///< LDN filtering)
-    u16 m_expected_scene_id{0};  ///< Expected sceneId from game's Scan filter
-                                 ///< (Ryujinx may use 0)
+    ncm::ProgramId m_program_id;  ///< Client program ID (title ID)
 
     /**
      * @brief Static callback for inactivity timeout

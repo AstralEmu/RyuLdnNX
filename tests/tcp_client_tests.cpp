@@ -32,6 +32,7 @@
 #include <unistd.h>
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -204,12 +205,11 @@ TEST(destructor_safe_disconnected) {
 TEST(move_constructor) {
     socket_init();
 
-    TcpClient client1;
-    const std::reference_wrapper<const TcpClient> client1_source =
-        std::cref(client1);
-    TcpClient client2(std::move(client1));
+    const auto client1 = std::make_unique<TcpClient>();
+    const TcpClient& client1_source = *client1;
+    TcpClient client2(std::move(*client1));
 
-    ASSERT_FALSE(moved_from_is_connected(client1_source.get()));
+    ASSERT_FALSE(moved_from_is_connected(client1_source));
     ASSERT_FALSE(client2.is_connected());
 }
 
@@ -219,14 +219,13 @@ TEST(move_constructor) {
 TEST(move_assignment) {
     socket_init();
 
-    TcpClient client1;
+    const auto client1 = std::make_unique<TcpClient>();
+    const TcpClient& client1_source = *client1;
     TcpClient client2;
-    const std::reference_wrapper<const TcpClient> client1_source =
-        std::cref(client1);
 
-    client2 = std::move(client1);
+    client2 = std::move(*client1);
 
-    ASSERT_FALSE(moved_from_is_connected(client1_source.get()));
+    ASSERT_FALSE(moved_from_is_connected(client1_source));
     ASSERT_FALSE(client2.is_connected());
 }
 
@@ -681,21 +680,18 @@ TEST(retry_after_failed_connect) {
 TEST(multiple_moves_safe) {
     socket_init();
 
-    TcpClient client1;
-    const std::reference_wrapper<const TcpClient> client1_source =
-        std::cref(client1);
-    TcpClient client2(std::move(client1));
-    const std::reference_wrapper<const TcpClient> client2_source =
-        std::cref(client2);
-    TcpClient client3(std::move(client2));
-    const std::reference_wrapper<const TcpClient> client3_source =
-        std::cref(client3);
+    const auto client1 = std::make_unique<TcpClient>();
+    const TcpClient& client1_source = *client1;
+    const auto client2 = std::make_unique<TcpClient>(std::move(*client1));
+    const TcpClient& client2_source = *client2;
+    const auto client3 = std::make_unique<TcpClient>(std::move(*client2));
+    const TcpClient& client3_source = *client3;
     TcpClient client4;
-    client4 = std::move(client3);
+    client4 = std::move(*client3);
 
-    ASSERT_FALSE(moved_from_is_connected(client1_source.get()));
-    ASSERT_FALSE(moved_from_is_connected(client2_source.get()));
-    ASSERT_FALSE(moved_from_is_connected(client3_source.get()));
+    ASSERT_FALSE(moved_from_is_connected(client1_source));
+    ASSERT_FALSE(moved_from_is_connected(client2_source));
+    ASSERT_FALSE(moved_from_is_connected(client3_source));
     ASSERT_FALSE(client4.is_connected());
 }
 
@@ -1083,7 +1079,7 @@ public:
     /// EOF/timeout).
     /// @param size Number of bytes to read (2 s receive timeout per recv).
     /// @return The bytes read, possibly fewer than `size`.
-    std::vector<uint8_t> read_bytes(size_t size) const {
+    [[nodiscard]] std::vector<uint8_t> read_bytes(size_t size) const {
         std::vector<uint8_t> out(size);
         size_t got = 0;
         while (got < size) {
@@ -1103,7 +1099,7 @@ public:
      * @return header plus payload bytes; shorter than a header when the read
      * timed out
      */
-    std::vector<uint8_t> read_packet() {
+    [[nodiscard]] std::vector<uint8_t> read_packet() const {
         std::vector<uint8_t> pkt = read_bytes(sizeof(LdnHeader));
         if (pkt.size() != sizeof(LdnHeader)) {
             return pkt;
@@ -1236,14 +1232,13 @@ TEST(connected_connect_enables_nodelay_and_rejects_second_connect) {
  */
 TEST(connected_move_assignment_transfers_the_connection) {
     Peer peer;
-    TcpClient source;
-    CONNECT_PAIR(source, peer);
-    const std::reference_wrapper<const TcpClient> source_observer =
-        std::cref(source);
+    const auto source = std::make_unique<TcpClient>();
+    CONNECT_PAIR(*source, peer);
+    const TcpClient& source_observer = *source;
     TcpClient target;
-    target = std::move(source);
+    target = std::move(*source);
     ASSERT_TRUE(target.is_connected());
-    ASSERT_FALSE(moved_from_is_connected(source_observer.get()));
+    ASSERT_FALSE(moved_from_is_connected(source_observer));
     ASSERT_EQ(target.send_raw("ab", 2), ClientResult::Success);
     ASSERT_EQ(peer.read_bytes(2).size(), static_cast<size_t>(2));
 }

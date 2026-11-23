@@ -19,6 +19,7 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <memory>
 #include <vector>
 #include <functional>
 
@@ -95,22 +96,6 @@ static int g_tests_failed = 0;
                 static_cast<int>(a));                    \
             return false;                                \
         }                                                \
-    } while (0)
-
-/**
- * @brief Run a bool-returning test, print PASS and count the result.
- * @param test_func Name of the test function.
- */
-#define RUN_TEST(test_func)                    \
-    do {                                       \
-        printf("  [TEST] %s... ", #test_func); \
-        fflush(stdout);                        \
-        if (test_func()) {                     \
-            printf("PASS\n");                  \
-            g_tests_passed++;                  \
-        } else {                               \
-            g_tests_failed++;                  \
-        }                                      \
     } while (0)
 
 /// Server host name, overridable by the first command-line argument.
@@ -953,13 +938,15 @@ bool test_send_reject() {
 
     // Node doesn't exist, but send should still succeed at protocol level
     ClientOpResult r1 = client.send_reject(1, protocol::DisconnectReason::User);
-    ASSERT_TRUE(
-        r1 == ClientOpResult::Success || r1 == ClientOpResult::SendFailed);
+    const bool r1_ok =
+        r1 == ClientOpResult::Success || r1 == ClientOpResult::SendFailed;
+    ASSERT_TRUE(r1_ok);
 
     ClientOpResult r2 =
         client.send_reject(0, protocol::DisconnectReason::SystemRequest);
-    ASSERT_TRUE(
-        r2 == ClientOpResult::Success || r2 == ClientOpResult::SendFailed);
+    const bool r2_ok =
+        r2 == ClientOpResult::Success || r2 == ClientOpResult::SendFailed;
+    ASSERT_TRUE(r2_ok);
 
     client.disconnect();
     socket_exit();
@@ -1368,10 +1355,10 @@ bool test_passphrase_connect() {
     client.connect(g_host, g_port);
     (void)wait_until_ready(client, 8000);
     // Server behavior depends on passphrase matching — just verify no crash
-    ASSERT_TRUE(
-        client.get_state() == ConnectionState::Ready ||
-        client.get_state() == ConnectionState::Error ||
-        client.get_state() == ConnectionState::Disconnected);
+    const bool state_ok = client.get_state() == ConnectionState::Ready ||
+                          client.get_state() == ConnectionState::Error ||
+                          client.get_state() == ConnectionState::Disconnected;
+    ASSERT_TRUE(state_ok);
 
     client.disconnect();
     socket_exit();
@@ -1398,10 +1385,10 @@ bool test_connect_to_invalid_port() {
 
     ClientOpResult result = client.connect(g_host, 19999);
     // Should fail or auto-transition, but not crash
-    ASSERT_TRUE(
-        result == ClientOpResult::Success ||
-        result == ClientOpResult::ConnectionFailed ||
-        result == ClientOpResult::InvalidState);
+    const bool result_ok = result == ClientOpResult::Success ||
+                           result == ClientOpResult::ConnectionFailed ||
+                           result == ClientOpResult::InvalidState;
+    ASSERT_TRUE(result_ok);
 
     socket_exit();
     return true;
@@ -1514,10 +1501,10 @@ bool test_client_op_result_to_string_all() {
  */
 static std::string get_compose_file() {
     const char* env = std::getenv("INTEGRATION_COMPOSE_FILE");
-    if (env && env[0] != '\0') {
-        return std::string(env);
+    if (env != nullptr && env[0] != '\0') {
+        return {env};
     }
-    return "docker-compose.yml";
+    return {"docker-compose.yml"};
 }
 
 // Execute a shell command, return its exit code (or -1 on signal)
@@ -1600,7 +1587,7 @@ static bool restart_server(int max_wait_s = 30) {
     if (rc != 0) {
         cmd =
             "docker compose -f '" + compose + "' up -d ldn-server 2>/dev/null";
-        rc = run_shell(cmd.c_str());
+        static_cast<void>(run_shell(cmd.c_str()));
     }
     for (int i = 0; i < max_wait_s; i++) {
         if (tcp_check(g_host, g_port, 2)) {
@@ -1839,9 +1826,9 @@ bool test_backoff_expiry_and_retry() {
     RyuLdnClient client(cfg);
 
     struct BoffFlags {
-        std::atomic<int>& boff;
-        std::atomic<int>& retry;
-    } flags{.boff = backoff_count, .retry = retrying_count};
+        std::atomic<int>* boff;
+        std::atomic<int>* retry;
+    } flags{.boff = &backoff_count, .retry = &retrying_count};
 
     client.set_state_callback(
         [](ConnectionState old_state,
@@ -1849,12 +1836,12 @@ bool test_backoff_expiry_and_retry() {
            void* user_data) {
             auto* f = static_cast<BoffFlags*>(user_data);
             if (new_state == ConnectionState::Backoff) {
-                f->boff++;
+                (*f->boff)++;
             }
             // Retrying is a transient state — detect it from old_state
             if (old_state == ConnectionState::Retrying ||
                 new_state == ConnectionState::Retrying) {
-                f->retry++;
+                (*f->retry)++;
             }
         },
         &flags);
@@ -1938,7 +1925,8 @@ bool test_server_initiated_disconnect() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
     }
-    ASSERT_TRUE(saw_disconnect_callback.load() || !client.is_ready());
+    const bool drop_seen = saw_disconnect_callback.load() || !client.is_ready();
+    ASSERT_TRUE(drop_seen);
 
     ASSERT_TRUE(restart_server(30));
     client.disconnect();
@@ -2160,9 +2148,9 @@ bool test_tcpclient_send_receive_roundtrip() {
         r = tc.receive_packet(type, buf, sizeof(buf), payload_size, 500);
         if (r == ClientResult::Success) {
             // Got a packet — verify it's a valid type
-            ASSERT_TRUE(
-                type == protocol::PacketId::Connected ||
-                type == protocol::PacketId::Initialize);
+            const bool type_ok = type == protocol::PacketId::Connected ||
+                                 type == protocol::PacketId::Initialize;
+            ASSERT_TRUE(type_ok);
             break;
         }
         if (r == ClientResult::ConnectionLost) {
@@ -2171,7 +2159,9 @@ bool test_tcpclient_send_receive_roundtrip() {
     }
     // Success if we got any packet, or Timeout is acceptable
     // (server may not respond without proper handshake sequence)
-    ASSERT_TRUE(r == ClientResult::Success || r == ClientResult::Timeout);
+    const bool recv_ok =
+        r == ClientResult::Success || r == ClientResult::Timeout;
+    ASSERT_TRUE(recv_ok);
 
     tc.disconnect();
     socket_exit();
@@ -2300,16 +2290,16 @@ bool test_socket_send_recv_not_connected() {
  */
 bool test_socket_move_constructor() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
-    Socket sock1;
-    SocketResult r = sock1.connect(g_host, g_port, 3000);
+    const auto sock1 = std::make_unique<Socket>();
+    SocketResult r = sock1->connect(g_host, g_port, 3000);
     ASSERT_EQ(r, SocketResult::Success);
-    ASSERT_TRUE(sock1.is_connected());
+    ASSERT_TRUE(sock1->is_connected());
 
-    Socket sock2 = std::move(sock1);
+    Socket sock2 = std::move(*sock1);
     ASSERT_TRUE(sock2.is_connected());
     // sock1 moved-from
-    ASSERT_FALSE(sock1.is_valid());
-    ASSERT_FALSE(sock1.is_connected());
+    ASSERT_FALSE(sock1->is_valid());
+    ASSERT_FALSE(sock1->is_connected());
 
     sock2.close();
     socket_exit();
@@ -2322,14 +2312,14 @@ bool test_socket_move_constructor() {
  */
 bool test_socket_move_assignment() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
-    Socket sock1;
-    SocketResult r = sock1.connect(g_host, g_port, 3000);
+    const auto sock1 = std::make_unique<Socket>();
+    SocketResult r = sock1->connect(g_host, g_port, 3000);
     ASSERT_EQ(r, SocketResult::Success);
 
     Socket sock2;
-    sock2 = std::move(sock1);
+    sock2 = std::move(*sock1);
     ASSERT_TRUE(sock2.is_connected());
-    ASSERT_FALSE(sock1.is_valid());
+    ASSERT_FALSE(sock1->is_valid());
 
     sock2.close();
     socket_exit();
@@ -2368,7 +2358,9 @@ bool test_socket_send_all_connected() {
     size_t received = 0;
     r = sock.recv(recv_buf, sizeof(recv_buf), received, 2000);
     // Server may reply or timeout — just verify no crash
-    ASSERT_TRUE(r == SocketResult::Success || r == SocketResult::Timeout);
+    const bool recv_ok =
+        r == SocketResult::Success || r == SocketResult::Timeout;
+    ASSERT_TRUE(recv_ok);
 
     sock.close();
     socket_exit();
@@ -2473,7 +2465,9 @@ bool test_socket_recv_timeout() {
     size_t received = 0;
     r = sock.recv(buf, sizeof(buf), received, 100);
     // Timeout is expected since we haven't sent any handshake
-    ASSERT_TRUE(r == SocketResult::Timeout || r == SocketResult::Success);
+    const bool recv_ok =
+        r == SocketResult::Timeout || r == SocketResult::Success;
+    ASSERT_TRUE(recv_ok);
 
     sock.close();
     socket_exit();
@@ -2519,9 +2513,10 @@ bool test_socket_recv_nonblocking() {
     // Non-blocking recv — server hasn't sent anything yet, so this should
     // return WouldBlock or Timeout immediately
     r = sock.recv(buf, sizeof(buf), received, 0);
-    ASSERT_TRUE(
-        r == SocketResult::WouldBlock || r == SocketResult::Timeout ||
-        r == SocketResult::Success);
+    const bool recv_ok = r == SocketResult::WouldBlock ||
+                         r == SocketResult::Timeout ||
+                         r == SocketResult::Success;
+    ASSERT_TRUE(recv_ok);
 
     sock.close();
     socket_exit();
@@ -2560,9 +2555,10 @@ bool test_socket_recv_blocking() {
     uint8_t recv_buf[4096];
     size_t received = 0;
     r = sock.recv(recv_buf, sizeof(recv_buf), received, -1);
-    ASSERT_TRUE(
+    const bool recv_ok =
         r == SocketResult::Success || r == SocketResult::Timeout ||
-        r == SocketResult::ConnectionReset || r == SocketResult::Closed);
+        r == SocketResult::ConnectionReset || r == SocketResult::Closed;
+    ASSERT_TRUE(recv_ok);
     if (r == SocketResult::Success) {
         ASSERT_TRUE(received > 0);
     }
@@ -2641,8 +2637,7 @@ bool test_socket_connect_empty_host() {
 }
 
 /**
- * @brief Connecting to 127.0.0.1 port 1 does not crash; the result is not
- *        asserted (the check is always true).
+ * @brief Connecting to 127.0.0.1 port 1 (nothing listening) must fail.
  * @return true when all assertions hold, false otherwise.
  */
 bool test_socket_connect_port_zero() {
@@ -2652,9 +2647,7 @@ bool test_socket_connect_port_zero() {
     SocketResult r = sock.connect("127.0.0.1", 1, 2000);
     // Accept any non-success result; the important thing is no crash
     // and the result is a reasonable error code
-    ASSERT_TRUE(
-        r != SocketResult::Success ||
-        true);  // always passes, no crash = success
+    ASSERT_TRUE(r != SocketResult::Success);
     sock.close();
     socket_exit();
     return true;
@@ -2675,9 +2668,10 @@ bool test_socket_connect_connection_refused() {
         sock.connect("127.0.0.1", 1, 0);  // timeout_ms=0 = blocking mode
     // In blocking mode, ECONNREFUSED goes through the else branch at line ~470
     // which calls errno_to_result(ECONNREFUSED)
-    ASSERT_TRUE(
-        r == SocketResult::ConnectionRefused || r == SocketResult::Timeout ||
-        r == SocketResult::HostUnreachable);
+    const bool refused = r == SocketResult::ConnectionRefused ||
+                         r == SocketResult::Timeout ||
+                         r == SocketResult::HostUnreachable;
+    ASSERT_TRUE(refused);
     sock.close();
     socket_exit();
     return true;
@@ -2805,6 +2799,204 @@ bool test_socket_create_twice() {
 // Main
 // ============================================================================
 
+/// One named bool-returning test function.
+struct TestCase {
+    /// Function name, printed before the run.
+    const char* name;
+    /// Test entry point; returns true on success.
+    bool (*run)();
+};
+
+/// A titled group of tests run in order.
+struct TestSection {
+    /// Heading printed before the group.
+    const char* title;
+    /// Tests of the group.
+    std::vector<TestCase> tests;
+};
+
+/**
+ * @brief Run one test, print PASS and count the result.
+ * @param tc Test to run.
+ */
+static void run_case(const TestCase& tc) {
+    printf("  [TEST] %s... ", tc.name);
+    fflush(stdout);
+    if (tc.run()) {
+        printf("PASS\n");
+        g_tests_passed++;
+    } else {
+        g_tests_failed++;
+    }
+}
+
+/**
+ * @brief Every test of the suite, grouped by section, in execution order.
+ * @return The sections.
+ */
+static std::vector<TestSection> all_sections() {
+    return {
+        {"Construction & Configuration",
+         {
+             {"test_default_config_values", test_default_config_values},
+             {"test_config_from_default_constructor",
+              test_config_from_default_constructor},
+             {"test_config_from_custom_constructor",
+              test_config_from_custom_constructor},
+             {"test_set_config_while_disconnected",
+              test_set_config_while_disconnected},
+             {"test_config_change_then_connect",
+              test_config_change_then_connect},
+             {"test_passphrase_config", test_passphrase_config},
+         }},
+        {"Connection & Handshake",
+         {
+             {"test_connect_handshake", test_connect_handshake},
+             {"test_connect_parameterless", test_connect_parameterless},
+             {"test_connect_already_connected", test_connect_already_connected},
+             {"test_state_transitions_connect", test_state_transitions_connect},
+             {"test_disconnect_reconnect", test_disconnect_reconnect},
+             {"test_sequential_connect_disconnect_cycles",
+              test_sequential_connect_disconnect_cycles},
+             {"test_double_disconnect", test_double_disconnect},
+             {"test_multiple_clients_same_server",
+              test_multiple_clients_same_server},
+         }},
+        {"Getters & State Queries",
+         {
+             {"test_getters_while_connected", test_getters_while_connected},
+             {"test_getters_while_disconnected",
+              test_getters_while_disconnected},
+             {"test_get_last_rtt_initial", test_get_last_rtt_initial},
+         }},
+        {"Packet Sending (all methods while Ready)",
+         {
+             {"test_send_scan", test_send_scan},
+             {"test_send_create_access_point", test_send_create_access_point},
+             {"test_send_create_access_point_with_advertise",
+              test_send_create_access_point_with_advertise},
+             {"test_send_connect", test_send_connect},
+             {"test_send_create_access_point_private",
+              test_send_create_access_point_private},
+             {"test_send_connect_private", test_send_connect_private},
+             {"test_send_proxy_data", test_send_proxy_data},
+             {"test_send_ping", test_send_ping},
+             {"test_send_ping_response", test_send_ping_response},
+             {"test_send_disconnect_network", test_send_disconnect_network},
+             {"test_send_set_accept_policy", test_send_set_accept_policy},
+             {"test_send_set_advertise_data", test_send_set_advertise_data},
+             {"test_send_reject", test_send_reject},
+             {"test_send_raw_packet", test_send_raw_packet},
+         }},
+        {"Packet Sending (Not Connected)",
+         {
+             {"test_send_not_connected", test_send_not_connected},
+         }},
+        {"Callbacks",
+         {
+             {"test_state_callback_lifecycle", test_state_callback_lifecycle},
+             {"test_state_callback_null", test_state_callback_null},
+             {"test_packet_callback_receives_data",
+              test_packet_callback_receives_data},
+             {"test_packet_callback_null_no_crash",
+              test_packet_callback_null_no_crash},
+         }},
+        {"Packet Reception",
+         {
+             {"test_receive_scan_reply", test_receive_scan_reply},
+             {"test_receive_connected_sync_network",
+              test_receive_connected_sync_network},
+             {"test_server_ping_echo", test_server_ping_echo},
+         }},
+        {"Multi-client",
+         {
+             {"test_host_station_full_flow", test_host_station_full_flow},
+             {"test_three_clients_scan", test_three_clients_scan},
+             {"test_passphrase_connect", test_passphrase_connect},
+         }},
+        {"Error & Edge Cases",
+         {
+             {"test_connect_to_invalid_port", test_connect_to_invalid_port},
+             {"test_multiple_scan_requests", test_multiple_scan_requests},
+             {"test_move_constructor", test_move_constructor},
+             {"test_move_assignment", test_move_assignment},
+             {"test_client_op_result_to_string_all",
+              test_client_op_result_to_string_all},
+         }},
+        {"Server Drop (Docker kill/restart)",
+         {
+             {"test_connection_lost_during_ready",
+              test_connection_lost_during_ready},
+             {"test_connection_lost_no_auto_reconnect",
+              test_connection_lost_no_auto_reconnect},
+             {"test_send_fails_after_server_drop",
+              test_send_fails_after_server_drop},
+             {"test_try_connect_failure_then_backoff",
+              test_try_connect_failure_then_backoff},
+             {"test_backoff_expiry_and_retry", test_backoff_expiry_and_retry},
+             {"test_server_initiated_disconnect",
+              test_server_initiated_disconnect},
+         }},
+        {"TcpClient Direct",
+         {
+             {"test_tcpclient_connect_already_connected",
+              test_tcpclient_connect_already_connected},
+             {"test_tcpclient_send_not_connected",
+              test_tcpclient_send_not_connected},
+             {"test_tcpclient_move_constructor",
+              test_tcpclient_move_constructor},
+             {"test_tcpclient_move_assignment", test_tcpclient_move_assignment},
+             {"test_tcpclient_receive_packet_not_connected",
+              test_tcpclient_receive_packet_not_connected},
+             {"test_tcpclient_has_packet_available_not_connected",
+              test_tcpclient_has_packet_available_not_connected},
+             {"test_tcpclient_set_nodelay_connected",
+              test_tcpclient_set_nodelay_connected},
+             {"test_tcpclient_send_receive_roundtrip",
+              test_tcpclient_send_receive_roundtrip},
+         }},
+        {"Socket Direct",
+         {
+             {"test_socket_init_exit", test_socket_init_exit},
+             {"test_socket_connect_disconnect", test_socket_connect_disconnect},
+             {"test_socket_connect_already_connected",
+              test_socket_connect_already_connected},
+             {"test_socket_connect_invalid_host",
+              test_socket_connect_invalid_host},
+             {"test_socket_not_initialized", test_socket_not_initialized},
+             {"test_socket_send_recv_not_connected",
+              test_socket_send_recv_not_connected},
+             {"test_socket_move_constructor", test_socket_move_constructor},
+             {"test_socket_move_assignment", test_socket_move_assignment},
+             {"test_socket_send_all_connected", test_socket_send_all_connected},
+             {"test_socket_set_nodelay_connected",
+              test_socket_set_nodelay_connected},
+             {"test_socket_set_buffer_sizes_connected",
+              test_socket_set_buffer_sizes_connected},
+             {"test_socket_set_options_invalid_fd",
+              test_socket_set_options_invalid_fd},
+             {"test_socket_ipv4_connect", test_socket_ipv4_connect},
+             {"test_socket_recv_timeout", test_socket_recv_timeout},
+             {"test_socket_double_close", test_socket_double_close},
+             {"test_socket_recv_nonblocking", test_socket_recv_nonblocking},
+             {"test_socket_recv_blocking", test_socket_recv_blocking},
+             {"test_socket_send_zero_bytes", test_socket_send_zero_bytes},
+             {"test_socket_is_valid_after_connect",
+              test_socket_is_valid_after_connect},
+             {"test_socket_connect_null_host", test_socket_connect_null_host},
+             {"test_socket_connect_empty_host", test_socket_connect_empty_host},
+             {"test_socket_connect_port_zero", test_socket_connect_port_zero},
+             {"test_socket_connect_connection_refused",
+              test_socket_connect_connection_refused},
+             {"test_socket_recv_blocking_with_data",
+              test_socket_recv_blocking_with_data},
+             {"test_socket_recv_zero_timeout_with_data",
+              test_socket_recv_zero_timeout_with_data},
+             {"test_socket_create_twice", test_socket_create_twice},
+         }},
+    };
+}
+
 /**
  * @brief Run every integration test against the server.
  * @param argc Argument count.
@@ -2822,116 +3014,14 @@ int main(int argc, char* argv[]) {
     printf("  Server: %s:%u\n", g_host, g_port);
     printf("========================================\n\n");
 
-    printf("--- Construction & Configuration ---\n");
-    RUN_TEST(test_default_config_values);
-    RUN_TEST(test_config_from_default_constructor);
-    RUN_TEST(test_config_from_custom_constructor);
-    RUN_TEST(test_set_config_while_disconnected);
-    RUN_TEST(test_config_change_then_connect);
-    RUN_TEST(test_passphrase_config);
-
-    printf("\n--- Connection & Handshake ---\n");
-    RUN_TEST(test_connect_handshake);
-    RUN_TEST(test_connect_parameterless);
-    RUN_TEST(test_connect_already_connected);
-    RUN_TEST(test_state_transitions_connect);
-    RUN_TEST(test_disconnect_reconnect);
-    RUN_TEST(test_sequential_connect_disconnect_cycles);
-    RUN_TEST(test_double_disconnect);
-    RUN_TEST(test_multiple_clients_same_server);
-
-    printf("\n--- Getters & State Queries ---\n");
-    RUN_TEST(test_getters_while_connected);
-    RUN_TEST(test_getters_while_disconnected);
-    RUN_TEST(test_get_last_rtt_initial);
-
-    printf("\n--- Packet Sending (all methods while Ready) ---\n");
-    RUN_TEST(test_send_scan);
-    RUN_TEST(test_send_create_access_point);
-    RUN_TEST(test_send_create_access_point_with_advertise);
-    RUN_TEST(test_send_connect);
-    RUN_TEST(test_send_create_access_point_private);
-    RUN_TEST(test_send_connect_private);
-    RUN_TEST(test_send_proxy_data);
-    RUN_TEST(test_send_ping);
-    RUN_TEST(test_send_ping_response);
-    RUN_TEST(test_send_disconnect_network);
-    RUN_TEST(test_send_set_accept_policy);
-    RUN_TEST(test_send_set_advertise_data);
-    RUN_TEST(test_send_reject);
-    RUN_TEST(test_send_raw_packet);
-
-    printf("\n--- Packet Sending (Not Connected) ---\n");
-    RUN_TEST(test_send_not_connected);
-
-    printf("\n--- Callbacks ---\n");
-    RUN_TEST(test_state_callback_lifecycle);
-    RUN_TEST(test_state_callback_null);
-    RUN_TEST(test_packet_callback_receives_data);
-    RUN_TEST(test_packet_callback_null_no_crash);
-
-    printf("\n--- Packet Reception ---\n");
-    RUN_TEST(test_receive_scan_reply);
-    RUN_TEST(test_receive_connected_sync_network);
-    RUN_TEST(test_server_ping_echo);
-
-    printf("\n--- Multi-client ---\n");
-    RUN_TEST(test_host_station_full_flow);
-    RUN_TEST(test_three_clients_scan);
-    RUN_TEST(test_passphrase_connect);
-
-    printf("\n--- Error & Edge Cases ---\n");
-    RUN_TEST(test_connect_to_invalid_port);
-    RUN_TEST(test_multiple_scan_requests);
-    RUN_TEST(test_move_constructor);
-    RUN_TEST(test_move_assignment);
-    RUN_TEST(test_client_op_result_to_string_all);
-
-    printf("\n--- Server Drop (Docker kill/restart) ---\n");
-    RUN_TEST(test_connection_lost_during_ready);
-    RUN_TEST(test_connection_lost_no_auto_reconnect);
-    RUN_TEST(test_send_fails_after_server_drop);
-    RUN_TEST(test_try_connect_failure_then_backoff);
-    RUN_TEST(test_backoff_expiry_and_retry);
-    RUN_TEST(test_server_initiated_disconnect);
-
-    printf("\n--- TcpClient Direct ---\n");
-    RUN_TEST(test_tcpclient_connect_already_connected);
-    RUN_TEST(test_tcpclient_send_not_connected);
-    RUN_TEST(test_tcpclient_move_constructor);
-    RUN_TEST(test_tcpclient_move_assignment);
-    RUN_TEST(test_tcpclient_receive_packet_not_connected);
-    RUN_TEST(test_tcpclient_has_packet_available_not_connected);
-    RUN_TEST(test_tcpclient_set_nodelay_connected);
-    RUN_TEST(test_tcpclient_send_receive_roundtrip);
-
-    printf("\n--- Socket Direct ---\n");
-    RUN_TEST(test_socket_init_exit);
-    RUN_TEST(test_socket_connect_disconnect);
-    RUN_TEST(test_socket_connect_already_connected);
-    RUN_TEST(test_socket_connect_invalid_host);
-    RUN_TEST(test_socket_not_initialized);
-    RUN_TEST(test_socket_send_recv_not_connected);
-    RUN_TEST(test_socket_move_constructor);
-    RUN_TEST(test_socket_move_assignment);
-    RUN_TEST(test_socket_send_all_connected);
-    RUN_TEST(test_socket_set_nodelay_connected);
-    RUN_TEST(test_socket_set_buffer_sizes_connected);
-    RUN_TEST(test_socket_set_options_invalid_fd);
-    RUN_TEST(test_socket_ipv4_connect);
-    RUN_TEST(test_socket_recv_timeout);
-    RUN_TEST(test_socket_double_close);
-    RUN_TEST(test_socket_recv_nonblocking);
-    RUN_TEST(test_socket_recv_blocking);
-    RUN_TEST(test_socket_send_zero_bytes);
-    RUN_TEST(test_socket_is_valid_after_connect);
-    RUN_TEST(test_socket_connect_null_host);
-    RUN_TEST(test_socket_connect_empty_host);
-    RUN_TEST(test_socket_connect_port_zero);
-    RUN_TEST(test_socket_connect_connection_refused);
-    RUN_TEST(test_socket_recv_blocking_with_data);
-    RUN_TEST(test_socket_recv_zero_timeout_with_data);
-    RUN_TEST(test_socket_create_twice);
+    bool first = true;
+    for (const TestSection& section : all_sections()) {
+        printf("%s--- %s ---\n", first ? "" : "\n", section.title);
+        first = false;
+        for (const TestCase& tc : section.tests) {
+            run_case(tc);
+        }
+    }
 
     printf("\n========================================\n");
     printf(

@@ -79,7 +79,9 @@
 
 #include "network/connection_state.hpp"
 
+#include <bit>
 #include <cstdio>
+#include <type_traits>
 #include <cstring>
 #include <stdexcept>
 
@@ -1207,38 +1209,49 @@ TEST(is_connected_in_handshaking_detailed) {
     ASSERT_FALSE(sm.is_ready());
 }
 
+/**
+ * @brief Build an enum value that is deliberately outside the declared range.
+ * @tparam E Enumeration type.
+ * @param raw Raw underlying value to reinterpret.
+ * @return The enumerator-less value of type E.
+ */
+template <typename E>
+static E invalid_enum(std::underlying_type_t<E> raw) {
+    return std::bit_cast<E>(raw);
+}
+
 /** @brief Test case: state to string unknown. */
 TEST(state_to_string_unknown) {
     const char* result = ConnectionStateMachine::state_to_string(
-        static_cast<ConnectionState>(99));
+        invalid_enum<ConnectionState>(99));
     ASSERT_STREQ(result, "Unknown");
 }
 
 /** @brief Test case: event to string unknown. */
 TEST(event_to_string_unknown) {
     const char* result = ConnectionStateMachine::event_to_string(
-        static_cast<ConnectionEvent>(99));
+        invalid_enum<ConnectionEvent>(99));
     ASSERT_STREQ(result, "Unknown");
 }
 
 /** @brief Test case: transition result to string unknown. */
 TEST(transition_result_to_string_unknown) {
     ASSERT_STREQ(
-        transition_result_to_string(static_cast<TransitionResult>(99)),
+        transition_result_to_string(invalid_enum<TransitionResult>(99)),
         "Unknown");
 }
 
 /** @brief Test case: process event rejects out of range state and event. */
 TEST(process_event_rejects_out_of_range_state_and_event) {
     ConnectionStateMachine sm;
-    sm.force_state(static_cast<ConnectionState>(99));
+    sm.force_state(invalid_enum<ConnectionState>(99));
     ASSERT_TRUE(
         sm.process_event(ConnectionEvent::Connect) ==
         TransitionResult::InvalidTransition);
 
     sm.force_state(ConnectionState::Disconnected);
     ASSERT_TRUE(
-        sm.process_event(static_cast<ConnectionEvent>(99)) ==
+        sm.process_event(invalid_enum<ConnectionEvent>(99)) ==
         TransitionResult::InvalidTransition);
     ASSERT_TRUE(sm.get_state() == ConnectionState::Disconnected);
 }

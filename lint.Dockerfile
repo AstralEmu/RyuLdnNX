@@ -31,3 +31,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg && \
     rm -rf /var/lib/apt/lists/* && \
     clang-tidy --version && \
     clang-format --version
+
+# Security and workflow analysers (maintained, standard tools). They live in a
+# dedicated virtualenv so pip never touches the system interpreter packages.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3-venv valgrind && \
+    rm -rf /var/lib/apt/lists/* && \
+    python3 -m venv /opt/analysers && \
+    /opt/analysers/bin/pip install --no-cache-dir flawfinder semgrep zizmor && \
+    for tool in flawfinder semgrep zizmor; do \
+        ln -sf /opt/analysers/bin/$tool /usr/local/bin/$tool; \
+    done && \
+    flawfinder --version && semgrep --version && zizmor --version && valgrind --version
