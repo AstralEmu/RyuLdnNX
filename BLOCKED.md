@@ -45,6 +45,12 @@ Measured with `docker compose run -T --rm --entrypoint zizmor lint .github/workf
 
 flawfinder (level >= 3, build-logs/flawfinder.log): `srand(time)` + `rand()` generate the `Ryujinx-xxxxxxxx` passphrase in sysmodule/source/config/config_manager.cpp:67-78, overlay/source/utils/formatters.hpp:131-137 and overlay/source/views/connection/main_dashboard_gui.cpp:30,373: predictable output. Real fix: `randomGet` (libnx, already used at sysmodule/source/network/client.cpp:1192) on Switch and `getrandom` on the host build, behind a test seam. It changes Switch-side code and needs a behaviour proof; not done unattended. The two format hits (config.cpp:380, log.cpp:110) are false positives (constant format strings).
 
+## valgrind memcheck cannot judge the allocator-overriding suites (2026-11-23)
+
+- Measured: `valgrind --error-exitcode=9 --leak-check=full --errors-for-leak-kinds=definite,indirect` over all 46 host binaries: 43 clean, 3 failing (`run_ldn_icommunication_real_tests` 124/127, `run_main_tests` 10/12, `run_p2p_proxy_server_real_tests` SIGSEGV at p2p_proxy_server.hpp:671). All three replace the global `operator new` (tests/main_tests.cpp unity build of main.cpp, the scoped allocation failure, the session tracker of p2p_proxy_server_real_tests.cpp).
+- Cause, proven with a minimal probe (build-logs/vgprobe.cpp, build-logs/vgprobe.sh): a program defining its own `operator new` counts 1 call when run directly and 0 under valgrind. Memcheck redirects `operator new`/`delete` globally, so a suite that owns the allocator is judged against valgrind's allocator: its counters stay at 0, its injected failures never fire, its delete/free pairing no longer matches.
+- No source fix exists (the tests are right; the tool replaces the function under test). Excluding those three files from a valgrind gate would be a forbidden exclusion, so valgrind is not wired. Memory checking stays with ASan + LSan + UBSan, which keep the program's own allocator and pass on all 49 suites.
+
 ## semgrep not measured (2026-11-23)
 
 `docker compose run -T --rm --entrypoint semgrep lint --config p/cpp --metrics=off --quiet sysmodule/source overlay/source` exits rc=7 with no finding printed (registry rules need network from the container; build-logs/semgrep.log). Needs vendored rules or network access; not wired.
