@@ -17,7 +17,15 @@
 #include "ldn/ldn_shared_state.hpp"
 #include "config/config_manager.hpp"
 
-using namespace ams::mitm::ldn;
+using ams::mitm::ldn::CommState;
+using ams::mitm::ldn::ConfigResult;
+using ams::mitm::ldn::ConnectionStatus;
+using ams::mitm::ldn::ICommunicationService;
+using ams::mitm::ldn::LdnConfigService;
+using ams::mitm::ldn::Passphrase;
+using ams::mitm::ldn::ServerAddress;
+using ams::mitm::ldn::SessionInfo;
+using ams::mitm::ldn::SharedState;
 using ams::sf::Out;
 using ryu_ldn::config::ConfigManager;
 

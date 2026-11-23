@@ -18,10 +18,14 @@
 #include "config/config_ipc_service.hpp"
 #include "ldn/ldn_shared_state.hpp"
 
-using namespace ryu_ldn::ipc;
-using ams::sf::Out;
-namespace fsys = std::filesystem;
 namespace config = ryu_ldn::config;
+namespace fsys = std::filesystem;
+namespace result = ryu_ldn::ipc::result;
+using ams::sf::Out;
+using ryu_ldn::ipc::ConfigService;
+using ryu_ldn::ipc::InitializeConfig;
+using ryu_ldn::ipc::ServerAddressIpc;
+using ryu_ldn::ipc::SessionInfoIpc;
 
 namespace {
 

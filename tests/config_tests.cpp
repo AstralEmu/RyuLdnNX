@@ -7,6 +7,7 @@
 
 #include "config/config.hpp"
 
+#include <cinttypes>
 #include <bit>
 #include <cstdio>
 #include <memory>
@@ -18,7 +19,15 @@
 #include <cstdlib>
 #include <fstream>
 
-using namespace ryu_ldn::config;
+using ryu_ldn::config::Config;
+using ryu_ldn::config::ConfigResult;
+using ryu_ldn::config::DEFAULT_HOST;
+using ryu_ldn::config::DEFAULT_PORT;
+using ryu_ldn::config::ensure_config_exists;
+using ryu_ldn::config::get_default_config;
+using ryu_ldn::config::load_config;
+using ryu_ldn::config::open_stream;
+using ryu_ldn::config::save_config;
 
 // ============================================================================
 // Test Framework (minimal, no external dependencies)
@@ -67,14 +76,14 @@ static int g_tests_failed = 0;
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
 /**
- * @brief Widen an integral value for "%lld" printing.
+ * @brief Widen an integral value for PRId64 printing.
  * @tparam T integral or enum type of the value
  * @param v value to widen
  * @return v as long long
  */
 template <typename T>
-static long long assert_ll(T v) {
-    return static_cast<long long>(v);
+static int64_t assert_ll(T v) {
+    return static_cast<int64_t>(v);
 }
 
 /**
@@ -82,15 +91,18 @@ static long long assert_ll(T v) {
  * @param a Actual value (integral).
  * @param b Expected value (integral).
  */
-#define ASSERT_EQ(a, b)                                                      \
-    do {                                                                     \
-        auto _a = (a);                                                       \
-        auto _b = (b);                                                       \
-        if (_a != _b) {                                                      \
-            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
-            printf("    got: %lld vs %lld\n", assert_ll(_a), assert_ll(_b)); \
-            throw std::runtime_error("Test assertion failed");               \
-        }                                                                    \
+#define ASSERT_EQ(a, b)                                               \
+    do {                                                              \
+        auto _a = (a);                                                \
+        auto _b = (b);                                                \
+        if (_a != _b) {                                               \
+            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
+            printf(                                                   \
+                "    got: %" PRId64 " vs %" PRId64 "\n",              \
+                assert_ll(_a),                                        \
+                assert_ll(_b));                                       \
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
     } while (0)
 
 /**
@@ -639,14 +651,14 @@ TEST(parse_bool_rejects_anything_else_as_false) {
  * @param value Text written after "level =".
  * @return The resulting debug level (preset to 77 before loading).
  */
-static long long load_debug_level(const char* value) {
+static int64_t load_debug_level(const char* value) {
     char content[128];
     snprintf(content, sizeof(content), "[debug]\nlevel = %s\n", value);
     TempConfigFile file(content);
     Config config = get_default_config();
     config.debug.level = 77;
     ASSERT_EQ(load_config(file.path(), config), ConfigResult::Success);
-    return static_cast<long long>(config.debug.level);
+    return static_cast<int64_t>(config.debug.level);
 }
 
 /**

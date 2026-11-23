@@ -66,3 +66,15 @@ Measured with `scripts/codeql.sh` (database of `make -C tests COVERAGE=1 test` +
 - `cpp/unused-static-function` `sysmodule/source/config/config.cpp:152` `parse_uint32`: the function has a caller (`process_debug_key`, :274) in both builds. Proven with QL on the database: two `parse_uint32` entities exist (one per compilation, #53 aarch64 and #61 host), one has 1 call, the other 0, and `process_debug_key` exists once with 2 calls. Looks like the extractor linking the call of the second compilation to the first entity; not proven. No code change removes it without removing a used function.
 - Suite: the config uses `security-and-quality`, a superset of `security-extended`; GitHub's default setup uses the same file, so the local result is the one CI will see. The bundle is not in the repo: set `CODEQL_HOME` to an extracted `codeql-bundle-linux64` (no checksum asset exists for it, so the download is unverified).
 - Not added to hooks-proposal/pre-push-heavy-gates.sh: the gate exits 1 until these 3 are resolved.
+
+## google-runtime-int on user-defined literals (tests/stubs/stratosphere.hpp:1494, :1503)
+
+`operator""_KB` / `operator""_MB` must take `unsigned long long` (C++ [over.literal]: the
+only integer parameter type allowed for a literal operator). google-runtime-int proposes
+`uint64`, which the language rejects. False positive, no source fix. Proof: tidy-host log
+`build-logs/tidy-host.log` lines for those two locations.
+
+## tests/_probe_move.cpp
+
+Untracked owner file (never committed): google-build-using-namespace at :7 and
+clang-analyzer-cplusplus.Move at :12/:16. Owner deletes it.

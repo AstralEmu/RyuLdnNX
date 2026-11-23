@@ -82,6 +82,7 @@ _REQUIRED_FAMILIES = (
     "clang-analyzer-*",
     "bugprone-*",
     "cppcoreguidelines-*",
+    "google-*",
     "hicpp-*",
     "misc-*",
     "modernize-*",

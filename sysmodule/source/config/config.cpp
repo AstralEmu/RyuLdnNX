@@ -166,7 +166,7 @@ uint32_t parse_uint32(const char* value) {
     // would indicate a parser bug rather than a user intent).
     errno = 0;
     char* endptr = nullptr;
-    unsigned long parsed = std::strtoul(value, &endptr, 10);
+    const auto parsed = std::strtoul(value, &endptr, 10);
 
     // Overflow: strtoul returned ULONG_MAX and set errno. For platforms
     // where unsigned long is 64-bit, also reject values that exceed the

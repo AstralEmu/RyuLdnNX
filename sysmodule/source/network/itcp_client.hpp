@@ -110,6 +110,9 @@ inline const char* client_result_to_string(ClientResult result) {
  */
 class ITcpClient {
 public:
+    /// Default connection timeout (ms) used by the short connect() overload.
+    static constexpr uint32_t kDefaultConnectTimeoutMs = 5000;
+
     /**
      * @brief Virtual destructor
      */
@@ -136,7 +139,20 @@ public:
      * @return ClientResult indicating success or failure
      */
     virtual ClientResult connect(
-        const char* host, uint16_t port, uint32_t timeout_ms = 5000) = 0;
+        const char* host, uint16_t port, uint32_t timeout_ms) = 0;
+
+    /**
+     * @brief Connect to a remote server with the default 5000 ms timeout
+     *
+     * Non-virtual convenience overload; forwards to the full-arity connect().
+     *
+     * @param host Server hostname or IP address
+     * @param port Server port number
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult connect(const char* host, uint16_t port) {
+        return connect(host, port, kDefaultConnectTimeoutMs);
+    }
 
     /**
      * @brief Disconnect from the server
@@ -225,8 +241,22 @@ public:
      */
     virtual ClientResult send_create_access_point(
         const protocol::CreateAccessPointRequest& request,
-        const uint8_t* advertise_data = nullptr,
-        size_t advertise_size = 0) = 0;
+        const uint8_t* advertise_data,
+        size_t advertise_size) = 0;
+
+    /**
+     * @brief Convenience overload without advertise data
+     *
+     * Non-virtual; forwards to the full-arity send_create_access_point()
+     * with a null advertise buffer of size 0.
+     *
+     * @param request Request configuration
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult send_create_access_point(
+        const protocol::CreateAccessPointRequest& request) {
+        return send_create_access_point(request, nullptr, 0);
+    }
 
     /**
      * @brief Send CreateAccessPointPrivate request (private host mode)
@@ -238,8 +268,23 @@ public:
      */
     virtual ClientResult send_create_access_point_private(
         const protocol::CreateAccessPointPrivateRequest& request,
-        const uint8_t* advertise_data = nullptr,
-        size_t advertise_size = 0) = 0;
+        const uint8_t* advertise_data,
+        size_t advertise_size) = 0;
+
+    /**
+     * @brief Convenience overload without advertise data
+     *
+     * Non-virtual; forwards to the full-arity
+     * send_create_access_point_private() with a null advertise buffer of size
+     * 0.
+     *
+     * @param request Request configuration
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult send_create_access_point_private(
+        const protocol::CreateAccessPointPrivateRequest& request) {
+        return send_create_access_point_private(request, nullptr, 0);
+    }
 
     /**
      * @brief Send Connect request (join a network)
@@ -325,7 +370,28 @@ public:
         void* payload,
         size_t payload_buffer_size,
         size_t& payload_size,
-        int32_t timeout_ms = -1) = 0;
+        int32_t timeout_ms) = 0;
+
+    /**
+     * @brief Receive a packet, blocking until one arrives
+     *
+     * Non-virtual convenience overload; forwards to the full-arity
+     * receive_packet() with timeout_ms = -1.
+     *
+     * @param[out] type Packet type of received packet
+     * @param[out] payload Buffer to receive payload data
+     * @param payload_buffer_size Size of payload buffer
+     * @param[out] payload_size Actual size of received payload
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult receive_packet(
+        protocol::PacketId& type,
+        void* payload,
+        size_t payload_buffer_size,
+        size_t& payload_size) {
+        return receive_packet(
+            type, payload, payload_buffer_size, payload_size, -1);
+    }
 
     /**
      * @brief Check if a complete packet is buffered and available

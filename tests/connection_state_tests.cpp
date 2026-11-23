@@ -85,7 +85,11 @@
 #include <cstring>
 #include <stdexcept>
 
-using namespace ryu_ldn::network;
+using ryu_ldn::network::ConnectionEvent;
+using ryu_ldn::network::ConnectionState;
+using ryu_ldn::network::ConnectionStateMachine;
+using ryu_ldn::network::transition_result_to_string;
+using ryu_ldn::network::TransitionResult;
 
 // ============================================================================
 // Test Framework

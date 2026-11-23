@@ -22,9 +22,15 @@
 #include "config/config.hpp"
 #include "debug/log.hpp"
 
-using namespace ams::mitm::bsd;
 namespace bsdt = ryu_ldn::bsd;
 namespace proto = ryu_ldn::protocol;
+using ams::mitm::bsd::MAX_ACCEPT_QUEUE;
+using ams::mitm::bsd::MAX_PROXY_SOCKETS;
+using ams::mitm::bsd::PROXY_SOCKET_MAX_PAYLOAD;
+using ams::mitm::bsd::PROXY_SOCKET_MAX_QUEUE_SIZE;
+using ams::mitm::bsd::ProxySocket;
+using ams::mitm::bsd::ProxySocketManager;
+using ams::mitm::bsd::ProxySocketState;
 /// Test fixture value: Errno.
 using Errno = bsdt::BsdErrno;
 

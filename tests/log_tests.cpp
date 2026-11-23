@@ -9,6 +9,7 @@
 #include "debug/log.hpp"
 #include "config/config.hpp"
 
+#include <cinttypes>
 #include <bit>
 #include <cstdarg>
 #include <cstdio>
@@ -17,8 +18,15 @@
 #include <fstream>
 #include <string>
 
-using namespace ryu_ldn::debug;
-using namespace ryu_ldn::config;
+using ryu_ldn::config::Config;
+using ryu_ldn::config::DebugConfig;
+using ryu_ldn::config::get_default_config;
+using ryu_ldn::debug::format_log_message;
+using ryu_ldn::debug::log_level_to_string;
+using ryu_ldn::debug::LogBuffer;
+using ryu_ldn::debug::Logger;
+using ryu_ldn::debug::LogLevel;
+using ryu_ldn::debug::MAX_LOG_BUFFER_ENTRIES;
 
 // ============================================================================
 // Test Framework (minimal, no external dependencies)
@@ -54,26 +62,29 @@ static int g_tests_failed = 0;
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
 /**
- * @brief Widen an integral value for "%lld" printing.
+ * @brief Widen an integral value for PRId64 printing.
  * @tparam T integral or enum type of the value
  * @param v value to widen
  * @return v as long long
  */
 template <typename T>
-static long long assert_ll(T v) {
-    return static_cast<long long>(v);
+static int64_t assert_ll(T v) {
+    return static_cast<int64_t>(v);
 }
 
 /// Fails the current test when the two values differ.
-#define ASSERT_EQ(a, b)                                                      \
-    do {                                                                     \
-        auto _a = (a);                                                       \
-        auto _b = (b);                                                       \
-        if (_a != _b) {                                                      \
-            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
-            printf("    got: %lld vs %lld\n", assert_ll(_a), assert_ll(_b)); \
-            throw std::runtime_error("Test assertion failed");               \
-        }                                                                    \
+#define ASSERT_EQ(a, b)                                               \
+    do {                                                              \
+        auto _a = (a);                                                \
+        auto _b = (b);                                                \
+        if (_a != _b) {                                               \
+            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
+            printf(                                                   \
+                "    got: %" PRId64 " vs %" PRId64 "\n",              \
+                assert_ll(_a),                                        \
+                assert_ll(_b));                                       \
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
     } while (0)
 
 /// Fails the current test when the two C strings differ.

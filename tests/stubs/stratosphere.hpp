@@ -460,7 +460,7 @@ private:
     bool m_signaled = false;
     /// A Signal() releases every waiter already blocked, even if Clear() ran
     /// before they woke (kernel semantics).
-    unsigned long m_generation = 0;
+    uint64_t m_generation = 0;
 };
 
 /// Holder of one event inside a MultiWaitType (os::MultiWaitHolderType).
@@ -1460,13 +1460,11 @@ inline std::vector<std::string> g_host_boot_calls;
 /// that an unreachable-in-production branch aborts.
 namespace ams {
 struct HostAbort : std::exception {};
-namespace {
 /// Throws HostAbort; a call rather than a throw-expression, so the statement
 /// reads as an ordinary aborting call at every use site.
 [[noreturn]] inline void AbortImpl() {
     throw HostAbort{};
 }
-}  // namespace
 }  // namespace ams
 /// Throws HostAbort instead of aborting the process
 #define AMS_ABORT(...) ::ams::AbortImpl()

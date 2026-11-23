@@ -61,10 +61,28 @@
 #include "network/socket.hpp"
 #include "mock_tcp_client.hpp"
 
-using namespace ryu_ldn;
-using namespace ryu_ldn::network;
-using namespace ryu_ldn::network::test;
-using namespace ryu_ldn::protocol;
+namespace config = ryu_ldn::config;
+using ryu_ldn::network::ClientOpResult;
+using ryu_ldn::network::ClientResult;
+using ryu_ldn::network::ConnectionState;
+using ryu_ldn::network::RyuLdnClient;
+using ryu_ldn::network::RyuLdnClientConfig;
+using ryu_ldn::network::test::MockPacket;
+using ryu_ldn::network::test::MockTcpClient;
+using ryu_ldn::protocol::AcceptPolicy;
+using ryu_ldn::protocol::ConnectPrivateRequest;
+using ryu_ldn::protocol::ConnectRequest;
+using ryu_ldn::protocol::CreateAccessPointPrivateRequest;
+using ryu_ldn::protocol::CreateAccessPointRequest;
+using ryu_ldn::protocol::DisconnectMessage;
+using ryu_ldn::protocol::DisconnectReason;
+using ryu_ldn::protocol::InitializeMessage;
+using ryu_ldn::protocol::NetworkErrorCode;
+using ryu_ldn::protocol::NetworkErrorMessage;
+using ryu_ldn::protocol::PacketId;
+using ryu_ldn::protocol::PingMessage;
+using ryu_ldn::protocol::ProxyDataHeader;
+using ryu_ldn::protocol::ScanFilterFull;
 
 // ============================================================================
 // Test Framework (Minimal)

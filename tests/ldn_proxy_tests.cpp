@@ -22,7 +22,9 @@
 
 #include "protocol/types.hpp"
 
-using namespace ryu_ldn::protocol;
+using ryu_ldn::protocol::ProtocolType;
+using ryu_ldn::protocol::ProxyDataHeader;
+using ryu_ldn::protocol::ProxyInfo;
 
 // ============================================================================
 // Test Framework (minimal standalone)

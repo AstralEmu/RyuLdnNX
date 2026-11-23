@@ -38,8 +38,34 @@
 
 #include "network/tcp_client.hpp"
 
-using namespace ryu_ldn::network;
-using namespace ryu_ldn::protocol;
+using ryu_ldn::network::ClientResult;
+using ryu_ldn::network::socket_exit;
+using ryu_ldn::network::socket_init;
+using ryu_ldn::network::socket_is_initialized;
+using ryu_ldn::network::SocketResult;
+using ryu_ldn::network::TcpClient;
+using ryu_ldn::protocol::AddressEntry;
+using ryu_ldn::protocol::AddressList;
+using ryu_ldn::protocol::ConnectPrivateRequest;
+using ryu_ldn::protocol::ConnectRequest;
+using ryu_ldn::protocol::CreateAccessPointPrivateRequest;
+using ryu_ldn::protocol::CreateAccessPointRequest;
+using ryu_ldn::protocol::DisconnectMessage;
+using ryu_ldn::protocol::EncodeResult;
+using ryu_ldn::protocol::get_packet_size;
+using ryu_ldn::protocol::InitializeMessage;
+using ryu_ldn::protocol::LdnHeader;
+using ryu_ldn::protocol::PacketId;
+using ryu_ldn::protocol::PassphraseMessage;
+using ryu_ldn::protocol::PingMessage;
+using ryu_ldn::protocol::PROTOCOL_MAGIC;
+using ryu_ldn::protocol::PROTOCOL_VERSION;
+using ryu_ldn::protocol::ProtocolType;
+using ryu_ldn::protocol::ProxyDataHeader;
+using ryu_ldn::protocol::RejectRequest;
+using ryu_ldn::protocol::ScanFilterFull;
+using ryu_ldn::protocol::SecurityParameter;
+using ryu_ldn::protocol::SetAcceptPolicyRequest;
 
 /**
  * @brief Observe whether a TcpClient left behind by a move is disconnected.

@@ -59,7 +59,9 @@
 
 #include "network/reconnect.hpp"
 
-using namespace ryu_ldn::network;
+using ryu_ldn::network::ReconnectConfig;
+using ryu_ldn::network::ReconnectManager;
+using ryu_ldn::network::RetryResult;
 
 // ============================================================================
 // Test Framework (Minimal)

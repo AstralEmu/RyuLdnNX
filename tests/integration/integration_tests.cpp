@@ -28,8 +28,18 @@
 #include "network/client.hpp"
 #include "config/config.hpp"
 
-using namespace ryu_ldn;
-using namespace ryu_ldn::network;
+namespace protocol = ryu_ldn::protocol;
+using ryu_ldn::network::ClientOpResult;
+using ryu_ldn::network::ClientResult;
+using ryu_ldn::network::ConnectionState;
+using ryu_ldn::network::RyuLdnClient;
+using ryu_ldn::network::RyuLdnClientConfig;
+using ryu_ldn::network::Socket;
+using ryu_ldn::network::socket_exit;
+using ryu_ldn::network::socket_init;
+using ryu_ldn::network::socket_is_initialized;
+using ryu_ldn::network::SocketResult;
+using ryu_ldn::network::TcpClient;
 
 // ============================================================================
 // Test framework

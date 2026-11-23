@@ -357,7 +357,8 @@ void PacketDispatcher::dispatch_typed(
  */
 void PacketDispatcher::dispatch(
     const protocol::LdnHeader& header, const uint8_t* data, size_t data_size) {
-    using namespace protocol;
+    using protocol::PacketId;
+    using protocol::ProxyDataHeader;
 
     // Route packet based on type
     switch (static_cast<PacketId>(header.type)) {

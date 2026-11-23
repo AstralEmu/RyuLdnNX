@@ -37,8 +37,8 @@
 #include "test_harness.hpp"
 #include "p2p/p2p_proxy_client.hpp"
 
-using ams::mitm::p2p::P2pProxyClient;
 namespace proto = ryu_ldn::protocol;
+using ams::mitm::p2p::P2pProxyClient;
 
 // ---------------------------------------------------------------------------
 // Fault injection through --wrap (pass-through while every mode is 0)
@@ -157,7 +157,7 @@ int __wrap_fcntl(int fd, int cmd, ...) {
     }
     va_list ap;
     va_start(ap, cmd);
-    const long arg = va_arg(ap, long);
+    const std::intptr_t arg = va_arg(ap, std::intptr_t);
     va_end(ap);
     return __real_fcntl(fd, cmd, arg);
 }
@@ -849,7 +849,8 @@ TEST(every_packet_type_is_dispatched_in_order_from_one_stream) {
     const auto config = make_config(0x0A720003, 0xFFFFFF00);
     auto data = blob(sizeof(proto::ProxyDataHeader) + 5, 0x11);
     for (size_t i = 0; i < 5; ++i) {
-        data[sizeof(proto::ProxyDataHeader) + i] = uint8_t(0xA0 + i);
+        data[sizeof(proto::ProxyDataHeader) + i] =
+            static_cast<uint8_t>(0xA0 + i);
     }
     const auto connect = blob(sizeof(proto::ProxyConnectRequest), 0x22);
     const auto reply = blob(sizeof(proto::ProxyConnectResponse), 0x33);

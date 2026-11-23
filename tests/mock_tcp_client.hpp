@@ -38,6 +38,66 @@ struct MockPacket {
  */
 class MockTcpClient : public ITcpClient {
 public:
+    /**
+     * @brief Create an access point without advertise data
+     *
+     * Forwards to the full-arity override with a null advertise buffer.
+     *
+     * @param request Request configuration
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult send_create_access_point(
+        const protocol::CreateAccessPointRequest& request) {
+        return send_create_access_point(request, nullptr, 0);
+    }
+
+    /**
+     * @brief Create a private access point without advertise data
+     *
+     * Forwards to the full-arity override with a null advertise buffer.
+     *
+     * @param request Request configuration
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult send_create_access_point_private(
+        const protocol::CreateAccessPointPrivateRequest& request) {
+        return send_create_access_point_private(request, nullptr, 0);
+    }
+
+    /**
+     * @brief Connect with the default timeout
+     *
+     * Forwards to the full-arity override with
+     * ITcpClient::kDefaultConnectTimeoutMs.
+     *
+     * @param host Server hostname or IP address
+     * @param port Server port number
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult connect(const char* host, uint16_t port) {
+        return connect(host, port, kDefaultConnectTimeoutMs);
+    }
+
+    /**
+     * @brief Receive a packet without a timeout
+     *
+     * Forwards to the full-arity override with timeout_ms = -1.
+     *
+     * @param[out] type Received packet identifier
+     * @param[out] payload Buffer receiving the payload
+     * @param payload_buffer_size Size of payload buffer
+     * @param[out] payload_size Actual size of received payload
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult receive_packet(
+        protocol::PacketId& type,
+        void* payload,
+        size_t payload_buffer_size,
+        size_t& payload_size) {
+        return receive_packet(
+            type, payload, payload_buffer_size, payload_size, -1);
+    }
+
     /// True between a successful connect() and disconnect().
     std::atomic<bool> connected{false};
     /// Set by initialize() when initialize_should_fail is false.

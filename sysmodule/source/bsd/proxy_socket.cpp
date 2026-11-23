@@ -328,7 +328,7 @@ void ProxySocket::IncomingData(
         ryu_ldn::debug::g_logger.should_log(
             ryu_ldn::debug::LogLevel::Verbose)) {
         const auto* bytes = static_cast<const uint8_t*>(data);
-        size_t log_len = std::min(len, size_t(32));
+        size_t log_len = std::min(len, static_cast<size_t>(32));
         char hex_buf[128];
         char* p = hex_buf;
         for (size_t i = 0; i < log_len && (p - hex_buf) < 120; i++) {

@@ -99,8 +99,22 @@ static int g_tests_failed = 0;
 // Test Helpers
 // ============================================================================
 
-using namespace ryu_ldn;
-using namespace ryu_ldn::protocol;
+namespace ldn = ryu_ldn::ldn;
+using ryu_ldn::protocol::AcceptPolicy;
+using ryu_ldn::protocol::DisconnectMessage;
+using ryu_ldn::protocol::DisconnectReason;
+using ryu_ldn::protocol::InitializeMessage;
+using ryu_ldn::protocol::LdnHeader;
+using ryu_ldn::protocol::MAX_NODES;
+using ryu_ldn::protocol::NetworkErrorCode;
+using ryu_ldn::protocol::NetworkErrorMessage;
+using ryu_ldn::protocol::NetworkInfo;
+using ryu_ldn::protocol::PacketId;
+using ryu_ldn::protocol::PingMessage;
+using ryu_ldn::protocol::PROTOCOL_MAGIC;
+using ryu_ldn::protocol::PROTOCOL_VERSION;
+using ryu_ldn::protocol::RejectRequest;
+using ryu_ldn::protocol::SetAcceptPolicyRequest;
 
 /**
  * @brief Create a test NetworkInfo with specified parameters

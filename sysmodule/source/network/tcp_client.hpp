@@ -107,6 +107,66 @@ namespace ryu_ldn::network {
 class TcpClient : public ITcpClient {
 public:
     /**
+     * @brief Create an access point without advertise data
+     *
+     * Forwards to the full-arity override with a null advertise buffer.
+     *
+     * @param request Request configuration
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult send_create_access_point(
+        const protocol::CreateAccessPointRequest& request) {
+        return send_create_access_point(request, nullptr, 0);
+    }
+
+    /**
+     * @brief Create a private access point without advertise data
+     *
+     * Forwards to the full-arity override with a null advertise buffer.
+     *
+     * @param request Request configuration
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult send_create_access_point_private(
+        const protocol::CreateAccessPointPrivateRequest& request) {
+        return send_create_access_point_private(request, nullptr, 0);
+    }
+
+    /**
+     * @brief Connect with the default timeout
+     *
+     * Forwards to the full-arity override with
+     * ITcpClient::kDefaultConnectTimeoutMs.
+     *
+     * @param host Server hostname or IP address
+     * @param port Server port number
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult connect(const char* host, uint16_t port) {
+        return connect(host, port, kDefaultConnectTimeoutMs);
+    }
+
+    /**
+     * @brief Receive a packet without a timeout
+     *
+     * Forwards to the full-arity override with timeout_ms = -1.
+     *
+     * @param[out] type Received packet identifier
+     * @param[out] payload Buffer receiving the payload
+     * @param payload_buffer_size Size of payload buffer
+     * @param[out] payload_size Actual size of received payload
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult receive_packet(
+        protocol::PacketId& type,
+        void* payload,
+        size_t payload_buffer_size,
+        size_t& payload_size) {
+        return receive_packet(
+            type, payload, payload_buffer_size, payload_size, -1);
+    }
+
+    /**
      * @brief Default constructor
      *
      * Creates a disconnected client. Call connect() to establish connection.
@@ -156,7 +216,7 @@ public:
      */
     /// @gdb{tag="NETWORK:TCP", msg="TcpClient::connect"}
     ClientResult connect(
-        const char* host, uint16_t port, uint32_t timeout_ms = 5000) override;
+        const char* host, uint16_t port, uint32_t timeout_ms) override;
 
     /**
      * @brief Disconnect from server
@@ -302,8 +362,8 @@ public:
     /// @gdb{tag="NETWORK:TCP", msg="send_create_access_point"}
     ClientResult send_create_access_point(
         const protocol::CreateAccessPointRequest& request,
-        const uint8_t* advertise_data = nullptr,
-        size_t advertise_size = 0) override;
+        const uint8_t* advertise_data,
+        size_t advertise_size) override;
 
     /**
      * @brief Send CreateAccessPointPrivate request
@@ -318,8 +378,8 @@ public:
     /// @gdb{tag="NETWORK:TCP", msg="send_create_access_point_private"}
     ClientResult send_create_access_point_private(
         const protocol::CreateAccessPointPrivateRequest& request,
-        const uint8_t* advertise_data = nullptr,
-        size_t advertise_size = 0) override;
+        const uint8_t* advertise_data,
+        size_t advertise_size) override;
 
     /**
      * @brief Send Connect request
@@ -440,7 +500,7 @@ public:
         void* payload,
         size_t payload_buffer_size,
         size_t& payload_size,
-        int32_t timeout_ms = -1) override;
+        int32_t timeout_ms) override;
 
     /**
      * @brief Check if a complete packet is available

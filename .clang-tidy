@@ -62,6 +62,7 @@ Checks: >-
   -cppcoreguidelines-pro-type-vararg,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-no-malloc,
+  google-*,
   hicpp-*,
   -hicpp-no-malloc,
   -hicpp-avoid-c-arrays,

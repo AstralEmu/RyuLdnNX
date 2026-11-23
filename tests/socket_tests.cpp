@@ -42,7 +42,12 @@
 
 #include "network/socket.hpp"
 
-using namespace ryu_ldn::network;
+using ryu_ldn::network::errno_to_result;
+using ryu_ldn::network::Socket;
+using ryu_ldn::network::socket_exit;
+using ryu_ldn::network::socket_init;
+using ryu_ldn::network::socket_is_initialized;
+using ryu_ldn::network::SocketResult;
 
 /**
  * @brief Observe whether a moved-from Socket is in its documented empty state.
@@ -1308,7 +1313,7 @@ constexpr size_t fn_index(Fn fn) {
  */
 struct Fault {
     /// value returned instead of calling libc
-    long ret;
+    ssize_t ret;
     /// number of calls to let through before failing
     int skip;
     /// errno to set (when ret < 0)
@@ -1332,7 +1337,7 @@ Fault g_fault[fn_index(Fn::Count)];
  * @param skip calls to let through first
  * @param ret value returned instead of calling libc
  */
-void arm(Fn fn, int err, int skip = 0, long ret = -1) {
+void arm(Fn fn, int err, int skip = 0, ssize_t ret = -1) {
     g_fault[fn_index(fn)] = Fault{
         .ret = ret,
         .skip = skip,

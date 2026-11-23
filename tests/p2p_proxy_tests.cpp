@@ -24,6 +24,7 @@
  * @license GPL-2.0-or-later
  */
 
+#include <cinttypes>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -73,14 +74,14 @@ static int g_tests_failed = 0;
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
 /**
- * @brief Widen an integral value for "%lld" printing.
+ * @brief Widen an integral value for PRId64 printing.
  * @tparam T integral or enum type of the value
  * @param v value to widen
  * @return v as long long
  */
 template <typename T>
-static long long assert_ll(T v) {
-    return static_cast<long long>(v);
+static int64_t assert_ll(T v) {
+    return static_cast<int64_t>(v);
 }
 
 /**
@@ -88,15 +89,18 @@ static long long assert_ll(T v) {
  * @param a Actual value.
  * @param b Expected value.
  */
-#define ASSERT_EQ(a, b)                                                      \
-    do {                                                                     \
-        auto _a = (a);                                                       \
-        auto _b = (b);                                                       \
-        if (_a != _b) {                                                      \
-            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__);        \
-            printf("    got: %lld vs %lld\n", assert_ll(_a), assert_ll(_b)); \
-            throw std::runtime_error("Test assertion failed");               \
-        }                                                                    \
+#define ASSERT_EQ(a, b)                                               \
+    do {                                                              \
+        auto _a = (a);                                                \
+        auto _b = (b);                                                \
+        if (_a != _b) {                                               \
+            printf("  FAIL: %s == %s (line %d)\n", #a, #b, __LINE__); \
+            printf(                                                   \
+                "    got: %" PRId64 " vs %" PRId64 "\n",              \
+                assert_ll(_a),                                        \
+                assert_ll(_b));                                       \
+            throw std::runtime_error("Test assertion failed");        \
+        }                                                             \
     } while (0)
 
 /**
