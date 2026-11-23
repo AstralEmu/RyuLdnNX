@@ -235,7 +235,7 @@ void init_mock_config() {
     // Server defaults
     std::strncpy(
         g_mock_config.server.host,
-        "ryuldnnx.ddns.net",
+        "ldn.astralemu.com",
         sizeof(g_mock_config.server.host) - 1);
     g_mock_config.server.port = 30456;
 
@@ -818,7 +818,7 @@ TEST(get_server_address_default) {
     Result r = mock::MockConfigService::GetServerAddress(addr);
 
     ASSERT_SUCCESS(r);
-    ASSERT_STREQ(addr.host, "ryuldnnx.ddns.net");
+    ASSERT_STREQ(addr.host, "ldn.astralemu.com");
     ASSERT_EQ(addr.port, 30456U);
 }
 

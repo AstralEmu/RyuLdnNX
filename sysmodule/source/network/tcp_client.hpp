@@ -41,7 +41,7 @@
  * TcpClient client;
  *
  * // Connect to server
- * if (client.connect("ryuldnnx.ddns.net", 30456, 5000) ==
+ * if (client.connect("ldn.astralemu.com", 30456, 5000) ==
  * ClientResult::Success) {
  *     // Send initialize message
  *     InitializeMessage init{};

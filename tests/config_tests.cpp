@@ -203,7 +203,7 @@ TEST(default_values) {
     Config config = get_default_config();
 
     // Server defaults
-    ASSERT_STREQ(config.server.host, "ryuldnnx.ddns.net");
+    ASSERT_STREQ(config.server.host, "ldn.astralemu.com");
     ASSERT_EQ(config.server.port, 30456);
 
     // LDN defaults
@@ -235,7 +235,7 @@ TEST(parse_empty_file) {
 
     ASSERT_EQ(result, ConfigResult::Success);
     // Should have defaults
-    ASSERT_STREQ(config.server.host, "ryuldnnx.ddns.net");
+    ASSERT_STREQ(config.server.host, "ldn.astralemu.com");
 }
 
 /**
@@ -379,7 +379,7 @@ TEST(file_not_found) {
 
     ASSERT_EQ(result, ConfigResult::FileNotFound);
     // Config should still have defaults
-    ASSERT_STREQ(config.server.host, "ryuldnnx.ddns.net");
+    ASSERT_STREQ(config.server.host, "ldn.astralemu.com");
 }
 
 /**

@@ -2,16 +2,16 @@
 # These owners will be requested for review when PRs touch these paths
 
 # Default owners for everything
-* @MH13-YT @Ethiquema
+* @MH13-000 @Ethiquema
 
 # Sysmodule core
-/sysmodule/ @MH13-YT @Ethiquema
+/sysmodule/ @MH13-000 @Ethiquema
 
 # Build system
-/Makefile @MH13-YT @Ethiquema
-/Dockerfile @MH13-YT @Ethiquema
-/docker-compose.yml @MH13-YT @Ethiquema
-/.github/workflows/ @MH13-YT @Ethiquema
+/Makefile @MH13-000 @Ethiquema
+/Dockerfile @MH13-000 @Ethiquema
+/docker-compose.yml @MH13-000 @Ethiquema
+/.github/workflows/ @MH13-000 @Ethiquema
 
 # Documentation
-/*.md @MH13-YT @Ethiquema
+/*.md @MH13-000 @Ethiquema
