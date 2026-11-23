@@ -20,7 +20,7 @@ the page here.
   `make lint`, `make dist`. Never invoke the cross toolchain on the host.
 - Workflows: `make workflow-lint` (actionlint + shellcheck, containerised). Actions
   pinned by commit SHA, least-privilege `permissions`, untrusted input only via
-  `env:`, no `|| true`.
+  `env:`, no forced-success fallback after a command.
 
 ## Wiki before code
 

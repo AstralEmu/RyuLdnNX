@@ -1,6 +1,6 @@
 ---
 name: doctrinal-integrity
-description: Absolute integrity rules. NEVER fake a green check by disabling, excluding or weakening it (lint suppressions, lowered coverage, skipped or deleted tests, `|| true`) — that is a failure disguised as a success. NEVER invent directories outside the project layout. NEVER force-push, rewrite published history or skip a hook. Read and apply on EVERY task; these override convenience and speed.
+description: Absolute integrity rules. NEVER fake a green check by disabling, excluding or weakening it (lint suppressions, lowered coverage, skipped or deleted tests, forced-success fallbacks) — that is a failure disguised as a success. NEVER invent directories outside the project layout. NEVER force-push, rewrite published history or skip a hook. Read and apply on EVERY task; these override convenience and speed.
 ---
 
 # doctrinal-integrity — no faked victories, no violations, no history rewrite
@@ -13,7 +13,7 @@ pass by weakening or dodging it:
 - No path added to a clang-tidy / cppcheck / actionlint exclusion to silence
   findings in code that should pass.
 - No `// NOLINT`, `#pragma` warning suppressions, `-Wno-*` flags, lowered coverage
-  threshold (`MIN_COVERAGE`), skipped or commented-out test, `|| true`,
+  threshold (`MIN_COVERAGE`), skipped or commented-out test, a forced-success fallback,
   `continue-on-error`, or swallowed error to turn a step green.
 - No throwaway code parked where the gate cannot see it.
 - No test weakened or special-cased for the test (`#ifdef TEST_BUILD` branches that
