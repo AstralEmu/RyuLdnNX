@@ -251,7 +251,7 @@ struct Config {
  * @return Config struct with default values on production release
  *
  * ## Default Values
- * - server.host: "ryuldnnx.ddns.net"
+ * - server.host: "ldn.astralemu.com"
  * - server.port: 30456
  * - ldn.enabled: true
  * - ldn.passphrase: "" (empty)
