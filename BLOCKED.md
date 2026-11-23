@@ -95,3 +95,11 @@ Open tickets: none in `todo`. `tk list` shows L1, L3-L11 all in `review` (awaiti
 Push (L9/L10): `git rev-list --left-right --count HEAD...origin/chore/post-audit-fixes` -> `371	323`;
 pre-push refuses a branch behind its remote; the fix is a merge (158 conflicts) or a new branch/PR,
 both owner decisions. L11: needs owner decision (see above).
+
+## PR #104 state after the org move (2026-11-23, supersedes the Push and Total blockage sections above)
+
+- Code origin is now git@github-ethiquema:AstralEmu/RyuLdnNX.git; PR is AstralEmu/RyuLdnNX#104 (base develop).
+- Conflicts with develop (157 files) resolved by merge commit 2f8c11d (`-s ours`): `git diff 0ef2be6 2f8c11d --quiet` is empty, develop + the 62 unique commits equals the branch tree. Pushed as fast-forward, no force. `gh pr view 104`: mergeable=MERGEABLE.
+- Checks on 2f8c11d: CodeQL SUCCESS, actionlint SUCCESS, clang-tidy / Test & Build / Pre-Release SKIPPED, DCO FAILURE.
+- DCO FAILURE (run 45273763961): "196 commit(s) failed DCO check (177 missing, 19 mismatched)", first 436917b. These are historical commits shared with develop's lineage; only a signed history rewrite + force push would fix it, forbidden by doctrinal-integrity. Needs the owner: mandate for that rewrite, or accept the red DCO check.
+- Wiki remote still HTTPS under REMOVED (403): owner runs `git -C docs remote set-url origin git@github-ethiquema:AstralEmu/RyuLdnNX.wiki.git`.
