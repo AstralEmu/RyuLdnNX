@@ -103,3 +103,9 @@ both owner decisions. L11: needs owner decision (see above).
 - Checks on 2f8c11d: CodeQL SUCCESS, actionlint SUCCESS, clang-tidy / Test & Build / Pre-Release SKIPPED, DCO FAILURE.
 - DCO FAILURE (run 45273763961): "196 commit(s) failed DCO check (177 missing, 19 mismatched)", first 436917b. These are historical commits shared with develop's lineage; only a signed history rewrite + force push would fix it, forbidden by doctrinal-integrity. Needs the owner: mandate for that rewrite, or accept the red DCO check.
 - Wiki remote still HTTPS under REMOVED (403): owner runs `git -C docs remote set-url origin git@github-ethiquema:AstralEmu/RyuLdnNX.wiki.git`.
+
+## Total blockage proof, update (tick 2026-11-23, after L12)
+
+- `tk list`: no ticket in `todo`; L1, L3-L12 are all `review` (11 in review, owner closes). No other ticket exists.
+- L12 -> review: `tk review L12` printed "L12 -> review".
+- Remaining blockers, all owner decisions: DCO check red on 196 historical commits (`gh pr view 104`: DCO sign-off check FAILURE, mergeable=MERGEABLE; fix = signed history rewrite + force push, forbidden by doctrinal-integrity without mandate); L11 -Wthread-safety (see section above).
