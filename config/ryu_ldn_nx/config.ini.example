@@ -4,7 +4,7 @@
 
 [server]
 ; Server hostname or IP address
-host = ryuldnnx.ddns.net
+host = ldn.astralemu.com
 ; Server port
 port = 30456
 

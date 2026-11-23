@@ -118,7 +118,7 @@ constexpr const char* LOG_PATH = "sdmc:/config/ryu_ldn_nx/ryu_ldn_nx.log";
 
 /** @brief Default server hostname (Temporary private RyuLDN server for
  * development and testing) */
-constexpr const char* DEFAULT_HOST = "ryuldnnx.ddns.net";
+constexpr const char* DEFAULT_HOST = "ldn.astralemu.com";
 
 /** @brief Default server port */
 constexpr uint16_t DEFAULT_PORT = 30456;
