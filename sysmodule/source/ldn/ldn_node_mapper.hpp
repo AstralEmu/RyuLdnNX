@@ -14,6 +14,7 @@
 
 #include <stratosphere.hpp>
 #include "ldn_types.hpp"
+#include "../util/thread_safety.hpp"
 
 namespace ams::mitm::ldn {
 
@@ -126,7 +127,7 @@ public:
 
 private:
     mutable os::SdkMutex m_mutex;   ///< Thread safety mutex
-    NodeEntry m_nodes[MaxNodes]{};  ///< Node entries
+    RYU_GUARDED_BY(m_mutex) NodeEntry m_nodes[MaxNodes]{};  ///< Node entries
     u8 m_local_node_id{0xFF};       ///< This client's node ID
 };
 

@@ -119,7 +119,7 @@ inline void (*g_host_before_plain_lock)(const void* mutex) = nullptr;
 /// Satisfies Lockable, so std::scoped_lock / std::unique_lock work on it.
 /// Clang thread-safety capability attributes (no-ops elsewhere), so
 /// -Wthread-safety can check code that locks the stub Mutex.
-#if defined(__clang__)
+#ifdef __clang__
 #define RYU_TSA(x) __attribute__((x))
 #else
 #define RYU_TSA(x)
@@ -189,14 +189,14 @@ private:
 };
 
 /// Non-recursive mutex of the SDK (Lockable)
-class SdkMutex {
+class RYU_TSA(capability("mutex")) SdkMutex {
 public:
     SdkMutex() = default;
     SdkMutex(const SdkMutex&) = delete;
     SdkMutex& operator=(const SdkMutex&) = delete;
 
     /// Locks the mutex
-    void lock() {
+    void lock() RYU_TSA(acquire_capability()) {
         m_mutex.lock();
     }
     /**
@@ -204,11 +204,11 @@ public:
      *
      * @return true if the lock was taken
      */
-    bool try_lock() {
+    bool try_lock() RYU_TSA(try_acquire_capability(true)) {
         return m_mutex.try_lock();
     }
     /// Unlocks the mutex
-    void unlock() {
+    void unlock() RYU_TSA(release_capability()) {
         m_mutex.unlock();
     }
 

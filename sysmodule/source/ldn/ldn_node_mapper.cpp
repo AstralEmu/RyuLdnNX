@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include "ldn_node_mapper.hpp"
+#include "../util/thread_safety.hpp"
 
 namespace ams::mitm::ldn {
 
@@ -57,7 +58,7 @@ void LdnNodeMapper::AddNode(u32 node_id, u32 ipv4) {
         return;
     }
 
-    std::scoped_lock lk(m_mutex);
+    ryu::ScopedLock lk(m_mutex);
     m_nodes[node_id].ipv4_address = ipv4;
     m_nodes[node_id].is_connected = true;
 }
@@ -75,7 +76,7 @@ void LdnNodeMapper::RemoveNode(u32 node_id) {
         return;
     }
 
-    std::scoped_lock lk(m_mutex);
+    ryu::ScopedLock lk(m_mutex);
     m_nodes[node_id].is_connected = false;
 }
 
@@ -91,7 +92,7 @@ bool LdnNodeMapper::IsNodeConnected(u32 node_id) const {
         return false;
     }
 
-    std::scoped_lock lk(m_mutex);
+    ryu::ScopedLock lk(m_mutex);
     return m_nodes[node_id].is_connected;
 }
 
@@ -107,7 +108,7 @@ u32 LdnNodeMapper::GetNodeIp(u32 node_id) const {
         return 0;
     }
 
-    std::scoped_lock lk(m_mutex);
+    ryu::ScopedLock lk(m_mutex);
     return m_nodes[node_id].ipv4_address;
 }
 
@@ -120,7 +121,7 @@ u32 LdnNodeMapper::GetNodeIp(u32 node_id) const {
  * @return Number of connected nodes (0-8)
  */
 size_t LdnNodeMapper::GetConnectedCount() const {
-    std::scoped_lock lk(m_mutex);
+    ryu::ScopedLock lk(m_mutex);
 
     return static_cast<size_t>(std::count_if(
         std::begin(m_nodes), std::end(m_nodes), [](const auto& node) {
@@ -137,7 +138,7 @@ size_t LdnNodeMapper::GetConnectedCount() const {
  * - Network connection is lost
  */
 void LdnNodeMapper::Clear() {
-    std::scoped_lock lk(m_mutex);
+    ryu::ScopedLock lk(m_mutex);
 
     for (auto& m_node : m_nodes) {
         m_node.ipv4_address = 0;
@@ -158,7 +159,7 @@ void LdnNodeMapper::Clear() {
  * - NetworkInfo.ldn.nodes[i].isConnected → m_nodes[].is_connected
  */
 void LdnNodeMapper::UpdateFromNetworkInfo(const NetworkInfo& info) {
-    std::scoped_lock lk(m_mutex);
+    ryu::ScopedLock lk(m_mutex);
 
     // Clear existing nodes first
     for (auto& m_node : m_nodes) {
@@ -207,7 +208,7 @@ bool LdnNodeMapper::ShouldRouteToNode(
         return false;
     }
 
-    std::scoped_lock lk(m_mutex);
+    ryu::ScopedLock lk(m_mutex);
 
     // First check: target must be connected
     if (!m_nodes[target_node_id].is_connected) {
