@@ -22,7 +22,8 @@ the page here.
   pinned by commit SHA, least-privilege `permissions`, untrusted input only via
   `env:`, no forced-success fallback after a command.
 - The ticket CI (`tk.yml`) runs the tk CLI vendored in `scripts/tk` through `TK_BIN`, never a
-  tk installed on the runner; re-sync that copy by hand when CI needs a newer tk.
+  tk installed on the runner; re-sync that copy by hand when CI needs a newer tk. Its `gate` job checks out with
+  `submodules: recursive` (the test image builds from `sysmodule/Atmosphere-libs`).
 
 ## Wiki before code
 
