@@ -117,7 +117,15 @@ inline void (*g_host_before_plain_lock)(const void* mutex) = nullptr;
 
 /// Mutex with the Stratosphere constructor signature (recursive flag).
 /// Satisfies Lockable, so std::scoped_lock / std::unique_lock work on it.
-class Mutex {
+/// Clang thread-safety capability attributes (no-ops elsewhere), so
+/// -Wthread-safety can check code that locks the stub Mutex.
+#if defined(__clang__)
+#define RYU_TSA(x) __attribute__((x))
+#else
+#define RYU_TSA(x)
+#endif
+
+class RYU_TSA(capability("mutex")) Mutex {
 public:
     /**
      * @brief Creates the mutex
@@ -130,7 +138,7 @@ public:
     Mutex& operator=(const Mutex&) = delete;
 
     /// Locks the mutex, after running the matching g_host_before_* test hook
-    void lock() {
+    void lock() RYU_TSA(acquire_capability()) {
         if (m_recursive) {
             if (g_host_before_recursive_lock != nullptr) {
                 g_host_before_recursive_lock();
@@ -149,21 +157,21 @@ public:
      *
      * @return true if the lock was taken
      */
-    bool try_lock() {
+    bool try_lock() RYU_TSA(try_acquire_capability(true)) {
         return m_recursive ? m_recursive_mutex.try_lock() : m_mutex.try_lock();
     }
 
     /// Stratosphere spelling of lock()/unlock()
-    void Lock() {
+    void Lock() RYU_TSA(acquire_capability()) {
         lock();
     }
     /// Unlocks the mutex (same as unlock())
-    void Unlock() {
+    void Unlock() RYU_TSA(release_capability()) {
         unlock();
     }
 
     /// Unlocks the mutex of the flavor chosen at construction
-    void unlock() {
+    void unlock() RYU_TSA(release_capability()) {
         if (m_recursive) {
             m_recursive_mutex.unlock();
         } else {
