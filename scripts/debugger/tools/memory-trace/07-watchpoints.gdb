@@ -89,7 +89,6 @@ define watch-ldn-state
     echo [MEMORY] Key state transition points:\n
     echo [MEMORY]\n
     echo [MEMORY] LdnStateMachine (CommState):\n
-    echo [MEMORY]   ams::mitm::ldn::LdnStateMachine::TransitionTo\n
     echo [MEMORY]   ams::mitm::ldn::LdnStateMachine::SignalStateChange\n
     echo [MEMORY]\n
     echo [MEMORY] ConnectionStateMachine (ConnectionState):\n
@@ -99,7 +98,7 @@ define watch-ldn-state
     echo [MEMORY]   m_state_callback invocations in update(), try_connect(),\n
     echo [MEMORY]   disconnect(), process_handshake_response()\n
     echo [MEMORY]\n
-    echo [MEMORY] Use: break ams::mitm::ldn::LdnStateMachine::TransitionTo\n
+    echo [MEMORY] Use: break ams::mitm::ldn::LdnStateMachine::SignalStateChange\n
 end
 
 document watch-ldn-state

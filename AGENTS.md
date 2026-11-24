@@ -36,7 +36,7 @@ cd tests && make test-ldn-state-machine       # see Makefile for full list
 make COVERAGE=1 coverage                        # gcov report
 ```
 
-Available suite names: `protocol`, `config`, `config-manager`, `log`, `socket`, `tcp-client`, `connection-state`, `reconnect`, `client`, `ldn-types`, `ldn-state-machine`, `ldn-proxy`, `ldn-error`, `ldn-integration`, `overlay`, `ipc-config`, `config-ipc-service`, `shared-state`, `packet-dispatcher`, `session-handler`, `proxy-handler`, `handler-integration`, `upnp`, `p2p-proxy`, `p2p-client`, `p2p-integration`, `p2p-create-network`.
+Available suite names: `protocol`, `config`, `config-manager`, `log`, `socket`, `tcp-client`, `connection-state`, `reconnect`, `client`, `ldn-types`, `ldn-state-machine`, `ldn-proxy`, `ldn-error`, `ldn-integration`, `overlay`, `ipc-config`, `config-ipc-service`, `shared-state`, `packet-dispatcher`, `session-handler`, `proxy-handler`, `handler-integration`, `upnp`, `p2p-proxy`, `p2p-client`, `p2p-integration`, `p2p-create-network`, `ephemeral-port-pool`, `ldn-node-mapper`.
 
 ### Distribution packaging
 
@@ -178,7 +178,7 @@ The sysmodule runs on Switch hardware with aggressive constraints:
 
 ## Test Patterns
 
-- Tests in `tests/` are host-compiled (`g++ -std=c++17 -Wall -Wextra -g -O0 -I../sysmodule/source -DTEST_BUILD`).
+- Tests in `tests/` are host-compiled (`g++ -std=c++20 -Wall -Wextra -g -O0 -I../sysmodule/source -DTEST_BUILD`).
 - Each suite has its own Makefile target: `make test-<name>` runs just that suite.
 - Lightweight custom test framework: `TEST(name)` macro, `ASSERT_TRUE`/`ASSERT_EQ`/`ASSERT_NE` macros, auto-registration via `register_test()`.
 - Some suites link implementation objects (e.g., `config.o`, `tcp_client.o`); others are standalone (e.g., `ldn_state_machine_tests.cpp` inlines everything).
@@ -187,7 +187,7 @@ The sysmodule runs on Switch hardware with aggressive constraints:
 ## Configuration
 
 - INI file at `sdmc:/config/ryu_ldn_nx/config.ini` (template: `config/ryu_ldn_nx/config.ini.example`).
-- Sections: `[server]` (host, port, use_tls), `[network]` (timeouts, reconnect), `[ldn]` (enabled, passphrase, disable_p2p), `[debug]` (enabled, level, log_to_file).
+- Sections: `[server]` (host, port), `[network]` (timeouts, reconnect), `[ldn]` (enabled, passphrase, disable_p2p), `[debug]` (enabled, level, log_to_file).
 - All config strings use fixed-size buffers — no `std::string` or dynamic allocation.
 - Default-on-failure semantics: if config is missing or malformed, defaults are used so the sysmodule still functions.
 - Config is loaded once at startup in `InitializeSystemModule()`. Live changes go through `ryu:cfg` IPC.
@@ -290,4 +290,4 @@ Documentation: `scripts/gdb_codegen/README.md`
 
 ## Docs Site
 
-`docs/` is an Astro + Starlight site. Build with `npm run generate-api` (runs Doxygen, transforms XML → MDX) then `astro build`. Deploys to GitHub Pages.
+The documentation is the GitHub wiki, reached through the untracked `docs` symlink (`../RyuLdnNX.wiki`). `make docs` regenerates the generated regions (Doxygen XML via `scripts/gen_docs.py`); `make hooks` activates the git hooks that require the wiki to move with the code. See wiki page `Handoff-Dev-Flow`.

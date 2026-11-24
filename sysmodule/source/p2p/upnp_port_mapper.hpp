@@ -41,9 +41,11 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_P2P_UPNP_PORT_MAPPER_HPP_
+#define SYSMODULE_SOURCE_P2P_UPNP_PORT_MAPPER_HPP_
 
 #include <stratosphere.hpp>
+#include <memory>
 
 // Forward declarations for miniupnpc types
 struct UPNPUrls;
@@ -152,8 +154,11 @@ public:
      * @note Requires Discover() to have succeeded
      */
     /// @gdb{tag="P2P:NAT", msg="Adding port mapping"}
-    bool AddPortMapping(uint16_t internal_port, uint16_t external_port,
-                        const char* description, int lease_duration = PORT_LEASE_DURATION);
+    bool AddPortMapping(
+        uint16_t internal_port,
+        uint16_t external_port,
+        const char* description,
+        int lease_duration = PORT_LEASE_DURATION);
 
     /**
      * @brief Delete a TCP port mapping
@@ -180,8 +185,10 @@ public:
      * @return true if lease was refreshed, false on error
      */
     /// @gdb{tag="P2P:NAT", msg="Refreshing port mapping"}
-    bool RefreshPortMapping(uint16_t internal_port, uint16_t external_port,
-                            const char* description);
+    bool RefreshPortMapping(
+        uint16_t internal_port,
+        uint16_t external_port,
+        const char* description);
 
     // =========================================================================
     // Information
@@ -235,7 +242,7 @@ private:
     /**
      * @brief Private constructor (singleton)
      */
-    UpnpPortMapper();
+    UpnpPortMapper() noexcept;
 
     /**
      * @brief Destructor
@@ -250,22 +257,23 @@ private:
     /**
      * @brief UPnP URLs structure (allocated dynamically)
      */
-    UPNPUrls* m_urls;
+    std::unique_ptr<UPNPUrls> m_urls;
 
     /**
      * @brief IGD data structure (allocated dynamically)
      */
-    IGDdatas* m_data;
+    std::unique_ptr<IGDdatas> m_data;
 
     /**
      * @brief Local IP address string
      */
-    char m_lan_addr[64];
+    char m_lan_addr[64]{};
 
     /**
      * @brief Whether discovery succeeded
      */
-    bool m_available;
+    bool m_available{false};
 };
 
-} // namespace ams::mitm::p2p
+}  // namespace ams::mitm::p2p
+#endif  // SYSMODULE_SOURCE_P2P_UPNP_PORT_MAPPER_HPP_

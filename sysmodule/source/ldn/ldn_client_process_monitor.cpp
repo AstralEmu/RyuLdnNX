@@ -19,12 +19,15 @@ IClientProcessMonitor::~IClientProcessMonitor() {
     LOG_VERBOSE("IClientProcessMonitor destroyed");
 }
 
-Result IClientProcessMonitor::RegisterClient(const sf::ClientProcessId &client_process_id) {
-    LOG_INFO("IClientProcessMonitor::RegisterClient pid=%lu", client_process_id.GetValue());
+Result IClientProcessMonitor::RegisterClient(
+    const sf::ClientProcessId& client_process_id) {
+    LOG_INFO(
+        "IClientProcessMonitor::RegisterClient pid=%lu",
+        client_process_id.GetValue());
 
     // Stub implementation for firmware 18.0.0+ compatibility
     // Games require this function but don't use its functionality
     R_SUCCEED();
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

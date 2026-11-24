@@ -1,7 +1,7 @@
-# ryu_ldn_nx
+# RyuLdnNX
 
-[![Build Status](https://github.com/Ethiquema/ryu_ldn_nx/actions/workflows/build.yml/badge.svg)](https://github.com/Ethiquema/ryu_ldn_nx/actions)
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/REMOVED/REMOVED/raw/coverage.json)](https://github.com/Ethiquema/ryu_ldn_nx/actions)
+[![Build Status](https://github.com/AstralEmu/RyuLdnNX/actions/workflows/build.yml/badge.svg)](https://github.com/AstralEmu/RyuLdnNX/actions)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/REMOVED/REMOVED/raw/coverage.json)](https://github.com/AstralEmu/RyuLdnNX/actions)
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
 Nintendo Switch sysmodule enabling online multiplayer via Ryujinx LDN servers — no complex network setup required.
@@ -13,11 +13,11 @@ This project is still under development and is not ready for release yet.
 
 If you want to test the project and contribute, please use a private RyuLDN server, please DO NOT USE the official Ryujinx LDN servers with this project (ldn.ryujinx.app).
 
-A hosted testing instance is also available via IP address at 90.93.156.13.
+A hosted testing instance is also available via IP address at ldn.astralemu.com.
 
-## What is ryu_ldn_nx?
+## What is RyuLdnNX?
 
-ryu_ldn_nx is an Atmosphere sysmodule that intercepts local wireless (LDN) game traffic and routes it through Ryujinx's LDN servers over TCP. This allows Switch users with CFW to play online multiplayer games without:
+RyuLdnNX is an Atmosphere sysmodule that intercepts local wireless (LDN) game traffic and routes it through Ryujinx's LDN servers over TCP. This allows Switch users with CFW to play online multiplayer games without:
 
 - Complex LAN play configurations
 - PC with pcap in connection sharing mode
@@ -27,7 +27,7 @@ Just install, connect to WiFi, and play!
 
 ## How It Works
 
-ryu_ldn_nx registers **three IPC services** simultaneously:
+RyuLdnNX registers **three IPC services** simultaneously:
 
 1. **`ldn:u` MITM** — Intercepts Nintendo's LDN user service. Implements `ICommunicationService` with a full state machine (None → Initialized → AccessPoint/Station → AccessPointCreated/StationConnected). Games see synthesized `NetworkInfo` and node IDs from Ryujinx server responses.
 
@@ -53,35 +53,18 @@ ryu_ldn_nx registers **three IPC services** simultaneously:
 
 ### Quick Install
 
-1. Download the latest release from [Releases](https://github.com/Ethiquema/ryu_ldn_nx/releases)
+1. Download the latest release from [Releases](https://github.com/AstralEmu/RyuLdnNX/releases)
 2. Extract the ZIP to your SD card root (contains `/atmosphere/contents/4200000000000010/` layout)
 3. Reboot your Switch
 4. Launch any game with local multiplayer — it will automatically use online mode!
 
 ### Configuration (Optional)
 
-Create `sdmc:/config/ryu_ldn_nx/config.ini` (or let the sysmodule auto-create it on first boot):
+On first boot, the sysmodule automatically generates `sdmc:/config/ryu_ldn_nx/config.ini` with the default settings and inline documentation.
 
-```ini
-[server]
-host = 90.93.156.13    ; IP address or hostname
-port = 30456
-use_tls = 0                      ; NOT IMPLEMENTED — no TLS code exists
+* **To customize settings:** Boot once to let the file generate, then edit `sdmc:/config/ryu_ldn_nx/config.ini` directly on your SD card.
+* **To configure before booting:** Copy [`config.ini.example`](./config/ryu_ldn_nx/config.ini.example) to `sdmc:/config/ryu_ldn_nx/config.ini` and adjust the values as needed.
 
-[network]
-connect_timeout = 5000
-reconnect_delay = 3000
-max_reconnect_attempts = 5       ; 0 = disable auto-reconnect
-
-[ldn]
-enabled = 1
-disable_p2p = 1
-
-[debug]
-enabled = 0
-level = 1
-log_to_file = 0
-```
 
 All settings have sensible defaults and can be changed live via the Tesla overlay (`ryu:cfg` service).
 
@@ -104,7 +87,7 @@ Any game that supports Nintendo's Local Wireless (LDN) multiplayer should work, 
 #### Using Docker (Recommended)
 
 ```bash
-git clone --recursive https://github.com/Ethiquema/ryu_ldn_nx.git
+git clone --recursive https://github.com/AstralEmu/RyuLdnNX.git
 cd ryu_ldn_nx
 
 # Build everything (sysmodule + overlay + dist ZIP)
@@ -116,8 +99,6 @@ docker compose run --rm test
 # Clean build artifacts and output/
 docker compose run --rm clean
 
-# Package for distribution
-cd sysmodule && make dist
 ```
 
 The build produces:
@@ -132,22 +113,6 @@ make COVERAGE=1 coverage                        # gcov report
 ```
 
 Available suites: `protocol`, `config`, `config-manager`, `log`, `socket`, `tcp-client`, `connection-state`, `reconnect`, `client`, `ldn-types`, `ldn-state-machine`, `ldn-proxy`, `ldn-error`, `ldn-integration`, `overlay`, `ipc-config`, `config-ipc-service`, `shared-state`, `packet-dispatcher`, `session-handler`, `proxy-handler`, `handler-integration`, `upnp`, `p2p-proxy`, `p2p-client`, `p2p-integration`, `p2p-create-network`.
-
-#### Native Build
-
-Requirements:
-- [devkitPro](https://devkitpro.org/wiki/Getting_Started) with devkitA64
-- libnx
-- Atmosphere libraries (libstratosphere)
-
-```bash
-dkp-pacman -S switch-dev libnx
-git clone --recursive https://github.com/Atmosphere-NX/Atmosphere.git
-cd Atmosphere && make -C libraries
-
-export ATMOSPHERE_LIBS=/path/to/Atmosphere/libraries
-cd /path/to/ryu_ldn_nx/sysmodule && make
-```
 
 ### Project Structure
 
@@ -168,21 +133,8 @@ ryu_ldn_nx/
 ├── tests/               # Host unit tests
 ├── scripts/             # Build scripts, GDB debugger scripts
 ├── config/              # Example configuration
-└── docs/                 # Astro + Starlight documentation site
+└── docs                  # Symlink to the GitHub wiki clone (untracked)
 ```
-
-### Debugging on Hardware
-
-```bash
-# Interactive GDB session
-docker compose run --rm debugger <SWITCH_IP> [PID]
-
-# Regenerate GDB tracepoints from @gdb{} annotations
-python3 scripts/gdb_codegen.py generate
-python3 scripts/gdb_codegen.py verify
-```
-
-Log files on Switch: `config/ryu_ldn_nx/ryu_ldn_nx.log` (when `log_to_file=1`).
 
 ## Contributing
 

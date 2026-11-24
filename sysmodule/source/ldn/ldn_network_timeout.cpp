@@ -11,12 +11,12 @@
 
 namespace ams::mitm::ldn {
 
-NetworkTimeout::NetworkTimeout(uint64_t idle_timeout_ms, TimeoutCallback callback)
-    : m_idle_timeout_ms(idle_timeout_ms)
-    , m_callback(callback)
-    , m_timeout_start_ms(0)
-    , m_active(false)
-    , m_mutex(false) // Non-recursive mutex
+NetworkTimeout::NetworkTimeout(
+    uint64_t idle_timeout_ms, TimeoutCallback callback)
+    : m_idle_timeout_ms(idle_timeout_ms),
+      m_callback(callback),
+
+      m_mutex(false)  // Non-recursive mutex
 {
     LOG_VERBOSE("NetworkTimeout created with %lu ms timeout", idle_timeout_ms);
 }
@@ -30,10 +30,12 @@ bool NetworkTimeout::RefreshTimeout() {
     std::scoped_lock lock(m_mutex);
 
     // Get current time
-    m_timeout_start_ms = os::ConvertToTimeSpan(os::GetSystemTick()).GetMilliSeconds();
+    m_timeout_start_ms = static_cast<uint64_t>(
+        os::ConvertToTimeSpan(os::GetSystemTick()).GetMilliSeconds());
     m_active = true;
 
-    LOG_VERBOSE("NetworkTimeout refreshed, will expire in %lu ms", m_idle_timeout_ms);
+    LOG_VERBOSE(
+        "NetworkTimeout refreshed, will expire in %lu ms", m_idle_timeout_ms);
 
     return true;
 }
@@ -56,8 +58,9 @@ bool NetworkTimeout::CheckTimeout(uint64_t current_time_ms) {
 
     // Check if timeout has elapsed
     if (current_time_ms >= m_timeout_start_ms + m_idle_timeout_ms) {
-        LOG_INFO("NetworkTimeout expired after %lu ms of inactivity",
-                 current_time_ms - m_timeout_start_ms);
+        LOG_INFO(
+            "NetworkTimeout expired after %lu ms of inactivity",
+            current_time_ms - m_timeout_start_ms);
 
         m_active = false;
 
@@ -77,4 +80,4 @@ bool NetworkTimeout::IsActive() const {
     return m_active;
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

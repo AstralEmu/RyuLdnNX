@@ -4,7 +4,7 @@
  *
  * This module handles loading and parsing of INI configuration files.
  * It provides all runtime settings for the sysmodule including server
- * connection details, network timeouts, and debug options.
+ * connection details, LDN settings, and debug options.
  *
  * ## Design Principles
  *
@@ -32,8 +32,7 @@
  *
  * ## Supported Sections
  *
- * - `[server]`: Server hostname, port, TLS settings
- * - `[network]`: Timeouts, reconnect behavior
+ * - `[server]`: Server hostname and port
  * - `[ldn]`: LDN enable/disable, passphrase
  * - `[debug]`: Logging configuration
  *
@@ -51,8 +50,8 @@
  * ConfigResult result = load_config("/config/ryu_ldn_nx/config.ini", config);
  *
  * if (result == ConfigResult::Success) {
- *     printf("Loaded config, server: %s:%d\n", config.server.host, config.server.port);
- * } else if (result == ConfigResult::FileNotFound) {
+ *     printf("Loaded config, server: %s:%d\n", config.server.host,
+ * config.server.port); } else if (result == ConfigResult::FileNotFound) {
  *     printf("Using default config\n");
  * }
  * @endcode
@@ -61,10 +60,16 @@
  * @see Epic 2, Story 2.1 for requirements
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_CONFIG_CONFIG_HPP_
+#define SYSMODULE_SOURCE_CONFIG_CONFIG_HPP_
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdio>
+#ifndef __SWITCH__
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace ryu_ldn::config {
 
@@ -88,13 +93,6 @@ constexpr size_t MAX_HOST_LENGTH = 128;
 constexpr size_t MAX_PASSPHRASE_LENGTH = 64;
 
 /**
- * @brief Maximum length of network interface name (excluding null terminator)
- *
- * Linux interface names are typically max 15 chars (IFNAMSIZ).
- */
-constexpr size_t MAX_INTERFACE_LENGTH = 32;
-
-/**
  * @brief Default configuration file path on SD card
  *
  * This is the standard location for ryu_ldn_nx config.
@@ -110,7 +108,7 @@ constexpr const char* CONFIG_DIR = "sdmc:/config/ryu_ldn_nx";
 /**
  * @brief Log file path on SD card
  *
- * Debug logs are written here when log_to_file is enabled.
+ * Debug logs are written here when debug logging is enabled.
  */
 constexpr const char* LOG_PATH = "sdmc:/config/ryu_ldn_nx/ryu_ldn_nx.log";
 
@@ -118,30 +116,12 @@ constexpr const char* LOG_PATH = "sdmc:/config/ryu_ldn_nx/ryu_ldn_nx.log";
 // Default Values - Server
 // -----------------------------------------------------------------------------
 
-/** @brief Default server hostname (Temporary private RyuLDN server for development and testing) */
-constexpr const char* DEFAULT_HOST = "90.93.156.13";
+/** @brief Default server hostname (Temporary private RyuLDN server for
+ * development and testing) */
+constexpr const char* DEFAULT_HOST = "ldn.astralemu.com";
 
 /** @brief Default server port */
 constexpr uint16_t DEFAULT_PORT = 30456;
-
-/** @brief Default TLS setting — NOT IMPLEMENTED, always plain TCP regardless of this value */
-constexpr bool DEFAULT_USE_TLS = false;
-
-// -----------------------------------------------------------------------------
-// Default Values - Network
-// -----------------------------------------------------------------------------
-
-/** @brief Default connection timeout (5 seconds) */
-constexpr uint32_t DEFAULT_CONNECT_TIMEOUT_MS = 5000;
-
-/** @brief Default ping/keepalive interval (10 seconds) */
-constexpr uint32_t DEFAULT_PING_INTERVAL_MS = 10000;
-
-/** @brief Default initial reconnect delay (3 seconds) */
-constexpr uint32_t DEFAULT_RECONNECT_DELAY_MS = 3000;
-
-/** @brief Default maximum reconnection attempts (0 = disable auto-reconnect) */
-constexpr uint32_t DEFAULT_MAX_RECONNECT_ATTEMPTS = 5;
 
 // -----------------------------------------------------------------------------
 // Default Values - LDN
@@ -149,8 +129,11 @@ constexpr uint32_t DEFAULT_MAX_RECONNECT_ATTEMPTS = 5;
 
 /** @brief Default LDN enabled state */
 constexpr bool DEFAULT_LDN_ENABLED = true;
+/** @brief Default use_passphrase state (false = public rooms, no filtering) */
+constexpr bool DEFAULT_USE_PASSPHRASE = false;
 
-/** @brief Default P2P proxy disabled state (matches config.ini.example: disable_p2p = 1) */
+/** @brief Default P2P proxy disabled state (matches config.ini.example:
+ * disable_p2p = 1) */
 constexpr bool DEFAULT_DISABLE_P2P = true;
 
 // -----------------------------------------------------------------------------
@@ -163,9 +146,6 @@ constexpr bool DEFAULT_DEBUG_ENABLED = false;
 /** @brief Default debug log level (1 = warnings) */
 constexpr uint32_t DEFAULT_DEBUG_LEVEL = 1;
 
-/** @brief Default file logging state */
-constexpr bool DEFAULT_LOG_TO_FILE = false;
-
 // =============================================================================
 // Result Codes
 // =============================================================================
@@ -174,10 +154,10 @@ constexpr bool DEFAULT_LOG_TO_FILE = false;
  * @brief Result codes for configuration operations
  */
 enum class ConfigResult {
-    Success = 0,       ///< Configuration loaded successfully
-    FileNotFound,      ///< Configuration file does not exist
-    ParseError,        ///< File exists but contains syntax errors
-    IoError            ///< File I/O error (permissions, disk full, etc.)
+    Success = 0,   ///< Configuration loaded successfully
+    FileNotFound,  ///< Configuration file does not exist
+    ParseError,    ///< File exists but contains syntax errors
+    IoError        ///< File I/O error (permissions, disk full, etc.)
 };
 
 // =============================================================================
@@ -193,31 +173,10 @@ enum class ConfigResult {
  * ## INI Keys
  * - `host`: Server hostname or IP address
  * - `port`: Server port number
- * - `use_tls`: Enable TLS encryption (0/1)
  */
 struct ServerConfig {
     char host[MAX_HOST_LENGTH + 1];  ///< Server hostname/IP (null-terminated)
-    uint16_t port;                    ///< Server port number
-    bool use_tls;                     ///< Use TLS/SSL encryption
-};
-
-/**
- * @brief Network behavior settings
- *
- * Configuration for network timeouts and reconnection behavior.
- * Corresponds to the [network] section in config.ini.
- *
- * ## INI Keys
- * - `connect_timeout`: Connection timeout in milliseconds
- * - `ping_interval`: Keepalive ping interval in milliseconds
- * - `reconnect_delay`: Initial delay before reconnection attempt
- * - `max_reconnect_attempts`: Maximum reconnect attempts (0 = disable auto-reconnect)
- */
-struct NetworkConfig {
-    uint32_t connect_timeout_ms;       ///< TCP connection timeout
-    uint32_t ping_interval_ms;         ///< Keepalive ping interval
-    uint32_t reconnect_delay_ms;       ///< Initial reconnect delay
-    uint32_t max_reconnect_attempts;   ///< Max reconnect attempts (0 disables auto-reconnect)
+    uint16_t port;                   ///< Server port number
 };
 
 /**
@@ -229,14 +188,16 @@ struct NetworkConfig {
  * ## INI Keys
  * - `enabled`: Enable/disable LDN emulation (0/1)
  * - `passphrase`: Passphrase for private rooms (max 64 chars)
- * - `interface`: Preferred network interface (empty = auto)
+ * - `use_passphrase`: Enable passphrase filtering (0/1) - false = public rooms
  * - `disable_p2p`: Disable P2P proxy (0/1) - like Ryujinx MultiplayerDisableP2p
  */
 struct LdnConfig {
-    bool enabled;                                    ///< Enable LDN emulation
-    char passphrase[MAX_PASSPHRASE_LENGTH + 1];      ///< Room passphrase (null-terminated)
-    char interface_name[MAX_INTERFACE_LENGTH + 1];   ///< Network interface (null-terminated)
-    bool disable_p2p;                                ///< Disable P2P proxy (like Ryujinx)
+    bool enabled;                                ///< Enable LDN emulation
+    char passphrase[MAX_PASSPHRASE_LENGTH + 1];  ///< Room passphrase
+                                                 ///< (null-terminated)
+    bool
+        use_passphrase;  ///< Enable passphrase filtering (false = public rooms)
+    bool disable_p2p;    ///< Disable P2P proxy (like Ryujinx)
 };
 
 /**
@@ -248,7 +209,10 @@ struct LdnConfig {
  * ## INI Keys
  * - `enabled`: Enable debug logging (0/1)
  * - `level`: Log verbosity (0=errors, 1=warnings, 2=info, 3=verbose)
- * - `log_to_file`: Also write logs to file (0/1)
+ *
+ * When debug logging is enabled, logs are written to both console
+ * and the log file on the SD card. No separate log_to_file flag
+ * is needed — enabling debug implies file logging.
  *
  * ## Log Levels
  * - 0: Errors only (critical issues)
@@ -257,9 +221,8 @@ struct LdnConfig {
  * - 3: Verbose (detailed debugging)
  */
 struct DebugConfig {
-    bool enabled;       ///< Enable debug logging
-    uint32_t level;     ///< Log level (0-3)
-    bool log_to_file;   ///< Write logs to file
+    bool enabled;    ///< Enable debug logging (also enables file logging)
+    uint32_t level;  ///< Log level (0-3)
 };
 
 /**
@@ -270,10 +233,9 @@ struct DebugConfig {
  * load_config() to override with file settings.
  */
 struct Config {
-    ServerConfig server;    ///< Server connection settings
-    NetworkConfig network;  ///< Network behavior settings
-    LdnConfig ldn;          ///< LDN emulation settings
-    DebugConfig debug;      ///< Debug/logging settings
+    ServerConfig server;  ///< Server connection settings
+    LdnConfig ldn;        ///< LDN emulation settings
+    DebugConfig debug;    ///< Debug/logging settings
 };
 
 // =============================================================================
@@ -289,28 +251,20 @@ struct Config {
  * @return Config struct with default values on production release
  *
  * ## Default Values
- * - server.host: "90.93.156.13"
+ * - server.host: "ldn.astralemu.com"
  * - server.port: 30456
- * - server.use_tls: true
- * - network.connect_timeout_ms: 5000
- * - network.ping_interval_ms: 10000
- * - network.reconnect_delay_ms: 3000
- * - network.max_reconnect_attempts: 5
  * - ldn.enabled: true
  * - ldn.passphrase: "" (empty)
- * - ldn.interface_name: "" (empty = auto-detect)
+ * - ldn.use_passphrase: false (public rooms)
  * - ldn.disable_p2p: false
  * - debug.enabled: false
  * - debug.level: 1 (warnings)
- * - debug.log_to_file: false
- *
- * ## Not Yet Wired
- * - server.use_tls: parsed and stored but not consumed (no TLS implementation)
- * - network.ping_interval_ms: parsed and stored but forced to 0 in client (server drives pings)
- * - ldn.interface_name: parsed and stored but not consumed (always uses auto-detect)
  *
  * ## Bool Parsing
- * Accepts: 0, f, F, n, N → false; anything else → true (1, true, yes, etc.)
+ * Accepts ONLY: "true"/"1" → true; "false"/"0" → false (case-insensitive).
+ * Any other value (including "yes"/"no"/"on"/"off"/empty) → false (parse
+ * error). This is stricter than the original implementation, which defaulted to
+ * true for any unrecognized value — see parse_bool() in config.cpp.
  */
 Config get_default_config();
 
@@ -352,6 +306,33 @@ ConfigResult load_config(const char* path, Config& config);
  */
 ConfigResult save_config(const char* path, const Config& config);
 
+#ifndef __SWITCH__
+/**
+ * @brief Open a file for stdio use with an explicit creation mode (0644)
+ *
+ * Equivalent to fopen() except that a created file is not world-writable
+ * (fopen() always requests mode 0666). Host builds only: the Switch build
+ * reads and writes the configuration through ams::fs and never reaches this.
+ *
+ * @param path File to open or create
+ * @param open_flags open(2) flags (O_WRONLY | O_CREAT | ...)
+ * @param stream_mode fdopen(3) mode string matching open_flags
+ * @return Open stream, or nullptr (no descriptor left open) on failure
+ */
+inline std::FILE* open_stream(
+    const char* path, int open_flags, const char* stream_mode) {
+    const int fd = ::open(path, open_flags, 0644);
+    if (fd < 0) {
+        return nullptr;
+    }
+    std::FILE* stream = ::fdopen(fd, stream_mode);
+    if (stream == nullptr) {
+        ::close(fd);
+    }
+    return stream;
+}
+#endif  // __SWITCH__
+
 /**
  * @brief Ensure configuration file exists, create with defaults if not
  *
@@ -371,12 +352,18 @@ ConfigResult ensure_config_exists(const char* path);
  */
 inline const char* config_result_to_string(ConfigResult result) {
     switch (result) {
-        case ConfigResult::Success:      return "Success";
-        case ConfigResult::FileNotFound: return "FileNotFound";
-        case ConfigResult::ParseError:   return "ParseError";
-        case ConfigResult::IoError:      return "IoError";
-        default:                         return "Unknown";
+        case ConfigResult::Success:
+            return "Success";
+        case ConfigResult::FileNotFound:
+            return "FileNotFound";
+        case ConfigResult::ParseError:
+            return "ParseError";
+        case ConfigResult::IoError:
+            return "IoError";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ryu_ldn::config
+}  // namespace ryu_ldn::config
+#endif  // SYSMODULE_SOURCE_CONFIG_CONFIG_HPP_

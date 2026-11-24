@@ -20,7 +20,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_NETWORK_TIMEOUT_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_NETWORK_TIMEOUT_HPP_
 
 #include <stratosphere.hpp>
 
@@ -29,7 +30,7 @@ namespace ams::mitm::ldn {
 /**
  * @brief Callback type for timeout expiration
  */
-using TimeoutCallback = void(*)();
+using TimeoutCallback = void (*)();
 
 /**
  * @brief Network inactivity timeout manager
@@ -95,15 +96,17 @@ public:
 
     /**
      * @brief Check if timeout is currently active
+     * @return true while a timeout is armed
      */
     bool IsActive() const;
 
 private:
     uint64_t m_idle_timeout_ms;      ///< Timeout duration
-    TimeoutCallback m_callback;       ///< Callback to invoke on timeout
-    uint64_t m_timeout_start_ms;     ///< When timeout was started
-    bool m_active;                    ///< True if timeout is active
-    mutable os::Mutex m_mutex;        ///< Thread safety
+    TimeoutCallback m_callback;      ///< Callback to invoke on timeout
+    uint64_t m_timeout_start_ms{0};  ///< When timeout was started
+    bool m_active{false};            ///< True if timeout is active
+    mutable os::Mutex m_mutex;       ///< Thread safety
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_NETWORK_TIMEOUT_HPP_

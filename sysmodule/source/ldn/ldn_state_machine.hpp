@@ -9,7 +9,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_STATE_MACHINE_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_STATE_MACHINE_HPP_
 
 #include <stratosphere.hpp>
 #include "ldn_types.hpp"
@@ -63,7 +64,14 @@ enum class StateTransitionResult {
  */
 class LdnStateMachine {
 public:
-    using StateCallback = void (*)(CommState old_state, CommState new_state, void* user_data);
+    /**
+     * @brief State change callback.
+     * @param old_state State being left.
+     * @param new_state State being entered.
+     * @param user_data Opaque pointer given at registration.
+     */
+    using StateCallback =
+        void (*)(CommState old_state, CommState new_state, void* user_data);
 
     /**
      * @brief Constructor
@@ -75,7 +83,7 @@ public:
      * @brief Destructor
      */
     /// @gdb{tag="LDN:STATE", msg="LdnStateMachine: destructor"}
-    ~LdnStateMachine();
+    ~LdnStateMachine() = default;
 
     // Non-copyable
     LdnStateMachine(const LdnStateMachine&) = delete;
@@ -108,7 +116,8 @@ public:
     bool IsInitialized() const;
 
     /**
-     * @brief Check if in a connected state (AccessPointCreated or StationConnected)
+     * @brief Check if in a connected state (AccessPointCreated or
+     * StationConnected)
      * @return true if connected to a network
      */
     /// @gdb{tag="LDN:STATE", msg="IsNetworkActive"}
@@ -140,7 +149,8 @@ public:
     StateTransitionResult OpenAccessPoint();
 
     /**
-     * @brief Close access point mode (AccessPoint/AccessPointCreated -> Initialized)
+     * @brief Close access point mode (AccessPoint/AccessPointCreated ->
+     * Initialized)
      * @return Transition result
      */
     /// @gdb{tag="LDN:STATE", msg="CloseAccessPoint → Initialized"}
@@ -244,29 +254,13 @@ public:
     void SignalStateChange();
 
 private:
-    /**
-     * @brief Perform state transition if valid
-     * @param new_state Target state
-     * @return Transition result
-     */
-    /// @gdb{tag="LDN:STATE", msg="TransitionTo: new_state=%d", args="$x1"}
-    StateTransitionResult TransitionTo(CommState new_state);
+    mutable os::SdkMutex m_mutex;        ///< Mutex for thread safety
+    CommState m_state{CommState::None};  ///< Current state
+    os::SystemEvent m_state_event;       ///< State change event
 
-    /**
-     * @brief Check if transition is valid
-     * @param from Source state
-     * @param to Target state
-     * @return true if transition is allowed
-     */
-    static bool IsValidTransition(CommState from, CommState to);
-
-private:
-    mutable os::SdkMutex m_mutex;           ///< Mutex for thread safety
-    CommState m_state;                       ///< Current state
-    os::SystemEvent m_state_event;           ///< State change event
-
-    StateCallback m_callback;                ///< Optional state change callback
-    void* m_callback_user_data;              ///< User data for callback
+    StateCallback m_callback{nullptr};    ///< Optional state change callback
+    void* m_callback_user_data{nullptr};  ///< User data for callback
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_STATE_MACHINE_HPP_

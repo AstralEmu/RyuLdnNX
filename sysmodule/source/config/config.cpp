@@ -10,9 +10,12 @@
  */
 
 #include "config.hpp"
+#include "../debug/log.hpp"
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
+#include <cerrno>
+#include <memory>
 
 #ifdef __SWITCH__
 #include <stratosphere.hpp>
@@ -30,6 +33,9 @@ namespace {
 
 /**
  * @brief Trim leading whitespace from string
+ *
+ * @param str Null-terminated input
+ * @return Pointer to the first non-blank character of str
  */
 const char* trim_start(const char* str) {
     while (*str == ' ' || *str == '\t') {
@@ -40,6 +46,8 @@ const char* trim_start(const char* str) {
 
 /**
  * @brief Trim trailing whitespace from string (modifies in place)
+ *
+ * @param str Null-terminated buffer, shortened in place
  */
 void trim_end(char* str) {
     size_t len = std::strlen(str);
@@ -51,6 +59,10 @@ void trim_end(char* str) {
 
 /**
  * @brief Copy string with length limit
+ *
+ * @param dest Destination buffer (at least max_len + 1 bytes)
+ * @param src Null-terminated source
+ * @param max_len Maximum number of characters copied
  */
 void safe_strcpy(char* dest, const char* src, size_t max_len) {
     size_t i = 0;
@@ -62,90 +74,186 @@ void safe_strcpy(char* dest, const char* src, size_t max_len) {
 }
 
 /**
- * @brief Parse boolean value (0/1, true/false, yes/no)
+ * @brief Parse a boolean (strict: true/false/1/0, case-insensitive)
+ *
+ * Returns false for any value that is not one of the four accepted forms.
+ * The previous implementation accepted "f/F/n/N" prefixes and defaulted to
+ * true for anything else, which silently turned typos and garbage into
+ * "enabled" — a dangerous default for security-relevant flags such as
+ * `disable_p2p` or `use_passphrase`.
+ *
+ * @param value Null-terminated string to parse (may be nullptr)
+ * @return parsed boolean; false if the value is unrecognized or nullptr
  */
 bool parse_bool(const char* value) {
-    if (value[0] == '0' || value[0] == 'f' || value[0] == 'F' ||
-        value[0] == 'n' || value[0] == 'N') {
+    if (value == nullptr || value[0] == '\0') {
         return false;
     }
-    return true;  // Default to true for any non-false value
+
+    // Accept only "true"/"false"/"1"/"0" (case-insensitive). We do a small
+    // inline case-insensitive compare to stay portable across devkitPro
+    // (Switch) and the host g++ test build without pulling in <strings.h>.
+    auto ieq = [](char a, char b) {
+        // ASCII-only lowercasing of the input; the reference token b is
+        // always a lowercase literal ("true"/"false").
+        if (a >= 'A' && a <= 'Z') {
+            a = static_cast<char>(a - 'A' + 'a');
+        }
+        return a == b;
+    };
+    auto ieqstr = [&](const char* a, const char* b) {
+        while (*a && *b) {
+            if (!ieq(*a, *b)) {
+                return false;
+            }
+            a++;
+            b++;
+        }
+        return *a == '\0' && *b == '\0';
+    };
+
+    if (std::strcmp(value, "1") == 0 || ieqstr(value, "true")) {
+        return true;
+    }
+    if (std::strcmp(value, "0") == 0 || ieqstr(value, "false")) {
+        return false;
+    }
+    // Anything else (yes, no, on, off, True-ish, 2, ...) is a parse error.
+    // Defaulting to false is the safe choice: it never silently enables a
+    // feature the user did not intend to enable.
+    return false;
 }
 
 /**
- * @brief Parse unsigned integer
+ * @brief Parse unsigned 32-bit integer from a config value string.
+ *
+ * @note Errors are handled by returning 0 (the same default-on-failure
+ *       convention used by parse_bool in this file): a null/empty input or
+ *       a leading '-' (negative value) is rejected and the function returns
+ *       0 instead of letting strtoul silently wrap "-1" into ULONG_MAX and
+ *       then truncate to UINT32_MAX. This prevents a config typo like
+ *       `port = -1` from turning into 65535 or `level = -5` from becoming
+ *       UINT32_MAX.
+ *
+ *       In addition, the parse now rejects trailing garbage and overflow:
+ *       - `"123abc"` previously parsed as `123` (strtoul stops at the first
+ *         non-digit and silently drops the rest). It now returns 0 because
+ *         the whole input is not a clean integer.
+ *       - `"4294967296"` (2^32) previously wrapped/truncated silently. It
+ *         now returns 0 because strtoul sets errno=ERANGE and the result
+ *         does not fit in uint32_t.
+ *       This makes malformed config values loud (default applied) rather
+ *       than quietly producing a wrong-but-plausible number.
+ *
+ * @param value Null-terminated decimal string (may be nullptr)
+ * @return the parsed value, or 0 if the input is null, empty, negative,
+ *         malformed, has trailing characters or does not fit in 32 bits
  */
 uint32_t parse_uint32(const char* value) {
-    return static_cast<uint32_t>(std::strtoul(value, nullptr, 10));
+    if (value == nullptr || value[0] == '\0') {
+        return 0;
+    }
+    // Reject negative input. strtoul would happily accept "-1" and return
+    // ULONG_MAX (wrapped), which is never what a config value means here.
+    if (value[0] == '-') {
+        return 0;
+    }
+
+    // Use endptr to detect trailing characters and errno to detect overflow.
+    // strtoul skips leading whitespace itself; trailing whitespace is also
+    // rejected here so that "123 " is treated as malformed (the INI parser
+    // already trims values before calling us, so any trailing whitespace
+    // would indicate a parser bug rather than a user intent).
+    errno = 0;
+    char* endptr = nullptr;
+    const auto parsed = std::strtoul(value, &endptr, 10);
+
+    // Overflow: strtoul returned ULONG_MAX and set errno. For platforms
+    // where unsigned long is 64-bit, also reject values that exceed the
+    // uint32_t range even without ERANGE (defensive: ULONG_MAX on a 32-bit
+    // unsigned long triggers ERANGE, but on a 64-bit unsigned long only
+    // values >= 2^64 set ERANGE — a value like 0x1_0000_0000 fits in
+    // unsigned long but not in uint32_t).
+    if (errno == ERANGE || parsed > 0xFFFFFFFFUL) {
+        errno = 0;
+        return 0;
+    }
+
+    // Trailing garbage: the whole input must be consumed. If endptr does
+    // not point at the terminating NUL, characters such as "abc" in
+    // "123abc" were left unparsed.
+    if (endptr == value || *endptr != '\0') {
+        return 0;
+    }
+
+    errno = 0;
+    return static_cast<uint32_t>(parsed);
 }
 
-/**
- * @brief Parse unsigned 16-bit integer
- */
-uint16_t parse_uint16(const char* value) {
-    return static_cast<uint16_t>(std::strtoul(value, nullptr, 10));
-}
-
-// Section identifiers
-enum class Section {
-    None,
-    Server,
-    Network,
-    Ldn,
-    Debug,
-    Unknown
-};
+/// INI section being parsed (None before the first header)
+enum class Section { None, Server, Ldn, Debug, Unknown };
 
 /**
  * @brief Identify section from header line
+ *
+ * @param line Trimmed line text
+ * @return Section named by the header, Unknown for other headers, None if
+ *         the line is not a header
  */
 Section parse_section(const char* line) {
-    if (std::strcmp(line, "[server]") == 0) return Section::Server;
-    if (std::strcmp(line, "[network]") == 0) return Section::Network;
-    if (std::strcmp(line, "[ldn]") == 0) return Section::Ldn;
-    if (std::strcmp(line, "[debug]") == 0) return Section::Debug;
-    if (line[0] == '[') return Section::Unknown;
+    if (std::strcmp(line, "[server]") == 0) {
+        return Section::Server;
+    }
+    if (std::strcmp(line, "[ldn]") == 0) {
+        return Section::Ldn;
+    }
+    if (std::strcmp(line, "[debug]") == 0) {
+        return Section::Debug;
+    }
+    if (line[0] == '[') {
+        return Section::Unknown;
+    }
     return Section::None;
 }
 
 /**
  * @brief Process a key=value line for server section
+ *
+ * @param key Option name
+ * @param value Option value text
+ * @param config Server configuration updated in place
  */
-void process_server_key(const char* key, const char* value, ServerConfig& config) {
+void process_server_key(
+    const char* key, const char* value, ServerConfig& config) {
     if (std::strcmp(key, "host") == 0) {
         safe_strcpy(config.host, value, MAX_HOST_LENGTH);
     } else if (std::strcmp(key, "port") == 0) {
-        config.port = parse_uint16(value);
-    } else if (std::strcmp(key, "use_tls") == 0) {
-        config.use_tls = parse_bool(value);
-    }
-}
-
-/**
- * @brief Process a key=value line for network section
- */
-void process_network_key(const char* key, const char* value, NetworkConfig& config) {
-    if (std::strcmp(key, "connect_timeout") == 0) {
-        config.connect_timeout_ms = parse_uint32(value);
-    } else if (std::strcmp(key, "ping_interval") == 0) {
-        config.ping_interval_ms = parse_uint32(value);
-    } else if (std::strcmp(key, "reconnect_delay") == 0) {
-        config.reconnect_delay_ms = parse_uint32(value);
-    } else if (std::strcmp(key, "max_reconnect_attempts") == 0) {
-        config.max_reconnect_attempts = parse_uint32(value);
+        // Inlined parse_uint16 (single call site — LINT-12).
+        // Same error convention as parse_uint32: null/empty or negative
+        // input returns 0. Guards `port = -1` from wrapping to 65535.
+        if (value != nullptr && value[0] != '\0' && value[0] != '-') {
+            config.port =
+                static_cast<uint16_t>(std::strtoul(value, nullptr, 10));
+        } else {
+            config.port = 0;
+        }
     }
 }
 
 /**
  * @brief Process a key=value line for ldn section
+ *
+ * @param key Option name
+ * @param value Option value text
+ * @param config LDN configuration updated in place
  */
 void process_ldn_key(const char* key, const char* value, LdnConfig& config) {
     if (std::strcmp(key, "enabled") == 0) {
         config.enabled = parse_bool(value);
     } else if (std::strcmp(key, "passphrase") == 0) {
         safe_strcpy(config.passphrase, value, MAX_PASSPHRASE_LENGTH);
-    } else if (std::strcmp(key, "interface") == 0) {
-        safe_strcpy(config.interface_name, value, MAX_INTERFACE_LENGTH);
+    } else if (std::strcmp(key, "use_passphrase") == 0) {
+        config.use_passphrase = parse_bool(value);
     } else if (std::strcmp(key, "disable_p2p") == 0) {
         config.disable_p2p = parse_bool(value);
     }
@@ -153,14 +261,17 @@ void process_ldn_key(const char* key, const char* value, LdnConfig& config) {
 
 /**
  * @brief Process a key=value line for debug section
+ *
+ * @param key Option name
+ * @param value Option value text
+ * @param config Debug configuration updated in place
  */
-void process_debug_key(const char* key, const char* value, DebugConfig& config) {
+void process_debug_key(
+    const char* key, const char* value, DebugConfig& config) {
     if (std::strcmp(key, "enabled") == 0) {
         config.enabled = parse_bool(value);
     } else if (std::strcmp(key, "level") == 0) {
         config.level = parse_uint32(value);
-    } else if (std::strcmp(key, "log_to_file") == 0) {
-        config.log_to_file = parse_bool(value);
     }
 }
 
@@ -193,11 +304,12 @@ void parse_config_content(const char* content, size_t size, Config& config) {
                         Section new_section = parse_section(trimmed);
                         if (new_section != Section::None) {
                             current_section = new_section;
-                        } else if (current_section != Section::None &&
-                                   current_section != Section::Unknown) {
+                        } else if (
+                            current_section != Section::None &&
+                            current_section != Section::Unknown) {
                             // Parse key=value
                             char* eq_pos = std::strchr(line, '=');
-                            if (eq_pos) {
+                            if (eq_pos != nullptr) {
                                 *eq_pos = '\0';
                                 char* key = line;
                                 char* value = eq_pos + 1;
@@ -211,22 +323,27 @@ void parse_config_content(const char* content, size_t size, Config& config) {
 
                                 // Copy trimmed key
                                 char key_buf[64];
-                                safe_strcpy(key_buf, trimmed_key, sizeof(key_buf) - 1);
+                                safe_strcpy(
+                                    key_buf, trimmed_key, sizeof(key_buf) - 1);
                                 trim_end(key_buf);
 
                                 // Process based on current section
                                 switch (current_section) {
                                     case Section::Server:
-                                        process_server_key(key_buf, trimmed_value, config.server);
-                                        break;
-                                    case Section::Network:
-                                        process_network_key(key_buf, trimmed_value, config.network);
+                                        process_server_key(
+                                            key_buf,
+                                            trimmed_value,
+                                            config.server);
                                         break;
                                     case Section::Ldn:
-                                        process_ldn_key(key_buf, trimmed_value, config.ldn);
+                                        process_ldn_key(
+                                            key_buf, trimmed_value, config.ldn);
                                         break;
                                     case Section::Debug:
-                                        process_debug_key(key_buf, trimmed_value, config.debug);
+                                        process_debug_key(
+                                            key_buf,
+                                            trimmed_value,
+                                            config.debug);
                                         break;
                                     default:
                                         break;
@@ -239,7 +356,8 @@ void parse_config_content(const char* content, size_t size, Config& config) {
 
             line_pos = 0;
             // Skip \r if followed by \n
-            if (i < size && content[i] == '\r' && i + 1 < size && content[i + 1] == '\n') {
+            if (i < size && content[i] == '\r' && i + 1 < size &&
+                content[i + 1] == '\n') {
                 i++;
             }
         } else if (line_pos < sizeof(line) - 1) {
@@ -253,13 +371,17 @@ void parse_config_content(const char* content, size_t size, Config& config) {
  * @brief Format config content into buffer for writing
  * @return Number of bytes written
  */
-size_t format_config_content(char* buffer, size_t buffer_size, const Config& config) {
+size_t format_config_content(
+    char* buffer, size_t buffer_size, const Config& config) {
     size_t offset = 0;
 
-    #define WRITE_LINE(fmt, ...) do { \
-        int written = std::snprintf(buffer + offset, buffer_size - offset, fmt "\n", ##__VA_ARGS__); \
-        if (written > 0 && offset + written < buffer_size) offset += written; \
-    } while(0)
+#define WRITE_LINE(fmt, ...)                                                 \
+    do {                                                                     \
+        int written = std::snprintf(                                         \
+            buffer + offset, buffer_size - offset, fmt "\n", ##__VA_ARGS__); \
+        if (written > 0 && offset + written < buffer_size)                   \
+            offset += written;                                               \
+    } while (0)
 
     WRITE_LINE("; ryu_ldn_nx Configuration");
     WRITE_LINE("; Auto-generated on first boot");
@@ -271,29 +393,19 @@ size_t format_config_content(char* buffer, size_t buffer_size, const Config& con
     WRITE_LINE("host = %s", config.server.host);
     WRITE_LINE("; Server port");
     WRITE_LINE("port = %u", config.server.port);
-    WRITE_LINE("; Use TLS encryption (0/1)");
-    WRITE_LINE("use_tls = %d", config.server.use_tls ? 1 : 0);
     WRITE_LINE("");
 
-    WRITE_LINE("[network]");
-    WRITE_LINE("; Connection timeout in milliseconds");
-    WRITE_LINE("connect_timeout = %u", config.network.connect_timeout_ms);
-    WRITE_LINE("; Ping interval in milliseconds");
-    WRITE_LINE("ping_interval = %u", config.network.ping_interval_ms);
-    WRITE_LINE("; Reconnect delay in milliseconds");
-    WRITE_LINE("reconnect_delay = %u", config.network.reconnect_delay_ms);
-    WRITE_LINE("; Max reconnect attempts (0 = disable auto-reconnect)");
-    WRITE_LINE("max_reconnect_attempts = %u", config.network.max_reconnect_attempts);
     WRITE_LINE("");
 
     WRITE_LINE("[ldn]");
     WRITE_LINE("; Enable LDN emulation (0/1)");
     WRITE_LINE("enabled = %d", config.ldn.enabled ? 1 : 0);
+    WRITE_LINE("; Enable passphrase filtering (0/1)");
+    WRITE_LINE("use_passphrase = %d", config.ldn.use_passphrase ? 1 : 0);
     WRITE_LINE("; Room passphrase (empty = public)");
     WRITE_LINE("passphrase = %s", config.ldn.passphrase);
-    WRITE_LINE("; Network interface (empty = auto)");
-    WRITE_LINE("interface = %s", config.ldn.interface_name);
-    WRITE_LINE("; Disable P2P proxy (0/1) - like Ryujinx MultiplayerDisableP2p");
+    WRITE_LINE(
+        "; Disable P2P proxy (0/1) - like Ryujinx MultiplayerDisableP2p");
     WRITE_LINE("disable_p2p = %d", config.ldn.disable_p2p ? 1 : 0);
     WRITE_LINE("");
 
@@ -302,16 +414,14 @@ size_t format_config_content(char* buffer, size_t buffer_size, const Config& con
     WRITE_LINE("enabled = %d", config.debug.enabled ? 1 : 0);
     WRITE_LINE("; Log level (0=errors, 1=warnings, 2=info, 3=verbose)");
     WRITE_LINE("level = %u", config.debug.level);
-    WRITE_LINE("; Log to file (0/1)");
-    WRITE_LINE("log_to_file = %d", config.debug.log_to_file ? 1 : 0);
 
-    #undef WRITE_LINE
+#undef WRITE_LINE
 
     return offset;
 }
-#endif // __SWITCH__
+#endif  // __SWITCH__
 
-} // anonymous namespace
+}  // anonymous namespace
 
 // ============================================================================
 // Public Functions
@@ -323,24 +433,16 @@ Config get_default_config() {
     // Server defaults
     safe_strcpy(config.server.host, DEFAULT_HOST, MAX_HOST_LENGTH);
     config.server.port = DEFAULT_PORT;
-    config.server.use_tls = DEFAULT_USE_TLS;
-
-    // Network defaults
-    config.network.connect_timeout_ms = DEFAULT_CONNECT_TIMEOUT_MS;
-    config.network.ping_interval_ms = DEFAULT_PING_INTERVAL_MS;
-    config.network.reconnect_delay_ms = DEFAULT_RECONNECT_DELAY_MS;
-    config.network.max_reconnect_attempts = DEFAULT_MAX_RECONNECT_ATTEMPTS;
 
     // LDN defaults
     config.ldn.enabled = DEFAULT_LDN_ENABLED;
     config.ldn.passphrase[0] = '\0';
-    config.ldn.interface_name[0] = '\0';
+    config.ldn.use_passphrase = DEFAULT_USE_PASSPHRASE;
     config.ldn.disable_p2p = DEFAULT_DISABLE_P2P;
 
     // Debug defaults
     config.debug.enabled = DEFAULT_DEBUG_ENABLED;
     config.debug.level = DEFAULT_DEBUG_LEVEL;
-    config.debug.log_to_file = DEFAULT_LOG_TO_FILE;
 
     return config;
 }
@@ -363,7 +465,7 @@ ConfigResult load_config(const char* path, Config& config) {
     }
 
     // Open file for reading
-    ams::fs::FileHandle file;
+    ams::fs::FileHandle file{};
     if (R_FAILED(ams::fs::OpenFile(&file, path, ams::fs::OpenMode_Read))) {
         return ConfigResult::IoError;
     }
@@ -384,28 +486,28 @@ ConfigResult load_config(const char* path, Config& config) {
         return ConfigResult::ParseError;
     }
 
-    // Allocate buffer and read file
-    char* content = new (std::nothrow) char[file_size + 1];
-    if (!content) {
+    // Allocate buffer and read file (RAII: freed on every exit path,
+    // including future early returns — cppcoreguidelines-owning-memory)
+    std::unique_ptr<char[]> content(new (std::nothrow) char[file_size + 1]);
+    if (content == nullptr) {
         ams::fs::CloseFile(file);
         return ConfigResult::IoError;
     }
 
     size_t bytes_read;
-    ams::Result read_result = ams::fs::ReadFile(&bytes_read, file, 0, content, static_cast<size_t>(file_size));
+    ams::Result read_result = ams::fs::ReadFile(
+        &bytes_read, file, 0, content.get(), static_cast<size_t>(file_size));
     ams::fs::CloseFile(file);
 
     if (R_FAILED(read_result)) {
-        delete[] content;
         return ConfigResult::IoError;
     }
 
     content[bytes_read] = '\0';
 
     // Parse content
-    parse_config_content(content, bytes_read, config);
+    parse_config_content(content.get(), bytes_read, config);
 
-    delete[] content;
     return ConfigResult::Success;
 }
 
@@ -415,47 +517,95 @@ ConfigResult save_config(const char* path, const Config& config) {
     safe_strcpy(dir_path, path, sizeof(dir_path) - 1);
 
     char* last_slash = std::strrchr(dir_path, '/');
-    if (last_slash) {
+    if (last_slash != nullptr) {
         *last_slash = '\0';
-        // Use ams::fs::EnsureDirectory which creates recursively
-        ams::fs::EnsureDirectory(dir_path);
+        // Use ams::fs::EnsureDirectory which creates recursively.
+        // Best-effort: if the directory cannot be created, CreateFile below
+        // will surface the real error — but log the root cause first.
+        const ams::Result dir_rc = ams::fs::EnsureDirectory(dir_path);
+        if (R_FAILED(dir_rc)) {
+            LOG_WARN(
+                "save_config: EnsureDirectory('%s') failed (rc=0x%x)",
+                dir_path,
+                dir_rc.GetValue());
+        }
     }
 
-    // Format config content
+    // Format config content (RAII: freed on every exit path —
+    // cppcoreguidelines-owning-memory)
     constexpr size_t buffer_size = 4096;
-    char* buffer = new (std::nothrow) char[buffer_size];
-    if (!buffer) {
+    std::unique_ptr<char[]> buffer(new (std::nothrow) char[buffer_size]);
+    if (buffer == nullptr) {
         return ConfigResult::IoError;
     }
 
-    size_t content_size = format_config_content(buffer, buffer_size, config);
+    size_t content_size =
+        format_config_content(buffer.get(), buffer_size, config);
 
-    // Delete existing file if present
-    ams::fs::DirectoryEntryType entry_type;
-    if (R_SUCCEEDED(ams::fs::GetEntryType(&entry_type, path))) {
-        ams::fs::DeleteFile(path);
+    // Atomic write via temp file + rename to avoid TOCTOU window where the
+    // config file is missing between DeleteFile and CreateFile succeeds.
+    // If any intermediate step fails, the original (if any) is left untouched.
+    char tmp_path[256];
+    // Reserve room for the ".tmp" suffix (4 chars) so strcat cannot overflow.
+    safe_strcpy(tmp_path, path, sizeof(tmp_path) - 1 - 4);
+    std::strcat(tmp_path, ".tmp");
+
+    // If a stale temp file from a previous failed run exists, delete it so
+    // CreateFile does not fail with FileExists.
+    ams::fs::DirectoryEntryType tmp_entry_type;
+    if (R_SUCCEEDED(ams::fs::GetEntryType(&tmp_entry_type, tmp_path))) {
+        const ams::Result del_rc = ams::fs::DeleteFile(tmp_path);
+        if (R_FAILED(del_rc)) {
+            LOG_WARN(
+                "save_config: stale temp delete failed (rc=0x%x)",
+                del_rc.GetValue());
+        }
     }
 
-    // Create new file
-    if (R_FAILED(ams::fs::CreateFile(path, content_size))) {
-        delete[] buffer;
+    // Create temp file
+    if (R_FAILED(ams::fs::CreateFile(tmp_path, content_size))) {
         return ConfigResult::IoError;
     }
 
-    // Open file for writing
-    ams::fs::FileHandle file;
-    if (R_FAILED(ams::fs::OpenFile(&file, path, ams::fs::OpenMode_Write))) {
-        delete[] buffer;
+    // Open temp file for writing
+    ams::fs::FileHandle tmp_file{};
+    if (R_FAILED(
+            ams::fs::OpenFile(&tmp_file, tmp_path, ams::fs::OpenMode_Write))) {
+        const ams::Result del_rc = ams::fs::DeleteFile(tmp_path);
+        if (R_FAILED(del_rc)) {
+            LOG_WARN(
+                "save_config: temp cleanup after open failure failed (rc=0x%x)",
+                del_rc.GetValue());
+        }
         return ConfigResult::IoError;
     }
 
     // Write content
-    ams::Result write_result = ams::fs::WriteFile(file, 0, buffer, content_size, ams::fs::WriteOption::Flush);
-    ams::fs::CloseFile(file);
-
-    delete[] buffer;
+    ams::Result write_result = ams::fs::WriteFile(
+        tmp_file, 0, buffer.get(), content_size, ams::fs::WriteOption::Flush);
+    ams::fs::CloseFile(tmp_file);
 
     if (R_FAILED(write_result)) {
+        const ams::Result del_rc = ams::fs::DeleteFile(tmp_path);
+        if (R_FAILED(del_rc)) {
+            LOG_WARN(
+                "save_config: temp cleanup after write failure failed "
+                "(rc=0x%x)",
+                del_rc.GetValue());
+        }
+        return ConfigResult::IoError;
+    }
+
+    // Atomically replace the original file. RenameFile overwrites the
+    // destination on the SD card filesystem (FAT-like semantics).
+    if (R_FAILED(ams::fs::RenameFile(tmp_path, path))) {
+        const ams::Result del_rc = ams::fs::DeleteFile(tmp_path);
+        if (R_FAILED(del_rc)) {
+            LOG_WARN(
+                "save_config: temp cleanup after rename failure failed "
+                "(rc=0x%x)",
+                del_rc.GetValue());
+        }
         return ConfigResult::IoError;
     }
 
@@ -483,15 +633,16 @@ ConfigResult ensure_config_exists(const char* path) {
 // =============================================================================
 
 ConfigResult load_config(const char* path, Config& config) {
-    FILE* file = std::fopen(path, "r");
-    if (!file) {
+    const std::unique_ptr<std::FILE, decltype(&std::fclose)> file(
+        open_stream(path, O_RDONLY, "r"), &std::fclose);
+    if (file == nullptr) {
         return ConfigResult::FileNotFound;
     }
 
     char line[512];
     Section current_section = Section::None;
 
-    while (std::fgets(line, sizeof(line), file)) {
+    while (std::fgets(line, sizeof(line), file.get()) != nullptr) {
         // Remove trailing whitespace/newlines
         trim_end(line);
 
@@ -513,14 +664,10 @@ ConfigResult load_config(const char* path, Config& config) {
             continue;
         }
 
-        // Skip if in unknown section
-        if (current_section == Section::None || current_section == Section::Unknown) {
-            continue;
-        }
-
-        // Parse key=value
+        // Parse key=value (lines outside a known section are dropped by the
+        // `default` arm of the switch below)
         char* eq_pos = std::strchr(line, '=');
-        if (!eq_pos) {
+        if (eq_pos == nullptr) {
             continue;  // No '=' found, skip line
         }
 
@@ -546,9 +693,6 @@ ConfigResult load_config(const char* path, Config& config) {
             case Section::Server:
                 process_server_key(key_buf, trimmed_value, config.server);
                 break;
-            case Section::Network:
-                process_network_key(key_buf, trimmed_value, config.network);
-                break;
             case Section::Ldn:
                 process_ldn_key(key_buf, trimmed_value, config.ldn);
                 break;
@@ -560,7 +704,6 @@ ConfigResult load_config(const char* path, Config& config) {
         }
     }
 
-    std::fclose(file);
     return ConfigResult::Success;
 }
 
@@ -571,17 +714,16 @@ ConfigResult save_config(const char* path, const Config& config) {
     safe_strcpy(dir_path, path, sizeof(dir_path) - 1);
 
     char* last_slash = std::strrchr(dir_path, '/');
-    if (last_slash) {
+    if (last_slash != nullptr) {
         *last_slash = '\0';
         // Create directory (mkdir -p equivalent)
         mkdir(dir_path, 0755);
     }
 
-    // The Switch SD card uses FAT32/exFAT which has no POSIX permission
-    // model — fopen("w") creates with default FAT attributes and chmod is
-    // a no-op on this filesystem.  // codeql[cpp/world-writable-file-creation]
-    FILE* file = std::fopen(path, "w");
-    if (!file) {
+    const std::unique_ptr<std::FILE, decltype(&std::fclose)> out(
+        open_stream(path, O_WRONLY | O_CREAT | O_TRUNC, "w"), &std::fclose);
+    FILE* file = out.get();
+    if (file == nullptr) {
         return ConfigResult::IoError;
     }
 
@@ -594,46 +736,35 @@ ConfigResult save_config(const char* path, const Config& config) {
     std::fprintf(file, "host = %s\n", config.server.host);
     std::fprintf(file, "; Server port\n");
     std::fprintf(file, "port = %u\n", config.server.port);
-    std::fprintf(file, "; Use TLS encryption (0/1)\n");
-    std::fprintf(file, "use_tls = %d\n\n", config.server.use_tls ? 1 : 0);
-
-    std::fprintf(file, "[network]\n");
-    std::fprintf(file, "; Connection timeout in milliseconds\n");
-    std::fprintf(file, "connect_timeout = %u\n", config.network.connect_timeout_ms);
-    std::fprintf(file, "; Ping interval in milliseconds\n");
-    std::fprintf(file, "ping_interval = %u\n", config.network.ping_interval_ms);
-    std::fprintf(file, "; Reconnect delay in milliseconds\n");
-    std::fprintf(file, "reconnect_delay = %u\n", config.network.reconnect_delay_ms);
-    std::fprintf(file, "; Max reconnect attempts (0 = disable auto-reconnect)\n");
-    std::fprintf(file, "max_reconnect_attempts = %u\n\n", config.network.max_reconnect_attempts);
 
     std::fprintf(file, "[ldn]\n");
     std::fprintf(file, "; Enable LDN emulation (0/1)\n");
     std::fprintf(file, "enabled = %d\n", config.ldn.enabled ? 1 : 0);
+    std::fprintf(file, "; Enable passphrase filtering (0/1)\n");
+    std::fprintf(
+        file, "use_passphrase = %d\n", config.ldn.use_passphrase ? 1 : 0);
     std::fprintf(file, "; Room passphrase (empty = public)\n");
     std::fprintf(file, "passphrase = %s\n", config.ldn.passphrase);
-    std::fprintf(file, "; Network interface (empty = auto)\n");
-    std::fprintf(file, "interface = %s\n", config.ldn.interface_name);
-    std::fprintf(file, "; Disable P2P proxy (0/1) - like Ryujinx MultiplayerDisableP2p\n");
+    std::fprintf(
+        file,
+        "; Disable P2P proxy (0/1) - like Ryujinx MultiplayerDisableP2p\n");
     std::fprintf(file, "disable_p2p = %d\n\n", config.ldn.disable_p2p ? 1 : 0);
 
     std::fprintf(file, "[debug]\n");
     std::fprintf(file, "; Enable debug logging (0/1)\n");
     std::fprintf(file, "enabled = %d\n", config.debug.enabled ? 1 : 0);
-    std::fprintf(file, "; Log level (0=errors, 1=warnings, 2=info, 3=verbose)\n");
+    std::fprintf(
+        file, "; Log level (0=errors, 1=warnings, 2=info, 3=verbose)\n");
     std::fprintf(file, "level = %u\n", config.debug.level);
-    std::fprintf(file, "; Log to file (0/1)\n");
-    std::fprintf(file, "log_to_file = %d\n", config.debug.log_to_file ? 1 : 0);
 
-    std::fclose(file);
     return ConfigResult::Success;
 }
 
 ConfigResult ensure_config_exists(const char* path) {
     // Try to open file to check if it exists
-    FILE* file = std::fopen(path, "r");
-    if (file) {
-        std::fclose(file);
+    if (const std::unique_ptr<std::FILE, decltype(&std::fclose)> existing(
+            open_stream(path, O_RDONLY, "r"), &std::fclose);
+        existing != nullptr) {
         return ConfigResult::Success;  // File already exists
     }
 
@@ -642,6 +773,6 @@ ConfigResult ensure_config_exists(const char* path) {
     return save_config(path, default_config);
 }
 
-#endif // __SWITCH__
+#endif  // __SWITCH__
 
-} // namespace ryu_ldn::config
+}  // namespace ryu_ldn::config

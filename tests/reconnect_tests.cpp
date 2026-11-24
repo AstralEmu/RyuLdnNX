@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2026 ryu_ldn_nx contributors
  * @license GPL-2.0-or-later
  *
- * @section Test Categories
+ * @section reconnect_test_categories Test Categories
  *
  * The tests are organized into the following categories:
  *
@@ -18,7 +18,7 @@
  * - 30000ms max delay
  * - 200 (2.0x) multiplier
  * - 10% jitter
- * - 0 (infinite) max retries
+ * - 0 (disabled) max retries
  * - 1 fast retry at 200ms
  *
  * ### Fast Retry Tests
@@ -46,7 +46,7 @@
  *
  * ### Max Retries Tests
  * Test maximum retry limiting:
- * - Infinite retries when max_retries = 0
+ * - Disabled auto-reconnect when max_retries = 0
  * - MaxRetriesReached when limit exceeded
  *
  * ### Custom Configuration Tests
@@ -59,121 +59,225 @@
 
 #include "network/reconnect.hpp"
 
-using namespace ryu_ldn::network;
+using ryu_ldn::network::ReconnectConfig;
+using ryu_ldn::network::ReconnectManager;
+using ryu_ldn::network::RetryResult;
 
 // ============================================================================
 // Test Framework (Minimal)
 // ============================================================================
 
+/// Number of tests that passed so far
 static int g_tests_passed = 0;
+/// Number of tests that failed so far
 static int g_tests_failed = 0;
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+/**
+ * @brief Fails the calling test when a condition is false and returns false
+ *        from it
+ *
+ * @param cond expression expected to be true
+ */
+#define ASSERT_TRUE(cond)                                               \
+    do {                                                                \
+        if (!(cond)) {                                                  \
             printf("    FAIL: %s:%d: %s\n", __FILE__, __LINE__, #cond); \
-            return false; \
-        } \
-    } while(0)
+            return false;                                               \
+        }                                                               \
+    } while (0)
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("    FAIL: %s:%d: %s == %s (%lld != %lld)\n", \
-                   __FILE__, __LINE__, #a, #b, \
-                   static_cast<long long>(a), static_cast<long long>(b)); \
-            return false; \
-        } \
-    } while(0)
+/**
+ * @brief Fails the calling test when two values differ and returns false from
+ *        it
+ *
+ * @param a actual value
+ * @param b expected value
+ */
+#define ASSERT_EQ(a, b)                                       \
+    do {                                                      \
+        if ((a) != (b)) {                                     \
+            printf(                                           \
+                "    FAIL: %s:%d: %s == %s (%lld != %lld)\n", \
+                __FILE__,                                     \
+                __LINE__,                                     \
+                #a,                                           \
+                #b,                                           \
+                static_cast<long long>(a),                    \
+                static_cast<long long>(b));                   \
+            return false;                                     \
+        }                                                     \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
-            printf("    FAIL: %s:%d: %s != %s (both %lld)\n", \
-                   __FILE__, __LINE__, #a, #b, \
-                   static_cast<long long>(a)); \
-            return false; \
-        } \
-    } while(0)
+/**
+ * @brief Fails the calling test when two values are equal and returns false
+ *        from it
+ *
+ * @param a first value
+ * @param b value it must differ from
+ */
+#define ASSERT_NE(a, b)                                    \
+    do {                                                   \
+        if ((a) == (b)) {                                  \
+            printf(                                        \
+                "    FAIL: %s:%d: %s != %s (both %lld)\n", \
+                __FILE__,                                  \
+                __LINE__,                                  \
+                #a,                                        \
+                #b,                                        \
+                static_cast<long long>(a));                \
+            return false;                                  \
+        }                                                  \
+    } while (0)
 
-#define ASSERT_IN_RANGE(val, min_val, max_val) \
-    do { \
-        auto _v = static_cast<long long>(val); \
-        auto _min = static_cast<long long>(min_val); \
-        auto _max = static_cast<long long>(max_val); \
-        if (_v < _min || _v > _max) { \
-            printf("    FAIL: %s:%d: %s in [%lld, %lld] (got %lld)\n", \
-                   __FILE__, __LINE__, #val, _min, _max, _v); \
-            return false; \
-        } \
-    } while(0)
+/**
+ * @brief Fails the calling test when a value is outside an inclusive range and
+ *        returns false from it
+ *
+ * @param val value checked
+ * @param min_val lowest accepted value
+ * @param max_val highest accepted value
+ */
+#define ASSERT_IN_RANGE(val, min_val, max_val)                      \
+    do {                                                            \
+        auto _v = static_cast<long long>(val);                      \
+        auto _min = static_cast<long long>(min_val);                \
+        auto _max = static_cast<long long>(max_val);                \
+        if (_v < _min || _v > _max) {                               \
+            printf(                                                 \
+                "    FAIL: %s:%d: %s in [%lld, %lld] (got %lld)\n", \
+                __FILE__,                                           \
+                __LINE__,                                           \
+                #val,                                               \
+                _min,                                               \
+                _max,                                               \
+                _v);                                                \
+            return false;                                           \
+        }                                                           \
+    } while (0)
 
-#define ASSERT_STREQ(a, b) \
-    do { \
-        if (std::strcmp((a), (b)) != 0) { \
-            printf("    FAIL: %s:%d: \"%s\" != \"%s\"\n", \
-                   __FILE__, __LINE__, (a), (b)); \
-            return false; \
-        } \
-    } while(0)
+/**
+ * @brief Fails the calling test when two C strings differ and returns false
+ *        from it
+ *
+ * @param a actual string
+ * @param b expected string
+ */
+#define ASSERT_STREQ(a, b)                             \
+    do {                                               \
+        if (std::strcmp((a), (b)) != 0) {              \
+            printf(                                    \
+                "    FAIL: %s:%d: \"%s\" != \"%s\"\n", \
+                __FILE__,                              \
+                __LINE__,                              \
+                (a),                                   \
+                (b));                                  \
+            return false;                              \
+        }                                              \
+    } while (0)
 
-#define RUN_TEST(test_func) \
-    do { \
+/**
+ * @brief Runs one test function, prints PASS or the failure and updates the
+ *        counters
+ *
+ * @param test_func name of a bool() test function
+ */
+#define RUN_TEST(test_func)                    \
+    do {                                       \
         printf("  [TEST] %s... ", #test_func); \
-        if (test_func()) { \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } else { \
-            g_tests_failed++; \
-        } \
-    } while(0)
+        if (test_func()) {                     \
+            printf("PASS\n");                  \
+            g_tests_passed++;                  \
+        } else {                               \
+            g_tests_failed++;                  \
+        }                                      \
+    } while (0)
 
 // ============================================================================
 // Default Configuration Tests
 // ============================================================================
 
+/**
+ * @brief Verifies the default initial delay is 1000 ms
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_default_initial_delay() {
     ReconnectManager mgr;
     ASSERT_EQ(mgr.get_config().initial_delay_ms, 1000);
     return true;
 }
 
+/**
+ * @brief Verifies the default maximum delay is 30000 ms
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_default_max_delay() {
     ReconnectManager mgr;
     ASSERT_EQ(mgr.get_config().max_delay_ms, 30000);
     return true;
 }
 
+/**
+ * @brief Verifies the default multiplier is 200 percent (x2)
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_default_multiplier() {
     ReconnectManager mgr;
     ASSERT_EQ(mgr.get_config().multiplier_percent, 200);
     return true;
 }
 
+/**
+ * @brief Verifies the default jitter is 10 percent
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_default_jitter() {
     ReconnectManager mgr;
     ASSERT_EQ(mgr.get_config().jitter_percent, 10);
     return true;
 }
 
+/**
+ * @brief Verifies max_retries defaults to 0, which disables auto-reconnect
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_default_max_retries() {
     ReconnectManager mgr;
     ASSERT_EQ(mgr.get_config().max_retries, 0);
     return true;
 }
 
+/**
+ * @brief Verifies exactly one fast retry is configured by default
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_default_fast_retries() {
     ReconnectManager mgr;
     ASSERT_EQ(mgr.get_config().fast_retries, 1);
     return true;
 }
 
+/**
+ * @brief Verifies the default fast retry delay is 200 ms
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_default_fast_delay() {
     ReconnectManager mgr;
     ASSERT_EQ(mgr.get_config().fast_delay_ms, 200);
     return true;
 }
 
+/**
+ * @brief Verifies a new manager has recorded no failure
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_initial_retry_count() {
     ReconnectManager mgr;
     ASSERT_EQ(mgr.get_retry_count(), 0);
@@ -188,6 +292,8 @@ bool test_initial_retry_count() {
  * @brief Test that initial delay is the fast delay (200ms)
  *
  * With fast_retries=1, retry_count=0 uses fast_delay_ms.
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_initial_delay_is_fast_delay() {
     ReconnectManager mgr;
@@ -201,20 +307,25 @@ bool test_initial_delay_is_fast_delay() {
  * retry 0: 200ms (fast)
  * retry 1: 1000ms (initial_delay, first exponential step)
  * retry 2: 2000ms (initial * 2)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_fast_then_exponential() {
     ReconnectManager mgr;
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 200);   // fast retry (retry 0)
+    ASSERT_EQ(mgr.get_next_delay_ms(), 200);  // fast retry (retry 0)
     mgr.record_failure();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // first exponential step (retry 1)
+    ASSERT_EQ(
+        mgr.get_next_delay_ms(), 1000);  // first exponential step (retry 1)
     mgr.record_failure();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 2000);  // second exponential step (retry 2)
+    ASSERT_EQ(
+        mgr.get_next_delay_ms(), 2000);  // second exponential step (retry 2)
     mgr.record_failure();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 4000);  // third exponential step (retry 3)
+    ASSERT_EQ(
+        mgr.get_next_delay_ms(), 4000);  // third exponential step (retry 3)
     return true;
 }
 
@@ -226,6 +337,8 @@ bool test_fast_then_exponential() {
  * retry 1: 150ms (fast)
  * retry 2: 1000ms (initial)
  * retry 3: 2000ms (initial * 2)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_multiple_fast_retries() {
     ReconnectConfig cfg;
@@ -234,10 +347,10 @@ bool test_multiple_fast_retries() {
     cfg.fast_delay_ms = 150;
     ReconnectManager mgr(cfg);
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 150);   // fast retry 0
+    ASSERT_EQ(mgr.get_next_delay_ms(), 150);  // fast retry 0
     mgr.record_failure();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 150);   // fast retry 1
+    ASSERT_EQ(mgr.get_next_delay_ms(), 150);  // fast retry 1
     mgr.record_failure();
 
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // first exponential step
@@ -251,6 +364,8 @@ bool test_multiple_fast_retries() {
  * @brief Test zero fast retries (no fast retry phase)
  *
  * With fast_retries=0, delays start directly at initial_delay_ms.
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_zero_fast_retries() {
     ReconnectConfig cfg;
@@ -277,6 +392,8 @@ bool test_zero_fast_retries() {
  * retry 2: 2000ms
  * retry 3: 4000ms
  * retry 4: 8000ms
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_exponential_growth() {
     ReconnectManager mgr;
@@ -302,6 +419,8 @@ bool test_exponential_growth() {
 
 /**
  * @brief Test delay is capped at max_delay
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_delay_capped_at_max() {
     ReconnectManager mgr;
@@ -317,6 +436,8 @@ bool test_delay_capped_at_max() {
 
 /**
  * @brief Test delay stays at max after reaching it
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_delay_stays_at_max() {
     ReconnectManager mgr;
@@ -337,6 +458,8 @@ bool test_delay_stays_at_max() {
 
 /**
  * @brief Test retry count increments correctly
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_retry_count_increments() {
     ReconnectManager mgr;
@@ -359,6 +482,11 @@ bool test_retry_count_increments() {
 // Reset Tests
 // ============================================================================
 
+/**
+ * @brief Verifies reset() brings the retry count back from 3 to 0
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_reset_clears_retry_count() {
     ReconnectManager mgr;
 
@@ -375,6 +503,8 @@ bool test_reset_clears_retry_count() {
 
 /**
  * @brief Test reset restores initial delay (fast delay phase)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_reset_restores_initial_delay() {
     ReconnectManager mgr;
@@ -389,6 +519,12 @@ bool test_reset_restores_initial_delay() {
     return true;
 }
 
+/**
+ * @brief Verifies that calling reset() repeatedly is harmless: count 0 and the
+ *        fast delay (200 ms) are kept
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_multiple_resets_safe() {
     ReconnectManager mgr;
 
@@ -405,6 +541,8 @@ bool test_multiple_resets_safe() {
 
 /**
  * @brief Test backoff restarts from fast delay after reset
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_backoff_after_reset() {
     ReconnectManager mgr;
@@ -415,11 +553,11 @@ bool test_backoff_after_reset() {
 
     mgr.reset();
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 200);   // fast delay
+    ASSERT_EQ(mgr.get_next_delay_ms(), 200);  // fast delay
     mgr.record_failure();
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // first exponential step
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 2000);   // second exponential step
+    ASSERT_EQ(mgr.get_next_delay_ms(), 2000);  // second exponential step
 
     return true;
 }
@@ -428,6 +566,12 @@ bool test_backoff_after_reset() {
 // Jitter Tests
 // ============================================================================
 
+/**
+ * @brief Verifies that three different seeds do not all yield the same jittered
+ *        delay
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_jitter_varies_with_seed() {
     ReconnectManager mgr;
 
@@ -443,6 +587,8 @@ bool test_jitter_varies_with_seed() {
 
 /**
  * @brief Test jitter stays within bounds for fast retry (200ms +/- 10%)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_jitter_within_bounds() {
     ReconnectManager mgr;
@@ -460,6 +606,12 @@ bool test_jitter_within_bounds() {
     return true;
 }
 
+/**
+ * @brief Verifies that with jitter_percent 0 every seed returns exactly the
+ *        base delay
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_zero_jitter_no_variation() {
     ReconnectConfig cfg;
     cfg.jitter_percent = 0;
@@ -476,6 +628,8 @@ bool test_zero_jitter_no_variation() {
 
 /**
  * @brief Test jitter at higher delays (after fast phase)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_jitter_at_high_delay() {
     ReconnectManager mgr;
@@ -500,19 +654,27 @@ bool test_jitter_at_high_delay() {
 // Max Retries Tests
 // ============================================================================
 
-bool test_infinite_retries_by_default() {
+/**
+ * @brief Verifies max_retries 0 reports MaxRetriesReached at once: it disables
+ *        auto-reconnect, it does not mean unlimited retries
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
+bool test_max_retries_zero_disables_retry() {
     ReconnectManager mgr;
 
-    for (int i = 0; i < 100; i++) {
-        ASSERT_EQ(mgr.should_retry(), RetryResult::ShouldRetry);
-        mgr.record_failure();
-    }
-
-    ASSERT_EQ(mgr.should_retry(), RetryResult::ShouldRetry);
+    // max_retries=0 disables auto-reconnect entirely (not infinite retries)
+    ASSERT_EQ(mgr.should_retry(), RetryResult::MaxRetriesReached);
 
     return true;
 }
 
+/**
+ * @brief Verifies should_retry() allows exactly max_retries (3) attempts, then
+ *        reports MaxRetriesReached
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_max_retries_limit() {
     ReconnectConfig cfg;
     cfg.max_retries = 3;
@@ -532,6 +694,12 @@ bool test_max_retries_limit() {
     return true;
 }
 
+/**
+ * @brief Verifies reset() clears a reached retry limit so should_retry()
+ *        answers ShouldRetry again
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_reset_allows_retries_again() {
     ReconnectConfig cfg;
     cfg.max_retries = 2;
@@ -553,6 +721,8 @@ bool test_reset_allows_retries_again() {
 
 /**
  * @brief Test custom initial delay with fast retries skipped
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_custom_initial_delay() {
     ReconnectConfig cfg;
@@ -569,6 +739,8 @@ bool test_custom_initial_delay() {
  * @brief Test custom max delay with fast phase
  *
  * fast(200) → 1000 → 2000 → 4000 → 5000 (capped)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_custom_max_delay() {
     ReconnectConfig cfg;
@@ -592,6 +764,8 @@ bool test_custom_max_delay() {
  * @brief Test custom multiplier (1.5x) with fast phase
  *
  * fast(200) → 1000 → 1500 → 2250 → 3375
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_custom_multiplier() {
     ReconnectConfig cfg;
@@ -601,7 +775,7 @@ bool test_custom_multiplier() {
     // fast_retries=1 by default
     ReconnectManager mgr(cfg);
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 200);   // fast delay
+    ASSERT_EQ(mgr.get_next_delay_ms(), 200);  // fast delay
     mgr.record_failure();
 
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // first exponential step
@@ -617,6 +791,8 @@ bool test_custom_multiplier() {
 
 /**
  * @brief Test custom jitter on fast delay (200ms +/- 50%)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_custom_jitter() {
     ReconnectConfig cfg;
@@ -639,6 +815,8 @@ bool test_custom_jitter() {
 
 /**
  * @brief Test set_config updates configuration
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_set_config() {
     ReconnectManager mgr;
@@ -659,6 +837,8 @@ bool test_set_config() {
 
 /**
  * @brief Test set_config preserves retry count
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_set_config_preserves_retry_count() {
     ReconnectManager mgr;
@@ -686,6 +866,8 @@ bool test_set_config_preserves_retry_count() {
 
 /**
  * @brief Test very small initial delay (with fast phase disabled)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_small_initial_delay() {
     ReconnectConfig cfg;
@@ -704,6 +886,8 @@ bool test_small_initial_delay() {
 
 /**
  * @brief Test initial delay equals max delay (with fast phase disabled)
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_initial_equals_max() {
     ReconnectConfig cfg;
@@ -722,12 +906,14 @@ bool test_initial_equals_max() {
 
 /**
  * @brief Test multiplier of 100 (1.0x = no growth) with fast phase
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_no_growth_multiplier() {
     ReconnectConfig cfg;
     cfg.initial_delay_ms = 1000;
     cfg.multiplier_percent = 100;  // 1.0x
-    cfg.fast_retries = 0;  // disable fast phase for simpler test
+    cfg.fast_retries = 0;          // disable fast phase for simpler test
     ReconnectManager mgr(cfg);
 
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);
@@ -745,10 +931,36 @@ bool test_no_growth_multiplier() {
 // String Conversion Tests
 // ============================================================================
 
+/**
+ * @brief Build a RetryResult holding a raw value.
+ *
+ * RetryResult has a fixed uint8_t underlying type, so any uint8_t is a valid
+ * value of the enum; the one built here names no enumerator on purpose, to
+ * exercise the "Unknown" fallback of retry_result_to_string().
+ *
+ * @param raw Underlying value to reinterpret.
+ * @return The enum value holding raw.
+ */
+RetryResult unknown_retry_result(uint8_t raw) {
+    RetryResult result{};
+    std::memcpy(&result, &raw, sizeof(result));
+    return result;
+}
+
+/**
+ * @brief Verifies retry_result_to_string() names both RetryResult values and
+ *        returns "Unknown" for an out-of-range value
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
 bool test_retry_result_to_string() {
-    ASSERT_STREQ(retry_result_to_string(RetryResult::ShouldRetry), "ShouldRetry");
-    ASSERT_STREQ(retry_result_to_string(RetryResult::MaxRetriesReached), "MaxRetriesReached");
-    ASSERT_STREQ(retry_result_to_string(static_cast<RetryResult>(99)), "Unknown");
+    ASSERT_STREQ(
+        retry_result_to_string(RetryResult::ShouldRetry), "ShouldRetry");
+    ASSERT_STREQ(
+        retry_result_to_string(RetryResult::MaxRetriesReached),
+        "MaxRetriesReached");
+    ASSERT_STREQ(
+        retry_result_to_string(unknown_retry_result(uint8_t{99})), "Unknown");
     return true;
 }
 
@@ -758,6 +970,8 @@ bool test_retry_result_to_string() {
 
 /**
  * @brief Test that default fast delay is 200ms
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_default_fast_delay_value() {
     ReconnectManager mgr;
@@ -767,6 +981,8 @@ bool test_default_fast_delay_value() {
 
 /**
  * @brief Test that default fast_retries is 1
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_default_fast_retries_count() {
     ReconnectManager mgr;
@@ -778,6 +994,8 @@ bool test_default_fast_retries_count() {
  * @brief Test fast delay applies on first retry attempt
  *
  * The fast delay phase uses fast_delay_ms for retry_count < fast_retries.
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_fast_delay_applies_first() {
     ReconnectManager mgr;
@@ -795,6 +1013,8 @@ bool test_fast_delay_applies_first() {
 
 /**
  * @brief Test custom fast delay configuration
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_custom_fast_delay() {
     ReconnectConfig cfg;
@@ -802,9 +1022,9 @@ bool test_custom_fast_delay() {
     cfg.fast_retries = 2;
     ReconnectManager mgr(cfg);
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast retry 0
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast retry 0
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast retry 1
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast retry 1
     mgr.record_failure();
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // exponential begins
 
@@ -813,6 +1033,8 @@ bool test_custom_fast_delay() {
 
 /**
  * @brief Test fast delay with jitter
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_fast_delay_with_jitter() {
     ReconnectManager mgr;
@@ -828,6 +1050,8 @@ bool test_fast_delay_with_jitter() {
 
 /**
  * @brief Test transition from fast to exponential is smooth
+ *
+ * @return true if every assertion holds, false at the first failed one
  */
 bool test_fast_to_exponential_transition() {
     ReconnectConfig cfg;
@@ -837,15 +1061,41 @@ bool test_fast_to_exponential_transition() {
     cfg.multiplier_percent = 200;
     ReconnectManager mgr(cfg);
 
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast 0
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast 0
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast 1
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast 1
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 100);   // fast 2
+    ASSERT_EQ(mgr.get_next_delay_ms(), 100);  // fast 2
     mgr.record_failure();
-    ASSERT_EQ(mgr.get_next_delay_ms(), 500);   // initial (exponential step 0)
+    ASSERT_EQ(mgr.get_next_delay_ms(), 500);  // initial (exponential step 0)
     mgr.record_failure();
     ASSERT_EQ(mgr.get_next_delay_ms(), 1000);  // 500 * 2
+
+    return true;
+}
+
+/**
+ * @brief Backoff with a max delay above 2^32 / 100 ms must not overflow
+ *
+ * max_delay_ms * 100 does not fit in 32 bits for max_delay_ms > ~42.9 M, which
+ * used to wrap the overflow guard and clamp the delay to the maximum too early.
+ *
+ * @return true if every assertion holds, false at the first failed one
+ */
+bool test_large_max_delay_does_not_overflow() {
+    ReconnectConfig cfg;
+    cfg.fast_retries = 0;
+    cfg.initial_delay_ms = 30000000;  // 30 000 s
+    cfg.max_delay_ms = 100000000;     // 100 000 s
+    cfg.multiplier_percent = 200;
+    ReconnectManager mgr(cfg);
+
+    ASSERT_EQ(mgr.get_next_delay_ms(), 30000000);
+    mgr.record_failure();
+    ASSERT_EQ(mgr.get_next_delay_ms(), 60000000);  // 30 M * 2, below the cap
+    mgr.record_failure();
+    ASSERT_EQ(
+        mgr.get_next_delay_ms(), 100000000);  // 120 M would exceed the cap
 
     return true;
 }
@@ -854,6 +1104,11 @@ bool test_fast_to_exponential_transition() {
 // Main
 // ============================================================================
 
+/**
+ * @brief Runs every test of this suite, grouped by category
+ *
+ * @return 0 if all tests passed, 1 otherwise
+ */
 int main() {
     printf("\n========================================\n");
     printf("  ReconnectManager Tests - ryu_ldn_nx\n");
@@ -904,7 +1159,7 @@ int main() {
 
     // Max Retries Tests
     printf("\nMax Retries:\n");
-    RUN_TEST(test_infinite_retries_by_default);
+    RUN_TEST(test_max_retries_zero_disables_retry);
     RUN_TEST(test_max_retries_limit);
     RUN_TEST(test_reset_allows_retries_again);
 
@@ -922,6 +1177,7 @@ int main() {
     RUN_TEST(test_small_initial_delay);
     RUN_TEST(test_initial_equals_max);
     RUN_TEST(test_no_growth_multiplier);
+    RUN_TEST(test_large_max_delay_does_not_overflow);
 
     // String Conversion
     printf("\nString Conversion:\n");
@@ -929,8 +1185,10 @@ int main() {
 
     // Summary
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n", g_tests_passed,
-           g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n");
 
     return g_tests_failed > 0 ? 1 : 0;

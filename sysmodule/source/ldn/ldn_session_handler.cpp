@@ -49,25 +49,7 @@ namespace ryu_ldn::ldn {
  * - No node ID assigned
  * - No callbacks registered
  */
-LdnSessionHandler::LdnSessionHandler()
-    : m_state(LdnSessionState::None)
-    , m_is_host(false)
-    , m_local_node_id(-1)
-    , m_last_ping_id(0)
-    , m_session_id{}
-    , m_mac_address{}
-    , m_network_info{}
-    , m_accept_policy(protocol::AcceptPolicy::AcceptAll)
-    , m_state_callback(nullptr)
-    , m_network_updated_callback(nullptr)
-    , m_scan_result_callback(nullptr)
-    , m_scan_completed_callback(nullptr)
-    , m_disconnected_callback(nullptr)
-    , m_error_callback(nullptr)
-    , m_rejected_callback(nullptr)
-    , m_accept_policy_changed_callback(nullptr)
-{
-}
+LdnSessionHandler::LdnSessionHandler() : m_network_info{} {}
 
 // ============================================================================
 // Callback Registration
@@ -78,8 +60,6 @@ LdnSessionHandler::LdnSessionHandler()
  *
  * The callback is invoked whenever the session state changes.
  * Useful for updating UI or triggering application logic.
- *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnSessionHandler::set_state_callback(SessionStateCallback callback) {
     m_state_callback = callback;
@@ -91,10 +71,9 @@ void LdnSessionHandler::set_state_callback(SessionStateCallback callback) {
  * Called when:
  * - Successfully joined a network (Connected)
  * - Network state changes (SyncNetwork)
- *
- * @param callback Function pointer or nullptr to disable
  */
-void LdnSessionHandler::set_network_updated_callback(NetworkUpdatedCallback callback) {
+void LdnSessionHandler::set_network_updated_callback(
+    NetworkUpdatedCallback callback) {
     m_network_updated_callback = callback;
 }
 
@@ -103,8 +82,6 @@ void LdnSessionHandler::set_network_updated_callback(NetworkUpdatedCallback call
  *
  * Called once for each network found during scan operation.
  * Application should collect these until scan_completed is called.
- *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnSessionHandler::set_scan_result_callback(ScanResultCallback callback) {
     m_scan_result_callback = callback;
@@ -115,10 +92,9 @@ void LdnSessionHandler::set_scan_result_callback(ScanResultCallback callback) {
  *
  * Called when ScanReplyEnd is received, indicating no more
  * scan results will be sent for the current scan operation.
- *
- * @param callback Function pointer or nullptr to disable
  */
-void LdnSessionHandler::set_scan_completed_callback(ScanCompletedCallback callback) {
+void LdnSessionHandler::set_scan_completed_callback(
+    ScanCompletedCallback callback) {
     m_scan_completed_callback = callback;
 }
 
@@ -129,10 +105,9 @@ void LdnSessionHandler::set_scan_completed_callback(ScanCompletedCallback callba
  * - Another player disconnects from the session
  * - We are kicked from the session
  * - Host closes the session
- *
- * @param callback Function pointer or nullptr to disable
  */
-void LdnSessionHandler::set_disconnected_callback(DisconnectedCallback callback) {
+void LdnSessionHandler::set_disconnected_callback(
+    DisconnectedCallback callback) {
     m_disconnected_callback = callback;
 }
 
@@ -141,8 +116,6 @@ void LdnSessionHandler::set_disconnected_callback(DisconnectedCallback callback)
  *
  * Called when NetworkError packet is received from server.
  * Application should check the error code and handle appropriately.
- *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnSessionHandler::set_error_callback(ErrorCallback callback) {
     m_error_callback = callback;
@@ -152,8 +125,6 @@ void LdnSessionHandler::set_error_callback(ErrorCallback callback) {
  * @brief Set callback for rejection events
  *
  * Called when a player is rejected/kicked from the session.
- *
- * @param callback Function pointer or nullptr to disable
  */
 void LdnSessionHandler::set_rejected_callback(RejectedCallback callback) {
     m_rejected_callback = callback;
@@ -163,10 +134,9 @@ void LdnSessionHandler::set_rejected_callback(RejectedCallback callback) {
  * @brief Set callback for accept policy changes
  *
  * Called when accept policy is confirmed changed.
- *
- * @param callback Function pointer or nullptr to disable
  */
-void LdnSessionHandler::set_accept_policy_changed_callback(AcceptPolicyChangedCallback callback) {
+void LdnSessionHandler::set_accept_policy_changed_callback(
+    AcceptPolicyChangedCallback callback) {
     m_accept_policy_changed_callback = callback;
 }
 
@@ -183,12 +153,9 @@ void LdnSessionHandler::set_accept_policy_changed_callback(AcceptPolicyChangedCa
  * - Assigned MAC address (may be same as requested or server-generated)
  *
  * After receiving this, we are ready to scan, create, or join networks.
- *
- * @param header Packet header (unused but kept for consistency)
- * @param msg Initialize message containing assigned ID and MAC
  */
-void LdnSessionHandler::handle_initialize(const protocol::LdnHeader& header,
-                                           const protocol::InitializeMessage& msg) {
+void LdnSessionHandler::handle_initialize(
+    const protocol::LdnHeader& header, const protocol::InitializeMessage& msg) {
     (void)header;  // Unused
 
     // Store assigned session ID and MAC address
@@ -207,12 +174,9 @@ void LdnSessionHandler::handle_initialize(const protocol::LdnHeader& header,
  * - Network ID and configuration
  * - List of all connected nodes
  * - Our assigned node ID (determined by position in node list)
- *
- * @param header Packet header (unused)
- * @param info Complete network information
  */
-void LdnSessionHandler::handle_connected(const protocol::LdnHeader& header,
-                                          const protocol::NetworkInfo& info) {
+void LdnSessionHandler::handle_connected(
+    const protocol::LdnHeader& header, const protocol::NetworkInfo& info) {
     (void)header;
 
     // Store network info
@@ -225,7 +189,7 @@ void LdnSessionHandler::handle_connected(const protocol::LdnHeader& header,
     set_state(LdnSessionState::Station);
 
     // Notify application
-    if (m_network_updated_callback) {
+    if (m_network_updated_callback != nullptr) {
         m_network_updated_callback(m_network_info);
     }
 }
@@ -241,12 +205,9 @@ void LdnSessionHandler::handle_connected(const protocol::LdnHeader& header,
  *
  * This packet is also sent when we successfully create an access point,
  * confirming we are now the host.
- *
- * @param header Packet header (unused)
- * @param info Updated network information
  */
-void LdnSessionHandler::handle_sync_network(const protocol::LdnHeader& header,
-                                             const protocol::NetworkInfo& info) {
+void LdnSessionHandler::handle_sync_network(
+    const protocol::LdnHeader& header, const protocol::NetworkInfo& info) {
     (void)header;
 
     // Store updated network info
@@ -269,7 +230,7 @@ void LdnSessionHandler::handle_sync_network(const protocol::LdnHeader& header,
     }
 
     // Notify application
-    if (m_network_updated_callback) {
+    if (m_network_updated_callback != nullptr) {
         m_network_updated_callback(m_network_info);
     }
 }
@@ -281,16 +242,13 @@ void LdnSessionHandler::handle_sync_network(const protocol::LdnHeader& header,
  * Multiple ScanReply packets may be received before ScanReplyEnd.
  *
  * The application should collect these results until scan_completed is called.
- *
- * @param header Packet header (unused)
- * @param info Network information for one found network
  */
-void LdnSessionHandler::handle_scan_reply(const protocol::LdnHeader& header,
-                                           const protocol::NetworkInfo& info) {
+void LdnSessionHandler::handle_scan_reply(
+    const protocol::LdnHeader& header, const protocol::NetworkInfo& info) {
     (void)header;
 
     // Forward to application callback
-    if (m_scan_result_callback) {
+    if (m_scan_result_callback != nullptr) {
         m_scan_result_callback(info);
     }
 }
@@ -301,14 +259,13 @@ void LdnSessionHandler::handle_scan_reply(const protocol::LdnHeader& header,
  * Server sends this after all ScanReply packets to indicate
  * the scan operation is complete. No more networks will be reported
  * for this scan.
- *
- * @param header Packet header (unused)
  */
-void LdnSessionHandler::handle_scan_reply_end(const protocol::LdnHeader& header) {
+void LdnSessionHandler::handle_scan_reply_end(
+    const protocol::LdnHeader& header) {
     (void)header;
 
     // Notify application that scan is complete
-    if (m_scan_completed_callback) {
+    if (m_scan_completed_callback != nullptr) {
         m_scan_completed_callback();
     }
 }
@@ -322,12 +279,10 @@ void LdnSessionHandler::handle_scan_reply_end(const protocol::LdnHeader& header)
  * 2. Our ping response (requester=1): Response to a ping we sent.
  *    Indicates connection is alive.
  *
- * @param header Packet header (unused)
- * @param msg Ping message with requester and ID
  * @return true if we need to echo the ping back (server requested)
  */
-bool LdnSessionHandler::handle_ping(const protocol::LdnHeader& header,
-                                     const protocol::PingMessage& msg) {
+bool LdnSessionHandler::handle_ping(
+    const protocol::LdnHeader& header, const protocol::PingMessage& msg) {
     (void)header;
 
     m_last_ping_id = msg.id;
@@ -344,16 +299,13 @@ bool LdnSessionHandler::handle_ping(const protocol::LdnHeader& header,
  *
  * If the disconnecting IP matches our IP, we've been kicked or
  * the session was closed.
- *
- * @param header Packet header (unused)
- * @param msg Disconnect message with client IP
  */
-void LdnSessionHandler::handle_disconnect(const protocol::LdnHeader& header,
-                                           const protocol::DisconnectMessage& msg) {
+void LdnSessionHandler::handle_disconnect(
+    const protocol::LdnHeader& header, const protocol::DisconnectMessage& msg) {
     (void)header;
 
     // Notify application
-    if (m_disconnected_callback) {
+    if (m_disconnected_callback != nullptr) {
         m_disconnected_callback(msg.disconnect_ip);
     }
 
@@ -372,20 +324,17 @@ void LdnSessionHandler::handle_disconnect(const protocol::LdnHeader& header,
  *
  * The application should check the error code and handle appropriately.
  * Some errors are recoverable, others may require reconnection.
- *
- * @param header Packet header (unused)
- * @param msg Error message with code
  */
-void LdnSessionHandler::handle_network_error(const protocol::LdnHeader& header,
-                                              const protocol::NetworkErrorMessage& msg) {
+void LdnSessionHandler::handle_network_error(
+    const protocol::LdnHeader& header,
+    const protocol::NetworkErrorMessage& msg) {
     (void)header;
 
     // Convert to typed error code
-    protocol::NetworkErrorCode code =
-        static_cast<protocol::NetworkErrorCode>(msg.error_code);
+    auto code = static_cast<protocol::NetworkErrorCode>(msg.error_code);
 
     // Notify application
-    if (m_error_callback) {
+    if (m_error_callback != nullptr) {
         m_error_callback(code);
     }
 }
@@ -398,16 +347,13 @@ void LdnSessionHandler::handle_network_error(const protocol::LdnHeader& header,
  *
  * If the rejected node_id matches our local node ID, we have been kicked
  * and should leave the session.
- *
- * @param header Packet header (unused)
- * @param req Reject request containing node_id and reason
  */
-void LdnSessionHandler::handle_reject(const protocol::LdnHeader& header,
-                                       const protocol::RejectRequest& req) {
+void LdnSessionHandler::handle_reject(
+    const protocol::LdnHeader& header, const protocol::RejectRequest& req) {
     (void)header;
 
     // Notify application
-    if (m_rejected_callback) {
+    if (m_rejected_callback != nullptr) {
         m_rejected_callback(req.node_id, req.disconnect_reason);
     }
 
@@ -423,8 +369,6 @@ void LdnSessionHandler::handle_reject(const protocol::LdnHeader& header,
  * RejectReply is sent by the server to confirm that a rejection
  * request was processed. This is typically sent back to the host
  * who initiated the rejection.
- *
- * @param header Packet header (unused)
  */
 void LdnSessionHandler::handle_reject_reply(const protocol::LdnHeader& header) {
     (void)header;
@@ -438,19 +382,17 @@ void LdnSessionHandler::handle_reject_reply(const protocol::LdnHeader& header) {
  *
  * SetAcceptPolicy response confirms that the accept policy was changed.
  * This is sent back to the host who changed the policy.
- *
- * @param header Packet header (unused)
- * @param req Accept policy request containing new policy
  */
-void LdnSessionHandler::handle_set_accept_policy(const protocol::LdnHeader& header,
-                                                  const protocol::SetAcceptPolicyRequest& req) {
+void LdnSessionHandler::handle_set_accept_policy(
+    const protocol::LdnHeader& header,
+    const protocol::SetAcceptPolicyRequest& req) {
     (void)header;
 
     // Update stored accept policy
     m_accept_policy = static_cast<protocol::AcceptPolicy>(req.accept_policy);
 
     // Notify application
-    if (m_accept_policy_changed_callback) {
+    if (m_accept_policy_changed_callback != nullptr) {
         m_accept_policy_changed_callback(m_accept_policy);
     }
 }
@@ -500,8 +442,6 @@ uint8_t LdnSessionHandler::get_max_nodes() const {
  *
  * Called when the server assigns us a node ID or when
  * we determine our node ID from the network info.
- *
- * @param node_id Our node ID (0-7)
  */
 void LdnSessionHandler::set_local_node_id(int8_t node_id) {
     m_local_node_id = node_id;
@@ -564,8 +504,6 @@ void LdnSessionHandler::reset() {
  * @brief Set state and invoke callback
  *
  * Handles state transition and notifies registered callback.
- *
- * @param new_state New state to transition to
  */
 void LdnSessionHandler::set_state(LdnSessionState new_state) {
     if (m_state == new_state) {
@@ -576,9 +514,9 @@ void LdnSessionHandler::set_state(LdnSessionState new_state) {
     m_state = new_state;
 
     // Notify callback
-    if (m_state_callback) {
+    if (m_state_callback != nullptr) {
         m_state_callback(old_state, new_state);
     }
 }
 
-} // namespace ryu_ldn::ldn
+}  // namespace ryu_ldn::ldn

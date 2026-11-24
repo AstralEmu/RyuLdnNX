@@ -45,6 +45,36 @@ RE_ANNOTATION = re.compile(
     r'\}'
 )
 
+def join_annotations(lines: list[str]) -> list[str]:
+    """Fold multi-line ``/// @gdb{...}`` annotations onto their last line.
+
+    clang-format wraps long comments at 80 columns, so an annotation may span
+    several ``///`` lines. The folded text lands on the LAST line, directly
+    above the declaration it tags (the scanner requires that adjacency); the
+    earlier lines are blanked, not removed, so every line keeps its number.
+    """
+    out = list(lines)
+    i = 0
+    while i < len(out):
+        head = out[i]
+        if "@gdb{" not in head or "}" in head.split("@gdb{", 1)[1]:
+            i += 1
+            continue
+        text = head.rstrip("\n")
+        j = i + 1
+        while j < len(out) and "}" not in text:
+            cont = out[j].strip()
+            if not cont.startswith("///"):
+                break
+            text += " " + cont[3:].strip()
+            j += 1
+        for k in range(i, j - 1):
+            out[k] = "\n"
+        out[j - 1] = text + "\n"
+        i = j
+    return out
+
+
 RE_NAMESPACE = re.compile(r'\bnamespace\s+([\w:]+)\s*\{')
 RE_CLASS = re.compile(r'\b(?:class|struct)\s+(?:__attribute__\s*\(\(.*?\)\)\s+)?(\w+)\s*(?:__attribute__\s*\(\(.*?\)\)\s*)?(?::.*?)?\s*\{')
 RE_ENUM_CLASS = re.compile(r'\benum\s+class\s+\w+')
@@ -138,7 +168,7 @@ class SourceScanner:
 
     def _scan_file(self, filepath: str):
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
+            lines = join_annotations(f.readlines())
 
         ns_stack: list[str] = []
         cls_stack: list[str] = []
@@ -473,7 +503,7 @@ def inject_annotations(source_dir: str, dprintfs: list[GdbDprintf], dry_run: boo
             continue
 
         with open(filepath, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+            lines = join_annotations(f.readlines())
 
         # Insert annotations in reverse order to preserve line numbers
         insertions = {}
@@ -511,7 +541,7 @@ def build_symbol_map(source_dir: str) -> dict[str, tuple]:
                 continue
             filepath = os.path.join(root, fname)
             with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-                lines = f.readlines()
+                lines = join_annotations(f.readlines())
 
             ns_stack = []
             cls_stack = []

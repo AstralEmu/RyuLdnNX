@@ -9,12 +9,15 @@
 
 #include "log.hpp"
 #include "../config/config.hpp"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <cstdarg>
+#include <fcntl.h>
 
 #ifdef __SWITCH__
 #include <stratosphere.hpp>
+#include <utility>
 #endif
 
 namespace ryu_ldn::debug {
@@ -38,6 +41,10 @@ namespace {
 
 /**
  * @brief Copy string with length limit
+ *
+ * @param dest Destination buffer (at least max_len + 1 bytes)
+ * @param src Null-terminated source
+ * @param max_len Maximum number of characters copied
  */
 void safe_strcpy(char* dest, const char* src, size_t max_len) {
     size_t i = 0;
@@ -50,36 +57,49 @@ void safe_strcpy(char* dest, const char* src, size_t max_len) {
 
 /**
  * @brief Get a simple timestamp string
+ *
+ * @param buffer Output buffer
+ * @param buffer_size Size of the output buffer in bytes
  */
 void get_timestamp(char* buffer, size_t buffer_size) {
     static uint32_t s_log_counter = 0;
     snprintf(buffer, buffer_size, "%06u", s_log_counter++);
 }
 
-} // anonymous namespace
+}  // anonymous namespace
 
 // =============================================================================
 // Message Formatting
 // =============================================================================
 
-void format_log_message(char* buffer, size_t buffer_size, LogLevel level,
-                        const char* format, ...) {
+void format_log_message(
+    char* buffer, size_t buffer_size, LogLevel level, const char* format, ...) {
     va_list args;
     va_start(args, format);
     format_log_message_v(buffer, buffer_size, level, format, args);
     va_end(args);
 }
 
-void format_log_message_v(char* buffer, size_t buffer_size, LogLevel level,
-                          const char* format, va_list args) {
-    if (buffer_size == 0) return;
+void format_log_message_v(
+    char* buffer,
+    size_t buffer_size,
+    LogLevel level,
+    const char* format,
+    va_list args) {
+    if (buffer_size == 0) {
+        return;
+    }
 
     // Format: [TIMESTAMP] [LEVEL] message
     char timestamp[16];
     get_timestamp(timestamp, sizeof(timestamp));
 
-    int prefix_len = snprintf(buffer, buffer_size, "[%s] [%s] ",
-                               timestamp, log_level_to_string(level));
+    int prefix_len = snprintf(
+        buffer,
+        buffer_size,
+        "[%s] [%s] ",
+        timestamp,
+        log_level_to_string(level));
 
     if (prefix_len < 0 || static_cast<size_t>(prefix_len) >= buffer_size) {
         buffer[buffer_size - 1] = '\0';
@@ -87,7 +107,11 @@ void format_log_message_v(char* buffer, size_t buffer_size, LogLevel level,
     }
 
     // Append the actual message
-    vsnprintf(buffer + prefix_len, buffer_size - prefix_len, format, args);
+    vsnprintf(
+        buffer + prefix_len,
+        buffer_size - static_cast<size_t>(prefix_len),
+        format,
+        args);
     buffer[buffer_size - 1] = '\0';
 }
 
@@ -96,12 +120,15 @@ void format_log_message_v(char* buffer, size_t buffer_size, LogLevel level,
 // =============================================================================
 
 void LogBuffer::init(size_t capacity) {
-    m_capacity = (capacity > MAX_LOG_BUFFER_ENTRIES) ? MAX_LOG_BUFFER_ENTRIES : capacity;
+    m_capacity =
+        (capacity > MAX_LOG_BUFFER_ENTRIES) ? MAX_LOG_BUFFER_ENTRIES : capacity;
     clear();
 }
 
 void LogBuffer::add(const char* message) {
-    if (message == nullptr || m_capacity == 0) return;
+    if (message == nullptr || m_capacity == 0) {
+        return;
+    }
 
     // Copy message to current tail position
     safe_strcpy(m_messages[m_tail], message, MAX_LOG_MESSAGE_LENGTH - 1);
@@ -118,28 +145,30 @@ void LogBuffer::add(const char* message) {
 }
 
 const char* LogBuffer::get(size_t index) const {
-    if (index >= m_count) return nullptr;
+    if (index >= m_count) {
+        return nullptr;
+    }
 
     size_t actual_index = (m_head + index) % m_capacity;
     return m_messages[actual_index];
 }
 
 void LogBuffer::get_all(char* buffer, size_t buffer_size) const {
-    if (buffer == nullptr || buffer_size == 0) return;
+    if (buffer == nullptr || buffer_size == 0) {
+        return;
+    }
 
     buffer[0] = '\0';
     size_t offset = 0;
 
     for (size_t i = 0; i < m_count && offset < buffer_size - 1; i++) {
+        // i < m_count, so the slot always holds a message.
         const char* msg = get(i);
-        if (msg == nullptr) continue;
 
         size_t msg_len = strlen(msg);
         size_t remaining = buffer_size - offset - 1;
 
-        if (msg_len > remaining) {
-            msg_len = remaining;
-        }
+        msg_len = std::min(msg_len, remaining);
 
         memcpy(buffer + offset, msg, msg_len);
         offset += msg_len;
@@ -170,7 +199,6 @@ Logger::~Logger() {
 void Logger::init(const config::DebugConfig& config, const char* log_path) {
     m_enabled = config.enabled;
     m_level = static_cast<LogLevel>(config.level);
-    m_log_to_file = config.log_to_file;
 
     if (log_path != nullptr) {
         safe_strcpy(m_log_path, log_path, sizeof(m_log_path) - 1);
@@ -187,21 +215,27 @@ void Logger::init(const config::DebugConfig& config, const char* log_path) {
     // Reset header flag - new session needs new header
     m_header_written = false;
 
-    // Log initialization
+    // Log initialization. The status in the message is literally "enabled":
+    // this line only exists inside the enabled branch above.
     if (m_enabled) {
-        log(LogLevel::Info, "Logger initialized (level=%u, file=%s)",
+        log(LogLevel::Info,
+            "Logger initialized (level=%u, file=%s)",
             static_cast<uint32_t>(m_level),
-            m_log_to_file ? "enabled" : "disabled");
+            "enabled");
     }
 }
 
 bool Logger::should_log(LogLevel level) const {
-    if (!m_enabled) return false;
+    if (!m_enabled) {
+        return false;
+    }
     return static_cast<uint32_t>(level) <= static_cast<uint32_t>(m_level);
 }
 
 void Logger::log(LogLevel level, const char* format, ...) {
-    if (!should_log(level)) return;
+    if (!should_log(level)) {
+        return;
+    }
 
     va_list args;
     va_start(args, format);
@@ -210,7 +244,9 @@ void Logger::log(LogLevel level, const char* format, ...) {
 }
 
 void Logger::log_v(LogLevel level, const char* format, va_list args) {
-    if (!should_log(level)) return;
+    if (!should_log(level)) {
+        return;
+    }
 
     char message[MAX_LOG_MESSAGE_LENGTH];
     format_log_message_v(message, sizeof(message), level, format, args);
@@ -219,7 +255,7 @@ void Logger::log_v(LogLevel level, const char* format, va_list args) {
 #ifdef __SWITCH__
     std::scoped_lock lock(m_mutex);
 #else
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
 #endif
     output_message(message);
 }
@@ -228,12 +264,19 @@ void Logger::flush() {
 #ifdef __SWITCH__
     std::scoped_lock lock(m_mutex);
     if (m_file_open) {
-        ams::fs::FlushFile(s_log_file_handle);
+        const ams::Result rc = ams::fs::FlushFile(s_log_file_handle);
+        if (R_FAILED(rc)) {
+            // printf (debug console) — LOG_WARN would deadlock: flush()
+            // already holds m_mutex and log_v re-locks it.
+            std::printf(
+                "[WARN] Logger::flush: FlushFile failed (rc=0x%x)\n",
+                rc.GetValue());
+        }
     }
 #else
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     if (m_file != nullptr) {
-        std::fflush(static_cast<FILE*>(m_file));
+        std::fflush(m_file.get());
     }
 #endif
 }
@@ -246,11 +289,9 @@ void Logger::output_message(const char* message) {
     std::printf("%s\n", message);
 
     // Output to file if enabled
-    if (m_log_to_file) {
+    if (m_enabled) {
         // Open file on-demand if not already open
-        if (!m_file_open) {
-            open_file();
-        }
+        open_file();  // no-op when the file is already open
 
 #ifdef __SWITCH__
         if (m_file_open) {
@@ -263,22 +304,35 @@ void Logger::output_message(const char* message) {
             // WriteOption::None — don't force an SD sync on every log line.
             // Under real traffic the game logs 50-100+ lines/sec; each synced
             // write is 10-50 ms of blocking I/O and stalls the whole sysmodule.
-            // The log maintenance thread periodically flushes via FlushFile, and
-            // close_file() flushes on idle timeout — we accept losing ~2 seconds
-            // of trailing log on crash in exchange for keeping the game playable.
-            ams::fs::WriteFile(s_log_file_handle, m_file_offset, line, msg_len + 1,
-                               ams::fs::WriteOption::None);
+            // The log maintenance thread periodically flushes via FlushFile,
+            // and close_file() flushes on idle timeout — we accept losing ~2
+            // seconds of trailing log on crash in exchange for keeping the game
+            // playable.
+            const ams::Result write_rc = ams::fs::WriteFile(
+                s_log_file_handle,
+                m_file_offset,
+                line,
+                msg_len + 1,
+                ams::fs::WriteOption::None);
+            if (R_FAILED(write_rc)) {
+                // Best-effort by design (see comment above) — but never
+                // silently. printf goes to the debug console; LOG_WARN here
+                // would deadlock (log_v already holds m_mutex).
+                std::printf(
+                    "[WARN] Logger: WriteFile failed (rc=0x%x)\n",
+                    write_rc.GetValue());
+            }
             m_file_offset += msg_len + 1;
-
             // Update last write time
             m_last_write_tick = armGetSystemTick();
         }
 #else
         if (m_file != nullptr) {
-            std::fprintf(static_cast<FILE*>(m_file), "%s\n", message);
-            std::fflush(static_cast<FILE*>(m_file));
+            std::fprintf(m_file.get(), "%s\n", message);
+            std::fflush(m_file.get());
 
-            // Update last write time (simple incrementing counter for non-Switch)
+            // Update last write time (simple incrementing counter for
+            // non-Switch)
             m_last_write_tick++;
         }
 #endif
@@ -286,21 +340,31 @@ void Logger::output_message(const char* message) {
 }
 
 void Logger::open_file() {
-    if (m_file_open) return;
+    if (m_file_open) {
+        return;
+    }
 
 #ifdef __SWITCH__
     // Ensure parent directory exists
     char dir_path[256];
     safe_strcpy(dir_path, m_log_path, sizeof(dir_path) - 1);
     char* last_slash = std::strrchr(dir_path, '/');
-    if (last_slash) {
+    if (last_slash != nullptr) {
         *last_slash = '\0';
-        ams::fs::EnsureDirectory(dir_path);
+        const ams::Result dir_rc = ams::fs::EnsureDirectory(dir_path);
+        if (R_FAILED(dir_rc)) {
+            // printf (debug console) — LOG_WARN would deadlock: open_file()
+            // is called from output_message() which holds m_mutex.
+            std::printf(
+                "[WARN] Logger::open_file: EnsureDirectory failed (rc=0x%x)\n",
+                dir_rc.GetValue());
+        }
     }
 
     // Check if file exists
     ams::fs::DirectoryEntryType entry_type;
-    bool file_exists = R_SUCCEEDED(ams::fs::GetEntryType(&entry_type, m_log_path));
+    bool file_exists =
+        R_SUCCEEDED(ams::fs::GetEntryType(&entry_type, m_log_path));
 
     if (!file_exists) {
         // Create new file
@@ -311,13 +375,17 @@ void Logger::open_file() {
 
     // Open file for append
     if (file_exists) {
-        if (R_SUCCEEDED(ams::fs::OpenFile(&s_log_file_handle, m_log_path,
-                        ams::fs::OpenMode_Write | ams::fs::OpenMode_AllowAppend))) {
+        if (R_SUCCEEDED(
+                ams::fs::OpenFile(
+                    &s_log_file_handle,
+                    m_log_path,
+                    ams::fs::OpenMode_Write | ams::fs::OpenMode_AllowAppend))) {
             m_file_open = true;
 
             // Get current file size for append offset
             s64 file_size;
-            if (R_SUCCEEDED(ams::fs::GetFileSize(&file_size, s_log_file_handle))) {
+            if (R_SUCCEEDED(
+                    ams::fs::GetFileSize(&file_size, s_log_file_handle))) {
                 m_file_offset = static_cast<size_t>(file_size);
             }
 
@@ -325,8 +393,20 @@ void Logger::open_file() {
             if (!m_header_written) {
                 const char* header = "\n=== ryu_ldn_nx Log Started ===\n";
                 size_t header_len = std::strlen(header);
-                ams::fs::WriteFile(s_log_file_handle, m_file_offset, header, header_len,
-                                   ams::fs::WriteOption::Flush);
+                const ams::Result header_rc = ams::fs::WriteFile(
+                    s_log_file_handle,
+                    m_file_offset,
+                    header,
+                    header_len,
+                    ams::fs::WriteOption::Flush);
+                if (R_FAILED(header_rc)) {
+                    // printf (debug console) — LOG_WARN would deadlock here
+                    // (open_file is called with m_mutex held).
+                    std::printf(
+                        "[WARN] Logger::open_file: header WriteFile failed "
+                        "(rc=0x%x)\n",
+                        header_rc.GetValue());
+                }
                 m_file_offset += header_len;
                 m_header_written = true;
             }
@@ -335,21 +415,18 @@ void Logger::open_file() {
         }
     }
 #else
-    // The Switch SD card uses FAT32/exFAT which has no POSIX permission
-    // model — fopen("a") creates with default FAT attributes and chmod is
-    // a no-op on this filesystem.  // codeql[cpp/world-writable-file-creation]
-    m_file = std::fopen(m_log_path, "a");
+    m_file.reset(
+        config::open_stream(m_log_path, O_WRONLY | O_CREAT | O_APPEND, "a"));
 
     if (m_file != nullptr) {
         m_file_open = true;
 
         // Write header only once per session
         if (!m_header_written) {
-            std::fprintf(static_cast<FILE*>(m_file),
-                         "\n=== ryu_ldn_nx Log Started ===\n");
+            std::fprintf(m_file.get(), "\n=== ryu_ldn_nx Log Started ===\n");
             m_header_written = true;
         }
-        std::fflush(static_cast<FILE*>(m_file));
+        std::fflush(m_file.get());
 
         // Simple counter for non-Switch (timeout not critical for testing)
         m_last_write_tick++;
@@ -360,15 +437,21 @@ void Logger::open_file() {
 void Logger::close_file() {
 #ifdef __SWITCH__
     if (m_file_open) {
-        ams::fs::FlushFile(s_log_file_handle);
+        const ams::Result flush_rc = ams::fs::FlushFile(s_log_file_handle);
+        if (R_FAILED(flush_rc)) {
+            // printf (debug console) — LOG_WARN would deadlock (close_file
+            // runs with m_mutex held from check_idle_timeout/flush paths).
+            std::printf(
+                "[WARN] Logger::close_file: FlushFile failed (rc=0x%x)\n",
+                flush_rc.GetValue());
+        }
         ams::fs::CloseFile(s_log_file_handle);
         m_file_open = false;
     }
 #else
     if (m_file != nullptr) {
-        std::fflush(static_cast<FILE*>(m_file));
-        std::fclose(static_cast<FILE*>(m_file));
-        m_file = nullptr;
+        std::fflush(m_file.get());
+        m_file.reset();
         m_file_open = false;
     }
 #endif
@@ -377,7 +460,9 @@ void Logger::close_file() {
 void Logger::check_idle_timeout() {
 #ifdef __SWITCH__
     std::scoped_lock lock(m_mutex);
-    if (!m_file_open) return;
+    if (!m_file_open) {
+        return;
+    }
 
     uint64_t current_tick = armGetSystemTick();
     uint64_t elapsed_ns = armTicksToNs(current_tick - m_last_write_tick);
@@ -386,12 +471,23 @@ void Logger::check_idle_timeout() {
         close_file();
     } else {
         // Periodic flush — writes are done with WriteOption::None for speed,
-        // so force a sync here to cap data loss on crash to the maintenance tick.
-        ams::fs::FlushFile(s_log_file_handle);
+        // so force a sync here to cap data loss on crash to the maintenance
+        // tick.
+        const ams::Result flush_rc = ams::fs::FlushFile(s_log_file_handle);
+        if (R_FAILED(flush_rc)) {
+            // printf (debug console) — LOG_WARN would deadlock
+            // (check_idle_timeout holds m_mutex).
+            std::printf(
+                "[WARN] Logger::check_idle_timeout: FlushFile failed "
+                "(rc=0x%x)\n",
+                flush_rc.GetValue());
+        }
     }
 #else
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_file_open) return;
+    std::scoped_lock lock(m_mutex);
+    if (!m_file_open) {
+        return;
+    }
 
     // Non-Switch: always close after check (for testing simplicity)
     // Real timeout only matters on Switch hardware
@@ -399,4 +495,4 @@ void Logger::check_idle_timeout() {
 #endif
 }
 
-} // namespace ryu_ldn::debug
+}  // namespace ryu_ldn::debug

@@ -9,7 +9,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_MITM_SERVICE_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_MITM_SERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "interfaces/iservice.hpp"
@@ -22,13 +23,13 @@ namespace ams::mitm::ldn {
  * @brief LDN MITM Service implementation
  *
  * This class implements the ldn:u MITM service. When a game opens ldn:u,
- * this service intercepts the calls and creates our custom ICommunicationService
- * instead of the original Nintendo service.
+ * this service intercepts the calls and creates our custom
+ * ICommunicationService instead of the original Nintendo service.
  */
 class LdnMitMService : public sf::MitmServiceImplBase {
 private:
     ncm::ProgramId m_program_id;  ///< Program ID of the client process
-    u64 m_client_pid;             ///< Process ID of the client (for BSD MITM tracking)
+    u64 m_client_pid;  ///< Process ID of the client (for BSD MITM tracking)
 
 public:
     /**
@@ -38,7 +39,8 @@ public:
      * @param c MITM process info for the client
      */
     /// @gdb{tag="LDN:LIFECYCLE", msg="MitMService constructor"}
-    LdnMitMService(std::shared_ptr<::Service>&& s, const sm::MitmProcessInfo& c);
+    LdnMitMService(
+        std::shared_ptr<::Service>&& s, const sm::MitmProcessInfo& c);
 
     /**
      * @brief Destructor
@@ -82,11 +84,12 @@ public:
      * @param out Output pointer for the created monitor
      * @return Result code
      */
-    Result CreateClientProcessMonitor(
+    static Result CreateClientProcessMonitor(
         sf::Out<sf::SharedPointer<IClientProcessMonitorInterface>> out);
 };
 
 // Verify interface compliance
 static_assert(ams::mitm::ldn::IsILdnMitMService<LdnMitMService>);
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_MITM_SERVICE_HPP_

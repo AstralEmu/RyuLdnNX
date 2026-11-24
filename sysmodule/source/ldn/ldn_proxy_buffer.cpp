@@ -30,17 +30,7 @@ namespace ams::mitm::ldn {
  *
  * All indices start at 0, buffer is empty.
  */
-LdnProxyBuffer::LdnProxyBuffer()
-    : m_mutex()
-    , m_packets{}
-    , m_packet_read_idx(0)
-    , m_packet_write_idx(0)
-    , m_packet_count(0)
-    , m_data_buffer{}
-    , m_data_read_pos(0)
-    , m_data_write_pos(0)
-{
-}
+LdnProxyBuffer::LdnProxyBuffer() = default;
 
 /**
  * @brief Write a packet to the buffer
@@ -49,18 +39,17 @@ LdnProxyBuffer::LdnProxyBuffer()
  *
  * ## Algorithm
  * 1. Check if packet queue is full
- * 2. Check if data buffer has enough space
+ * 2. Check if data buffer has enough free space (never overwriting unread
+ *    packets, also after the write position wrapped)
  * 3. Copy data to ring buffer (handle wrap-around)
  * 4. Store packet metadata
  * 5. Update write indices
  *
- * @param header Proxy data header (8 bytes)
- * @param data Packet payload
- * @param size Payload size (must be <= MaxPacketDataSize)
- * @return true if packet was queued successfully
  */
-bool LdnProxyBuffer::Write(const ryu_ldn::protocol::ProxyDataHeader& header,
-                           const u8* data, size_t size) {
+bool LdnProxyBuffer::Write(
+    const ryu_ldn::protocol::ProxyDataHeader& header,
+    const u8* data,
+    size_t size) {
     // Validate size
     if (size > MaxPacketDataSize) {
         return false;
@@ -73,17 +62,28 @@ bool LdnProxyBuffer::Write(const ryu_ldn::protocol::ProxyDataHeader& header,
         return false;
     }
 
-    // Calculate available data space
-    // If not enough contiguous space at end, wrap to start if space is available
-    size_t available = BufferSize - m_data_write_pos;
-    if (available < size) {
-        // Not enough contiguous space, wrap to start if possible
-        if (m_data_read_pos > size) {
-            m_data_write_pos = 0;
-        } else {
-            // Buffer full
-            return false;
+    // Where does the unread data start? Writes must never reach it.
+    // With nothing queued the data area is free (Read() rewinds it).
+    const size_t head = (m_packet_count > 0)
+                            ? m_packets[m_packet_read_idx].data_offset
+                            : m_data_write_pos;
+
+    if (m_data_write_pos >= head) {
+        // Unread data sits at or before the write position: the free space is
+        // the tail of the buffer, then (after wrapping) the area before head.
+        if (BufferSize - m_data_write_pos < size) {
+            if (head > size) {
+                m_data_write_pos = 0;
+            } else {
+                // Buffer full
+                return false;
+            }
         }
+    } else if (head - m_data_write_pos <= size) {
+        // The writer already wrapped: only the gap up to the oldest unread
+        // packet is free. Keep write_pos strictly below head so "full" is
+        // never confused with "empty".
+        return false;
     }
 
     // Store packet metadata
@@ -117,14 +117,12 @@ bool LdnProxyBuffer::Write(const ryu_ldn::protocol::ProxyDataHeader& header,
  * 4. Copy data to output (respecting max_size)
  * 5. Update read indices
  *
- * @param header Output: packet header
- * @param data Output: payload buffer
- * @param size Output: actual payload size copied
- * @param max_size Maximum bytes to copy to data buffer
- * @return true if packet was read, false if queue empty
  */
-bool LdnProxyBuffer::Read(ryu_ldn::protocol::ProxyDataHeader& header,
-                          u8* data, size_t& size, size_t max_size) {
+bool LdnProxyBuffer::Read(
+    ryu_ldn::protocol::ProxyDataHeader& header,
+    u8* data,
+    size_t& size,
+    size_t max_size) {
     std::scoped_lock lk(m_mutex);
 
     // Check if queue is empty
@@ -169,11 +167,9 @@ bool LdnProxyBuffer::Read(ryu_ldn::protocol::ProxyDataHeader& header,
  * Allows inspection of the next packet's metadata without
  * consuming it from the queue.
  *
- * @param header Output: packet header
- * @param size Output: payload size
- * @return true if packet available
  */
-bool LdnProxyBuffer::Peek(ryu_ldn::protocol::ProxyDataHeader& header, size_t& size) const {
+bool LdnProxyBuffer::Peek(
+    ryu_ldn::protocol::ProxyDataHeader& header, size_t& size) const {
     std::scoped_lock lk(m_mutex);
 
     if (m_packet_count == 0) {
@@ -239,10 +235,8 @@ size_t LdnProxyBuffer::GetUsedBytes() const {
 
     if (m_data_write_pos >= m_data_read_pos) {
         return m_data_write_pos - m_data_read_pos;
-    } else {
-        // Wrapped around
-        return BufferSize - m_data_read_pos + m_data_write_pos;
-    }
+    }  // Wrapped around
+    return BufferSize - m_data_read_pos + m_data_write_pos;
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

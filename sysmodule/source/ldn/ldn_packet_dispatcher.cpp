@@ -41,28 +41,16 @@ namespace ryu_ldn::ldn {
  * All handler pointers are initialized to nullptr. Packets received
  * before handlers are registered will be silently ignored.
  */
-PacketDispatcher::PacketDispatcher()
-    : m_initialize_handler(nullptr)
-    , m_connected_handler(nullptr)
-    , m_sync_network_handler(nullptr)
-    , m_scan_reply_handler(nullptr)
-    , m_scan_reply_end_handler(nullptr)
-    , m_disconnect_handler(nullptr)
-    , m_ping_handler(nullptr)
-    , m_network_error_handler(nullptr)
-    , m_proxy_config_handler(nullptr)
-    , m_proxy_connect_handler(nullptr)
-    , m_proxy_connect_reply_handler(nullptr)
-    , m_proxy_data_handler(nullptr)
-    , m_proxy_disconnect_handler(nullptr)
-    , m_reject_handler(nullptr)
-    , m_reject_reply_handler(nullptr)
-    , m_accept_policy_handler(nullptr)
-{
-}
+PacketDispatcher::PacketDispatcher() = default;
 
 // ============================================================================
 // Handler Registration
+//
+// The setters below name their member through `this->` on purpose: members
+// whose type is an alias template (PacketHandler<T>) are invisible to
+// cppcheck's "does this member function use a member" analysis, which then
+// reports every one of them as able to be static. Spelling the member access
+// out keeps that analysis truthful.
 // ============================================================================
 
 /**
@@ -74,8 +62,9 @@ PacketDispatcher::PacketDispatcher()
  * @param handler Function to call when Initialize packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_initialize_handler(PacketHandler<protocol::InitializeMessage> handler) {
-    m_initialize_handler = handler;
+void PacketDispatcher::set_initialize_handler(
+    PacketHandler<protocol::InitializeMessage> handler) {
+    this->m_initialize_handler = handler;
 }
 
 /**
@@ -87,8 +76,9 @@ void PacketDispatcher::set_initialize_handler(PacketHandler<protocol::Initialize
  * @param handler Function to call when Connected packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_connected_handler(PacketHandler<protocol::NetworkInfo> handler) {
-    m_connected_handler = handler;
+void PacketDispatcher::set_connected_handler(
+    PacketHandler<protocol::NetworkInfo> handler) {
+    this->m_connected_handler = handler;
 }
 
 /**
@@ -100,8 +90,9 @@ void PacketDispatcher::set_connected_handler(PacketHandler<protocol::NetworkInfo
  * @param handler Function to call when SyncNetwork packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_sync_network_handler(PacketHandler<protocol::NetworkInfo> handler) {
-    m_sync_network_handler = handler;
+void PacketDispatcher::set_sync_network_handler(
+    PacketHandler<protocol::NetworkInfo> handler) {
+    this->m_sync_network_handler = handler;
 }
 
 /**
@@ -113,8 +104,9 @@ void PacketDispatcher::set_sync_network_handler(PacketHandler<protocol::NetworkI
  * @param handler Function to call when ScanReply packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_scan_reply_handler(PacketHandler<protocol::NetworkInfo> handler) {
-    m_scan_reply_handler = handler;
+void PacketDispatcher::set_scan_reply_handler(
+    PacketHandler<protocol::NetworkInfo> handler) {
+    this->m_scan_reply_handler = handler;
 }
 
 /**
@@ -139,8 +131,9 @@ void PacketDispatcher::set_scan_reply_end_handler(EmptyPacketHandler handler) {
  * @param handler Function to call when Disconnect packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_disconnect_handler(PacketHandler<protocol::DisconnectMessage> handler) {
-    m_disconnect_handler = handler;
+void PacketDispatcher::set_disconnect_handler(
+    PacketHandler<protocol::DisconnectMessage> handler) {
+    this->m_disconnect_handler = handler;
 }
 
 /**
@@ -152,8 +145,9 @@ void PacketDispatcher::set_disconnect_handler(PacketHandler<protocol::Disconnect
  * @param handler Function to call when Ping packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_ping_handler(PacketHandler<protocol::PingMessage> handler) {
-    m_ping_handler = handler;
+void PacketDispatcher::set_ping_handler(
+    PacketHandler<protocol::PingMessage> handler) {
+    this->m_ping_handler = handler;
 }
 
 /**
@@ -165,8 +159,9 @@ void PacketDispatcher::set_ping_handler(PacketHandler<protocol::PingMessage> han
  * @param handler Function to call when NetworkError packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_network_error_handler(PacketHandler<protocol::NetworkErrorMessage> handler) {
-    m_network_error_handler = handler;
+void PacketDispatcher::set_network_error_handler(
+    PacketHandler<protocol::NetworkErrorMessage> handler) {
+    this->m_network_error_handler = handler;
 }
 
 /**
@@ -178,8 +173,9 @@ void PacketDispatcher::set_network_error_handler(PacketHandler<protocol::Network
  * @param handler Function to call when ProxyConfig packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_proxy_config_handler(PacketHandler<protocol::ProxyConfig> handler) {
-    m_proxy_config_handler = handler;
+void PacketDispatcher::set_proxy_config_handler(
+    PacketHandler<protocol::ProxyConfig> handler) {
+    this->m_proxy_config_handler = handler;
 }
 
 /**
@@ -191,20 +187,23 @@ void PacketDispatcher::set_proxy_config_handler(PacketHandler<protocol::ProxyCon
  * @param handler Function to call when ProxyConnect packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_proxy_connect_handler(PacketHandler<protocol::ProxyConnectRequest> handler) {
-    m_proxy_connect_handler = handler;
+void PacketDispatcher::set_proxy_connect_handler(
+    PacketHandler<protocol::ProxyConnectRequest> handler) {
+    this->m_proxy_connect_handler = handler;
 }
 
 /**
- * @brief Register handler for ProxyConnectReply packets (PacketId::ProxyConnectReply)
+ * @brief Register handler for ProxyConnectReply packets
+ * (PacketId::ProxyConnectReply)
  *
  * ProxyConnectReply confirms or denies P2P connection request.
  *
  * @param handler Function to call when ProxyConnectReply packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_proxy_connect_reply_handler(PacketHandler<protocol::ProxyConnectResponse> handler) {
-    m_proxy_connect_reply_handler = handler;
+void PacketDispatcher::set_proxy_connect_reply_handler(
+    PacketHandler<protocol::ProxyConnectResponse> handler) {
+    this->m_proxy_connect_reply_handler = handler;
 }
 
 /**
@@ -221,7 +220,8 @@ void PacketDispatcher::set_proxy_data_handler(ProxyDataHandler handler) {
 }
 
 /**
- * @brief Register handler for ProxyDisconnect packets (PacketId::ProxyDisconnect)
+ * @brief Register handler for ProxyDisconnect packets
+ * (PacketId::ProxyDisconnect)
  *
  * ProxyDisconnect notifies that a proxied P2P connection was closed.
  * Contains connection info and disconnect reason.
@@ -229,8 +229,9 @@ void PacketDispatcher::set_proxy_data_handler(ProxyDataHandler handler) {
  * @param handler Function to call when ProxyDisconnect packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_proxy_disconnect_handler(PacketHandler<protocol::ProxyDisconnectMessage> handler) {
-    m_proxy_disconnect_handler = handler;
+void PacketDispatcher::set_proxy_disconnect_handler(
+    PacketHandler<protocol::ProxyDisconnectMessage> handler) {
+    this->m_proxy_disconnect_handler = handler;
 }
 
 /**
@@ -242,8 +243,9 @@ void PacketDispatcher::set_proxy_disconnect_handler(PacketHandler<protocol::Prox
  * @param handler Function to call when Reject packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_reject_handler(PacketHandler<protocol::RejectRequest> handler) {
-    m_reject_handler = handler;
+void PacketDispatcher::set_reject_handler(
+    PacketHandler<protocol::RejectRequest> handler) {
+    this->m_reject_handler = handler;
 }
 
 /**
@@ -260,7 +262,8 @@ void PacketDispatcher::set_reject_reply_handler(EmptyPacketHandler handler) {
 }
 
 /**
- * @brief Register handler for SetAcceptPolicy packets (PacketId::SetAcceptPolicy)
+ * @brief Register handler for SetAcceptPolicy packets
+ * (PacketId::SetAcceptPolicy)
  *
  * SetAcceptPolicy changes who can join the session.
  * Contains AcceptPolicy enum value.
@@ -268,8 +271,9 @@ void PacketDispatcher::set_reject_reply_handler(EmptyPacketHandler handler) {
  * @param handler Function to call when SetAcceptPolicy packet is received.
  *                Pass nullptr to unregister.
  */
-void PacketDispatcher::set_accept_policy_handler(PacketHandler<protocol::SetAcceptPolicyRequest> handler) {
-    m_accept_policy_handler = handler;
+void PacketDispatcher::set_accept_policy_handler(
+    PacketHandler<protocol::SetAcceptPolicyRequest> handler) {
+    this->m_accept_policy_handler = handler;
 }
 
 // ============================================================================
@@ -294,11 +298,12 @@ void PacketDispatcher::set_accept_policy_handler(PacketHandler<protocol::SetAcce
  * @note If handler is nullptr, returns immediately (no-op)
  * @note If data_size < sizeof(T), returns immediately (undersized packet)
  */
-template<typename T>
-void PacketDispatcher::dispatch_typed(const protocol::LdnHeader& header,
-                                       const uint8_t* data,
-                                       size_t data_size,
-                                       PacketHandler<T> handler) {
+template <typename T>
+void PacketDispatcher::dispatch_typed(
+    const protocol::LdnHeader& header,
+    const uint8_t* data,
+    size_t data_size,
+    PacketHandler<T> handler) {
     // No handler registered for this packet type
     if (!handler) {
         return;
@@ -312,7 +317,7 @@ void PacketDispatcher::dispatch_typed(const protocol::LdnHeader& header,
 
     // Copy data into local struct for safe alignment and lifetime
     // Using memcpy ensures correct handling even if data is unaligned
-    T payload;
+    T payload{};
     std::memcpy(&payload, data, sizeof(T));
 
     // Invoke the registered handler
@@ -346,22 +351,18 @@ void PacketDispatcher::dispatch_typed(const protocol::LdnHeader& header,
  * | RejectReply      | EmptyHandler    | (none)                     |
  * | SetAcceptPolicy  | PacketHandler   | SetAcceptPolicyRequest (4B)|
  *
- * @param header The packet header (already parsed from wire format)
- * @param data Pointer to payload data following header
- * @param data_size Size of payload data in bytes
  *
  * @note Unknown packet types are silently ignored
  * @note Packets with insufficient data are silently ignored
  */
-void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
-                                 const uint8_t* data,
-                                 size_t data_size) {
-    using namespace protocol;
+void PacketDispatcher::dispatch(
+    const protocol::LdnHeader& header, const uint8_t* data, size_t data_size) {
+    using protocol::PacketId;
+    using protocol::ProxyDataHeader;
 
     // Route packet based on type
     switch (static_cast<PacketId>(header.type)) {
-
-        // === Session Management Packets ===
+            // === Session Management Packets ===
 
         case PacketId::Initialize:
             dispatch_typed(header, data, data_size, m_initialize_handler);
@@ -375,7 +376,7 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
             dispatch_typed(header, data, data_size, m_sync_network_handler);
             break;
 
-        // === Network Discovery Packets ===
+            // === Network Discovery Packets ===
 
         case PacketId::ScanReply:
             dispatch_typed(header, data, data_size, m_scan_reply_handler);
@@ -383,7 +384,7 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
 
         case PacketId::ScanReplyEnd:
             // Empty packet - no payload validation needed
-            if (m_scan_reply_end_handler) {
+            if (m_scan_reply_end_handler != nullptr) {
                 m_scan_reply_end_handler(header);
             }
             break;
@@ -392,7 +393,7 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
             dispatch_typed(header, data, data_size, m_disconnect_handler);
             break;
 
-        // === Utility Packets ===
+            // === Utility Packets ===
 
         case PacketId::Ping:
             dispatch_typed(header, data, data_size, m_ping_handler);
@@ -402,7 +403,7 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
             dispatch_typed(header, data, data_size, m_network_error_handler);
             break;
 
-        // === Proxy Packets (P2P Tunneling) ===
+            // === Proxy Packets (P2P Tunneling) ===
 
         case PacketId::ProxyConfig:
             dispatch_typed(header, data, data_size, m_proxy_config_handler);
@@ -413,24 +414,26 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
             break;
 
         case PacketId::ProxyConnectReply:
-            dispatch_typed(header, data, data_size, m_proxy_connect_reply_handler);
+            dispatch_typed(
+                header, data, data_size, m_proxy_connect_reply_handler);
             break;
 
         case PacketId::ProxyData:
             // Special handling: header struct + variable-length data
-            if (m_proxy_data_handler) {
+            if (m_proxy_data_handler != nullptr) {
                 // Validate minimum size for header
                 if (data_size < sizeof(ProxyDataHeader)) {
                     return;  // Packet too small
                 }
 
                 // Parse proxy header
-                ProxyDataHeader proxy_header;
+                ProxyDataHeader proxy_header{};
                 std::memcpy(&proxy_header, data, sizeof(ProxyDataHeader));
 
                 // Calculate data pointer and size
                 const uint8_t* proxy_data = data + sizeof(ProxyDataHeader);
-                size_t available_data_size = data_size - sizeof(ProxyDataHeader);
+                size_t available_data_size =
+                    data_size - sizeof(ProxyDataHeader);
 
                 // Validate declared data_length fits in remaining packet
                 if (available_data_size < proxy_header.data_length) {
@@ -438,7 +441,8 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
                 }
 
                 // Dispatch with validated data
-                m_proxy_data_handler(header, proxy_header, proxy_data, proxy_header.data_length);
+                m_proxy_data_handler(
+                    header, proxy_header, proxy_data, proxy_header.data_length);
             }
             break;
 
@@ -446,7 +450,7 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
             dispatch_typed(header, data, data_size, m_proxy_disconnect_handler);
             break;
 
-        // === Control Packets (Host Actions) ===
+            // === Control Packets (Host Actions) ===
 
         case PacketId::Reject:
             dispatch_typed(header, data, data_size, m_reject_handler);
@@ -454,7 +458,7 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
 
         case PacketId::RejectReply:
             // Empty packet - no payload validation needed
-            if (m_reject_reply_handler) {
+            if (m_reject_reply_handler != nullptr) {
                 m_reject_reply_handler(header);
             }
             break;
@@ -463,7 +467,7 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
             dispatch_typed(header, data, data_size, m_accept_policy_handler);
             break;
 
-        // === Unknown/Unhandled Packets ===
+            // === Unknown/Unhandled Packets ===
 
         default:
             // Unknown packet type - silently ignore
@@ -472,4 +476,4 @@ void PacketDispatcher::dispatch(const protocol::LdnHeader& header,
     }
 }
 
-} // namespace ryu_ldn::ldn
+}  // namespace ryu_ldn::ldn

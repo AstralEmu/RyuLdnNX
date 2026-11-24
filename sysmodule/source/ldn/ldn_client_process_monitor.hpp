@@ -10,13 +10,20 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_CLIENT_PROCESS_MONITOR_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_CLIENT_PROCESS_MONITOR_HPP_
 
 #include <stratosphere.hpp>
 #include "interfaces/iclient_process_monitor.hpp"
 
 namespace ams::mitm::ldn {
 
+/**
+ * @brief Stateless implementation of the client process monitor interface.
+ *
+ * Exposed to games alongside the LDN communication service; it only logs
+ * the registration of the client process.
+ */
 class IClientProcessMonitor {
 public:
     /// @gdb{tag="LDN:LIFECYCLE", msg="ClientProcessMonitor created"}
@@ -24,9 +31,18 @@ public:
     /// @gdb{tag="LDN:LIFECYCLE", msg="ClientProcessMonitor destroyed"}
     ~IClientProcessMonitor();
 
-    Result RegisterClient(const sf::ClientProcessId &client_process_id);
+    /**
+     * @brief Registers the calling client process (logged only).
+     *
+     * @param client_process_id Process id of the client, from the IPC
+     *                          context.
+     * @return Always ResultSuccess.
+     */
+    static Result RegisterClient(const sf::ClientProcessId& client_process_id);
 };
 
-static_assert(ams::mitm::ldn::IsIClientProcessMonitorInterface<IClientProcessMonitor>);
+static_assert(
+    ams::mitm::ldn::IsIClientProcessMonitorInterface<IClientProcessMonitor>);
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_CLIENT_PROCESS_MONITOR_HPP_

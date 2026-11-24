@@ -1,6 +1,7 @@
 /**
  * @file integration_tests.cpp
- * @brief Full-coverage integration tests for ryu_ldn_nx against a live LdnServer
+ * @brief Full-coverage integration tests for ryu_ldn_nx against a live
+ * LdnServer
  *
  * Exercises every RyuLdnClient public method, state transition, callback path,
  * and error branch that can be reached against a real server.
@@ -18,6 +19,7 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <memory>
 #include <vector>
 #include <functional>
 
@@ -26,112 +28,183 @@
 #include "network/client.hpp"
 #include "config/config.hpp"
 
-using namespace ryu_ldn;
-using namespace ryu_ldn::network;
+namespace protocol = ryu_ldn::protocol;
+using ryu_ldn::network::ClientOpResult;
+using ryu_ldn::network::ClientResult;
+using ryu_ldn::network::ConnectionState;
+using ryu_ldn::network::RyuLdnClient;
+using ryu_ldn::network::RyuLdnClientConfig;
+using ryu_ldn::network::Socket;
+using ryu_ldn::network::socket_exit;
+using ryu_ldn::network::socket_init;
+using ryu_ldn::network::socket_is_initialized;
+using ryu_ldn::network::SocketResult;
+using ryu_ldn::network::TcpClient;
 
 // ============================================================================
 // Test framework
 // ============================================================================
 
+/// Number of tests that passed.
 static int g_tests_passed = 0;
+/// Number of tests that failed.
 static int g_tests_failed = 0;
 
-#define ASSERT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
+/**
+ * @brief Print the failure and return false from the test when cond is false.
+ * @param cond Expression expected to be true.
+ */
+#define ASSERT_TRUE(cond)                                               \
+    do {                                                                \
+        if (!(cond)) {                                                  \
             printf("    FAIL: %s:%d: %s\n", __FILE__, __LINE__, #cond); \
-            return false; \
-        } \
-    } while(0)
+            return false;                                               \
+        }                                                               \
+    } while (0)
 
+/**
+ * @brief Assert that cond is false.
+ * @param cond Expression expected to be false.
+ */
 #define ASSERT_FALSE(cond) ASSERT_TRUE(!(cond))
 
-#define ASSERT_EQ(a, b) \
-    do { \
-        if ((a) != (b)) { \
-            printf("    FAIL: %s:%d: %s == %s (got %d, expected %d)\n", \
-                   __FILE__, __LINE__, #a, #b, \
-                   static_cast<int>(a), static_cast<int>(b)); \
-            return false; \
-        } \
-    } while(0)
+/**
+ * @brief Assert a == b, printing both as int on failure and returning false.
+ * @param a Actual value.
+ * @param b Expected value.
+ */
+#define ASSERT_EQ(a, b)                                              \
+    do {                                                             \
+        if ((a) != (b)) {                                            \
+            printf(                                                  \
+                "    FAIL: %s:%d: %s == %s (got %d, expected %d)\n", \
+                __FILE__,                                            \
+                __LINE__,                                            \
+                #a,                                                  \
+                #b,                                                  \
+                static_cast<int>(a),                                 \
+                static_cast<int>(b));                                \
+            return false;                                            \
+        }                                                            \
+    } while (0)
 
-#define ASSERT_NE(a, b) \
-    do { \
-        if ((a) == (b)) { \
-            printf("    FAIL: %s:%d: %s != %s (both %d)\n", \
-                   __FILE__, __LINE__, #a, #b, \
-                   static_cast<int>(a)); \
-            return false; \
-        } \
-    } while(0)
+/**
+ * @brief Assert a != b, printing the value as int on failure and returning
+ *        false.
+ * @param a Actual value.
+ * @param b Value a must differ from.
+ */
+#define ASSERT_NE(a, b)                                  \
+    do {                                                 \
+        if ((a) == (b)) {                                \
+            printf(                                      \
+                "    FAIL: %s:%d: %s != %s (both %d)\n", \
+                __FILE__,                                \
+                __LINE__,                                \
+                #a,                                      \
+                #b,                                      \
+                static_cast<int>(a));                    \
+            return false;                                \
+        }                                                \
+    } while (0)
 
-#define RUN_TEST(test_func) \
-    do { \
-        printf("  [TEST] %s... ", #test_func); \
-        fflush(stdout); \
-        if (test_func()) { \
-            printf("PASS\n"); \
-            g_tests_passed++; \
-        } else { \
-            g_tests_failed++; \
-        } \
-    } while(0)
-
+/// Server host name, overridable by the first command-line argument.
 static const char* g_host = "localhost";
+/// Server port, overridable by the second command-line argument.
 static uint16_t g_port = 30456;
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
+/**
+ * @brief Read the monotonic clock.
+ * @return Milliseconds since the steady clock epoch.
+ */
 static uint64_t now_ms() {
     auto tp = std::chrono::steady_clock::now();
     return static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(
-            tp.time_since_epoch()).count());
+            tp.time_since_epoch())
+            .count());
 }
 
+/**
+ * @brief Poll the client until it is Ready or the timeout elapses.
+ * @param client Client to update.
+ * @param timeout_ms Maximum wait in milliseconds.
+ * @return true when the client became ready.
+ */
 static bool wait_until_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     auto start = std::chrono::steady_clock::now();
     while (true) {
         client.update(now_ms());
-        if (client.is_ready()) return true;
+        if (client.is_ready()) {
+            return true;
+        }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed >= timeout_ms) return false;
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+        if (elapsed >= timeout_ms) {
+            return false;
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
-static bool wait_for_state(RyuLdnClient& client, ConnectionState target,
-                           int timeout_ms = 5000) {
+/**
+ * @brief Poll the client until it reaches a state or the timeout elapses.
+ * @param client Client to update.
+ * @param target State to wait for.
+ * @param timeout_ms Maximum wait in milliseconds.
+ * @return true when the client reached target.
+ */
+static bool wait_for_state(
+    RyuLdnClient& client, ConnectionState target, int timeout_ms = 5000) {
     auto start = std::chrono::steady_clock::now();
     while (true) {
         client.update(now_ms());
-        if (client.get_state() == target) return true;
+        if (client.get_state() == target) {
+            return true;
+        }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed >= timeout_ms) return false;
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+        if (elapsed >= timeout_ms) {
+            return false;
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
+/**
+ * @brief Update the client for a fixed duration.
+ * @param client Client to update.
+ * @param ms Duration in milliseconds.
+ */
 static void poll_for(RyuLdnClient& client, int ms) {
     auto start = std::chrono::steady_clock::now();
     while (true) {
         client.update(now_ms());
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (elapsed >= ms) break;
+                           std::chrono::steady_clock::now() - start)
+                           .count();
+        if (elapsed >= ms) {
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
+/**
+ * @brief Build a client config pointing at the test server.
+ * @param auto_reconnect Whether automatic reconnection is enabled.
+ * @return Config with host g_host, port g_port and a 3000 ms connect timeout.
+ */
 static RyuLdnClientConfig make_config(bool auto_reconnect = false) {
     RyuLdnClientConfig cfg;
     std::strncpy(cfg.host, g_host, sizeof(cfg.host) - 1);
@@ -141,20 +214,33 @@ static RyuLdnClientConfig make_config(bool auto_reconnect = false) {
     return cfg;
 }
 
-static protocol::CreateAccessPointRequest make_ap_request(const char* name = "TestHost") {
+/**
+ * @brief Build a valid open access point request for the test title.
+ * @param name User name of the host.
+ * @return Request for up to 8 nodes with game version "1.0".
+ */
+static protocol::CreateAccessPointRequest make_ap_request(
+    const char* name = "TestHost") {
     protocol::CreateAccessPointRequest req{};
     req.security_config.security_mode = 1;
     req.security_config.passphrase_size = 0;
-    std::strncpy(req.user_config.user_name, name, sizeof(req.user_config.user_name) - 1);
+    std::strncpy(
+        req.user_config.user_name, name, sizeof(req.user_config.user_name) - 1);
     req.network_config.intent_id.local_communication_id = 0x01000BB9000E0000LL;
     req.network_config.channel = 0;
     req.network_config.node_count_max = 8;
     req.network_config.local_communication_version = 1;
-    std::strncpy(reinterpret_cast<char*>(req.ryu_network_config.game_version),
-                 "1.0", sizeof(req.ryu_network_config.game_version) - 1);
+    std::strncpy(
+        reinterpret_cast<char*>(req.ryu_network_config.game_version),
+        "1.0",
+        sizeof(req.ryu_network_config.game_version) - 1);
     return req;
 }
 
+/**
+ * @brief Build a scan filter that matches every network type.
+ * @return The filter.
+ */
 static protocol::ScanFilterFull make_scan_filter() {
     protocol::ScanFilterFull filter{};
     filter.network_type = static_cast<uint8_t>(protocol::NetworkType::All);
@@ -162,9 +248,17 @@ static protocol::ScanFilterFull make_scan_filter() {
 }
 
 // Helper: connect a client and wait for Ready
+/**
+ * @brief Connect a client to the test server and wait until it is Ready.
+ * @param client Client to connect.
+ * @param timeout_ms Maximum wait for the Ready state in milliseconds.
+ * @return true when connect() succeeded and the client became ready.
+ */
 static bool connect_ready(RyuLdnClient& client, int timeout_ms = 8000) {
     ClientOpResult result = client.connect(g_host, g_port);
-    if (result != ClientOpResult::Success) return false;
+    if (result != ClientOpResult::Success) {
+        return false;
+    }
     return wait_until_ready(client, timeout_ms);
 }
 
@@ -172,26 +266,41 @@ static bool connect_ready(RyuLdnClient& client, int timeout_ms = 8000) {
 // SECTION 1: Construction & Configuration
 // ============================================================================
 
+/**
+ * @brief A default RyuLdnClientConfig holds the documented defaults
+ *        (127.0.0.1:30456, 5000 ms connect timeout, 20 ms receive timeout, no
+ *        ping, auto-reconnect, empty passphrase).
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_default_config_values() {
     RyuLdnClientConfig cfg;
     ASSERT_TRUE(std::strcmp(cfg.host, "127.0.0.1") == 0);
-    ASSERT_EQ(cfg.port, 30456u);
-    ASSERT_EQ(cfg.connect_timeout_ms, 5000u);
-    ASSERT_EQ(cfg.recv_timeout_ms, 20u);
-    ASSERT_EQ(cfg.ping_interval_ms, 0u);
+    ASSERT_EQ(cfg.port, 30456U);
+    ASSERT_EQ(cfg.connect_timeout_ms, 5000U);
+    ASSERT_EQ(cfg.recv_timeout_ms, 20U);
+    ASSERT_EQ(cfg.ping_interval_ms, 0U);
     ASSERT_TRUE(cfg.auto_reconnect);
     ASSERT_EQ(cfg.passphrase[0], '\0');
     return true;
 }
 
+/**
+ * @brief A default-constructed client exposes the default host and port.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_config_from_default_constructor() {
     RyuLdnClient client;
     const auto& cfg = client.get_config();
     ASSERT_TRUE(std::strcmp(cfg.host, "127.0.0.1") == 0);
-    ASSERT_EQ(cfg.port, 30456u);
+    ASSERT_EQ(cfg.port, 30456U);
     return true;
 }
 
+/**
+ * @brief A client built from a config returns the configured port from
+ *        get_config().
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_config_from_custom_constructor() {
     RyuLdnClientConfig cfg = make_config();
     RyuLdnClient client(cfg);
@@ -201,6 +310,10 @@ bool test_config_from_custom_constructor() {
     return true;
 }
 
+/**
+ * @brief set_config() on a disconnected client is reflected by get_config().
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_set_config_while_disconnected() {
     RyuLdnClient client;
     RyuLdnClientConfig new_cfg;
@@ -217,6 +330,10 @@ bool test_set_config_while_disconnected() {
     return true;
 }
 
+/**
+ * @brief A client reconfigured with set_config() connects and reaches Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_config_change_then_connect() {
     socket_init();
     RyuLdnClient client;
@@ -232,12 +349,17 @@ bool test_config_change_then_connect() {
     return true;
 }
 
+/**
+ * @brief A passphrase set in the config is stored verbatim.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_passphrase_config() {
     RyuLdnClientConfig cfg;
     std::strncpy(cfg.host, g_host, sizeof(cfg.host) - 1);
     cfg.port = g_port;
     cfg.connect_timeout_ms = 3000;
-    std::strncpy(cfg.passphrase, "Ryujinx-DEADBEEF", sizeof(cfg.passphrase) - 1);
+    std::strncpy(
+        cfg.passphrase, "Ryujinx-DEADBEEF", sizeof(cfg.passphrase) - 1);
     RyuLdnClient client(cfg);
 
     // Verify passphrase is stored
@@ -249,6 +371,11 @@ bool test_passphrase_config() {
 // SECTION 2: Connection & Handshake
 // ============================================================================
 
+/**
+ * @brief connect() succeeds and the handshake leaves the client connected,
+ * ready and in the Ready state.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connect_handshake() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -263,6 +390,11 @@ bool test_connect_handshake() {
     return true;
 }
 
+/**
+ * @brief connect() without arguments uses the configured host and port and
+ *        reaches Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connect_parameterless() {
     socket_init();
     RyuLdnClient client;
@@ -279,6 +411,10 @@ bool test_connect_parameterless() {
     return true;
 }
 
+/**
+ * @brief connect() on a connected client returns AlreadyConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connect_already_connected() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -292,6 +428,11 @@ bool test_connect_already_connected() {
     return true;
 }
 
+/**
+ * @brief The state callback fires at least twice while connecting and again on
+ *        disconnect.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_state_transitions_connect() {
     socket_init();
     std::atomic<int> callback_count{0};
@@ -319,6 +460,11 @@ bool test_state_transitions_connect() {
     return true;
 }
 
+/**
+ * @brief A client can disconnect, reach Disconnected, then connect to Ready
+ *        again.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_disconnect_reconnect() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -339,6 +485,10 @@ bool test_disconnect_reconnect() {
     return true;
 }
 
+/**
+ * @brief Three connect/disconnect cycles on one client all succeed.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_sequential_connect_disconnect_cycles() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -350,13 +500,19 @@ bool test_sequential_connect_disconnect_cycles() {
         ASSERT_TRUE(client.is_ready());
 
         client.disconnect();
-        ASSERT_TRUE(wait_for_state(client, ConnectionState::Disconnected, 3000));
+        ASSERT_TRUE(
+            wait_for_state(client, ConnectionState::Disconnected, 3000));
     }
 
     socket_exit();
     return true;
 }
 
+/**
+ * @brief A second disconnect() is a safe no-op and the state stays
+ * Disconnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_double_disconnect() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -372,6 +528,10 @@ bool test_double_disconnect() {
     return true;
 }
 
+/**
+ * @brief Three clients connect to the same server and are all Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_multiple_clients_same_server() {
     socket_init();
 
@@ -398,6 +558,11 @@ bool test_multiple_clients_same_server() {
 // SECTION 3: Getters & State Queries
 // ============================================================================
 
+/**
+ * @brief The getters report Ready, connected, not transitioning, no retries and
+ *        no error while connected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_getters_while_connected() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -407,7 +572,7 @@ bool test_getters_while_connected() {
     ASSERT_TRUE(client.is_connected());
     ASSERT_TRUE(client.is_ready());
     ASSERT_FALSE(client.is_transitioning());
-    ASSERT_EQ(client.get_retry_count(), 0u);
+    ASSERT_EQ(client.get_retry_count(), 0U);
     ASSERT_EQ(client.get_last_error_code(), protocol::NetworkErrorCode::None);
 
     client.disconnect();
@@ -415,6 +580,11 @@ bool test_getters_while_connected() {
     return true;
 }
 
+/**
+ * @brief The getters report Disconnected, no retries and a zero RTT on a fresh
+ *        client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_getters_while_disconnected() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -423,21 +593,26 @@ bool test_getters_while_disconnected() {
     ASSERT_FALSE(client.is_connected());
     ASSERT_FALSE(client.is_ready());
     ASSERT_FALSE(client.is_transitioning());
-    ASSERT_EQ(client.get_retry_count(), 0u);
-    ASSERT_EQ(client.get_last_rtt_ms(), 0u);
+    ASSERT_EQ(client.get_retry_count(), 0U);
+    ASSERT_EQ(client.get_last_rtt_ms(), 0U);
 
     socket_exit();
     return true;
 }
 
+/**
+ * @brief The last RTT is 0 before and after connecting, as no client ping is
+ *        sent.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_get_last_rtt_initial() {
     socket_init();
     RyuLdnClient client(make_config());
-    ASSERT_EQ(client.get_last_rtt_ms(), 0u);
+    ASSERT_EQ(client.get_last_rtt_ms(), 0U);
 
     ASSERT_TRUE(connect_ready(client));
     // ping_interval_ms=0 means no client pings, so RTT stays 0
-    ASSERT_EQ(client.get_last_rtt_ms(), 0u);
+    ASSERT_EQ(client.get_last_rtt_ms(), 0U);
 
     client.disconnect();
     socket_exit();
@@ -448,6 +623,10 @@ bool test_get_last_rtt_initial() {
 // SECTION 4: All send_* methods while Ready
 // ============================================================================
 
+/**
+ * @brief send_scan() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_scan() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -462,6 +641,10 @@ bool test_send_scan() {
     return true;
 }
 
+/**
+ * @brief send_create_access_point() without advertise data succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_create_access_point() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -477,6 +660,10 @@ bool test_send_create_access_point() {
     return true;
 }
 
+/**
+ * @brief send_create_access_point() with advertise data succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_create_access_point_with_advertise() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -484,7 +671,8 @@ bool test_send_create_access_point_with_advertise() {
 
     auto req = make_ap_request("APAdv");
     uint8_t advertise_data[] = {0x01, 0x02, 0x03, 0x04};
-    ClientOpResult result = client.send_create_access_point(req, advertise_data, sizeof(advertise_data));
+    ClientOpResult result = client.send_create_access_point(
+        req, advertise_data, sizeof(advertise_data));
     ASSERT_EQ(result, ClientOpResult::Success);
 
     poll_for(client, 2000);
@@ -493,6 +681,11 @@ bool test_send_create_access_point_with_advertise() {
     return true;
 }
 
+/**
+ * @brief A station sends a connect request to a hosted network and the send
+ *        succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_connect() {
     socket_init();
 
@@ -507,8 +700,10 @@ bool test_send_connect() {
     protocol::ConnectRequest connect_req{};
     connect_req.security_config.security_mode = 1;
     connect_req.security_config.passphrase_size = 0;
-    std::strncpy(connect_req.user_config.user_name, "Station",
-                 sizeof(connect_req.user_config.user_name) - 1);
+    std::strncpy(
+        connect_req.user_config.user_name,
+        "Station",
+        sizeof(connect_req.user_config.user_name) - 1);
     connect_req.local_communication_version = 1;
     std::memset(&connect_req.network_info, 0, sizeof(connect_req.network_info));
     connect_req.network_info.network_id.intent_id.local_communication_id =
@@ -524,6 +719,10 @@ bool test_send_connect() {
     return true;
 }
 
+/**
+ * @brief send_create_access_point_private() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_create_access_point_private() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -532,16 +731,22 @@ bool test_send_create_access_point_private() {
     protocol::CreateAccessPointPrivateRequest req{};
     req.security_config.security_mode = 1;
     req.security_config.passphrase_size = 8;
-    std::strncpy(reinterpret_cast<char*>(req.security_config.passphrase),
-                 "test1234", sizeof(req.security_config.passphrase) - 1);
-    std::strncpy(req.user_config.user_name, "PrivateHost",
-                 sizeof(req.user_config.user_name) - 1);
+    std::strncpy(
+        reinterpret_cast<char*>(req.security_config.passphrase),
+        "test1234",
+        sizeof(req.security_config.passphrase) - 1);
+    std::strncpy(
+        req.user_config.user_name,
+        "PrivateHost",
+        sizeof(req.user_config.user_name) - 1);
     req.network_config.intent_id.local_communication_id = 0x01000BB9000E0000LL;
     req.network_config.channel = 0;
     req.network_config.node_count_max = 8;
     req.network_config.local_communication_version = 1;
-    std::strncpy(reinterpret_cast<char*>(req.ryu_network_config.game_version),
-                 "1.0", sizeof(req.ryu_network_config.game_version) - 1);
+    std::strncpy(
+        reinterpret_cast<char*>(req.ryu_network_config.game_version),
+        "1.0",
+        sizeof(req.ryu_network_config.game_version) - 1);
 
     ClientOpResult result = client.send_create_access_point_private(req);
     ASSERT_EQ(result, ClientOpResult::Success);
@@ -552,6 +757,10 @@ bool test_send_create_access_point_private() {
     return true;
 }
 
+/**
+ * @brief send_connect_private() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_connect_private() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -560,10 +769,14 @@ bool test_send_connect_private() {
     protocol::ConnectPrivateRequest req{};
     req.security_config.security_mode = 1;
     req.security_config.passphrase_size = 8;
-    std::strncpy(reinterpret_cast<char*>(req.security_config.passphrase),
-                 "test1234", sizeof(req.security_config.passphrase) - 1);
-    std::strncpy(req.user_config.user_name, "PrivStation",
-                 sizeof(req.user_config.user_name) - 1);
+    std::strncpy(
+        reinterpret_cast<char*>(req.security_config.passphrase),
+        "test1234",
+        sizeof(req.security_config.passphrase) - 1);
+    std::strncpy(
+        req.user_config.user_name,
+        "PrivStation",
+        sizeof(req.user_config.user_name) - 1);
     req.network_config.intent_id.local_communication_id = 0x01000BB9000E0000LL;
     req.local_communication_version = 1;
 
@@ -576,6 +789,10 @@ bool test_send_connect_private() {
     return true;
 }
 
+/**
+ * @brief send_proxy_data() with a header and 3 payload bytes succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_proxy_data() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -599,6 +816,10 @@ bool test_send_proxy_data() {
     return true;
 }
 
+/**
+ * @brief send_ping() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_ping() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -613,6 +834,10 @@ bool test_send_ping() {
     return true;
 }
 
+/**
+ * @brief send_ping_response() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_ping_response() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -627,6 +852,10 @@ bool test_send_ping_response() {
     return true;
 }
 
+/**
+ * @brief send_disconnect_network() succeeds on a Ready client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_disconnect_network() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -641,6 +870,11 @@ bool test_send_disconnect_network() {
     return true;
 }
 
+/**
+ * @brief send_set_accept_policy() succeeds for RejectAll then AcceptAll on a
+ *        hosting client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_set_accept_policy() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -650,10 +884,12 @@ bool test_send_set_accept_policy() {
     client.send_create_access_point(ap_req, nullptr, 0);
     poll_for(client, 1500);
 
-    ClientOpResult r1 = client.send_set_accept_policy(protocol::AcceptPolicy::RejectAll);
+    ClientOpResult r1 =
+        client.send_set_accept_policy(protocol::AcceptPolicy::RejectAll);
     ASSERT_EQ(r1, ClientOpResult::Success);
 
-    ClientOpResult r2 = client.send_set_accept_policy(protocol::AcceptPolicy::AcceptAll);
+    ClientOpResult r2 =
+        client.send_set_accept_policy(protocol::AcceptPolicy::AcceptAll);
     ASSERT_EQ(r2, ClientOpResult::Success);
 
     client.disconnect();
@@ -661,6 +897,11 @@ bool test_send_set_accept_policy() {
     return true;
 }
 
+/**
+ * @brief send_set_advertise_data() succeeds with 3 bytes, the 384-byte maximum
+ *        and no data.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_set_advertise_data() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -671,13 +912,15 @@ bool test_send_set_advertise_data() {
     poll_for(client, 1500);
 
     uint8_t adv_data[] = {0xAA, 0xBB, 0xCC};
-    ClientOpResult result = client.send_set_advertise_data(adv_data, sizeof(adv_data));
+    ClientOpResult result =
+        client.send_set_advertise_data(adv_data, sizeof(adv_data));
     ASSERT_EQ(result, ClientOpResult::Success);
 
     // Also test max-size advertise data (384 bytes)
     uint8_t large_adv_data[384];
     std::memset(large_adv_data, 0xAB, sizeof(large_adv_data));
-    ClientOpResult r2 = client.send_set_advertise_data(large_adv_data, sizeof(large_adv_data));
+    ClientOpResult r2 =
+        client.send_set_advertise_data(large_adv_data, sizeof(large_adv_data));
     ASSERT_EQ(r2, ClientOpResult::Success);
 
     // Test null advertise data with size 0
@@ -689,6 +932,11 @@ bool test_send_set_advertise_data() {
     return true;
 }
 
+/**
+ * @brief send_reject() for an unknown node and for node 0 returns Success or
+ *        SendFailed.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_reject() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -700,16 +948,25 @@ bool test_send_reject() {
 
     // Node doesn't exist, but send should still succeed at protocol level
     ClientOpResult r1 = client.send_reject(1, protocol::DisconnectReason::User);
-    ASSERT_TRUE(r1 == ClientOpResult::Success || r1 == ClientOpResult::SendFailed);
+    const bool r1_ok =
+        r1 == ClientOpResult::Success || r1 == ClientOpResult::SendFailed;
+    ASSERT_TRUE(r1_ok);
 
-    ClientOpResult r2 = client.send_reject(0, protocol::DisconnectReason::SystemRequest);
-    ASSERT_TRUE(r2 == ClientOpResult::Success || r2 == ClientOpResult::SendFailed);
+    ClientOpResult r2 =
+        client.send_reject(0, protocol::DisconnectReason::SystemRequest);
+    const bool r2_ok =
+        r2 == ClientOpResult::Success || r2 == ClientOpResult::SendFailed;
+    ASSERT_TRUE(r2_ok);
 
     client.disconnect();
     socket_exit();
     return true;
 }
 
+/**
+ * @brief send_raw_packet() sends a hand-built Ping packet successfully.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_raw_packet() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -717,15 +974,23 @@ bool test_send_raw_packet() {
 
     // Valid Ping packet in raw format
     uint8_t raw_packet[14] = {};
-    raw_packet[0] = 'L'; raw_packet[1] = 'D'; raw_packet[2] = 'N'; raw_packet[3] = 0x00;
+    raw_packet[0] = 'L';
+    raw_packet[1] = 'D';
+    raw_packet[2] = 'N';
+    raw_packet[3] = 0x00;
     raw_packet[4] = 0xFE;  // Ping type
     raw_packet[5] = 0x00;  // version
-    raw_packet[6] = 0x00; raw_packet[7] = 0x00;  // reserved
-    raw_packet[8] = 0x02; raw_packet[9] = 0x00; raw_packet[10] = 0x00; raw_packet[11] = 0x00;  // data_size=2
+    raw_packet[6] = 0x00;
+    raw_packet[7] = 0x00;  // reserved
+    raw_packet[8] = 0x02;
+    raw_packet[9] = 0x00;
+    raw_packet[10] = 0x00;
+    raw_packet[11] = 0x00;  // data_size=2
     raw_packet[12] = 0x01;  // requester=1 (client)
     raw_packet[13] = 0x00;  // id=0
 
-    ClientOpResult result = client.send_raw_packet(raw_packet, sizeof(raw_packet));
+    ClientOpResult result =
+        client.send_raw_packet(raw_packet, sizeof(raw_packet));
     ASSERT_EQ(result, ClientOpResult::Success);
 
     poll_for(client, 1000);
@@ -738,22 +1003,43 @@ bool test_send_raw_packet() {
 // SECTION 5: All send_* methods while Not Connected / Not Ready
 // ============================================================================
 
+/**
+ * @brief Every send_*() method returns NotReady on a client that is not
+ *        connected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_not_connected() {
     socket_init();
     RyuLdnClient client(make_config());
     // Not connected — all send_* should return NotReady
     ASSERT_EQ(client.send_scan(make_scan_filter()), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_create_access_point(make_ap_request(), nullptr, 0), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_connect(protocol::ConnectRequest{}), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_create_access_point_private(protocol::CreateAccessPointPrivateRequest{}), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_connect_private(protocol::ConnectPrivateRequest{}), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_proxy_data(protocol::ProxyDataHeader{}, nullptr, 0), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_create_access_point(make_ap_request(), nullptr, 0),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_connect(protocol::ConnectRequest{}),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_create_access_point_private(
+            protocol::CreateAccessPointPrivateRequest{}),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_connect_private(protocol::ConnectPrivateRequest{}),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_proxy_data(protocol::ProxyDataHeader{}, nullptr, 0),
+        ClientOpResult::NotReady);
     ASSERT_EQ(client.send_ping(), ClientOpResult::NotReady);
     ASSERT_EQ(client.send_ping_response(0), ClientOpResult::NotReady);
     ASSERT_EQ(client.send_disconnect_network(), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_set_accept_policy(protocol::AcceptPolicy::AcceptAll), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_set_advertise_data(nullptr, 0), ClientOpResult::NotReady);
-    ASSERT_EQ(client.send_reject(0, protocol::DisconnectReason::User), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_set_accept_policy(protocol::AcceptPolicy::AcceptAll),
+        ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_set_advertise_data(nullptr, 0), ClientOpResult::NotReady);
+    ASSERT_EQ(
+        client.send_reject(0, protocol::DisconnectReason::User),
+        ClientOpResult::NotReady);
     ASSERT_EQ(client.send_raw_packet(nullptr, 0), ClientOpResult::NotReady);
 
     socket_exit();
@@ -764,13 +1050,20 @@ bool test_send_not_connected() {
 // SECTION 6: Callbacks
 // ============================================================================
 
+/**
+ * @brief The state callback fires at least twice up to Ready and again on
+ *        disconnect.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_state_callback_lifecycle() {
     socket_init();
     std::atomic<int> callback_count{0};
 
     RyuLdnClient client(make_config());
     client.set_state_callback(
-        [](ConnectionState /*old_state*/, ConnectionState /*new_state*/, void* user_data) {
+        [](ConnectionState /*old_state*/,
+           ConnectionState /*new_state*/,
+           void* user_data) {
             auto* count = static_cast<std::atomic<int>*>(user_data);
             (*count)++;
         },
@@ -778,7 +1071,9 @@ bool test_state_callback_lifecycle() {
 
     client.connect(g_host, g_port);
     ASSERT_TRUE(wait_until_ready(client, 8000));
-    ASSERT_TRUE(callback_count.load() >= 2);  // Connecting + Connected/Handshaking + Ready
+    ASSERT_TRUE(
+        callback_count.load() >=
+        2);  // Connecting + Connected/Handshaking + Ready
 
     int before_disconnect = callback_count.load();
     client.disconnect();
@@ -789,6 +1084,11 @@ bool test_state_callback_lifecycle() {
     return true;
 }
 
+/**
+ * @brief Null state and packet callbacks are accepted and the client still
+ *        connects.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_state_callback_null() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -803,6 +1103,10 @@ bool test_state_callback_null() {
     return true;
 }
 
+/**
+ * @brief The packet callback receives at least one packet after a scan.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_packet_callback_receives_data() {
     socket_init();
     struct PacketInfo {
@@ -833,6 +1137,10 @@ bool test_packet_callback_receives_data() {
     return true;
 }
 
+/**
+ * @brief Packets received without a packet callback are dropped silently.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_packet_callback_null_no_crash() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -851,6 +1159,10 @@ bool test_packet_callback_null_no_crash() {
 // SECTION 7: Packet Reception — handle_packet coverage
 // ============================================================================
 
+/**
+ * @brief A scan makes the server answer with at least a ScanReplyEnd packet.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_receive_scan_reply() {
     socket_init();
     struct ScanInfo {
@@ -862,8 +1174,12 @@ bool test_receive_scan_reply() {
     client.set_packet_callback(
         [](protocol::PacketId id, const uint8_t*, size_t, void* user_data) {
             auto* si = static_cast<ScanInfo*>(user_data);
-            if (id == protocol::PacketId::ScanReply) si->scan_reply_count++;
-            if (id == protocol::PacketId::ScanReplyEnd) si->scan_reply_end_count++;
+            if (id == protocol::PacketId::ScanReply) {
+                si->scan_reply_count++;
+            }
+            if (id == protocol::PacketId::ScanReplyEnd) {
+                si->scan_reply_end_count++;
+            }
         },
         &info);
 
@@ -879,6 +1195,11 @@ bool test_receive_scan_reply() {
     return true;
 }
 
+/**
+ * @brief Creating an access point with a packet callback installed runs the
+ *        callback path without failing; server replies are not asserted.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_receive_connected_sync_network() {
     socket_init();
     struct ServerInfo {
@@ -890,8 +1211,12 @@ bool test_receive_connected_sync_network() {
     client.set_packet_callback(
         [](protocol::PacketId id, const uint8_t*, size_t, void* user_data) {
             auto* si = static_cast<ServerInfo*>(user_data);
-            if (id == protocol::PacketId::Connected) si->got_connected.store(true);
-            if (id == protocol::PacketId::SyncNetwork) si->got_sync_network.store(true);
+            if (id == protocol::PacketId::Connected) {
+                si->got_connected.store(true);
+            }
+            if (id == protocol::PacketId::SyncNetwork) {
+                si->got_sync_network.store(true);
+            }
         },
         &info);
 
@@ -910,15 +1235,20 @@ bool test_receive_connected_sync_network() {
     return true;
 }
 
+/**
+ * @brief The client stays Ready while the server pings and the client echoes.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_server_ping_echo() {
     // The server sends Pings (requester=0), our client echoes them back
-    // in handle_packet(). We verify this doesn't crash and the connection stays alive.
+    // in handle_packet(). We verify this doesn't crash and the connection stays
+    // alive.
     socket_init();
     RyuLdnClient client(make_config());
     ASSERT_TRUE(connect_ready(client));
 
-    // Wait long enough for server to send a ping (server pings every ~30s in practice,
-    // but we just verify the connection stays stable)
+    // Wait long enough for server to send a ping (server pings every ~30s in
+    // practice, but we just verify the connection stays stable)
     poll_for(client, 2000);
     ASSERT_TRUE(client.is_ready());
 
@@ -931,13 +1261,19 @@ bool test_server_ping_echo() {
 // SECTION 8: Multi-client scenarios
 // ============================================================================
 
+/**
+ * @brief A host creates a network, a station scans and connects, and both keep
+ *        running 3 s without failure.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_host_station_full_flow() {
     socket_init();
 
     RyuLdnClient host(make_config());
     ASSERT_TRUE(connect_ready(host));
 
-    ClientOpResult host_result = host.send_create_access_point(make_ap_request("FlowHost"), nullptr, 0);
+    ClientOpResult host_result =
+        host.send_create_access_point(make_ap_request("FlowHost"), nullptr, 0);
     ASSERT_EQ(host_result, ClientOpResult::Success);
     poll_for(host, 2000);
 
@@ -951,8 +1287,10 @@ bool test_host_station_full_flow() {
     protocol::ConnectRequest connect_req{};
     connect_req.security_config.security_mode = 1;
     connect_req.security_config.passphrase_size = 0;
-    std::strncpy(connect_req.user_config.user_name, "FlowStation",
-                 sizeof(connect_req.user_config.user_name) - 1);
+    std::strncpy(
+        connect_req.user_config.user_name,
+        "FlowStation",
+        sizeof(connect_req.user_config.user_name) - 1);
     connect_req.local_communication_version = 1;
     std::memset(&connect_req.network_info, 0, sizeof(connect_req.network_info));
     connect_req.network_info.network_id.intent_id.local_communication_id =
@@ -966,8 +1304,11 @@ bool test_host_station_full_flow() {
         station.update(now_ms());
         host.update(now_ms());
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - t0).count();
-        if (elapsed >= 3000) break;
+                           std::chrono::steady_clock::now() - t0)
+                           .count();
+        if (elapsed >= 3000) {
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
@@ -977,6 +1318,10 @@ bool test_host_station_full_flow() {
     return true;
 }
 
+/**
+ * @brief A host and two scanning stations all stay Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_three_clients_scan() {
     socket_init();
 
@@ -1006,6 +1351,11 @@ bool test_three_clients_scan() {
     return true;
 }
 
+/**
+ * @brief Connecting with a passphrase ends in Ready, Error or Disconnected
+ *        without crashing.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_passphrase_connect() {
     socket_init();
     RyuLdnClientConfig cfg = make_config();
@@ -1015,9 +1365,10 @@ bool test_passphrase_connect() {
     client.connect(g_host, g_port);
     (void)wait_until_ready(client, 8000);
     // Server behavior depends on passphrase matching — just verify no crash
-    ASSERT_TRUE(client.get_state() == ConnectionState::Ready ||
-                client.get_state() == ConnectionState::Error ||
-                client.get_state() == ConnectionState::Disconnected);
+    const bool state_ok = client.get_state() == ConnectionState::Ready ||
+                          client.get_state() == ConnectionState::Error ||
+                          client.get_state() == ConnectionState::Disconnected;
+    ASSERT_TRUE(state_ok);
 
     client.disconnect();
     socket_exit();
@@ -1028,6 +1379,11 @@ bool test_passphrase_connect() {
 // SECTION 9: Error & Edge Cases
 // ============================================================================
 
+/**
+ * @brief connect() to a port with no listener returns Success, ConnectionFailed
+ *        or InvalidState without crashing.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connect_to_invalid_port() {
     socket_init();
     RyuLdnClientConfig cfg;
@@ -1039,14 +1395,19 @@ bool test_connect_to_invalid_port() {
 
     ClientOpResult result = client.connect(g_host, 19999);
     // Should fail or auto-transition, but not crash
-    ASSERT_TRUE(result == ClientOpResult::Success ||
-                result == ClientOpResult::ConnectionFailed ||
-                result == ClientOpResult::InvalidState);
+    const bool result_ok = result == ClientOpResult::Success ||
+                           result == ClientOpResult::ConnectionFailed ||
+                           result == ClientOpResult::InvalidState;
+    ASSERT_TRUE(result_ok);
 
     socket_exit();
     return true;
 }
 
+/**
+ * @brief Five consecutive send_scan() calls all succeed.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_multiple_scan_requests() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -1063,6 +1424,11 @@ bool test_multiple_scan_requests() {
     return true;
 }
 
+/**
+ * @brief Move-constructing a connected client leaves a usable client that can
+ *        disconnect.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_move_constructor() {
     socket_init();
     RyuLdnClient client(make_config());
@@ -1084,6 +1450,10 @@ bool test_move_constructor() {
     return true;
 }
 
+/**
+ * @brief Move-assigning a connected client to another leaves a usable target.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_move_assignment() {
     socket_init();
     RyuLdnClient client1(make_config());
@@ -1100,53 +1470,109 @@ bool test_move_assignment() {
     return true;
 }
 
+/**
+ * @brief client_op_result_to_string() returns a non-null label for every
+ *        ClientOpResult.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_client_op_result_to_string_all() {
     ASSERT_TRUE(client_op_result_to_string(ClientOpResult::Success) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::NotConnected) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::NotReady) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::AlreadyConnected) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::ConnectionFailed) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::SendFailed) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::InvalidState) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::NotConnected) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::NotReady) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::AlreadyConnected) !=
+        nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::ConnectionFailed) !=
+        nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::SendFailed) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::InvalidState) != nullptr);
     ASSERT_TRUE(client_op_result_to_string(ClientOpResult::Timeout) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::ProtocolError) != nullptr);
-    ASSERT_TRUE(client_op_result_to_string(ClientOpResult::InternalError) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::ProtocolError) != nullptr);
+    ASSERT_TRUE(
+        client_op_result_to_string(ClientOpResult::InternalError) != nullptr);
     return true;
 }
-
 
 // ============================================================================
 // SECTION 10: Server Drop Tests (kill/restart Docker container)
 // ============================================================================
 
 // Resolve docker-compose file path: env var takes priority, else relative path
+/**
+ * @brief Find the docker compose file that runs the server.
+ * @return INTEGRATION_COMPOSE_FILE when set and non-empty, otherwise
+ *         "docker-compose.yml".
+ */
 static std::string get_compose_file() {
     const char* env = std::getenv("INTEGRATION_COMPOSE_FILE");
-    if (env && env[0] != '\0') return std::string(env);
-    return "docker-compose.yml";
+    if (env != nullptr && env[0] != '\0') {
+        return {env};
+    }
+    return {"docker-compose.yml"};
 }
 
 // Execute a shell command, return its exit code (or -1 on signal)
+/**
+ * @brief Run a shell command.
+ * @param cmd Command line passed to std::system().
+ * @return Its exit code, or -1 when it did not exit normally.
+ */
 static int run_shell(const char* cmd) {
     int ret = std::system(cmd);
-    if (WIFEXITED(ret)) return WEXITSTATUS(ret);
+    if (WIFEXITED(ret)) {
+        return WEXITSTATUS(ret);
+    }
     return -1;
 }
 
-// Check if a TCP port is reachable (python3)
+// Check if a TCP port is served (python3)
+/**
+ * @brief Check with python3 whether a TCP port is served by the application.
+ *
+ * A restarting container accepts the connection through the Docker port
+ * proxy and closes it again until the application listens (observed for
+ * about 0.5 s after `docker compose start`). A connect alone therefore
+ * proves nothing: the connection must also stay open for one second without
+ * the peer sending or closing anything (the server never speaks first).
+ *
+ * @param host Host to connect to.
+ * @param port Port to connect to.
+ * @param timeout_s Connection timeout in seconds.
+ * @return true when the connection succeeded and was not closed by the peer.
+ */
 static bool tcp_check(const char* host, uint16_t port, int timeout_s = 5) {
-    std::string cmd = "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(" +
-                      std::to_string(timeout_s) + "); r=s.connect_ex(('" + host + "'," +
-                      std::to_string(port) + ")); s.close(); sys.exit(0 if r==0 else 1)\" 2>/dev/null";
+    std::string cmd =
+        "python3 -c \"import select,socket,sys; s=socket.socket(); "
+        "s.settimeout(" +
+        std::to_string(timeout_s) + "); r=s.connect_ex(('" + host + "'," +
+        std::to_string(port) +
+        ")); ok=r==0 and not select.select([s],[],[],1)[0]; s.close(); "
+        "sys.exit(0 if ok else 1)\" 2>/dev/null";
     return run_shell(cmd.c_str()) == 0;
 }
 
-// Kill the ldn-server container via docker compose (SIGKILL for immediate termination)
+// Kill the ldn-server container via docker compose (SIGKILL for immediate
+// termination)
+/**
+ * @brief SIGKILL the ldn-server container through docker compose.
+ *
+ * Falls back to the default compose file when the configured one fails.
+ *
+ * @return true when docker compose reported success.
+ */
 static bool kill_server() {
     std::string compose = get_compose_file();
     // Use kill (SIGKILL) for immediate process termination — stop (SIGTERM)
-    // lets the .NET server drain slowly and the TCP FIN may not arrive for seconds
-    std::string cmd = "docker compose -f '" + compose + "' kill ldn-server 2>/dev/null";
+    // lets the .NET server drain slowly and the TCP FIN may not arrive for
+    // seconds
+    std::string cmd =
+        "docker compose -f '" + compose + "' kill ldn-server 2>/dev/null";
     printf("(killing server...) ");
     fflush(stdout);
     int rc = run_shell(cmd.c_str());
@@ -1158,9 +1584,18 @@ static bool kill_server() {
 }
 
 // Restart the ldn-server container, then verify it is accepting TCP connections
+/**
+ * @brief Start the ldn-server container and wait for its TCP port.
+ *
+ * Tries start, then start without -f, then up -d, then polls once per second.
+ *
+ * @param max_wait_s Maximum wait in seconds.
+ * @return true when the port accepted a connection in time.
+ */
 static bool restart_server(int max_wait_s = 30) {
     std::string compose = get_compose_file();
-    std::string cmd = "docker compose -f '" + compose + "' start ldn-server 2>/dev/null";
+    std::string cmd =
+        "docker compose -f '" + compose + "' start ldn-server 2>/dev/null";
     printf("(restarting server...) ");
     fflush(stdout);
     int rc = run_shell(cmd.c_str());
@@ -1169,17 +1604,24 @@ static bool restart_server(int max_wait_s = 30) {
         rc = run_shell(cmd.c_str());
     }
     if (rc != 0) {
-        cmd = "docker compose -f '" + compose + "' up -d ldn-server 2>/dev/null";
-        rc = run_shell(cmd.c_str());
+        cmd =
+            "docker compose -f '" + compose + "' up -d ldn-server 2>/dev/null";
+        static_cast<void>(run_shell(cmd.c_str()));
     }
     for (int i = 0; i < max_wait_s; i++) {
-        if (tcp_check(g_host, g_port, 2)) return true;
+        if (tcp_check(g_host, g_port, 2)) {
+            return true;
+        }
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     return false;
 }
 
 // Force-send a ping to trigger ConnectionLost detection on a dead connection
+/**
+ * @brief Send five pings so a dead connection is noticed.
+ * @param client Client whose connection is suspected lost.
+ */
 static void force_send_to_detect_loss(RyuLdnClient& client) {
     for (int i = 0; i < 5; i++) {
         client.send_ping();
@@ -1188,6 +1630,11 @@ static void force_send_to_detect_loss(RyuLdnClient& client) {
     }
 }
 
+/**
+ * @brief With auto-reconnect, killing the server makes the client leave Ready
+ * or report Backoff, Disconnected or Error.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connection_lost_during_ready() {
     // auto_reconnect: kill server, verify Backoff/Disconnected transition
     socket_init();
@@ -1219,8 +1666,7 @@ bool test_connection_lost_during_ready() {
     poll_for(client, 2000);
 
     ConnectionState state = client.get_state();
-    bool lost = (state != ConnectionState::Ready ||
-                 saw_connection_lost.load());
+    bool lost = (state != ConnectionState::Ready || saw_connection_lost.load());
     // If still ready, push harder
     if (!lost) {
         for (int attempt = 0; attempt < 10 && !lost; attempt++) {
@@ -1228,7 +1674,8 @@ bool test_connection_lost_during_ready() {
             client.update(now_ms());
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             state = client.get_state();
-            lost = (state != ConnectionState::Ready || saw_connection_lost.load());
+            lost =
+                (state != ConnectionState::Ready || saw_connection_lost.load());
         }
     }
     ASSERT_TRUE(lost);
@@ -1239,6 +1686,11 @@ bool test_connection_lost_during_ready() {
     return true;
 }
 
+/**
+ * @brief Without auto-reconnect, killing the server makes the client leave
+ * Ready and never enter Retrying.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_connection_lost_no_auto_reconnect() {
     // NO auto_reconnect: kill server, verify client stays in Backoff (no retry)
     // and never reaches Retrying state
@@ -1265,7 +1717,8 @@ bool test_connection_lost_no_auto_reconnect() {
     force_send_to_detect_loss(client);
     poll_for(client, 2000);
 
-    // Without auto_reconnect, client should NOT attempt retry (no Retrying state)
+    // Without auto_reconnect, client should NOT attempt retry (no Retrying
+    // state)
     ASSERT_FALSE(saw_retrying.load());
 
     // Client should no longer be ready
@@ -1286,6 +1739,11 @@ bool test_connection_lost_no_auto_reconnect() {
     return true;
 }
 
+/**
+ * @brief After the server is killed, send_scan() fails or the client leaves
+ *        Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_send_fails_after_server_drop() {
     // Kill server, verify send_* returns SendFailed or client leaves Ready
     socket_init();
@@ -1300,12 +1758,14 @@ bool test_send_fails_after_server_drop() {
 
     // Send should fail or client should no longer be Ready
     ClientOpResult result = client.send_scan(make_scan_filter());
-    bool send_failed = (result != ClientOpResult::Success || !client.is_ready());
+    bool send_failed =
+        (result != ClientOpResult::Success || !client.is_ready());
     if (!send_failed) {
         for (int attempt = 0; attempt < 10 && !send_failed; attempt++) {
             result = client.send_scan(make_scan_filter());
             client.update(now_ms());
-            send_failed = (result != ClientOpResult::Success || !client.is_ready());
+            send_failed =
+                (result != ClientOpResult::Success || !client.is_ready());
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
     }
@@ -1317,6 +1777,11 @@ bool test_send_fails_after_server_drop() {
     return true;
 }
 
+/**
+ * @brief With the server down and auto-reconnect on, the client enters Backoff
+ * at least once and recovers after the restart.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_try_connect_failure_then_backoff() {
     // Kill server, try_connect() failure leads to Backoff
     socket_init();
@@ -1346,7 +1811,8 @@ bool test_try_connect_failure_then_backoff() {
 
     // Should have entered Backoff at least once (try_connect failed)
     if (backoff_count.load() == 0) {
-        for (int attempt = 0; attempt < 10 && backoff_count.load() == 0; attempt++) {
+        for (int attempt = 0; attempt < 10 && backoff_count.load() == 0;
+             attempt++) {
             client.send_scan(make_scan_filter());
             client.update(now_ms());
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -1362,6 +1828,11 @@ bool test_try_connect_failure_then_backoff() {
     return true;
 }
 
+/**
+ * @brief With the server down, the client goes through Backoff then Retrying
+ * and recovers after the restart.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_backoff_expiry_and_retry() {
     // Kill server, verify Backoff -> Retrying -> try_connect cycle
     socket_init();
@@ -1374,17 +1845,23 @@ bool test_backoff_expiry_and_retry() {
     RyuLdnClient client(cfg);
 
     struct BoffFlags {
-        std::atomic<int>& boff;
-        std::atomic<int>& retry;
-    } flags{backoff_count, retrying_count};
+        std::atomic<int>* boff;
+        std::atomic<int>* retry;
+    } flags{.boff = &backoff_count, .retry = &retrying_count};
 
     client.set_state_callback(
-        [](ConnectionState old_state, ConnectionState new_state, void* user_data) {
+        [](ConnectionState old_state,
+           ConnectionState new_state,
+           void* user_data) {
             auto* f = static_cast<BoffFlags*>(user_data);
-            if (new_state == ConnectionState::Backoff) f->boff++;
+            if (new_state == ConnectionState::Backoff) {
+                (*f->boff)++;
+            }
             // Retrying is a transient state — detect it from old_state
             if (old_state == ConnectionState::Retrying ||
-                new_state == ConnectionState::Retrying) f->retry++;
+                new_state == ConnectionState::Retrying) {
+                (*f->retry)++;
+            }
         },
         &flags);
 
@@ -1398,7 +1875,8 @@ bool test_backoff_expiry_and_retry() {
 
     // Should have entered Backoff at least once
     if (backoff_count.load() == 0) {
-        for (int attempt = 0; attempt < 10 && backoff_count.load() == 0; attempt++) {
+        for (int attempt = 0; attempt < 10 && backoff_count.load() == 0;
+             attempt++) {
             client.send_scan(make_scan_filter());
             client.update(now_ms());
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -1422,6 +1900,11 @@ bool test_backoff_expiry_and_retry() {
     return true;
 }
 
+/**
+ * @brief After a SIGKILL of the server the client reports Disconnected or
+ * Error, or leaves Ready.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_server_initiated_disconnect() {
     // Kill server with SIGKILL, verify client detects disconnect
     socket_init();
@@ -1443,7 +1926,8 @@ bool test_server_initiated_disconnect() {
     ASSERT_TRUE(connect_ready(client));
 
     std::string compose = get_compose_file();
-    std::string cmd = "docker compose -f '" + compose + "' kill ldn-server 2>/dev/null";
+    std::string cmd =
+        "docker compose -f '" + compose + "' kill ldn-server 2>/dev/null";
     printf("(killing server (SIGKILL)...) ");
     fflush(stdout);
     run_shell(cmd.c_str());
@@ -1460,7 +1944,8 @@ bool test_server_initiated_disconnect() {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
     }
-    ASSERT_TRUE(saw_disconnect_callback.load() || !client.is_ready());
+    const bool drop_seen = saw_disconnect_callback.load() || !client.is_ready();
+    ASSERT_TRUE(drop_seen);
 
     ASSERT_TRUE(restart_server(30));
     client.disconnect();
@@ -1472,6 +1957,10 @@ bool test_server_initiated_disconnect() {
 // SECTION: TcpClient Direct Tests
 // ============================================================================
 
+/**
+ * @brief A second TcpClient::connect() returns AlreadyConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_connect_already_connected() {
     socket_init();
     TcpClient tc;
@@ -1487,6 +1976,11 @@ bool test_tcpclient_connect_already_connected() {
     return true;
 }
 
+/**
+ * @brief Every TcpClient send method and set_nodelay() return NotConnected on
+ * an unconnected client.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_send_not_connected() {
     TcpClient tc;
     ClientResult r = tc.send_packet(protocol::PacketId::Scan, nullptr, 0);
@@ -1556,6 +2050,10 @@ bool test_tcpclient_send_not_connected() {
     return true;
 }
 
+/**
+ * @brief A move-constructed TcpClient keeps the connection.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_move_constructor() {
     socket_init();
     TcpClient tc1;
@@ -1572,6 +2070,10 @@ bool test_tcpclient_move_constructor() {
     return true;
 }
 
+/**
+ * @brief A move-assigned TcpClient keeps the connection.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_move_assignment() {
     socket_init();
     TcpClient tc1;
@@ -1587,16 +2089,25 @@ bool test_tcpclient_move_assignment() {
     return true;
 }
 
+/**
+ * @brief receive_packet() on an unconnected TcpClient returns NotConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_receive_packet_not_connected() {
     TcpClient tc;
     protocol::PacketId type;
     uint8_t buf[1024];
     size_t payload_size = 0;
-    ClientResult r = tc.receive_packet(type, buf, sizeof(buf), payload_size, 100);
+    ClientResult r =
+        tc.receive_packet(type, buf, sizeof(buf), payload_size, 100);
     ASSERT_EQ(r, ClientResult::NotConnected);
     return true;
 }
 
+/**
+ * @brief has_packet_available() is false on an unconnected TcpClient.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_has_packet_available_not_connected() {
     TcpClient tc;
     // has_packet_available returns false when not connected
@@ -1605,6 +2116,10 @@ bool test_tcpclient_has_packet_available_not_connected() {
     return true;
 }
 
+/**
+ * @brief set_nodelay() succeeds for true and false on a connected TcpClient.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_set_nodelay_connected() {
     socket_init();
     TcpClient tc;
@@ -1623,6 +2138,11 @@ bool test_tcpclient_set_nodelay_connected() {
     return true;
 }
 
+/**
+ * @brief After a passphrase and initialize message, a received packet is
+ *        Connected or Initialize, or the wait times out.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_tcpclient_send_receive_roundtrip() {
     socket_init();
     TcpClient tc;
@@ -1647,15 +2167,20 @@ bool test_tcpclient_send_receive_roundtrip() {
         r = tc.receive_packet(type, buf, sizeof(buf), payload_size, 500);
         if (r == ClientResult::Success) {
             // Got a packet — verify it's a valid type
-            ASSERT_TRUE(type == protocol::PacketId::Connected ||
-                        type == protocol::PacketId::Initialize);
+            const bool type_ok = type == protocol::PacketId::Connected ||
+                                 type == protocol::PacketId::Initialize;
+            ASSERT_TRUE(type_ok);
             break;
         }
-        if (r == ClientResult::ConnectionLost) break;
+        if (r == ClientResult::ConnectionLost) {
+            break;
+        }
     }
     // Success if we got any packet, or Timeout is acceptable
     // (server may not respond without proper handshake sequence)
-    ASSERT_TRUE(r == ClientResult::Success || r == ClientResult::Timeout);
+    const bool recv_ok =
+        r == ClientResult::Success || r == ClientResult::Timeout;
+    ASSERT_TRUE(recv_ok);
 
     tc.disconnect();
     socket_exit();
@@ -1666,6 +2191,11 @@ bool test_tcpclient_send_receive_roundtrip() {
 // SECTION: Socket Direct Tests
 // ============================================================================
 
+/**
+ * @brief socket_init() is idempotent and socket_exit() uninitialises, twice
+ *        safely.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_init_exit() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     // Double init is idempotent
@@ -1677,6 +2207,10 @@ bool test_socket_init_exit() {
     return true;
 }
 
+/**
+ * @brief Socket connects, becomes connected and valid, and close() resets both.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_disconnect() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1696,6 +2230,10 @@ bool test_socket_connect_disconnect() {
     return true;
 }
 
+/**
+ * @brief A second Socket::connect() returns AlreadyConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_already_connected() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1711,6 +2249,10 @@ bool test_socket_connect_already_connected() {
     return true;
 }
 
+/**
+ * @brief An empty and an unresolvable host name give InvalidAddress.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_invalid_host() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1726,6 +2268,10 @@ bool test_socket_connect_invalid_host() {
     return true;
 }
 
+/**
+ * @brief Socket::connect() returns NotInitialized after socket_exit().
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_not_initialized() {
     socket_exit();  // Ensure not initialized
     Socket sock;
@@ -1735,6 +2281,11 @@ bool test_socket_not_initialized() {
     return true;
 }
 
+/**
+ * @brief send(), send_all() and recv() on an unconnected Socket return
+ *        NotConnected.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_send_recv_not_connected() {
     Socket sock;
     uint8_t data[] = {0x01, 0x02, 0x03};
@@ -1752,40 +2303,53 @@ bool test_socket_send_recv_not_connected() {
     return true;
 }
 
+/**
+ * @brief A move-constructed Socket stays connected and empties the source.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_move_constructor() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
-    Socket sock1;
-    SocketResult r = sock1.connect(g_host, g_port, 3000);
+    const auto sock1 = std::make_unique<Socket>();
+    SocketResult r = sock1->connect(g_host, g_port, 3000);
     ASSERT_EQ(r, SocketResult::Success);
-    ASSERT_TRUE(sock1.is_connected());
+    ASSERT_TRUE(sock1->is_connected());
 
-    Socket sock2 = std::move(sock1);
+    Socket sock2 = std::move(*sock1);
     ASSERT_TRUE(sock2.is_connected());
     // sock1 moved-from
-    ASSERT_FALSE(sock1.is_valid());
-    ASSERT_FALSE(sock1.is_connected());
+    ASSERT_FALSE(sock1->is_valid());
+    ASSERT_FALSE(sock1->is_connected());
 
     sock2.close();
     socket_exit();
     return true;
 }
 
+/**
+ * @brief A move-assigned Socket stays connected and empties the source.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_move_assignment() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
-    Socket sock1;
-    SocketResult r = sock1.connect(g_host, g_port, 3000);
+    const auto sock1 = std::make_unique<Socket>();
+    SocketResult r = sock1->connect(g_host, g_port, 3000);
     ASSERT_EQ(r, SocketResult::Success);
 
     Socket sock2;
-    sock2 = std::move(sock1);
+    sock2 = std::move(*sock1);
     ASSERT_TRUE(sock2.is_connected());
-    ASSERT_FALSE(sock1.is_valid());
+    ASSERT_FALSE(sock1->is_valid());
 
     sock2.close();
     socket_exit();
     return true;
 }
 
+/**
+ * @brief send_all() sends a Passphrase packet and recv() then succeeds or times
+ *        out.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_send_all_connected() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1813,13 +2377,19 @@ bool test_socket_send_all_connected() {
     size_t received = 0;
     r = sock.recv(recv_buf, sizeof(recv_buf), received, 2000);
     // Server may reply or timeout — just verify no crash
-    ASSERT_TRUE(r == SocketResult::Success || r == SocketResult::Timeout);
+    const bool recv_ok =
+        r == SocketResult::Success || r == SocketResult::Timeout;
+    ASSERT_TRUE(recv_ok);
 
     sock.close();
     socket_exit();
     return true;
 }
 
+/**
+ * @brief set_nodelay() succeeds for true and false on a connected Socket.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_set_nodelay_connected() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1837,6 +2407,11 @@ bool test_socket_set_nodelay_connected() {
     return true;
 }
 
+/**
+ * @brief set_recv_buffer_size() and set_send_buffer_size() succeed on a
+ * connected Socket.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_set_buffer_sizes_connected() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1854,6 +2429,11 @@ bool test_socket_set_buffer_sizes_connected() {
     return true;
 }
 
+/**
+ * @brief Socket option setters return SocketError on a Socket without a
+ *        descriptor.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_set_options_invalid_fd() {
     Socket sock;  // no fd
     ASSERT_FALSE(sock.is_valid());
@@ -1872,6 +2452,10 @@ bool test_socket_set_options_invalid_fd() {
     return true;
 }
 
+/**
+ * @brief A numeric IPv4 host connects.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_ipv4_connect() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1885,6 +2469,10 @@ bool test_socket_ipv4_connect() {
     return true;
 }
 
+/**
+ * @brief recv() with a 100 ms timeout returns Timeout or Success.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_timeout() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1896,13 +2484,19 @@ bool test_socket_recv_timeout() {
     size_t received = 0;
     r = sock.recv(buf, sizeof(buf), received, 100);
     // Timeout is expected since we haven't sent any handshake
-    ASSERT_TRUE(r == SocketResult::Timeout || r == SocketResult::Success);
+    const bool recv_ok =
+        r == SocketResult::Timeout || r == SocketResult::Success;
+    ASSERT_TRUE(recv_ok);
 
     sock.close();
     socket_exit();
     return true;
 }
 
+/**
+ * @brief Calling close() twice is safe.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_double_close() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -1922,6 +2516,10 @@ bool test_socket_double_close() {
     return true;
 }
 
+/**
+ * @brief recv() with a 0 ms timeout returns WouldBlock, Timeout or Success.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_nonblocking() {
     // recv(timeout_ms=0) exercises the non-blocking recv path
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -1934,14 +2532,21 @@ bool test_socket_recv_nonblocking() {
     // Non-blocking recv — server hasn't sent anything yet, so this should
     // return WouldBlock or Timeout immediately
     r = sock.recv(buf, sizeof(buf), received, 0);
-    ASSERT_TRUE(r == SocketResult::WouldBlock || r == SocketResult::Timeout
-                || r == SocketResult::Success);
+    const bool recv_ok = r == SocketResult::WouldBlock ||
+                         r == SocketResult::Timeout ||
+                         r == SocketResult::Success;
+    ASSERT_TRUE(recv_ok);
 
     sock.close();
     socket_exit();
     return true;
 }
 
+/**
+ * @brief After sending a Ping, a blocking recv() returns data, a timeout, a
+ * reset or Closed.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_blocking() {
     // recv(timeout_ms=-1) exercises the blocking recv path
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -1969,9 +2574,10 @@ bool test_socket_recv_blocking() {
     uint8_t recv_buf[4096];
     size_t received = 0;
     r = sock.recv(recv_buf, sizeof(recv_buf), received, -1);
-    ASSERT_TRUE(r == SocketResult::Success || r == SocketResult::Timeout
-                || r == SocketResult::ConnectionReset
-                || r == SocketResult::Closed);
+    const bool recv_ok =
+        r == SocketResult::Success || r == SocketResult::Timeout ||
+        r == SocketResult::ConnectionReset || r == SocketResult::Closed;
+    ASSERT_TRUE(recv_ok);
     if (r == SocketResult::Success) {
         ASSERT_TRUE(received > 0);
     }
@@ -1981,6 +2587,10 @@ bool test_socket_recv_blocking() {
     return true;
 }
 
+/**
+ * @brief send_all() of zero bytes succeeds.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_send_zero_bytes() {
     // Exercise send_all with empty data — though this should succeed trivially
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -1990,8 +2600,8 @@ bool test_socket_send_zero_bytes() {
 
     // send_all with 0 bytes is a no-op
     r = sock.send_all(nullptr, 0);
-    // This returns Success because the while loop condition (total_sent < 0) is false
-    // Actually size_t(0) - so loop doesn't execute, returns Success
+    // This returns Success because the while loop condition (total_sent < 0) is
+    // false Actually size_t(0) - so loop doesn't execute, returns Success
     ASSERT_EQ(r, SocketResult::Success);
 
     sock.close();
@@ -1999,6 +2609,10 @@ bool test_socket_send_zero_bytes() {
     return true;
 }
 
+/**
+ * @brief is_valid() is false, true after connect and false after close.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_is_valid_after_connect() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2015,6 +2629,10 @@ bool test_socket_is_valid_after_connect() {
     return true;
 }
 
+/**
+ * @brief Socket::connect() with a null host returns InvalidAddress.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_null_host() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2024,6 +2642,10 @@ bool test_socket_connect_null_host() {
     return true;
 }
 
+/**
+ * @brief Socket::connect() with an empty host returns InvalidAddress.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_empty_host() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2033,6 +2655,10 @@ bool test_socket_connect_empty_host() {
     return true;
 }
 
+/**
+ * @brief Connecting to 127.0.0.1 port 1 (nothing listening) must fail.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_port_zero() {
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
@@ -2040,28 +2666,40 @@ bool test_socket_connect_port_zero() {
     SocketResult r = sock.connect("127.0.0.1", 1, 2000);
     // Accept any non-success result; the important thing is no crash
     // and the result is a reasonable error code
-    ASSERT_TRUE(r != SocketResult::Success || true);  // always passes, no crash = success
+    ASSERT_TRUE(r != SocketResult::Success);
     sock.close();
     socket_exit();
     return true;
 }
 
+/**
+ * @brief A blocking connect to a closed local port returns ConnectionRefused,
+ *        Timeout or HostUnreachable.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_connect_connection_refused() {
-    // Connect to a port that nobody listens on — exercises errno_to_result(ECONNREFUSED)
-    // and the immediate-failure path in Socket::connect()
+    // Connect to a port that nobody listens on — exercises
+    // errno_to_result(ECONNREFUSED) and the immediate-failure path in
+    // Socket::connect()
     ASSERT_TRUE(socket_init() == SocketResult::Success);
     Socket sock;
-    SocketResult r = sock.connect("127.0.0.1", 1, 0);  // timeout_ms=0 = blocking mode
+    SocketResult r =
+        sock.connect("127.0.0.1", 1, 0);  // timeout_ms=0 = blocking mode
     // In blocking mode, ECONNREFUSED goes through the else branch at line ~470
     // which calls errno_to_result(ECONNREFUSED)
-    ASSERT_TRUE(r == SocketResult::ConnectionRefused ||
-                r == SocketResult::Timeout ||
-                r == SocketResult::HostUnreachable);
+    const bool refused = r == SocketResult::ConnectionRefused ||
+                         r == SocketResult::Timeout ||
+                         r == SocketResult::HostUnreachable;
+    ASSERT_TRUE(refused);
     sock.close();
     socket_exit();
     return true;
 }
 
+/**
+ * @brief After sending a Ping, a blocking recv() returns data.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_blocking_with_data() {
     // Exercise recv(timeout_ms < 0) blocking path with actual data
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2096,6 +2734,11 @@ bool test_socket_recv_blocking_with_data() {
     return true;
 }
 
+/**
+ * @brief After a blocking recv(), a second Ping followed by recv() with 0 ms
+ * runs without failure; its result is not asserted.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_recv_zero_timeout_with_data() {
     // Exercise recv(timeout_ms == 0) non-blocking path when data IS available
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2130,8 +2773,8 @@ bool test_socket_recv_zero_timeout_with_data() {
     }
     ASSERT_TRUE(received > 0);
 
-    // Now try non-blocking recv (timeout_ms == 0) — will return WouldBlock since we
-    // already consumed the data. This exercises the recv(0) code path.
+    // Now try non-blocking recv (timeout_ms == 0) — will return WouldBlock
+    // since we already consumed the data. This exercises the recv(0) code path.
     // Send another ping and immediately recv(0) — might catch the response.
     r = sock.send_all(sendbuf, sizeof(hdr) + sizeof(ping));
     if (r != SocketResult::Success) {
@@ -2151,6 +2794,11 @@ bool test_socket_recv_zero_timeout_with_data() {
     return true;
 }
 
+/**
+ * @brief A second connect() on a connected Socket returns AlreadyConnected
+ *        instead of creating a new descriptor.
+ * @return true when all assertions hold, false otherwise.
+ */
 bool test_socket_create_twice() {
     // Exercise the m_fd >= 0 early return in create()
     ASSERT_TRUE(socket_init() == SocketResult::Success);
@@ -2170,6 +2818,210 @@ bool test_socket_create_twice() {
 // Main
 // ============================================================================
 
+/// One named bool-returning test function.
+struct TestCase {
+    /// Function name, printed before the run.
+    const char* name;
+    /// Test entry point; returns true on success.
+    bool (*run)();
+};
+
+/// A titled group of tests run in order.
+struct TestSection {
+    /// Heading printed before the group.
+    const char* title;
+    /// Tests of the group.
+    std::vector<TestCase> tests;
+};
+
+/**
+ * @brief Run one test, print PASS and count the result.
+ * @param tc Test to run.
+ */
+static void run_case(const TestCase& tc) {
+    printf("  [TEST] %s... ", tc.name);
+    fflush(stdout);
+    if (tc.run()) {
+        printf("PASS\n");
+        g_tests_passed++;
+    } else {
+        g_tests_failed++;
+    }
+}
+
+/**
+ * @brief Every test of the suite, grouped by section, in execution order.
+ * @return The sections.
+ */
+static std::vector<TestSection> all_sections() {
+    return {
+        {"Construction & Configuration",
+         {
+             {"test_default_config_values", test_default_config_values},
+             {"test_config_from_default_constructor",
+              test_config_from_default_constructor},
+             {"test_config_from_custom_constructor",
+              test_config_from_custom_constructor},
+             {"test_set_config_while_disconnected",
+              test_set_config_while_disconnected},
+             {"test_config_change_then_connect",
+              test_config_change_then_connect},
+             {"test_passphrase_config", test_passphrase_config},
+         }},
+        {"Connection & Handshake",
+         {
+             {"test_connect_handshake", test_connect_handshake},
+             {"test_connect_parameterless", test_connect_parameterless},
+             {"test_connect_already_connected", test_connect_already_connected},
+             {"test_state_transitions_connect", test_state_transitions_connect},
+             {"test_disconnect_reconnect", test_disconnect_reconnect},
+             {"test_sequential_connect_disconnect_cycles",
+              test_sequential_connect_disconnect_cycles},
+             {"test_double_disconnect", test_double_disconnect},
+             {"test_multiple_clients_same_server",
+              test_multiple_clients_same_server},
+         }},
+        {"Getters & State Queries",
+         {
+             {"test_getters_while_connected", test_getters_while_connected},
+             {"test_getters_while_disconnected",
+              test_getters_while_disconnected},
+             {"test_get_last_rtt_initial", test_get_last_rtt_initial},
+         }},
+        {"Packet Sending (all methods while Ready)",
+         {
+             {"test_send_scan", test_send_scan},
+             {"test_send_create_access_point", test_send_create_access_point},
+             {"test_send_create_access_point_with_advertise",
+              test_send_create_access_point_with_advertise},
+             {"test_send_connect", test_send_connect},
+             {"test_send_create_access_point_private",
+              test_send_create_access_point_private},
+             {"test_send_connect_private", test_send_connect_private},
+             {"test_send_proxy_data", test_send_proxy_data},
+             {"test_send_ping", test_send_ping},
+             {"test_send_ping_response", test_send_ping_response},
+             {"test_send_disconnect_network", test_send_disconnect_network},
+             {"test_send_set_accept_policy", test_send_set_accept_policy},
+             {"test_send_set_advertise_data", test_send_set_advertise_data},
+             {"test_send_reject", test_send_reject},
+             {"test_send_raw_packet", test_send_raw_packet},
+         }},
+        {"Packet Sending (Not Connected)",
+         {
+             {"test_send_not_connected", test_send_not_connected},
+         }},
+        {"Callbacks",
+         {
+             {"test_state_callback_lifecycle", test_state_callback_lifecycle},
+             {"test_state_callback_null", test_state_callback_null},
+             {"test_packet_callback_receives_data",
+              test_packet_callback_receives_data},
+             {"test_packet_callback_null_no_crash",
+              test_packet_callback_null_no_crash},
+         }},
+        {"Packet Reception",
+         {
+             {"test_receive_scan_reply", test_receive_scan_reply},
+             {"test_receive_connected_sync_network",
+              test_receive_connected_sync_network},
+             {"test_server_ping_echo", test_server_ping_echo},
+         }},
+        {"Multi-client",
+         {
+             {"test_host_station_full_flow", test_host_station_full_flow},
+             {"test_three_clients_scan", test_three_clients_scan},
+             {"test_passphrase_connect", test_passphrase_connect},
+         }},
+        {"Error & Edge Cases",
+         {
+             {"test_connect_to_invalid_port", test_connect_to_invalid_port},
+             {"test_multiple_scan_requests", test_multiple_scan_requests},
+             {"test_move_constructor", test_move_constructor},
+             {"test_move_assignment", test_move_assignment},
+             {"test_client_op_result_to_string_all",
+              test_client_op_result_to_string_all},
+         }},
+        {"Server Drop (Docker kill/restart)",
+         {
+             {"test_connection_lost_during_ready",
+              test_connection_lost_during_ready},
+             {"test_connection_lost_no_auto_reconnect",
+              test_connection_lost_no_auto_reconnect},
+             {"test_send_fails_after_server_drop",
+              test_send_fails_after_server_drop},
+             {"test_try_connect_failure_then_backoff",
+              test_try_connect_failure_then_backoff},
+             {"test_backoff_expiry_and_retry", test_backoff_expiry_and_retry},
+             {"test_server_initiated_disconnect",
+              test_server_initiated_disconnect},
+         }},
+        {"TcpClient Direct",
+         {
+             {"test_tcpclient_connect_already_connected",
+              test_tcpclient_connect_already_connected},
+             {"test_tcpclient_send_not_connected",
+              test_tcpclient_send_not_connected},
+             {"test_tcpclient_move_constructor",
+              test_tcpclient_move_constructor},
+             {"test_tcpclient_move_assignment", test_tcpclient_move_assignment},
+             {"test_tcpclient_receive_packet_not_connected",
+              test_tcpclient_receive_packet_not_connected},
+             {"test_tcpclient_has_packet_available_not_connected",
+              test_tcpclient_has_packet_available_not_connected},
+             {"test_tcpclient_set_nodelay_connected",
+              test_tcpclient_set_nodelay_connected},
+             {"test_tcpclient_send_receive_roundtrip",
+              test_tcpclient_send_receive_roundtrip},
+         }},
+        {"Socket Direct",
+         {
+             {"test_socket_init_exit", test_socket_init_exit},
+             {"test_socket_connect_disconnect", test_socket_connect_disconnect},
+             {"test_socket_connect_already_connected",
+              test_socket_connect_already_connected},
+             {"test_socket_connect_invalid_host",
+              test_socket_connect_invalid_host},
+             {"test_socket_not_initialized", test_socket_not_initialized},
+             {"test_socket_send_recv_not_connected",
+              test_socket_send_recv_not_connected},
+             {"test_socket_move_constructor", test_socket_move_constructor},
+             {"test_socket_move_assignment", test_socket_move_assignment},
+             {"test_socket_send_all_connected", test_socket_send_all_connected},
+             {"test_socket_set_nodelay_connected",
+              test_socket_set_nodelay_connected},
+             {"test_socket_set_buffer_sizes_connected",
+              test_socket_set_buffer_sizes_connected},
+             {"test_socket_set_options_invalid_fd",
+              test_socket_set_options_invalid_fd},
+             {"test_socket_ipv4_connect", test_socket_ipv4_connect},
+             {"test_socket_recv_timeout", test_socket_recv_timeout},
+             {"test_socket_double_close", test_socket_double_close},
+             {"test_socket_recv_nonblocking", test_socket_recv_nonblocking},
+             {"test_socket_recv_blocking", test_socket_recv_blocking},
+             {"test_socket_send_zero_bytes", test_socket_send_zero_bytes},
+             {"test_socket_is_valid_after_connect",
+              test_socket_is_valid_after_connect},
+             {"test_socket_connect_null_host", test_socket_connect_null_host},
+             {"test_socket_connect_empty_host", test_socket_connect_empty_host},
+             {"test_socket_connect_port_zero", test_socket_connect_port_zero},
+             {"test_socket_connect_connection_refused",
+              test_socket_connect_connection_refused},
+             {"test_socket_recv_blocking_with_data",
+              test_socket_recv_blocking_with_data},
+             {"test_socket_recv_zero_timeout_with_data",
+              test_socket_recv_zero_timeout_with_data},
+             {"test_socket_create_twice", test_socket_create_twice},
+         }},
+    };
+}
+
+/**
+ * @brief Run every integration test against the server.
+ * @param argc Argument count.
+ * @param argv Optional host and port (both required to take effect).
+ * @return 0 when every test passed, 1 otherwise.
+ */
 int main(int argc, char* argv[]) {
     if (argc >= 3) {
         g_host = argv[1];
@@ -2181,120 +3033,20 @@ int main(int argc, char* argv[]) {
     printf("  Server: %s:%u\n", g_host, g_port);
     printf("========================================\n\n");
 
-    printf("--- Construction & Configuration ---\n");
-    RUN_TEST(test_default_config_values);
-    RUN_TEST(test_config_from_default_constructor);
-    RUN_TEST(test_config_from_custom_constructor);
-    RUN_TEST(test_set_config_while_disconnected);
-    RUN_TEST(test_config_change_then_connect);
-    RUN_TEST(test_passphrase_config);
-
-    printf("\n--- Connection & Handshake ---\n");
-    RUN_TEST(test_connect_handshake);
-    RUN_TEST(test_connect_parameterless);
-    RUN_TEST(test_connect_already_connected);
-    RUN_TEST(test_state_transitions_connect);
-    RUN_TEST(test_disconnect_reconnect);
-    RUN_TEST(test_sequential_connect_disconnect_cycles);
-    RUN_TEST(test_double_disconnect);
-    RUN_TEST(test_multiple_clients_same_server);
-
-    printf("\n--- Getters & State Queries ---\n");
-    RUN_TEST(test_getters_while_connected);
-    RUN_TEST(test_getters_while_disconnected);
-    RUN_TEST(test_get_last_rtt_initial);
-
-    printf("\n--- Packet Sending (all methods while Ready) ---\n");
-    RUN_TEST(test_send_scan);
-    RUN_TEST(test_send_create_access_point);
-    RUN_TEST(test_send_create_access_point_with_advertise);
-    RUN_TEST(test_send_connect);
-    RUN_TEST(test_send_create_access_point_private);
-    RUN_TEST(test_send_connect_private);
-    RUN_TEST(test_send_proxy_data);
-    RUN_TEST(test_send_ping);
-    RUN_TEST(test_send_ping_response);
-    RUN_TEST(test_send_disconnect_network);
-    RUN_TEST(test_send_set_accept_policy);
-    RUN_TEST(test_send_set_advertise_data);
-    RUN_TEST(test_send_reject);
-    RUN_TEST(test_send_raw_packet);
-
-    printf("\n--- Packet Sending (Not Connected) ---\n");
-    RUN_TEST(test_send_not_connected);
-
-    printf("\n--- Callbacks ---\n");
-    RUN_TEST(test_state_callback_lifecycle);
-    RUN_TEST(test_state_callback_null);
-    RUN_TEST(test_packet_callback_receives_data);
-    RUN_TEST(test_packet_callback_null_no_crash);
-
-    printf("\n--- Packet Reception ---\n");
-    RUN_TEST(test_receive_scan_reply);
-    RUN_TEST(test_receive_connected_sync_network);
-    RUN_TEST(test_server_ping_echo);
-
-    printf("\n--- Multi-client ---\n");
-    RUN_TEST(test_host_station_full_flow);
-    RUN_TEST(test_three_clients_scan);
-    RUN_TEST(test_passphrase_connect);
-
-    printf("\n--- Error & Edge Cases ---\n");
-    RUN_TEST(test_connect_to_invalid_port);
-    RUN_TEST(test_multiple_scan_requests);
-    RUN_TEST(test_move_constructor);
-    RUN_TEST(test_move_assignment);
-    RUN_TEST(test_client_op_result_to_string_all);
-
-    printf("\n--- Server Drop (Docker kill/restart) ---\n");
-    RUN_TEST(test_connection_lost_during_ready);
-    RUN_TEST(test_connection_lost_no_auto_reconnect);
-    RUN_TEST(test_send_fails_after_server_drop);
-    RUN_TEST(test_try_connect_failure_then_backoff);
-    RUN_TEST(test_backoff_expiry_and_retry);
-    RUN_TEST(test_server_initiated_disconnect);
-
-    printf("\n--- TcpClient Direct ---\n");
-    RUN_TEST(test_tcpclient_connect_already_connected);
-    RUN_TEST(test_tcpclient_send_not_connected);
-    RUN_TEST(test_tcpclient_move_constructor);
-    RUN_TEST(test_tcpclient_move_assignment);
-    RUN_TEST(test_tcpclient_receive_packet_not_connected);
-    RUN_TEST(test_tcpclient_has_packet_available_not_connected);
-    RUN_TEST(test_tcpclient_set_nodelay_connected);
-    RUN_TEST(test_tcpclient_send_receive_roundtrip);
-
-    printf("\n--- Socket Direct ---\n");
-    RUN_TEST(test_socket_init_exit);
-    RUN_TEST(test_socket_connect_disconnect);
-    RUN_TEST(test_socket_connect_already_connected);
-    RUN_TEST(test_socket_connect_invalid_host);
-    RUN_TEST(test_socket_not_initialized);
-    RUN_TEST(test_socket_send_recv_not_connected);
-    RUN_TEST(test_socket_move_constructor);
-    RUN_TEST(test_socket_move_assignment);
-    RUN_TEST(test_socket_send_all_connected);
-    RUN_TEST(test_socket_set_nodelay_connected);
-    RUN_TEST(test_socket_set_buffer_sizes_connected);
-    RUN_TEST(test_socket_set_options_invalid_fd);
-    RUN_TEST(test_socket_ipv4_connect);
-    RUN_TEST(test_socket_recv_timeout);
-    RUN_TEST(test_socket_double_close);
-    RUN_TEST(test_socket_recv_nonblocking);
-    RUN_TEST(test_socket_recv_blocking);
-    RUN_TEST(test_socket_send_zero_bytes);
-    RUN_TEST(test_socket_is_valid_after_connect);
-    RUN_TEST(test_socket_connect_null_host);
-    RUN_TEST(test_socket_connect_empty_host);
-    RUN_TEST(test_socket_connect_port_zero);
-    RUN_TEST(test_socket_connect_connection_refused);
-    RUN_TEST(test_socket_recv_blocking_with_data);
-    RUN_TEST(test_socket_recv_zero_timeout_with_data);
-    RUN_TEST(test_socket_create_twice);
+    bool first = true;
+    for (const TestSection& section : all_sections()) {
+        printf("%s--- %s ---\n", first ? "" : "\n", section.title);
+        first = false;
+        for (const TestCase& tc : section.tests) {
+            run_case(tc);
+        }
+    }
 
     printf("\n========================================\n");
-    printf("  Results: %d/%d passed\n",
-           g_tests_passed, g_tests_passed + g_tests_failed);
+    printf(
+        "  Results: %d/%d passed\n",
+        g_tests_passed,
+        g_tests_passed + g_tests_failed);
     printf("========================================\n\n");
 
     return g_tests_failed > 0 ? 1 : 0;

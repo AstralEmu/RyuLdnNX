@@ -4,10 +4,50 @@
 
 # Compiler settings (host, not Switch)
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -g -O0
+CXXFLAGS := -std=c++20 -Wall -Wextra -g -O0
 CXXFLAGS += -I../sysmodule/source
+# Host stand-ins for Stratosphere/libnx (tests only, never seen by the sysmodule build)
+CXXFLAGS += -Istubs
+# Stubs that wrap a system header via #include_next: -isystem keeps the
+# GCC-extension diagnostic of -Wpedantic out of them without any suppression.
+CXXFLAGS += -isystem stubs/system
 CXXFLAGS += -DTEST_BUILD
-LDFLAGS += -no-pie
+# Strict diagnostics, every warning is an error: a regression fails the build.
+# Fix the code, never add a -Wno-* flag (scripts/style.py rejects them).
+STRICT_WARNINGS := -Wpedantic -Wshadow -Wconversion -Wsign-conversion \
+    -Wold-style-cast -Wcast-qual -Wnull-dereference -Wdouble-promotion \
+    -Wformat=2 -Wuseless-cast -Wduplicated-cond -Wlogical-op \
+    -Woverloaded-virtual -Wnon-virtual-dtor -Wimplicit-fallthrough
+CXXFLAGS += $(STRICT_WARNINGS) -Werror
+# Independent-position executable with full RELRO (read-only GOT, eager
+# binding) so the host test binaries carry the same hardening as a distro
+# build. The libc interposers of the suites keep working: the full suite passes
+# as PIE (see Technique-Changelog).
+LDFLAGS += -pie -Wl,-z,relro,-z,now
+
+# Compile-time and library hardening, always on: libstdc++ container and
+# string assertions, stack protector, stack clash protection, and the
+# control-flow protection of the host toolchain.
+CXXFLAGS += -D_GLIBCXX_ASSERTIONS -fstack-protector-strong \
+    -fstack-clash-protection -fcf-protection
+
+# Sanitizer build (optional): make SANITIZE=address,undefined test
+#                             make SANITIZE=thread test
+# Any report aborts the test (no recovery). _FORTIFY_SOURCE is not used:
+# it needs -O1 and GCC 12 then reports a false -Wstringop-overflow in the
+# dead branch of PacketBuffer::append (see BLOCKED.md).
+ifdef SANITIZE
+CXXFLAGS += -fsanitize=$(SANITIZE) -fno-sanitize-recover=all \
+    -fno-omit-frame-pointer
+LDFLAGS += -fsanitize=$(SANITIZE)
+# allocator_may_return_null: the tests drive the nothrow allocation-failure
+# paths on purpose (a huge size must make `new (std::nothrow)` return null,
+# as it does on the Switch heap); ASan would otherwise abort on the request.
+# Leaks (LSan) and every UBSan report stay fatal.
+export ASAN_OPTIONS := allocator_may_return_null=1:detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
+export UBSAN_OPTIONS := print_stacktrace=1:halt_on_error=1
+export TSAN_OPTIONS := allocator_may_return_null=1:halt_on_error=1:second_deadlock_stack=1
+endif
 
 # Coverage flags (optional)
 ifdef COVERAGE
@@ -46,7 +86,26 @@ TEST_SOURCES := \
 	p2p_proxy_tests.cpp \
 	p2p_proxy_client_tests.cpp \
 	p2p_integration_tests.cpp \
-	p2p_create_network_tests.cpp
+	p2p_create_network_tests.cpp \
+	ephemeral_port_pool_tests.cpp \
+	ldn_node_mapper_tests.cpp \
+	ldn_network_timeout_tests.cpp \
+	ldn_proxy_buffer_tests.cpp \
+	ldn_state_machine_real_tests.cpp \
+	ldn_shared_state_real_tests.cpp \
+	ldn_client_process_monitor_tests.cpp \
+	game_whitelist_tests.cpp \
+	ldn_config_service_tests.cpp \
+	config_ipc_service_real_tests.cpp \
+	upnp_port_mapper_tests.cpp \
+	dns_wrap_tests.cpp \
+	proxy_socket_tests.cpp \
+	p2p_proxy_client_real_tests.cpp \
+	p2p_proxy_server_real_tests.cpp \
+	ldn_mitm_service_tests.cpp \
+	ldn_icommunication_real_tests.cpp \
+	bsd_mitm_service_tests.cpp \
+	main_tests.cpp
 
 # Implementation sources needed for tests
 IMPL_SOURCES := \
@@ -90,14 +149,38 @@ TARGET_P2P_PROXY := run_p2p_proxy_tests
 TARGET_P2P_CLIENT := run_p2p_proxy_client_tests
 TARGET_P2P_INTEGRATION := run_p2p_integration_tests
 TARGET_P2P_CREATE_NETWORK := run_p2p_create_network_tests
+TARGET_EPHEMERAL_PORT_POOL := run_ephemeral_port_pool_tests
+TARGET_LDN_NODE_MAPPER := run_ldn_node_mapper_tests
+TARGET_LDN_NETWORK_TIMEOUT := run_ldn_network_timeout_tests
+TARGET_LDN_PROXY_BUFFER := run_ldn_proxy_buffer_tests
+TARGET_LDN_STATE_MACHINE_REAL := run_ldn_state_machine_real_tests
+TARGET_LDN_SHARED_STATE_REAL := run_ldn_shared_state_real_tests
+TARGET_LDN_CLIENT_PROCESS_MONITOR := run_ldn_client_process_monitor_tests
+TARGET_GAME_WHITELIST := run_game_whitelist_tests
+TARGET_LDN_CONFIG_SERVICE := run_ldn_config_service_tests
+TARGET_CONFIG_IPC_SERVICE_REAL := run_config_ipc_service_real_tests
+TARGET_UPNP_PORT_MAPPER := run_upnp_port_mapper_tests
+TARGET_DNS_WRAP := run_dns_wrap_tests
+TARGET_PROXY_SOCKET := run_proxy_socket_tests
+TARGET_P2P_CLIENT_REAL := run_p2p_proxy_client_real_tests
+TARGET_P2P_SERVER_REAL := run_p2p_proxy_server_real_tests
+TARGET_LDN_MITM_SERVICE := run_ldn_mitm_service_tests
+TARGET_LDN_ICOMMUNICATION_REAL := run_ldn_icommunication_real_tests
+TARGET_BSD_MITM_SERVICE := run_bsd_mitm_service_tests
+TARGET_MAIN := run_main_tests
+UPNP_SCENARIOS := alloc_urls_fail alloc_data_fail ok
+RUN_UPNP_PORT_MAPPER = for s in $(UPNP_SCENARIOS); do UPNP_SCENARIO=$$s ./$(TARGET_UPNP_PORT_MAPPER) || exit 1; done
+# The whitelist is a load-once latch: each scenario runs in its own process.
+GAME_WHITELIST_SCENARIOS := open_fail size_fail empty alloc_fail read_fail parse capacity
+RUN_GAME_WHITELIST = for s in $(GAME_WHITELIST_SCENARIOS); do WHITELIST_SCENARIO=$$s ./$(TARGET_GAME_WHITELIST) || exit 1; done
 TARGET_ALL := run_all_tests
 
 #---------------------------------------------------------------------------------
 # Build rules
 #---------------------------------------------------------------------------------
-.PHONY: all clean test test-protocol test-config test-config-manager test-log test-socket test-tcp-client test-connection-state test-reconnect test-client test-ldn-types test-ldn-state-machine test-ldn-proxy test-ldn-error test-ldn-integration test-overlay test-ipc-config test-config-ipc-service test-shared-state test-packet-dispatcher test-session-handler test-proxy-handler test-handler-integration test-upnp test-p2p-proxy test-p2p-client test-p2p-integration test-p2p-create-network coverage coverage-enforce coverage-full-enforce
+.PHONY: all clean test test-protocol test-config test-config-manager test-log test-socket test-tcp-client test-connection-state test-reconnect test-client test-ldn-types test-ldn-state-machine test-ldn-proxy test-ldn-error test-ldn-integration test-overlay test-ipc-config test-config-ipc-service test-shared-state test-packet-dispatcher test-session-handler test-proxy-handler test-handler-integration test-upnp test-p2p-proxy test-p2p-client test-p2p-integration test-p2p-create-network test-ephemeral-port-pool test-ldn-node-mapper test-ldn-network-timeout test-ldn-proxy-buffer test-ldn-state-machine-real test-ldn-shared-state-real test-ldn-client-process-monitor test-game-whitelist test-ldn-config-service test-config-ipc-service-real test-upnp-port-mapper test-dns-wrap test-proxy-socket test-p2p-client-real test-p2p-server-real test-ldn-mitm-service test-ldn-icommunication-real test-bsd-mitm-service coverage coverage-enforce coverage-full-enforce test-main
 
-all: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION)
+all: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL) $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET) $(TARGET_P2P_CLIENT_REAL) $(TARGET_P2P_SERVER_REAL) $(TARGET_LDN_MITM_SERVICE) $(TARGET_LDN_ICOMMUNICATION_REAL) $(TARGET_BSD_MITM_SERVICE) $(TARGET_MAIN)
 
 # Protocol tests (header-only, no impl needed)
 $(TARGET_PROTOCOL): protocol_tests.o
@@ -179,12 +262,13 @@ $(TARGET_PACKET_DISPATCHER): ldn_packet_dispatcher_tests.o ldn_packet_dispatcher
 $(TARGET_SESSION_HANDLER): ldn_session_handler_tests.o ldn_session_handler.o
 	$(CXX) $(LDFLAGS) -o $@ $^
 
-# Proxy Handler tests (needs ldn_proxy_handler.cpp)
-$(TARGET_PROXY_HANDLER): ldn_proxy_handler_tests.o ldn_proxy_handler.o
+# Proxy Handler tests (needs ldn_proxy_handler.cpp + log.o since add_connection
+# saturation path now logs via LOG_WARN)
+$(TARGET_PROXY_HANDLER): ldn_proxy_handler_tests.o ldn_proxy_handler.o log.o
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 # Handler Integration tests (needs all handler implementations)
-$(TARGET_HANDLER_INTEGRATION): ldn_handler_integration_tests.o ldn_packet_dispatcher.o ldn_session_handler.o ldn_proxy_handler.o
+$(TARGET_HANDLER_INTEGRATION): ldn_handler_integration_tests.o ldn_packet_dispatcher.o ldn_session_handler.o ldn_proxy_handler.o log.o
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 # UPnP tests (standalone, no miniupnpc needed for mock tests)
@@ -207,8 +291,109 @@ $(TARGET_P2P_INTEGRATION): p2p_integration_tests.o
 $(TARGET_P2P_CREATE_NETWORK): p2p_create_network_tests.o
 	$(CXX) $(LDFLAGS) -o $@ $^
 
+# EphemeralPortPool tests (real bsd/ephemeral_port_pool.cpp, host Stratosphere stand-in)
+$(TARGET_EPHEMERAL_PORT_POOL): ephemeral_port_pool_tests.o ephemeral_port_pool.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# LdnNodeMapper tests (real ldn/ldn_node_mapper.cpp)
+$(TARGET_LDN_NODE_MAPPER): ldn_node_mapper_tests.o ldn_node_mapper.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# NetworkTimeout tests (real ldn/ldn_network_timeout.cpp)
+$(TARGET_LDN_NETWORK_TIMEOUT): ldn_network_timeout_tests.o ldn_network_timeout.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# LdnProxyBuffer tests (real ldn/ldn_proxy_buffer.cpp)
+$(TARGET_LDN_PROXY_BUFFER): ldn_proxy_buffer_tests.o ldn_proxy_buffer.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# LDN State Machine (real) tests (real sources)
+$(TARGET_LDN_STATE_MACHINE_REAL): ldn_state_machine_real_tests.o ldn_state_machine.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# LDN Shared State (real) tests (real sources)
+$(TARGET_LDN_SHARED_STATE_REAL): ldn_shared_state_real_tests.o ldn_shared_state.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# LDN Client Process Monitor tests (real sources)
+$(TARGET_LDN_CLIENT_PROCESS_MONITOR): ldn_client_process_monitor_tests.o ldn_client_process_monitor.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# GameWhitelist tests (real sources)
+$(TARGET_GAME_WHITELIST): game_whitelist_tests.o game_whitelist.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# LdnConfigService tests (real sources)
+$(TARGET_LDN_CONFIG_SERVICE): ldn_config_service_tests.o ldn_config_service.o ldn_shared_state.o config_manager.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# ryu:cfg ConfigService tests (real sources)
+$(TARGET_CONFIG_IPC_SERVICE_REAL): config_ipc_service_real_tests.o config_ipc_service.o ldn_shared_state.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# UpnpPortMapper tests (real sources)
+$(TARGET_UPNP_PORT_MAPPER): upnp_port_mapper_tests.o upnp_port_mapper.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# DnsWrap tests (real sources)
+# --wrap=malloc lets the test fail the resolver's allocations (see dns_wrap_tests.cpp)
+$(TARGET_DNS_WRAP): dns_wrap_tests.o dns_wrap.o log.o config.o
+	$(CXX) $(LDFLAGS) -Wl,--wrap=malloc -o $@ $^
+
+# ProxySocket tests (real bsd/proxy_socket.cpp + manager, host Stratosphere stand-in)
+$(TARGET_PROXY_SOCKET): proxy_socket_tests.o proxy_socket.o proxy_socket_manager.o ephemeral_port_pool.o log.o config.o
+	$(CXX) $(LDFLAGS) -o $@ $^
+
+# P2pProxyClient tests (real p2p/p2p_proxy_client.cpp, loopback host)
+# --wrap lets the test inject the failures the kernel cannot produce on demand
+# (see p2p_proxy_client_real_tests.cpp); every wrapper passes through by default.
+P2P_CLIENT_REAL_WRAPS := -Wl,--wrap=socket,--wrap=setsockopt,--wrap=fcntl,--wrap=connect,--wrap=select,--wrap=getsockopt,--wrap=send,--wrap=recv
+$(TARGET_P2P_CLIENT_REAL): p2p_proxy_client_real_tests.o p2p_proxy_client.o log.o config.o
+	$(CXX) $(LDFLAGS) $(P2P_CLIENT_REAL_WRAPS) -pthread -o $@ $^
+
+# P2pProxyServer tests (real p2p/p2p_proxy_server.cpp, loopback peers)
+# --wrap injects the socket failures the kernel cannot produce on demand
+# (see p2p_proxy_server_real_tests.cpp); every wrapper passes through by default.
+P2P_SERVER_REAL_WRAPS := -Wl,--wrap=socket,--wrap=bind,--wrap=listen,--wrap=accept,--wrap=poll,--wrap=setsockopt,--wrap=send,--wrap=recv
+$(TARGET_P2P_SERVER_REAL): p2p_proxy_server_real_tests.o p2p_proxy_server.o upnp_port_mapper.o log.o config.o
+	$(CXX) $(LDFLAGS) $(P2P_SERVER_REAL_WRAPS) -pthread -o $@ $^
+
+# LdnMitMService tests (real ldn/ldn_mitm_service.cpp with the real communication
+# service, shared state, whitelist and network stack, all on the host stand-ins)
+$(TARGET_LDN_MITM_SERVICE): ldn_mitm_service_tests.o ldn_mitm_service.o ldn_icommunication.o ldn_shared_state.o ldn_client_process_monitor.o ldn_state_machine.o ldn_node_mapper.o ldn_proxy_buffer.o ldn_network_timeout.o game_whitelist.o config_ipc_service.o config_manager.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o p2p_proxy_client.o p2p_proxy_server.o upnp_port_mapper.o client.o tcp_client.o socket.o connection_state.o reconnect.o dns_wrap.o log.o config.o
+	$(CXX) $(LDFLAGS) -pthread -o $@ $^
+
+# ICommunicationService tests (real ldn/ldn_icommunication.cpp against a loopback
+# fake of the Ryujinx LDN server). The test object is linked LAST: TEST() runs
+# each test from a static initializer, and initializers run in link order, so
+# the statics of the service sources (mutexes, ...) must be built before it.
+$(TARGET_LDN_ICOMMUNICATION_REAL): ldn_icommunication.o ldn_shared_state.o ldn_client_process_monitor.o ldn_state_machine.o ldn_node_mapper.o ldn_proxy_buffer.o ldn_network_timeout.o config_ipc_service.o config_manager.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o p2p_proxy_client.o p2p_proxy_server.o upnp_port_mapper.o client.o tcp_client.o socket.o connection_state.o reconnect.o dns_wrap.o log.o config.o ldn_icommunication_real_tests.o
+	$(CXX) $(LDFLAGS) -pthread -o $@ $^
+
+# BsdMitmService tests: bsd/bsd_mitm_service.cpp is its own translation unit,
+# reached through the bsd_mitm_service_internal.hpp test seam. bsd_mitm_service.o
+# must come BEFORE bsd_mitm_service_tests.o: TEST() runs each test from a static
+# initializer, so the service's tracking tables and mutexes must be constructed
+# first. The real proxy socket stack is linked, bsd:u is a recording fake. Test
+# object last.
+$(TARGET_BSD_MITM_SERVICE): bsd_mitm_service.o ldn_shared_state.o game_whitelist.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o log.o config.o bsd_mitm_service_tests.o
+	$(CXX) $(LDFLAGS) -pthread -o $@ $^
+
+# Boot tests: main.cpp is its own translation unit, reached through the
+# main_internal.hpp test seam. main.o must come BEFORE main_tests.o: TEST()
+# runs each test from a static initializer, so main.cpp's server managers and
+# heap must be constructed first. The real services it registers are linked;
+# the SF server and the libnx boot calls are host stand-ins that record what
+# they were given. Test object last.
+$(TARGET_MAIN): ldn_mitm_service.o bsd_mitm_service.o ldn_icommunication.o ldn_shared_state.o ldn_client_process_monitor.o ldn_state_machine.o ldn_node_mapper.o ldn_proxy_buffer.o ldn_network_timeout.o game_whitelist.o config_ipc_service.o config_manager.o proxy_socket_manager.o proxy_socket.o ephemeral_port_pool.o p2p_proxy_client.o p2p_proxy_server.o upnp_port_mapper.o client.o tcp_client.o socket.o connection_state.o reconnect.o dns_wrap.o log.o config.o main.o main_instantiations.o main_tests.o
+	$(CXX) $(LDFLAGS) -pthread -o $@ $^
+
 # Compile test sources
 %.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+# Compile the sysmodule entry point as a normal test translation unit.
+main.o: ../sysmodule/source/main.cpp ../sysmodule/source/main_internal.hpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Compile implementation sources
@@ -236,6 +421,64 @@ reconnect.o: ../sysmodule/source/network/reconnect.cpp
 client.o: ../sysmodule/source/network/client.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
+ephemeral_port_pool.o: ../sysmodule/source/bsd/ephemeral_port_pool.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_node_mapper.o: ../sysmodule/source/ldn/ldn_node_mapper.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_state_machine.o: ../sysmodule/source/ldn/ldn_state_machine.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_network_timeout.o: ../sysmodule/source/ldn/ldn_network_timeout.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_proxy_buffer.o: ../sysmodule/source/ldn/ldn_proxy_buffer.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_shared_state.o: ../sysmodule/source/ldn/ldn_shared_state.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_client_process_monitor.o: ../sysmodule/source/ldn/ldn_client_process_monitor.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+game_whitelist.o: ../sysmodule/source/config/game_whitelist.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_config_service.o: ../sysmodule/source/ldn/ldn_config_service.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+config_ipc_service.o: ../sysmodule/source/config/config_ipc_service.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+upnp_port_mapper.o: ../sysmodule/source/p2p/upnp_port_mapper.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+dns_wrap.o: ../sysmodule/source/network/dns_wrap.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+proxy_socket.o: ../sysmodule/source/bsd/proxy_socket.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+proxy_socket_manager.o: ../sysmodule/source/bsd/proxy_socket_manager.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+p2p_proxy_client.o: ../sysmodule/source/p2p/p2p_proxy_client.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+p2p_proxy_server.o: ../sysmodule/source/p2p/p2p_proxy_server.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+bsd_mitm_service.o: ../sysmodule/source/bsd/bsd_mitm_service.cpp \
+	../sysmodule/source/bsd/bsd_mitm_service_internal.hpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_mitm_service.o: ../sysmodule/source/ldn/ldn_mitm_service.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+ldn_icommunication.o: ../sysmodule/source/ldn/ldn_icommunication.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 ldn_packet_dispatcher.o: ../sysmodule/source/ldn/ldn_packet_dispatcher.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
@@ -246,7 +489,7 @@ ldn_proxy_handler.o: ../sysmodule/source/ldn/ldn_proxy_handler.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Run all tests
-test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK)
+test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL) $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET) $(TARGET_P2P_CLIENT_REAL) $(TARGET_P2P_SERVER_REAL) $(TARGET_LDN_MITM_SERVICE) $(TARGET_LDN_ICOMMUNICATION_REAL) $(TARGET_BSD_MITM_SERVICE) $(TARGET_MAIN)
 	@echo "=== Running Protocol Tests ==="
 	./$(TARGET_PROTOCOL)
 	@echo ""
@@ -327,6 +570,63 @@ test: $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG)
 	@echo ""
 	@echo "=== Running P2P CreateNetwork Tests ==="
 	./$(TARGET_P2P_CREATE_NETWORK)
+	@echo ""
+	@echo "=== Running EphemeralPortPool Tests ==="
+	./$(TARGET_EPHEMERAL_PORT_POOL)
+	@echo ""
+	@echo "=== Running LdnNodeMapper Tests ==="
+	./$(TARGET_LDN_NODE_MAPPER)
+	@echo ""
+	@echo "=== Running NetworkTimeout Tests ==="
+	./$(TARGET_LDN_NETWORK_TIMEOUT)
+	@echo ""
+	@echo "=== Running LdnProxyBuffer Tests ==="
+	./$(TARGET_LDN_PROXY_BUFFER)
+	@echo ""
+	@echo "=== Running LDN State Machine (real) Tests ==="
+	./$(TARGET_LDN_STATE_MACHINE_REAL)
+	@echo ""
+	@echo "=== Running LDN Shared State (real) Tests ==="
+	./$(TARGET_LDN_SHARED_STATE_REAL)
+	@echo ""
+	@echo "=== Running LDN Client Process Monitor Tests ==="
+	./$(TARGET_LDN_CLIENT_PROCESS_MONITOR)
+	@echo ""
+	@echo "=== Running GameWhitelist Tests ==="
+	$(RUN_GAME_WHITELIST)
+	@echo ""
+	@echo "=== Running LdnConfigService Tests ==="
+	./$(TARGET_LDN_CONFIG_SERVICE)
+	@echo ""
+	@echo "=== Running ryu:cfg ConfigService Tests ==="
+	./$(TARGET_CONFIG_IPC_SERVICE_REAL)
+	@echo ""
+	@echo "=== Running UpnpPortMapper Tests ==="
+	$(RUN_UPNP_PORT_MAPPER)
+	@echo ""
+	@echo "=== Running DnsWrap Tests ==="
+	./$(TARGET_DNS_WRAP)
+	@echo ""
+	@echo "=== Running ProxySocket tests (real bsd/proxy_socket.cpp + manager, host Stratosphere stand-in) Tests ==="
+	./$(TARGET_PROXY_SOCKET)
+	@echo ""
+	@echo "=== Running P2pProxyClient tests (real p2p/p2p_proxy_client.cpp, loopback host) ==="
+	./$(TARGET_P2P_CLIENT_REAL)
+	@echo ""
+	@echo "=== Running P2pProxyServer tests (real p2p/p2p_proxy_server.cpp, loopback peers) ==="
+	./$(TARGET_P2P_SERVER_REAL)
+	@echo ""
+	@echo "=== Running LdnMitMService tests (real ldn/ldn_mitm_service.cpp) ==="
+	./$(TARGET_LDN_MITM_SERVICE)
+	@echo ""
+	@echo "=== Running ICommunicationService tests (real ldn/ldn_icommunication.cpp) ==="
+	./$(TARGET_LDN_ICOMMUNICATION_REAL)
+	@echo ""
+	@echo "=== Running BsdMitmService tests (real bsd/bsd_mitm_service.cpp) ==="
+	./$(TARGET_BSD_MITM_SERVICE)
+	@echo ""
+	@echo "=== Running boot tests (real main.cpp) ==="
+	./$(TARGET_MAIN)
 
 test-protocol: $(TARGET_PROTOCOL)
 	./$(TARGET_PROTOCOL)
@@ -468,21 +768,34 @@ coverage-full-enforce: clean
 	bash integration/wait-for-server.sh localhost 30456 60
 	sleep 2
 	INTEGRATION_COMPOSE_FILE="$$(pwd)/integration/docker-compose.yml" \
-		./integration/run_integration_tests localhost 30456 || true
-	@echo ""
-	@echo "=== Phase 3: Stopping LdnServer ==="
-	docker compose -f integration/docker-compose.yml down -v
+		./integration/run_integration_tests localhost 30456 ; \
+		int_exit=$$? ; \
+	echo "" ; \
+	echo "=== Phase 3: Stopping LdnServer ===" ; \
+	docker compose -f integration/docker-compose.yml down -v ; \
+	test $$int_exit -eq 0
 	@echo ""
 	@echo "=== Phase 4: Checking per-file coverage (minimum $(MIN_COVERAGE)%) ==="
 	cd .. && python3 scripts/check-coverage.py --min $(MIN_COVERAGE) --root .
+	@echo ""
+	@echo "=== Phase 5: Every line executed by unit or integration tests ==="
+	cd .. && python3 scripts/check-coverage-surface.py --root .
 
 clean:
-	rm -f *.o $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK)
+	rm -f *.o $(TARGET_PROTOCOL) $(TARGET_CONFIG) $(TARGET_CONFIG_MANAGER) $(TARGET_LOG) $(TARGET_SOCKET) $(TARGET_TCP_CLIENT) $(TARGET_CONNECTION_STATE) $(TARGET_RECONNECT) $(TARGET_CLIENT) $(TARGET_LDN_TYPES) $(TARGET_LDN_STATE_MACHINE) $(TARGET_LDN_PROXY) $(TARGET_LDN_ERROR) $(TARGET_LDN_INTEGRATION) $(TARGET_OVERLAY) $(TARGET_IPC_CONFIG) $(TARGET_CONFIG_IPC_SERVICE) $(TARGET_SHARED_STATE) $(TARGET_PACKET_DISPATCHER) $(TARGET_SESSION_HANDLER) $(TARGET_PROXY_HANDLER) $(TARGET_HANDLER_INTEGRATION) $(TARGET_UPNP) $(TARGET_P2P_PROXY) $(TARGET_P2P_CLIENT) $(TARGET_P2P_INTEGRATION) $(TARGET_P2P_CREATE_NETWORK) $(TARGET_EPHEMERAL_PORT_POOL) $(TARGET_LDN_NODE_MAPPER) $(TARGET_LDN_NETWORK_TIMEOUT) $(TARGET_LDN_PROXY_BUFFER) $(TARGET_LDN_STATE_MACHINE_REAL) $(TARGET_LDN_SHARED_STATE_REAL) $(TARGET_LDN_CLIENT_PROCESS_MONITOR) $(TARGET_GAME_WHITELIST) $(TARGET_LDN_CONFIG_SERVICE) $(TARGET_CONFIG_IPC_SERVICE_REAL) $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET) $(TARGET_P2P_CLIENT_REAL) $(TARGET_P2P_SERVER_REAL) $(TARGET_LDN_MITM_SERVICE) $(TARGET_LDN_ICOMMUNICATION_REAL) $(TARGET_BSD_MITM_SERVICE) $(TARGET_MAIN)
 	rm -f *.gcno *.gcda *.gcov
 
 #---------------------------------------------------------------------------------
 # Dependencies
 #---------------------------------------------------------------------------------
+main_tests.o: main_tests.cpp ../sysmodule/source/main_internal.hpp
+
+main_instantiations.o: main_instantiations.cpp \
+	../sysmodule/source/main_internal.hpp
+
+bsd_mitm_service_tests.o: bsd_mitm_service_tests.cpp \
+	../sysmodule/source/bsd/bsd_mitm_service_internal.hpp
+
 protocol_tests.o: protocol_tests.cpp \
 	../sysmodule/source/protocol/types.hpp \
 	../sysmodule/source/protocol/ryu_protocol.hpp \
@@ -571,3 +884,60 @@ overlay_tests.o: overlay_tests.cpp
 ipc_config_tests.o: ipc_config_tests.cpp
 
 config_ipc_service_tests.o: config_ipc_service_tests.cpp
+
+test-ephemeral-port-pool: $(TARGET_EPHEMERAL_PORT_POOL)
+	./$(TARGET_EPHEMERAL_PORT_POOL)
+
+test-ldn-node-mapper: $(TARGET_LDN_NODE_MAPPER)
+	./$(TARGET_LDN_NODE_MAPPER)
+
+test-ldn-network-timeout: $(TARGET_LDN_NETWORK_TIMEOUT)
+	./$(TARGET_LDN_NETWORK_TIMEOUT)
+
+test-ldn-proxy-buffer: $(TARGET_LDN_PROXY_BUFFER)
+	./$(TARGET_LDN_PROXY_BUFFER)
+
+test-ldn-state-machine-real: $(TARGET_LDN_STATE_MACHINE_REAL)
+	./$(TARGET_LDN_STATE_MACHINE_REAL)
+
+test-ldn-shared-state-real: $(TARGET_LDN_SHARED_STATE_REAL)
+	./$(TARGET_LDN_SHARED_STATE_REAL)
+
+test-ldn-client-process-monitor: $(TARGET_LDN_CLIENT_PROCESS_MONITOR)
+	./$(TARGET_LDN_CLIENT_PROCESS_MONITOR)
+
+test-game-whitelist: $(TARGET_GAME_WHITELIST)
+	$(RUN_GAME_WHITELIST)
+
+test-ldn-config-service: $(TARGET_LDN_CONFIG_SERVICE)
+	./$(TARGET_LDN_CONFIG_SERVICE)
+
+test-config-ipc-service-real: $(TARGET_CONFIG_IPC_SERVICE_REAL)
+	./$(TARGET_CONFIG_IPC_SERVICE_REAL)
+
+test-upnp-port-mapper: $(TARGET_UPNP_PORT_MAPPER) $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET)
+	$(RUN_UPNP_PORT_MAPPER)
+
+test-dns-wrap: $(TARGET_DNS_WRAP) $(TARGET_PROXY_SOCKET)
+	./$(TARGET_DNS_WRAP)
+
+test-proxy-socket: $(TARGET_PROXY_SOCKET)
+	./$(TARGET_PROXY_SOCKET)
+
+test-p2p-client-real: $(TARGET_P2P_CLIENT_REAL)
+	./$(TARGET_P2P_CLIENT_REAL)
+
+test-p2p-server-real: $(TARGET_P2P_SERVER_REAL)
+	./$(TARGET_P2P_SERVER_REAL)
+
+test-ldn-mitm-service: $(TARGET_LDN_MITM_SERVICE)
+	./$(TARGET_LDN_MITM_SERVICE)
+
+test-ldn-icommunication-real: $(TARGET_LDN_ICOMMUNICATION_REAL) $(TARGET_BSD_MITM_SERVICE)
+	./$(TARGET_LDN_ICOMMUNICATION_REAL)
+
+test-bsd-mitm-service: $(TARGET_BSD_MITM_SERVICE)
+	./$(TARGET_BSD_MITM_SERVICE)
+
+test-main: $(TARGET_MAIN)
+	./$(TARGET_MAIN)

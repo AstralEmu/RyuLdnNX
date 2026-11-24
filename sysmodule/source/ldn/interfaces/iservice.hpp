@@ -9,7 +9,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_INTERFACES_ISERVICE_HPP_
+#define SYSMODULE_SOURCE_LDN_INTERFACES_ISERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "icommunication.hpp"
@@ -19,13 +20,31 @@
  * @brief Interface definition for ILdnMitMService
  *
  * Commands:
- * - 0: CreateUserLocalCommunicationService - Creates the communication interface
- * - 1: CreateClientProcessMonitor - Creates the process monitor (required for FW 18.0.0+)
+ * - 0: CreateUserLocalCommunicationService - Creates the communication
+ * interface
+ * - 1: CreateClientProcessMonitor - Creates the process monitor (required for
+ * FW 18.0.0+)
  */
-#define AMS_RYU_LDN_MITM_SERVICE(C, H)                                                                           \
-    AMS_SF_METHOD_INFO(C, H, 0, Result, CreateUserLocalCommunicationService,                                     \
-        (ams::sf::Out<ams::sf::SharedPointer<ams::mitm::ldn::ICommunicationInterface>> out), (out))              \
-    AMS_SF_METHOD_INFO(C, H, 1, Result, CreateClientProcessMonitor,                                              \
-        (ams::sf::Out<ams::sf::SharedPointer<ams::mitm::ldn::IClientProcessMonitorInterface>> out), (out))
+#define AMS_RYU_LDN_MITM_SERVICE(C, H)                              \
+    AMS_SF_METHOD_INFO(                                             \
+        C,                                                          \
+        H,                                                          \
+        0,                                                          \
+        Result,                                                     \
+        CreateUserLocalCommunicationService,                        \
+        (ams::sf::Out<ams::sf::SharedPointer<                       \
+             ams::mitm::ldn::ICommunicationInterface>> out),        \
+        (out))                                                      \
+    AMS_SF_METHOD_INFO(                                             \
+        C,                                                          \
+        H,                                                          \
+        1,                                                          \
+        Result,                                                     \
+        CreateClientProcessMonitor,                                 \
+        (ams::sf::Out<ams::sf::SharedPointer<                       \
+             ams::mitm::ldn::IClientProcessMonitorInterface>> out), \
+        (out))
 
-AMS_SF_DEFINE_MITM_INTERFACE(ams::mitm::ldn, ILdnMitMService, AMS_RYU_LDN_MITM_SERVICE, 0x7A5E89C2)
+AMS_SF_DEFINE_MITM_INTERFACE(
+    ams::mitm::ldn, ILdnMitMService, AMS_RYU_LDN_MITM_SERVICE, 0x7A5E89C2)
+#endif  // SYSMODULE_SOURCE_LDN_INTERFACES_ISERVICE_HPP_

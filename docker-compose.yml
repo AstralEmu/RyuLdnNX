@@ -1,89 +1,101 @@
-services:
-  # Build everything + package into output/ and ZIP
-  # Usage: docker compose run --rm build
-  #
-  # Uses the pre-built image from GHCR which contains libstratosphere.a
-  # and all devkitPro packages. No lib rebuilding needed.
+# Base configuration shared by all services (no entrypoint, no command)
+x-service-base: &service-base
+  image: ghcr.io/ethiquema/ryu_ldn_nx:latest
   build:
-    image: ghcr.io/ethiquema/ryu_ldn_nx:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    context: .
+    dockerfile: Dockerfile
+  volumes:
+    - .:/workspace
+  working_dir: /workspace
+  # Every service writes into the bind-mounted checkout: run as the caller so
+  # nothing it creates (objects, output/, formatted sources) is owned by root.
+  # `make` exports the real ids; plain `docker compose` falls back to 1000.
+  user: "${DOCS_UID:-1000}:${DOCS_GID:-1000}"
+  environment:
+    HOME: /tmp
+
+# Build-specific base (adds entrypoint + command)
+x-build-base: &build-base
+  <<: *service-base
+  entrypoint: ["/bin/bash"]
+  command: ["/workspace/scripts/builder/entrypoint-build.sh"]
+
+# Clean-specific base (adds entrypoint + command)
+x-clean-base: &clean-base
+  <<: *service-base
+  entrypoint: ["/bin/bash"]
+  command: ["/workspace/scripts/builder/entrypoint-clean.sh"]
+
+services:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Build everything + package into output/ and ZIP (embedded atmosphere-libs)
+  # Usage: docker compose run --rm build
+  # Uses the pre-built libstratosphere.a from the Docker image.
+  # ──────────────────────────────────────────────────────────────────────────
+  build:
+    <<: *build-base
+    pull_policy: always
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Build with LOCAL atmosphere-libs (./sysmodule/Atmosphere-libs)
+  # Usage: docker compose run --rm build-local
+  # Mounts the local Atmosphere-libs checkout over /opt/ryu_ldn_nx,
+  # shadowing the image's pre-built .a and exposing local source for patching.
+  # ──────────────────────────────────────────────────────────────────────────
+  build-local:
+    <<: *build-base
     volumes:
       - .:/workspace
-    working_dir: /workspace
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        # Symlink pre-built libstratosphere.a from the container image
-        # into the checked-out workspace so the sysmodule Makefile finds it
-        # without rebuilding from source.
-        LIB_DIR="/workspace/sysmodule/Atmosphere-libs/libstratosphere/lib/nintendo_nx_arm64_armv8a/release"
-        PREBUILT="/opt/ryu_ldn_nx/libstratosphere/lib/nintendo_nx_arm64_armv8a/release/libstratosphere.a"
-        if [ -f "$PREBUILT" ] && [ ! -f "$LIB_DIR/libstratosphere.a" ]; then
-          mkdir -p "$LIB_DIR"
-          ln -s "$PREBUILT" "$LIB_DIR/libstratosphere.a"
-          echo "[build] Linked pre-built libstratosphere.a"
-        fi
+      - ./sysmodule/Atmosphere-libs:/opt/ryu_ldn_nx
+    environment:
+      - ATMOSPHERE_LIBS_PATH=/workspace/sysmodule/Atmosphere-libs
+      - HOME=/tmp
 
-        echo "[build] 🔨 Building sysmodule..."
-        cd /workspace/sysmodule && make -j4 all
-
-        echo "[build] 🔨 Building overlay..."
-        cd /workspace/overlay && make -j4 all
-
-        echo "[build] 📦 Packaging SD card structure..."
-        cd /workspace/sysmodule && make dist
-
-        echo "[build] ✅ Done — output/ and ryu_ldn_nx-release.zip ready"
-
-  # Clean all build artifacts + output
+  # ──────────────────────────────────────────────────────────────────────────
+  # Clean all build artifacts + output (embedded atmosphere-libs)
   # Usage: docker compose run --rm clean
+  # ──────────────────────────────────────────────────────────────────────────
   clean:
-    image: ghcr.io/ethiquema/ryu_ldn_nx:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *clean-base
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Clean with LOCAL atmosphere-libs (./sysmodule/Atmosphere-libs)
+  # Usage: docker compose run --rm clean-local
+  # Extended clean: also cleans local libstratosphere build artifacts.
+  # ──────────────────────────────────────────────────────────────────────────
+  clean-local:
+    <<: *clean-base
     volumes:
       - .:/workspace
-    working_dir: /workspace
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        echo "[clean] 🧹 Cleaning sysmodule..."
-        cd /workspace/sysmodule && make clean 2>/dev/null || true
-        echo "[clean] 🧹 Cleaning overlay..."
-        cd /workspace/overlay && make clean 2>/dev/null || true
-        echo "[clean] 🧹 Removing output..."
-        echo "[clean] 🧹 Cleaning tests..."
-        cd /workspace/tests && make clean 2>/dev/null || true
-        rm -rf /workspace/output /workspace/ryu_ldn_nx-release.zip
-        echo "[clean] ✅ Done"
+      - ./sysmodule/Atmosphere-libs:/opt/ryu_ldn_nx
+    environment:
+      - ATMOSPHERE_LIBS_PATH=/workspace/sysmodule/Atmosphere-libs
+      - HOME=/tmp
 
   # Run tests (host binary with g++)
   # NOTE: tests run on the host, not in the dev container — they use
   # g++ and don't need cross-compilation. This is kept as a fallback.
   test:
-    image: ghcr.io/ethiquema/ryu_ldn_nx:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/workspace
+    <<: *service-base
     working_dir: /workspace/tests
+    environment:
+      - COVERAGE
+      - SANITIZE
+      - HOME=/tmp
     command: make clean test
+
+  # Doxygen XML for the wiki code reference (rendered on the host by
+  # scripts/gen_docs.py, which writes into the ./docs wiki symlink that is not
+  # mounted here). Runs as the host user so .cache/ is not root-owned.
+  # Usage: make docs
+  docs:
+    <<: *service-base
+    entrypoint: ["python3", "/workspace/scripts/gen_docs.py", "--xml-only"]
 
   # GDB debugger for Switch (interactive)
   # Usage: docker compose run --rm debugger <SWITCH_IP> [PROCESS_ID]
   debugger:
-    image: ghcr.io/ethiquema/ryu_ldn_nx:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/workspace
-    working_dir: /workspace
+    <<: *service-base
     network_mode: host
     stdin_open: true
     tty: true
@@ -91,46 +103,86 @@ services:
 
   # Run clang-tidy on project source files (not Atmosphere-libs)
   # Usage: docker compose run --rm lint
+  # The lint image is tagged on its own: inheriting the base `image:` would
+  # make `docker compose build lint` overwrite the published dev image tag.
   lint:
-    image: ghcr.io/ethiquema/ryu_ldn_nx:latest
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
     build:
       context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/workspace
-    working_dir: /workspace
+      dockerfile: lint.Dockerfile
     entrypoint: ["/bin/bash", "/workspace/scripts/lint.sh"]
 
-  # Run CodeQL analysis (standalone CLI, no GitHub Actions needed)
-  # Usage: docker compose run --rm codeql-analyze
-  codeql-create:
-    image: ghcr.io/ethiquema/ryu_ldn_nx:latest
+  # cppcheck over the sysmodule and overlay sources, any finding fails:
+  #   docker compose run --rm cppcheck
+  cppcheck:
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
     build:
       context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/workspace
-    working_dir: /workspace
-    entrypoint: ["/bin/bash", "/workspace/scripts/codeql-create.sh"]
+      dockerfile: lint.Dockerfile
+    entrypoint: ["/bin/bash", "/workspace/scripts/cppcheck.sh"]
 
-  codeql-analyze:
-    image: ghcr.io/ethiquema/ryu_ldn_nx:latest
+  # Secret scanning: gitleaks over the repository history, any finding fails:
+  #   docker compose run --rm secrets
+  secrets:
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: lint.Dockerfile
+    entrypoint: ["/bin/bash", "/workspace/scripts/secrets.sh"]
+
+  # libFuzzer targets (tests/fuzz) on the protocol reassembly and the INI
+  # parser, built and run with clang 21 in the lint image; any crash,
+  # sanitizer report or timeout fails:
+  #   docker compose run --rm fuzz
+  #   docker compose run --rm -e FUZZ_SECONDS=600 fuzz
+  fuzz:
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
+    build:
+      context: .
+      dockerfile: lint.Dockerfile
+    entrypoint: ["/bin/bash", "/workspace/scripts/fuzz.sh"]
+
+  # clang-tidy (.clang-tidy checks) over the sysmodule sources and the host
+  # unit tests, headers included; any finding fails:
+  #   docker compose run --rm tidy-host [file.cpp ...]
+  tidy-host:
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
+    build:
+      context: .
+      dockerfile: lint.Dockerfile
+    entrypoint: ["/bin/bash", "/workspace/scripts/tidy-host.sh"]
+
+  # Formatting + Doxygen-completeness gate (scripts/style.py), run in the lint
+  # image so the clang-format version is pinned. Extra args reach style.py:
+  #   docker compose run --rm style            (check)
+  #   docker compose run --rm style format     (rewrite in place)
+  style:
+    <<: *service-base
+    image: ryu_ldn_nx-lint:local
+    build:
+      context: .
+      dockerfile: lint.Dockerfile
+    entrypoint: ["python3", "/workspace/scripts/style.py"]
+
+  # Local CodeQL run with the same queries and paths as the GitHub workflow.
+  # Usage: CODEQL_HOME=/path/to/unpacked/codeql docker compose run --rm codeql
+  codeql:
+    <<: *service-base
     volumes:
       - .:/workspace
-    working_dir: /workspace
-    entrypoint: ["/bin/bash", "/workspace/scripts/codeql-analyze.sh"]
+      - ${CODEQL_HOME:-/var/empty}:/opt/codeql:ro
+    environment:
+      HOME: /tmp
+      CODEQL_HOME: /opt/codeql
+    entrypoint: ["/bin/bash", "/workspace/scripts/codeql.sh"]
 
   shell:
-    image: ghcr.io/ethiquema/ryu_ldn_nx:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/workspace
-    working_dir: /workspace
+    <<: *service-base
     network_mode: host
     stdin_open: true
     tty: true

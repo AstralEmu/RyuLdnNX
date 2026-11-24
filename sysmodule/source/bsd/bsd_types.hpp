@@ -29,7 +29,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_BSD_TYPES_HPP_
+#define SYSMODULE_SOURCE_BSD_BSD_TYPES_HPP_
 
 #include <cstdint>
 #include <cstring>
@@ -46,7 +47,8 @@ namespace ryu_ldn::bsd {
  * All LDN proxy addresses are in the 10.114.0.0/16 subnet.
  * This is used to detect which sockets should be proxied.
  */
-constexpr uint32_t LDN_NETWORK_BASE = 0x0A720000;  // 10.114.0.0 in host byte order
+constexpr uint32_t LDN_NETWORK_BASE =
+    0x0A720000;  // 10.114.0.0 in host byte order
 
 /**
  * @brief LDN virtual network mask (255.255.0.0)
@@ -86,10 +88,10 @@ constexpr uint16_t EPHEMERAL_PORT_END = 65535;
  * @brief Address families matching BSD/Nintendo definitions
  */
 enum class AddressFamily : uint8_t {
-    Unspecified = 0,   ///< AF_UNSPEC
-    Unix = 1,          ///< AF_UNIX (local)
-    Inet = 2,          ///< AF_INET (IPv4)
-    Inet6 = 28,        ///< AF_INET6 (IPv6) - Nintendo uses 28, not Linux 10
+    Unspecified = 0,  ///< AF_UNSPEC
+    Unix = 1,         ///< AF_UNIX (local)
+    Inet = 2,         ///< AF_INET (IPv4)
+    Inet6 = 28,       ///< AF_INET6 (IPv6) - Nintendo uses 28, not Linux 10
 };
 
 // =============================================================================
@@ -100,20 +102,20 @@ enum class AddressFamily : uint8_t {
  * @brief Socket types matching BSD definitions
  */
 enum class SocketType : int32_t {
-    Stream = 1,        ///< SOCK_STREAM (TCP)
-    Dgram = 2,         ///< SOCK_DGRAM (UDP)
-    Raw = 3,           ///< SOCK_RAW (raw IP)
-    Seqpacket = 5,     ///< SOCK_SEQPACKET (sequenced packets)
+    Stream = 1,     ///< SOCK_STREAM (TCP)
+    Dgram = 2,      ///< SOCK_DGRAM (UDP)
+    Raw = 3,        ///< SOCK_RAW (raw IP)
+    Seqpacket = 5,  ///< SOCK_SEQPACKET (sequenced packets)
 };
 
 /**
  * @brief Protocol types
  */
 enum class ProtocolType : int32_t {
-    Unspecified = 0,   ///< Default protocol for socket type
-    Icmp = 1,          ///< IPPROTO_ICMP
-    Tcp = 6,           ///< IPPROTO_TCP
-    Udp = 17,          ///< IPPROTO_UDP
+    Unspecified = 0,  ///< Default protocol for socket type
+    Icmp = 1,         ///< IPPROTO_ICMP
+    Tcp = 6,          ///< IPPROTO_TCP
+    Udp = 17,         ///< IPPROTO_UDP
 };
 
 // =============================================================================
@@ -121,36 +123,40 @@ enum class ProtocolType : int32_t {
 // =============================================================================
 
 /**
+ * @struct SockAddr
  * @brief Generic socket address (sockaddr)
  *
  * Base structure for all socket addresses. The actual data depends on
  * the address family.
  */
 struct __attribute__((packed)) SockAddr {
-    uint8_t  sa_len;       ///< Total length (BSD style)
-    uint8_t  sa_family;    ///< Address family (AddressFamily)
-    uint8_t  sa_data[14];  ///< Address data
+    uint8_t sa_len;       ///< Total length (BSD style)
+    uint8_t sa_family;    ///< Address family (AddressFamily)
+    uint8_t sa_data[14];  ///< Address data
 };
 static_assert(sizeof(SockAddr) == 16, "SockAddr must be 16 bytes");
 
 /**
+ * @struct SockAddrIn
  * @brief IPv4 socket address (sockaddr_in)
  *
  * Used for AF_INET addresses. This is the primary structure for LDN
  * proxy socket operations.
  */
 struct __attribute__((packed)) SockAddrIn {
-    uint8_t  sin_len;      ///< sizeof(SockAddrIn) = 16
-    uint8_t  sin_family;   ///< AF_INET = 2
-    uint16_t sin_port;     ///< Port number (network byte order)
-    uint32_t sin_addr;     ///< IPv4 address (network byte order)
-    uint8_t  sin_zero[8];  ///< Padding to 16 bytes
+    uint8_t sin_len;      ///< sizeof(SockAddrIn) = 16
+    uint8_t sin_family;   ///< AF_INET = 2
+    uint16_t sin_port;    ///< Port number (network byte order)
+    uint32_t sin_addr;    ///< IPv4 address (network byte order)
+    uint8_t sin_zero[8];  ///< Padding to 16 bytes
 
     /**
      * @brief Check if this address is in the LDN network
+     * @return true if sin_addr lies in the LDN subnet
      */
-    /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::IsLdnAddress: this=%p", args="$x0"}
-    bool IsLdnAddress() const {
+    /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::IsLdnAddress: this=%p",
+    /// args="$x0"}
+    [[nodiscard]] bool IsLdnAddress() const {
         // Convert from network to host byte order for comparison
         uint32_t host_addr = __builtin_bswap32(sin_addr);
         return ryu_ldn::bsd::IsLdnAddress(host_addr);
@@ -158,70 +164,78 @@ struct __attribute__((packed)) SockAddrIn {
 
     /**
      * @brief Get port in host byte order
+     * @return Port converted from network to host byte order
      */
     /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::GetPort"}
-    uint16_t GetPort() const {
+    [[nodiscard]] uint16_t GetPort() const {
         return __builtin_bswap16(sin_port);
     }
 
     /**
      * @brief Get address in host byte order
+     * @return Address converted from network to host byte order
      */
     /// @gdb{tag="BSD:ALIGN", msg="SockAddrIn::GetAddr"}
-    uint32_t GetAddr() const {
+    [[nodiscard]] uint32_t GetAddr() const {
         return __builtin_bswap32(sin_addr);
     }
 };
 static_assert(sizeof(SockAddrIn) == 16, "SockAddrIn must be 16 bytes");
 
 /**
+ * @struct SockAddrIn6
  * @brief IPv6 socket address (sockaddr_in6)
  *
  * Used for AF_INET6 addresses. LDN doesn't use IPv6, but we need
  * this for completeness and forwarding.
  */
 struct __attribute__((packed)) SockAddrIn6 {
-    uint8_t  sin6_len;       ///< sizeof(SockAddrIn6) = 28
-    uint8_t  sin6_family;    ///< AF_INET6 = 28
+    uint8_t sin6_len;        ///< sizeof(SockAddrIn6) = 28
+    uint8_t sin6_family;     ///< AF_INET6 = 28
     uint16_t sin6_port;      ///< Port number (network byte order)
     uint32_t sin6_flowinfo;  ///< IPv6 flow info
-    uint8_t  sin6_addr[16];  ///< IPv6 address
+    uint8_t sin6_addr[16];   ///< IPv6 address
     uint32_t sin6_scope_id;  ///< Scope ID
 };
 static_assert(sizeof(SockAddrIn6) == 28, "SockAddrIn6 must be 28 bytes");
 
 /**
+ * @struct SockAddrStorage
  * @brief Socket address storage (large enough for any address type)
  */
 struct __attribute__((packed)) SockAddrStorage {
-    uint8_t  ss_len;         ///< Length
-    uint8_t  ss_family;      ///< Address family
-    uint8_t  ss_padding[126];///< Padding for alignment
+    uint8_t ss_len;           ///< Length
+    uint8_t ss_family;        ///< Address family
+    uint8_t ss_padding[126];  ///< Padding for alignment
 };
-static_assert(sizeof(SockAddrStorage) == 128, "SockAddrStorage must be 128 bytes");
+static_assert(
+    sizeof(SockAddrStorage) == 128, "SockAddrStorage must be 128 bytes");
 
 // =============================================================================
 // BSD Service Structures
 // =============================================================================
 
 /**
+ * @struct LibraryConfigData
  * @brief Library configuration data passed to RegisterClient
  *
  * This structure configures the BSD socket library for a client.
  */
 struct __attribute__((packed)) LibraryConfigData {
-    uint32_t version;             ///< Library version (current: 0xA for 19.0.0+)
-    uint32_t tcp_tx_buf_size;     ///< TCP transmit buffer size
-    uint32_t tcp_rx_buf_size;     ///< TCP receive buffer size
-    uint32_t tcp_tx_buf_max_size; ///< TCP max transmit buffer size
-    uint32_t tcp_rx_buf_max_size; ///< TCP max receive buffer size
-    uint32_t udp_tx_buf_size;     ///< UDP transmit buffer size
-    uint32_t udp_rx_buf_size;     ///< UDP receive buffer size
-    uint32_t sb_efficiency;       ///< Socket buffer efficiency
+    uint32_t version;          ///< Library version (current: 0xA for 19.0.0+)
+    uint32_t tcp_tx_buf_size;  ///< TCP transmit buffer size
+    uint32_t tcp_rx_buf_size;  ///< TCP receive buffer size
+    uint32_t tcp_tx_buf_max_size;  ///< TCP max transmit buffer size
+    uint32_t tcp_rx_buf_max_size;  ///< TCP max receive buffer size
+    uint32_t udp_tx_buf_size;      ///< UDP transmit buffer size
+    uint32_t udp_rx_buf_size;      ///< UDP receive buffer size
+    uint32_t sb_efficiency;        ///< Socket buffer efficiency
 };
-static_assert(sizeof(LibraryConfigData) == 32, "LibraryConfigData must be 32 bytes");
+static_assert(
+    sizeof(LibraryConfigData) == 32, "LibraryConfigData must be 32 bytes");
 
 /**
+ * @struct RegisterClientInput
  * @brief RegisterClient IPC input structure
  *
  * This is the exact structure sent by nnSdk/libnx for RegisterClient (cmd 0).
@@ -230,11 +244,12 @@ static_assert(sizeof(LibraryConfigData) == 32, "LibraryConfigData must be 32 byt
  * Reference: libnx bsd.c _bsdRegisterClient()
  */
 struct __attribute__((packed)) RegisterClientInput {
-    LibraryConfigData config;     ///< Socket library configuration (32 bytes)
-    uint64_t pid_placeholder;     ///< PID placeholder (filled by in_send_pid)
-    uint64_t tmem_size;           ///< Transfer memory size
+    LibraryConfigData config;  ///< Socket library configuration (32 bytes)
+    uint64_t pid_placeholder;  ///< PID placeholder (filled by in_send_pid)
+    uint64_t tmem_size;        ///< Transfer memory size
 };
-static_assert(sizeof(RegisterClientInput) == 48, "RegisterClientInput must be 48 bytes");
+static_assert(
+    sizeof(RegisterClientInput) == 48, "RegisterClientInput must be 48 bytes");
 
 // =============================================================================
 // Socket Options
@@ -244,33 +259,33 @@ static_assert(sizeof(RegisterClientInput) == 48, "RegisterClientInput must be 48
  * @brief Socket option levels
  */
 enum class SocketOptionLevel : int32_t {
-    Socket = 0xFFFF,   ///< SOL_SOCKET
-    Ip = 0,            ///< IPPROTO_IP
-    Tcp = 6,           ///< IPPROTO_TCP
-    Udp = 17,          ///< IPPROTO_UDP
+    Socket = 0xFFFF,  ///< SOL_SOCKET
+    Ip = 0,           ///< IPPROTO_IP
+    Tcp = 6,          ///< IPPROTO_TCP
+    Udp = 17,         ///< IPPROTO_UDP
 };
 
 /**
  * @brief Socket-level options (SOL_SOCKET)
  */
 enum class SocketOption : int32_t {
-    Debug = 0x0001,        ///< SO_DEBUG
-    AcceptConn = 0x0002,   ///< SO_ACCEPTCONN
-    ReuseAddr = 0x0004,    ///< SO_REUSEADDR
-    KeepAlive = 0x0008,    ///< SO_KEEPALIVE
-    DontRoute = 0x0010,    ///< SO_DONTROUTE
-    Broadcast = 0x0020,    ///< SO_BROADCAST
-    Linger = 0x0080,       ///< SO_LINGER
-    OobInline = 0x0100,    ///< SO_OOBINLINE
-    ReusePort = 0x0200,    ///< SO_REUSEPORT
-    SndBuf = 0x1001,       ///< SO_SNDBUF
-    RcvBuf = 0x1002,       ///< SO_RCVBUF
-    SndLoWat = 0x1003,     ///< SO_SNDLOWAT
-    RcvLoWat = 0x1004,     ///< SO_RCVLOWAT
-    SndTimeo = 0x1005,     ///< SO_SNDTIMEO
-    RcvTimeo = 0x1006,     ///< SO_RCVTIMEO
-    Error = 0x1007,        ///< SO_ERROR
-    Type = 0x1008,         ///< SO_TYPE
+    Debug = 0x0001,       ///< SO_DEBUG
+    AcceptConn = 0x0002,  ///< SO_ACCEPTCONN
+    ReuseAddr = 0x0004,   ///< SO_REUSEADDR
+    KeepAlive = 0x0008,   ///< SO_KEEPALIVE
+    DontRoute = 0x0010,   ///< SO_DONTROUTE
+    Broadcast = 0x0020,   ///< SO_BROADCAST
+    Linger = 0x0080,      ///< SO_LINGER
+    OobInline = 0x0100,   ///< SO_OOBINLINE
+    ReusePort = 0x0200,   ///< SO_REUSEPORT
+    SndBuf = 0x1001,      ///< SO_SNDBUF
+    RcvBuf = 0x1002,      ///< SO_RCVBUF
+    SndLoWat = 0x1003,    ///< SO_SNDLOWAT
+    RcvLoWat = 0x1004,    ///< SO_RCVLOWAT
+    SndTimeo = 0x1005,    ///< SO_SNDTIMEO
+    RcvTimeo = 0x1006,    ///< SO_RCVTIMEO
+    Error = 0x1007,       ///< SO_ERROR
+    Type = 0x1008,        ///< SO_TYPE
 };
 
 // =============================================================================
@@ -281,8 +296,8 @@ enum class SocketOption : int32_t {
  * @brief Fcntl commands (limited on Switch)
  */
 enum class FcntlCommand : int32_t {
-    GetFl = 3,   ///< F_GETFL - Get flags
-    SetFl = 4,   ///< F_SETFL - Set flags
+    GetFl = 3,  ///< F_GETFL - Get flags
+    SetFl = 4,  ///< F_SETFL - Set flags
 };
 
 /**
@@ -305,12 +320,13 @@ enum class IoctlRequest : uint32_t {
 // =============================================================================
 
 /**
+ * @struct PollFd
  * @brief Poll file descriptor structure
  */
 struct __attribute__((packed)) PollFd {
-    int32_t  fd;       ///< File descriptor
-    int16_t  events;   ///< Requested events
-    int16_t  revents;  ///< Returned events
+    int32_t fd;       ///< File descriptor
+    int16_t events;   ///< Requested events
+    int16_t revents;  ///< Returned events
 };
 static_assert(sizeof(PollFd) == 8, "PollFd must be 8 bytes");
 
@@ -318,12 +334,12 @@ static_assert(sizeof(PollFd) == 8, "PollFd must be 8 bytes");
  * @brief Poll event flags
  */
 enum class PollEvents : int16_t {
-    In = 0x0001,       ///< POLLIN - data available
-    Pri = 0x0002,      ///< POLLPRI - priority data
-    Out = 0x0004,      ///< POLLOUT - can write
-    Err = 0x0008,      ///< POLLERR - error condition
-    Hup = 0x0010,      ///< POLLHUP - hang up
-    Nval = 0x0020,     ///< POLLNVAL - invalid fd
+    In = 0x0001,    ///< POLLIN - data available
+    Pri = 0x0002,   ///< POLLPRI - priority data
+    Out = 0x0004,   ///< POLLOUT - can write
+    Err = 0x0008,   ///< POLLERR - error condition
+    Hup = 0x0010,   ///< POLLHUP - hang up
+    Nval = 0x0020,  ///< POLLNVAL - invalid fd
 };
 
 // =============================================================================
@@ -334,9 +350,9 @@ enum class PollEvents : int16_t {
  * @brief Shutdown how parameter
  */
 enum class ShutdownHow : int32_t {
-    Read = 0,     ///< SHUT_RD - disable reads
-    Write = 1,    ///< SHUT_WR - disable writes
-    Both = 2,     ///< SHUT_RDWR - disable both
+    Read = 0,   ///< SHUT_RD - disable reads
+    Write = 1,  ///< SHUT_WR - disable writes
+    Both = 2,   ///< SHUT_RDWR - disable both
 };
 
 // =============================================================================
@@ -350,38 +366,38 @@ enum class ShutdownHow : int32_t {
  */
 enum class BsdErrno : int32_t {
     Success = 0,
-    Perm = 1,            ///< EPERM
-    NoEnt = 2,           ///< ENOENT
-    Intr = 4,            ///< EINTR
-    Io = 5,              ///< EIO
-    BadF = 9,            ///< EBADF
-    Again = 11,          ///< EAGAIN/EWOULDBLOCK
-    NoMem = 12,          ///< ENOMEM
-    Access = 13,         ///< EACCES
-    Fault = 14,          ///< EFAULT
-    Inval = 22,          ///< EINVAL
-    NFile = 23,          ///< ENFILE
-    MFile = 24,          ///< EMFILE
-    NotSock = 88,        ///< ENOTSOCK
-    DestAddrReq = 89,    ///< EDESTADDRREQ
-    MsgSize = 90,        ///< EMSGSIZE
-    ProtoType = 91,      ///< EPROTOTYPE
-    NoProtoOpt = 92,     ///< ENOPROTOOPT
-    ProtoNoSupport = 93, ///< EPROTONOSUPPORT
-    OpNotSupp = 95,      ///< EOPNOTSUPP
-    AfNoSupport = 97,    ///< EAFNOSUPPORT
-    AddrInUse = 98,      ///< EADDRINUSE
-    AddrNotAvail = 99,   ///< EADDRNOTAVAIL
-    NetDown = 100,       ///< ENETDOWN
-    NetUnreach = 101,    ///< ENETUNREACH
-    ConnReset = 104,     ///< ECONNRESET
-    NoBufs = 105,        ///< ENOBUFS
-    IsConn = 106,        ///< EISCONN
-    NotConn = 107,       ///< ENOTCONN
-    TimedOut = 110,      ///< ETIMEDOUT
-    ConnRefused = 111,   ///< ECONNREFUSED
-    InProgress = 115,    ///< EINPROGRESS
-    Already = 114,       ///< EALREADY
+    Perm = 1,             ///< EPERM
+    NoEnt = 2,            ///< ENOENT
+    Intr = 4,             ///< EINTR
+    Io = 5,               ///< EIO
+    BadF = 9,             ///< EBADF
+    Again = 11,           ///< EAGAIN/EWOULDBLOCK
+    NoMem = 12,           ///< ENOMEM
+    Access = 13,          ///< EACCES
+    Fault = 14,           ///< EFAULT
+    Inval = 22,           ///< EINVAL
+    NFile = 23,           ///< ENFILE
+    MFile = 24,           ///< EMFILE
+    NotSock = 88,         ///< ENOTSOCK
+    DestAddrReq = 89,     ///< EDESTADDRREQ
+    MsgSize = 90,         ///< EMSGSIZE
+    ProtoType = 91,       ///< EPROTOTYPE
+    NoProtoOpt = 92,      ///< ENOPROTOOPT
+    ProtoNoSupport = 93,  ///< EPROTONOSUPPORT
+    OpNotSupp = 95,       ///< EOPNOTSUPP
+    AfNoSupport = 97,     ///< EAFNOSUPPORT
+    AddrInUse = 98,       ///< EADDRINUSE
+    AddrNotAvail = 99,    ///< EADDRNOTAVAIL
+    NetDown = 100,        ///< ENETDOWN
+    NetUnreach = 101,     ///< ENETUNREACH
+    ConnReset = 104,      ///< ECONNRESET
+    NoBufs = 105,         ///< ENOBUFS
+    IsConn = 106,         ///< EISCONN
+    NotConn = 107,        ///< ENOTCONN
+    TimedOut = 110,       ///< ETIMEDOUT
+    ConnRefused = 111,    ///< ECONNREFUSED
+    InProgress = 115,     ///< EINPROGRESS
+    Already = 114,        ///< EALREADY
 };
 
 // =============================================================================
@@ -434,4 +450,5 @@ enum class BsdCommand : uint32_t {
     RegisterResourceStatisticsName = 32,
 };
 
-} // namespace ryu_ldn::bsd
+}  // namespace ryu_ldn::bsd
+#endif  // SYSMODULE_SOURCE_BSD_BSD_TYPES_HPP_

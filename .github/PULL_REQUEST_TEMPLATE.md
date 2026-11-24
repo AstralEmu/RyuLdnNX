@@ -50,7 +50,7 @@ All commits should be DCO-signed (`git commit -s`).
 
 - [ ] Changes are tested thoroughly
 - [ ] No new compiler warnings introduced
-- [ ] Documentation updated if needed (comments, README, docs/)
+- [ ] Documentation updated if needed (comments, README, wiki Handoff-Changes / Technique-Changelog / User-Changelog / Handoff-Current-State)
 
 ## DCO
 

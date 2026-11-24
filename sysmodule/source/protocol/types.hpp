@@ -29,7 +29,8 @@
  * 2. **Network Info**: NodeInfo, CommonNetworkInfo, LdnNetworkInfo, NetworkInfo
  * 3. **Messages**: InitializeMessage, PingMessage, DisconnectMessage
  * 4. **Requests**: CreateAccessPointRequest, ConnectRequest, ScanFilterFull
- * 5. **Proxy Types**: ProxyDataHeader, ProxyConnectRequest, ProxyConnectResponse
+ * 5. **Proxy Types**: ProxyDataHeader, ProxyConnectRequest,
+ * ProxyConnectResponse
  *
  * ## Usage Example
  *
@@ -53,10 +54,13 @@
  * Reference: LdnServer/Network/RyuLdnProtocol.cs
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_PROTOCOL_TYPES_HPP_
+#define SYSMODULE_SOURCE_PROTOCOL_TYPES_HPP_
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 
 namespace ryu_ldn::protocol {
 
@@ -70,7 +74,8 @@ namespace ryu_ldn::protocol {
  * Every packet starts with this 4-byte magic number for identification.
  * Packets with incorrect magic are rejected as invalid.
  */
-constexpr uint32_t PROTOCOL_MAGIC = ('R' << 0) | ('L' << 8) | ('D' << 16) | ('N' << 24);
+constexpr uint32_t PROTOCOL_MAGIC =
+    ('R' << 0) | ('L' << 8) | ('D' << 16) | ('N' << 24);
 
 /**
  * @brief Current protocol version
@@ -135,42 +140,42 @@ constexpr size_t MAX_NODES = 8;
  */
 enum class PacketId : uint8_t {
     // Session management
-    Initialize = 0,              ///< Client sends ID and MAC to server
-    Passphrase = 1,              ///< Client sends passphrase for private rooms
+    Initialize = 0,  ///< Client sends ID and MAC to server
+    Passphrase = 1,  ///< Client sends passphrase for private rooms
 
     // Access point operations
-    CreateAccessPoint = 2,       ///< Create a public network session
-    CreateAccessPointPrivate = 3,///< Create a private (passphrase) session
-    ExternalProxy = 4,           ///< Configure external proxy mode
-    ExternalProxyToken = 5,      ///< External proxy authentication token
-    ExternalProxyState = 6,      ///< External proxy state update
-    SyncNetwork = 7,             ///< Synchronize network state to clients
-    Reject = 8,                  ///< Host rejects a player
-    RejectReply = 9,             ///< Server confirms rejection
+    CreateAccessPoint = 2,         ///< Create a public network session
+    CreateAccessPointPrivate = 3,  ///< Create a private (passphrase) session
+    ExternalProxy = 4,             ///< Configure external proxy mode
+    ExternalProxyToken = 5,        ///< External proxy authentication token
+    ExternalProxyState = 6,        ///< External proxy state update
+    SyncNetwork = 7,               ///< Synchronize network state to clients
+    Reject = 8,                    ///< Host rejects a player
+    RejectReply = 9,               ///< Server confirms rejection
 
     // Network discovery
-    Scan = 10,                   ///< Client requests available networks
-    ScanReply = 11,              ///< Server sends one network info
-    ScanReplyEnd = 12,           ///< Server finished sending networks
-    Connect = 13,                ///< Client requests to join a network
-    ConnectPrivate = 14,         ///< Client requests to join private network
-    Connected = 15,              ///< Server confirms connection success
-    Disconnect = 16,             ///< Client/server announces disconnect
+    Scan = 10,            ///< Client requests available networks
+    ScanReply = 11,       ///< Server sends one network info
+    ScanReplyEnd = 12,    ///< Server finished sending networks
+    Connect = 13,         ///< Client requests to join a network
+    ConnectPrivate = 14,  ///< Client requests to join private network
+    Connected = 15,       ///< Server confirms connection success
+    Disconnect = 16,      ///< Client/server announces disconnect
 
     // Proxy operations (P2P tunneling)
-    ProxyConfig = 17,            ///< Configure proxy settings
-    ProxyConnect = 18,           ///< Request P2P connection through proxy
-    ProxyConnectReply = 19,      ///< Proxy connection result
-    ProxyData = 20,              ///< Game data through proxy
-    ProxyDisconnect = 21,        ///< Close proxy connection
+    ProxyConfig = 17,        ///< Configure proxy settings
+    ProxyConnect = 18,       ///< Request P2P connection through proxy
+    ProxyConnectReply = 19,  ///< Proxy connection result
+    ProxyData = 20,          ///< Game data through proxy
+    ProxyDisconnect = 21,    ///< Close proxy connection
 
     // Host control
-    SetAcceptPolicy = 22,        ///< Change accept policy (allow/reject)
-    SetAdvertiseData = 23,       ///< Update advertise data
+    SetAcceptPolicy = 22,   ///< Change accept policy (allow/reject)
+    SetAdvertiseData = 23,  ///< Update advertise data
 
     // Utility
-    Ping = 254,                  ///< Keepalive packet with timestamp
-    NetworkError = 255           ///< Error notification
+    Ping = 254,         ///< Keepalive packet with timestamp
+    NetworkError = 255  ///< Error notification
 };
 
 // =============================================================================
@@ -208,13 +213,28 @@ enum class PacketId : uint8_t {
  * 3. data_size >= 0 && data_size <= MAX_PACKET_SIZE
  */
 struct __attribute__((packed)) LdnHeader {
-    uint32_t magic;      ///< Offset 0: Must be PROTOCOL_MAGIC (0x4E444C52 = "RLDN")
-    uint8_t  type;       ///< Offset 4: Packet type from PacketId enum
-    uint8_t  version;    ///< Offset 5: Protocol version (must be PROTOCOL_VERSION = 1)
-    uint16_t reserved;   ///< Offset 6: Padding to align data_size on 4-byte boundary
-    int32_t  data_size;  ///< Offset 8: Size of payload following header (may be 0)
+    uint32_t magic;  ///< Offset 0: Must be PROTOCOL_MAGIC (0x4E444C52 = "RLDN")
+    uint8_t type;    ///< Offset 4: Packet type from PacketId enum
+    uint8_t
+        version;  ///< Offset 5: Protocol version (must be PROTOCOL_VERSION = 1)
+    uint16_t
+        reserved;  ///< Offset 6: Padding to align data_size on 4-byte boundary
+    /// @note Signed `int32_t` (not `uint32_t`) on purpose: the C# server
+    ///   declares `LdnHeader.DataSize` as `int` (System.Int32, signed) under
+    ///   `[StructLayout(LayoutKind.Sequential, Size = 0xA)]`. Switching the C++
+    ///   side to `uint32_t` would still be wire-compatible (same 4 bytes) but
+    ///   would diverge from the C# type and break the `MemoryMarshal.Read`
+    ///   semantics the server relies on. The decoder validates
+    ///   `data_size >= 0 && data_size <= MAX_PACKET_SIZE` (see ryu_protocol.hpp
+    ///   decode_header), so negative values are rejected before use — the
+    ///   signedness is purely a cross-language type-parity concern, not a
+    ///   domain signal that negative sizes are meaningful.
+    int32_t
+        data_size;  ///< Offset 8: Size of payload following header (may be 0)
 };
-static_assert(sizeof(LdnHeader) == 0x0C, "LdnHeader must be 12 bytes to match C# server layout");
+static_assert(
+    sizeof(LdnHeader) == 0x0C,
+    "LdnHeader must be 12 bytes to match C# server layout");
 
 /**
  * @brief MAC Address - 6 bytes
@@ -236,8 +256,9 @@ struct __attribute__((packed)) MacAddress {
 
     /**
      * @brief Compare two MAC addresses for equality
-     * @param other MAC address to compare with
-     * @return true if addresses are identical
+     * @param other Right-hand operand
+     * @return true if addresses are identical (compared against the other
+     *         MAC address passed as the right-hand operand)
      */
     bool operator==(const MacAddress& other) const {
         return std::memcmp(data, other.data, 6) == 0;
@@ -250,11 +271,8 @@ struct __attribute__((packed)) MacAddress {
      * Zero MAC address is used to indicate "unassigned" or "any"
      * in certain protocol operations (e.g., new client registration).
      */
-    bool is_zero() const {
-        for (int i = 0; i < 6; i++) {
-            if (data[i] != 0) return false;
-        }
-        return true;
+    [[nodiscard]] bool is_zero() const {
+        return std::ranges::all_of(data, [](uint8_t b) { return b == 0; });
     }
 };
 static_assert(sizeof(MacAddress) == 6, "MacAddress must be 6 bytes");
@@ -284,11 +302,8 @@ struct __attribute__((packed)) SessionId {
      *
      * Zero session ID typically means "unassigned" or "new client".
      */
-    bool is_zero() const {
-        for (int i = 0; i < 16; i++) {
-            if (data[i] != 0) return false;
-        }
-        return true;
+    [[nodiscard]] bool is_zero() const {
+        return std::ranges::all_of(data, [](uint8_t b) { return b == 0; });
     }
 };
 static_assert(sizeof(SessionId) == 16, "SessionId must be 16 bytes");
@@ -302,8 +317,8 @@ static_assert(sizeof(SessionId) == 16, "SessionId must be 16 bytes");
  * ## Wire Format
  * ```
  * Offset  Size  Field                      Description
- * 0x00    8     local_communication_id     Game Title ID (e.g., 0x0100152000022000 for MK8DX)
- * 0x08    2     reserved1                  Reserved (usually 0)
+ * 0x00    8     local_communication_id     Game Title ID (e.g.,
+ * 0x0100152000022000 for MK8DX) 0x08    2     reserved1 Reserved (usually 0)
  * 0x0A    2     scene_id                   Scene/mode within game
  * 0x0C    4     reserved2                  Reserved (usually 0)
  * ```
@@ -313,10 +328,11 @@ static_assert(sizeof(SessionId) == 16, "SessionId must be 16 bytes");
  * - scene_id: Game-specific scene number (e.g., online lobby vs local play)
  */
 struct __attribute__((packed)) IntentId {
-    int64_t  local_communication_id;  ///< Title ID / Game ID (e.g., Mario Kart 8 DX)
-    uint16_t reserved1;               ///< Reserved, set to 0
-    uint16_t scene_id;                ///< Scene/mode within game (game-specific)
-    uint32_t reserved2;               ///< Reserved, set to 0
+    int64_t
+        local_communication_id;  ///< Title ID / Game ID (e.g., Mario Kart 8 DX)
+    uint16_t reserved1;          ///< Reserved, set to 0
+    uint16_t scene_id;           ///< Scene/mode within game (game-specific)
+    uint32_t reserved2;          ///< Reserved, set to 0
 };
 static_assert(sizeof(IntentId) == 0x10, "IntentId must be 16 bytes");
 
@@ -337,7 +353,7 @@ static_assert(sizeof(IntentId) == 0x10, "IntentId must be 16 bytes");
  * separate game sessions for the same game/mode.
  */
 struct __attribute__((packed)) NetworkId {
-    IntentId  intent_id;   ///< Game and scene identification
+    IntentId intent_id;    ///< Game and scene identification
     SessionId session_id;  ///< Unique session identifier
 };
 static_assert(sizeof(NetworkId) == 0x20, "NetworkId must be 32 bytes");
@@ -378,10 +394,10 @@ static_assert(sizeof(Ssid) == 0x22, "Ssid must be 34 bytes");
  * 0x04    6     mac_address                  Player's MAC address
  * 0x0A    1     node_id                      Player slot (0-7)
  * 0x0B    1     is_connected                 1 = connected, 0 = disconnected
- * 0x0C    33    user_name                    Player name (UTF-8, null-terminated)
- * 0x2D    1     reserved1                    Reserved
- * 0x2E    2     local_communication_version  Game protocol version
- * 0x30    16    reserved2                    Reserved
+ * 0x0C    33    user_name                    Player name (UTF-8,
+ * null-terminated) 0x2D    1     reserved1                    Reserved 0x2E 2
+ * local_communication_version  Game protocol version 0x30    16    reserved2
+ * Reserved
  * ```
  *
  * ## Node IDs
@@ -393,14 +409,14 @@ static_assert(sizeof(Ssid) == 0x22, "Ssid must be 34 bytes");
  * Disconnected slots may retain stale data until reused.
  */
 struct __attribute__((packed)) NodeInfo {
-    uint32_t   ipv4_address;                ///< IPv4 address (network byte order)
-    MacAddress mac_address;                 ///< Player's MAC address
-    uint8_t    node_id;                     ///< Node slot (0 = host, 1-7 = clients)
-    uint8_t    is_connected;                ///< Connection status (1 = connected)
-    char       user_name[33];               ///< Player name (UTF-8, null-terminated)
-    uint8_t    reserved1;                   ///< Reserved, set to 0
-    uint16_t   local_communication_version; ///< Game's LDN protocol version
-    uint8_t    reserved2[16];               ///< Reserved, set to 0
+    uint32_t ipv4_address;   ///< IPv4 address (network byte order)
+    MacAddress mac_address;  ///< Player's MAC address
+    uint8_t node_id;         ///< Node slot (0 = host, 1-7 = clients)
+    uint8_t is_connected;    ///< Connection status (1 = connected)
+    char user_name[33];      ///< Player name (UTF-8, null-terminated)
+    uint8_t reserved1;       ///< Reserved, set to 0
+    uint16_t local_communication_version;  ///< Game's LDN protocol version
+    uint8_t reserved2[16];                 ///< Reserved, set to 0
 };
 static_assert(sizeof(NodeInfo) == 0x40, "NodeInfo must be 64 bytes");
 
@@ -428,14 +444,15 @@ static_assert(sizeof(NodeInfo) == 0x40, "NodeInfo must be 64 bytes");
  * - 3: All
  */
 struct __attribute__((packed)) CommonNetworkInfo {
-    MacAddress mac_address;   ///< Network BSSID (typically host's MAC)
-    Ssid       ssid;          ///< Network name for display
-    uint16_t   channel;       ///< WiFi channel (1-11/13)
-    uint8_t    link_level;    ///< Signal strength (0-3)
-    uint8_t    network_type;  ///< NetworkType enum value
-    uint32_t   reserved;      ///< Reserved, set to 0
+    MacAddress mac_address;  ///< Network BSSID (typically host's MAC)
+    Ssid ssid;               ///< Network name for display
+    uint16_t channel;        ///< WiFi channel (1-11/13)
+    uint8_t link_level;      ///< Signal strength (0-3)
+    uint8_t network_type;    ///< NetworkType enum value
+    uint32_t reserved;       ///< Reserved, set to 0
 };
-static_assert(sizeof(CommonNetworkInfo) == 0x30, "CommonNetworkInfo must be 48 bytes");
+static_assert(
+    sizeof(CommonNetworkInfo) == 0x30, "CommonNetworkInfo must be 48 bytes");
 
 /**
  * @brief LDN Network Info - 0x430 bytes (1072 bytes)
@@ -466,21 +483,22 @@ static_assert(sizeof(CommonNetworkInfo) == 0x30, "CommonNetworkInfo must be 48 b
  * Content varies by game (e.g., game mode, map, restrictions).
  */
 struct __attribute__((packed)) LdnNetworkInfo {
-    uint8_t  security_parameter[16];      ///< Security/encryption parameters
-    uint16_t security_mode;               ///< SecurityMode enum value
-    uint8_t  station_accept_policy;       ///< AcceptPolicy enum value
-    uint8_t  unknown1;                    ///< Unknown field
-    uint16_t reserved1;                   ///< Reserved, set to 0
-    uint8_t  node_count_max;              ///< Maximum players (1-8)
-    uint8_t  node_count;                  ///< Current connected players
-    NodeInfo nodes[MAX_NODES];            ///< Player information (8 * 64 = 512 bytes)
-    uint16_t reserved2;                   ///< Reserved, set to 0
-    uint16_t advertise_data_size;         ///< Size of advertise_data (0-384)
-    uint8_t  advertise_data[384];         ///< Game-specific matchmaking data
-    uint8_t  unknown2[140];               ///< Unknown/reserved
-    uint64_t authentication_id;           ///< Network authentication identifier
+    uint8_t security_parameter[16];  ///< Security/encryption parameters
+    uint16_t security_mode;          ///< SecurityMode enum value
+    uint8_t station_accept_policy;   ///< AcceptPolicy enum value
+    uint8_t unknown1;                ///< Unknown field
+    uint16_t reserved1;              ///< Reserved, set to 0
+    uint8_t node_count_max;          ///< Maximum players (1-8)
+    uint8_t node_count;              ///< Current connected players
+    NodeInfo nodes[MAX_NODES];     ///< Player information (8 * 64 = 512 bytes)
+    uint16_t reserved2;            ///< Reserved, set to 0
+    uint16_t advertise_data_size;  ///< Size of advertise_data (0-384)
+    uint8_t advertise_data[384];   ///< Game-specific matchmaking data
+    uint8_t unknown2[140];         ///< Unknown/reserved
+    uint64_t authentication_id;    ///< Network authentication identifier
 };
-static_assert(sizeof(LdnNetworkInfo) == 0x430, "LdnNetworkInfo must be 0x430 bytes");
+static_assert(
+    sizeof(LdnNetworkInfo) == 0x430, "LdnNetworkInfo must be 0x430 bytes");
 
 /**
  * @brief Network Info - 0x480 bytes (1152 bytes)
@@ -503,9 +521,9 @@ static_assert(sizeof(LdnNetworkInfo) == 0x430, "LdnNetworkInfo must be 0x430 byt
  * - SyncNetwork: Server broadcasts this to update all clients
  */
 struct __attribute__((packed)) NetworkInfo {
-    NetworkId         network_id;  ///< Unique network identifier
-    CommonNetworkInfo common;      ///< Basic network information
-    LdnNetworkInfo    ldn;         ///< Extended LDN-specific information
+    NetworkId network_id;      ///< Unique network identifier
+    CommonNetworkInfo common;  ///< Basic network information
+    LdnNetworkInfo ldn;        ///< Extended LDN-specific information
 };
 static_assert(sizeof(NetworkInfo) == 0x480, "NetworkInfo must be 0x480 bytes");
 
@@ -540,10 +558,11 @@ static_assert(sizeof(NetworkInfo) == 0x480, "NetworkInfo must be 0x480 bytes");
  * 3. Server sends response (typically SyncNetwork or NetworkError)
  */
 struct __attribute__((packed)) InitializeMessage {
-    SessionId  id;           ///< Client session ID (zeros = new client)
+    SessionId id;            ///< Client session ID (zeros = new client)
     MacAddress mac_address;  ///< Client MAC address (zeros = assign new)
 };
-static_assert(sizeof(InitializeMessage) == 0x16, "InitializeMessage must be 22 bytes");
+static_assert(
+    sizeof(InitializeMessage) == 0x16, "InitializeMessage must be 22 bytes");
 
 /**
  * @brief Passphrase Message - 128 bytes (0x80)
@@ -564,12 +583,15 @@ static_assert(sizeof(InitializeMessage) == 0x16, "InitializeMessage must be 22 b
  * 4. Server responds with Initialize (assigned ID/MAC)
  *
  * ## Security Note
- * Passphrase is sent in plaintext. Use TLS for transport security.
+ * Passphrase is sent in plaintext over raw TCP (the LDN protocol does not
+ * use TLS — transport security is the responsibility of the application
+ * layer if required).
  */
 struct __attribute__((packed)) PassphraseMessage {
     uint8_t passphrase[128];  ///< UTF-8 passphrase (null-padded, max 128 chars)
 };
-static_assert(sizeof(PassphraseMessage) == 0x80, "PassphraseMessage must be 128 bytes");
+static_assert(
+    sizeof(PassphraseMessage) == 0x80, "PassphraseMessage must be 128 bytes");
 
 /**
  * @brief Ping Message - 2 bytes
@@ -590,8 +612,9 @@ static_assert(sizeof(PassphraseMessage) == 0x80, "PassphraseMessage must be 128 
  * - Server tracks id to detect dropped connections
  */
 struct __attribute__((packed)) PingMessage {
-    uint8_t requester;  ///< 0 = server requested (echo back), 1 = client requested
-    uint8_t id;         ///< Ping ID for matching request/response
+    uint8_t
+        requester;  ///< 0 = server requested (echo back), 1 = client requested
+    uint8_t id;     ///< Ping ID for matching request/response
 };
 static_assert(sizeof(PingMessage) == 2, "PingMessage must be 2 bytes");
 
@@ -614,7 +637,8 @@ static_assert(sizeof(PingMessage) == 2, "PingMessage must be 2 bytes");
 struct __attribute__((packed)) DisconnectMessage {
     uint32_t disconnect_ip;  ///< IPv4 address of disconnecting client
 };
-static_assert(sizeof(DisconnectMessage) == 4, "DisconnectMessage must be 4 bytes");
+static_assert(
+    sizeof(DisconnectMessage) == 4, "DisconnectMessage must be 4 bytes");
 
 /**
  * @brief Network Error Message - 4 bytes
@@ -636,7 +660,8 @@ static_assert(sizeof(DisconnectMessage) == 4, "DisconnectMessage must be 4 bytes
 struct __attribute__((packed)) NetworkErrorMessage {
     uint32_t error_code;  ///< Error code (see server documentation)
 };
-static_assert(sizeof(NetworkErrorMessage) == 4, "NetworkErrorMessage must be 4 bytes");
+static_assert(
+    sizeof(NetworkErrorMessage) == 4, "NetworkErrorMessage must be 4 bytes");
 
 /**
  * @brief Scan Filter (Basic) - 36 bytes
@@ -652,7 +677,7 @@ static_assert(sizeof(NetworkErrorMessage) == 4, "NetworkErrorMessage must be 4 b
  */
 struct __attribute__((packed)) ScanFilter {
     NetworkId network_id;  ///< Network ID filter (zeros = match any)
-    uint32_t  flag;        ///< Filter flags (implementation-defined)
+    uint32_t flag;         ///< Filter flags (implementation-defined)
 };
 // Note: This is a simplified filter; see ScanFilterFull for complete version
 
@@ -705,11 +730,11 @@ enum class ProtocolType : int32_t {
  * ```
  */
 struct __attribute__((packed)) ProxyInfo {
-    uint32_t     source_ipv4;  ///< Source IPv4 address
-    uint16_t     source_port;  ///< Source port number
-    uint32_t     dest_ipv4;    ///< Destination IPv4 address
-    uint16_t     dest_port;    ///< Destination port number
-    ProtocolType protocol;     ///< Protocol type (TCP/UDP)
+    uint32_t source_ipv4;   ///< Source IPv4 address
+    uint16_t source_port;   ///< Source port number
+    uint32_t dest_ipv4;     ///< Destination IPv4 address
+    uint16_t dest_port;     ///< Destination port number
+    ProtocolType protocol;  ///< Protocol type (TCP/UDP)
 };
 static_assert(sizeof(ProxyInfo) == 0x10, "ProxyInfo must be 16 bytes");
 
@@ -727,10 +752,11 @@ static_assert(sizeof(ProxyInfo) == 0x10, "ProxyInfo must be 16 bytes");
  * ```
  */
 struct __attribute__((packed)) ProxyDataHeader {
-    ProxyInfo info;         ///< Source/destination addressing
-    uint32_t  data_length;  ///< Length of payload data
+    ProxyInfo info;        ///< Source/destination addressing
+    uint32_t data_length;  ///< Length of payload data
 };
-static_assert(sizeof(ProxyDataHeader) == 0x14, "ProxyDataHeader must be 20 bytes");
+static_assert(
+    sizeof(ProxyDataHeader) == 0x14, "ProxyDataHeader must be 20 bytes");
 
 /**
  * @brief Proxy Config - 8 bytes
@@ -745,8 +771,8 @@ static_assert(sizeof(ProxyDataHeader) == 0x14, "ProxyDataHeader must be 20 bytes
  * ```
  */
 struct __attribute__((packed)) ProxyConfig {
-    uint32_t proxy_ip;          ///< Proxy server IPv4 address
-    uint32_t proxy_subnet_mask; ///< Subnet mask for proxy network
+    uint32_t proxy_ip;           ///< Proxy server IPv4 address
+    uint32_t proxy_subnet_mask;  ///< Subnet mask for proxy network
 };
 static_assert(sizeof(ProxyConfig) == 8, "ProxyConfig must be 8 bytes");
 
@@ -764,7 +790,9 @@ static_assert(sizeof(ProxyConfig) == 8, "ProxyConfig must be 8 bytes");
 struct __attribute__((packed)) ProxyConnectRequest {
     ProxyInfo info;  ///< Connection addressing info
 };
-static_assert(sizeof(ProxyConnectRequest) == 0x10, "ProxyConnectRequest must be 16 bytes");
+static_assert(
+    sizeof(ProxyConnectRequest) == 0x10,
+    "ProxyConnectRequest must be 16 bytes");
 
 /**
  * @brief Proxy Connect Response - 16 bytes (0x10)
@@ -780,7 +808,9 @@ static_assert(sizeof(ProxyConnectRequest) == 0x10, "ProxyConnectRequest must be 
 struct __attribute__((packed)) ProxyConnectResponse {
     ProxyInfo info;  ///< Connection addressing info
 };
-static_assert(sizeof(ProxyConnectResponse) == 0x10, "ProxyConnectResponse must be 16 bytes");
+static_assert(
+    sizeof(ProxyConnectResponse) == 0x10,
+    "ProxyConnectResponse must be 16 bytes");
 
 /**
  * @brief Proxy Disconnect Message - 20 bytes (0x14)
@@ -795,10 +825,12 @@ static_assert(sizeof(ProxyConnectResponse) == 0x10, "ProxyConnectResponse must b
  * ```
  */
 struct __attribute__((packed)) ProxyDisconnectMessage {
-    ProxyInfo info;              ///< Connection that was closed
-    int32_t   disconnect_reason; ///< Reason for disconnection
+    ProxyInfo info;             ///< Connection that was closed
+    int32_t disconnect_reason;  ///< Reason for disconnection
 };
-static_assert(sizeof(ProxyDisconnectMessage) == 0x14, "ProxyDisconnectMessage must be 20 bytes");
+static_assert(
+    sizeof(ProxyDisconnectMessage) == 0x14,
+    "ProxyDisconnectMessage must be 20 bytes");
 
 // ============================================================================
 // External Proxy Structures
@@ -807,46 +839,55 @@ static_assert(sizeof(ProxyDisconnectMessage) == 0x14, "ProxyDisconnectMessage mu
 /**
  * @brief External Proxy Config - 0x26 bytes (38 bytes)
  *
- * Sent by the server to point a client towards an external server being used as a proxy.
- * The client then forwards this to the external proxy after connecting, to verify the connection worked.
+ * Sent by the server to point a client towards an external server being used as
+ * a proxy. The client then forwards this to the external proxy after
+ * connecting, to verify the connection worked.
  */
 struct __attribute__((packed)) ExternalProxyConfig {
-    uint8_t  proxy_ip[16];     ///< Proxy server IP address (IPv4 or IPv6 string)
-    uint32_t address_family;   ///< AddressFamily enum (2=IPv4, 23=IPv6)
-    uint16_t proxy_port;       ///< Proxy server port
-    uint8_t  token[16];        ///< Authentication token
+    uint8_t proxy_ip[16];     ///< Proxy server IP address (IPv4 or IPv6 string)
+    uint32_t address_family;  ///< AddressFamily enum (2=IPv4, 23=IPv6)
+    uint16_t proxy_port;      ///< Proxy server port
+    uint8_t token[16];        ///< Authentication token
 };
-static_assert(sizeof(ExternalProxyConfig) == 0x26, "ExternalProxyConfig must be 0x26 bytes");
+static_assert(
+    sizeof(ExternalProxyConfig) == 0x26,
+    "ExternalProxyConfig must be 0x26 bytes");
 
 /**
  * @brief External Proxy Token - 0x28 bytes (40 bytes)
  *
- * Sent by the master server to an external proxy to tell them someone is going to connect.
- * This drives authentication, and lets the proxy know what virtual IP to give to each joiner.
+ * Sent by the master server to an external proxy to tell them someone is going
+ * to connect. This drives authentication, and lets the proxy know what virtual
+ * IP to give to each joiner.
  */
 struct __attribute__((packed)) ExternalProxyToken {
-    uint32_t virtual_ip;       ///< Virtual IP assigned to the client
-    uint8_t  token[16];        ///< Authentication token
-    uint8_t  physical_ip[16];  ///< Client's physical IP address
-    uint32_t address_family;   ///< AddressFamily enum (2=IPv4, 23=IPv6)
+    uint32_t virtual_ip;      ///< Virtual IP assigned to the client
+    uint8_t token[16];        ///< Authentication token
+    uint8_t physical_ip[16];  ///< Client's physical IP address
+    uint32_t address_family;  ///< AddressFamily enum (2=IPv4, 23=IPv6)
 };
-static_assert(sizeof(ExternalProxyToken) == 0x28, "ExternalProxyToken must be 0x28 bytes");
+static_assert(
+    sizeof(ExternalProxyToken) == 0x28,
+    "ExternalProxyToken must be 0x28 bytes");
 
 /**
  * @brief External Proxy Connection State - 0x08 bytes (8 bytes)
  *
  * Indicates a change in connection state for the given client.
  * Is sent to notify the master server when connection is first established.
- * Can be sent by the external proxy to the master server to notify it of a proxy disconnect.
+ * Can be sent by the external proxy to the master server to notify it of a
+ * proxy disconnect.
  *
  * Note: Pack=4 alignment means 3 bytes padding after the bool.
  */
 struct ExternalProxyConnectionState {
-    uint32_t ip_address;       ///< IP address of the client
-    uint8_t  connected;        ///< Connection state (0=disconnected, 1=connected)
-    uint8_t  _pad[3];          ///< Padding for Pack=4 alignment
+    uint32_t ip_address;  ///< IP address of the client
+    uint8_t connected;    ///< Connection state (0=disconnected, 1=connected)
+    uint8_t _pad[3];      ///< Padding for Pack=4 alignment
 };
-static_assert(sizeof(ExternalProxyConnectionState) == 0x08, "ExternalProxyConnectionState must be 0x08 bytes");
+static_assert(
+    sizeof(ExternalProxyConnectionState) == 0x08,
+    "ExternalProxyConnectionState must be 0x08 bytes");
 
 // ============================================================================
 // Request/Response Structures (Story 1.2)
@@ -856,11 +897,12 @@ static_assert(sizeof(ExternalProxyConnectionState) == 0x08, "ExternalProxyConnec
  * @brief Security Config - 0x44 bytes (68 bytes)
  */
 struct __attribute__((packed)) SecurityConfig {
-    uint16_t security_mode;
-    uint16_t passphrase_size;
-    uint8_t  passphrase[64];
+    uint16_t security_mode;    ///< Security mode (SecurityMode value)
+    uint16_t passphrase_size;  ///< Used bytes in passphrase
+    uint8_t passphrase[64];    ///< Passphrase bytes
 };
-static_assert(sizeof(SecurityConfig) == 0x44, "SecurityConfig must be 0x44 bytes");
+static_assert(
+    sizeof(SecurityConfig) == 0x44, "SecurityConfig must be 0x44 bytes");
 
 /**
  * @brief Security Parameter - 0x20 bytes (32 bytes)
@@ -872,7 +914,8 @@ struct __attribute__((packed)) SecurityParameter {
     uint8_t data[16];        ///< Random security data
     uint8_t session_id[16];  ///< Session ID
 };
-static_assert(sizeof(SecurityParameter) == 0x20, "SecurityParameter must be 0x20 bytes");
+static_assert(
+    sizeof(SecurityParameter) == 0x20, "SecurityParameter must be 0x20 bytes");
 
 /**
  * @brief Address Entry - 0x0C bytes (12 bytes)
@@ -880,9 +923,9 @@ static_assert(sizeof(SecurityParameter) == 0x20, "SecurityParameter must be 0x20
  * IP/MAC address pair for a node.
  */
 struct __attribute__((packed)) AddressEntry {
-    uint32_t   ipv4_address;  ///< IPv4 address
-    MacAddress mac_address;   ///< MAC address
-    uint16_t   reserved;      ///< Reserved/padding
+    uint32_t ipv4_address;   ///< IPv4 address
+    MacAddress mac_address;  ///< MAC address
+    uint16_t reserved;       ///< Reserved/padding
 };
 static_assert(sizeof(AddressEntry) == 0x0C, "AddressEntry must be 0x0C bytes");
 
@@ -900,8 +943,8 @@ static_assert(sizeof(AddressList) == 0x60, "AddressList must be 0x60 bytes");
  * @brief User Config - 0x30 bytes (48 bytes)
  */
 struct __attribute__((packed)) UserConfig {
-    char    user_name[33];   ///< Player name (UTF-8, null-terminated)
-    uint8_t unknown1[15];    ///< Unknown/reserved
+    char user_name[33];    ///< Player name (UTF-8, null-terminated)
+    uint8_t unknown1[15];  ///< Unknown/reserved
 };
 static_assert(sizeof(UserConfig) == 0x30, "UserConfig must be 0x30 bytes");
 
@@ -909,39 +952,43 @@ static_assert(sizeof(UserConfig) == 0x30, "UserConfig must be 0x30 bytes");
  * @brief Network Config - 0x20 bytes (32 bytes)
  */
 struct __attribute__((packed)) NetworkConfig {
-    IntentId intent_id;
-    uint16_t channel;
-    uint8_t  node_count_max;
-    uint8_t  reserved1;
-    uint16_t local_communication_version;
-    uint8_t  reserved2[10];
+    IntentId intent_id;                    ///< Game and scene identifier
+    uint16_t channel;                      ///< Wi-Fi channel
+    uint8_t node_count_max;                ///< Maximum number of nodes
+    uint8_t reserved1;                     ///< Reserved
+    uint16_t local_communication_version;  ///< LDN communication version
+    uint8_t reserved2[10];                 ///< Reserved
 };
-static_assert(sizeof(NetworkConfig) == 0x20, "NetworkConfig must be 0x20 bytes");
+static_assert(
+    sizeof(NetworkConfig) == 0x20, "NetworkConfig must be 0x20 bytes");
 
 /**
  * @brief Ryu Network Config - 0x28 bytes (40 bytes)
  * Extended config for Ryujinx-specific features
  */
 struct __attribute__((packed)) RyuNetworkConfig {
-    uint8_t  game_version[16];
-    uint8_t  private_ip[16];       // For external proxy LAN detection
-    uint32_t address_family;       // AddressFamily enum (2=IPv4, 23=IPv6)
-    uint16_t external_proxy_port;
-    uint16_t internal_proxy_port;
+    uint8_t game_version[16];  ///< Game version string
+    uint8_t private_ip[16];    ///< Private IP, for external proxy LAN detection
+    uint32_t address_family;   ///< AddressFamily enum (2=IPv4, 23=IPv6)
+    uint16_t external_proxy_port;  ///< Externally reachable proxy port
+    uint16_t internal_proxy_port;  ///< Proxy port on the local network
 };
-static_assert(sizeof(RyuNetworkConfig) == 0x28, "RyuNetworkConfig must be 0x28 bytes");
+static_assert(
+    sizeof(RyuNetworkConfig) == 0x28, "RyuNetworkConfig must be 0x28 bytes");
 
 /**
  * @brief Create Access Point Request - 0xBC bytes (188 bytes)
  * Note: Advertise data is appended after this structure
  */
 struct __attribute__((packed)) CreateAccessPointRequest {
-    SecurityConfig   security_config;
-    UserConfig       user_config;
-    NetworkConfig    network_config;
-    RyuNetworkConfig ryu_network_config;
+    SecurityConfig security_config;       ///< Security settings
+    UserConfig user_config;               ///< User name and flags
+    NetworkConfig network_config;         ///< Network settings
+    RyuNetworkConfig ryu_network_config;  ///< Ryujinx-specific settings
 };
-static_assert(sizeof(CreateAccessPointRequest) == 0xBC, "CreateAccessPointRequest must be 0xBC bytes");
+static_assert(
+    sizeof(CreateAccessPointRequest) == 0xBC,
+    "CreateAccessPointRequest must be 0xBC bytes");
 
 /**
  * @brief Create Access Point Private Request - 0x13C bytes (316 bytes)
@@ -951,14 +998,16 @@ static_assert(sizeof(CreateAccessPointRequest) == 0xBC, "CreateAccessPointReques
  * Advertise data is appended after this structure.
  */
 struct __attribute__((packed)) CreateAccessPointPrivateRequest {
-    SecurityConfig     security_config;      ///< 0x00: Security config (0x44)
-    SecurityParameter  security_parameter;   ///< 0x44: Security parameter (0x20)
-    UserConfig         user_config;          ///< 0x64: User config (0x30)
-    NetworkConfig      network_config;       ///< 0x94: Network config (0x20)
-    AddressList        address_list;         ///< 0xB4: Address list (0x60)
-    RyuNetworkConfig   ryu_network_config;   ///< 0x114: Ryu network config (0x28)
+    SecurityConfig security_config;        ///< 0x00: Security config (0x44)
+    SecurityParameter security_parameter;  ///< 0x44: Security parameter (0x20)
+    UserConfig user_config;                ///< 0x64: User config (0x30)
+    NetworkConfig network_config;          ///< 0x94: Network config (0x20)
+    AddressList address_list;              ///< 0xB4: Address list (0x60)
+    RyuNetworkConfig ryu_network_config;   ///< 0x114: Ryu network config (0x28)
 };
-static_assert(sizeof(CreateAccessPointPrivateRequest) == 0x13C, "CreateAccessPointPrivateRequest must be 0x13C bytes");
+static_assert(
+    sizeof(CreateAccessPointPrivateRequest) == 0x13C,
+    "CreateAccessPointPrivateRequest must be 0x13C bytes");
 
 /**
  * @brief Connect Private Request - 0xBC bytes (188 bytes)
@@ -967,14 +1016,16 @@ static_assert(sizeof(CreateAccessPointPrivateRequest) == 0x13C, "CreateAccessPoi
  * Contains SecurityParameter for authentication.
  */
 struct __attribute__((packed)) ConnectPrivateRequest {
-    SecurityConfig     security_config;             ///< 0x00: Security config (0x44)
-    SecurityParameter  security_parameter;          ///< 0x44: Security parameter (0x20)
-    UserConfig         user_config;                 ///< 0x64: User config (0x30)
-    uint32_t           local_communication_version; ///< 0x94: LDN version
-    uint32_t           option_unknown;              ///< 0x98: Unknown option
-    NetworkConfig      network_config;              ///< 0x9C: Network config (0x20)
+    SecurityConfig security_config;        ///< 0x00: Security config (0x44)
+    SecurityParameter security_parameter;  ///< 0x44: Security parameter (0x20)
+    UserConfig user_config;                ///< 0x64: User config (0x30)
+    uint32_t local_communication_version;  ///< 0x94: LDN version
+    uint32_t option_unknown;               ///< 0x98: Unknown option
+    NetworkConfig network_config;          ///< 0x9C: Network config (0x20)
 };
-static_assert(sizeof(ConnectPrivateRequest) == 0xBC, "ConnectPrivateRequest must be 0xBC bytes");
+static_assert(
+    sizeof(ConnectPrivateRequest) == 0xBC,
+    "ConnectPrivateRequest must be 0xBC bytes");
 
 /**
  * @brief Scan Filter (Full) - 0x60 bytes (96 bytes)
@@ -996,14 +1047,15 @@ static_assert(sizeof(ConnectPrivateRequest) == 0xBC, "ConnectPrivateRequest must
  * Total: 96 bytes (0x60)
  */
 struct __attribute__((packed)) ScanFilterFull {
-    NetworkId  network_id;      // 0x00: 32 bytes
-    uint32_t   network_type;    // 0x20: 4 bytes (matches server's NetworkType : uint)
-    MacAddress mac_address;     // 0x24: 6 bytes
-    Ssid       ssid;            // 0x2A: 34 bytes
-    uint8_t    reserved[16];    // 0x4C: 16 bytes
-    uint32_t   flag;            // 0x5C: 4 bytes
+    NetworkId network_id;    ///< 0x00: 32 bytes
+    uint32_t network_type;   ///< 0x20: 4 bytes (server's NetworkType : uint)
+    MacAddress mac_address;  ///< 0x24: 6 bytes
+    Ssid ssid;               ///< 0x2A: 34 bytes
+    uint8_t reserved[16];    ///< 0x4C: 16 bytes
+    uint32_t flag;           ///< 0x5C: 4 bytes
 };
-static_assert(sizeof(ScanFilterFull) == 0x60, "ScanFilterFull must be 96 bytes (0x60)");
+static_assert(
+    sizeof(ScanFilterFull) == 0x60, "ScanFilterFull must be 96 bytes (0x60)");
 
 /**
  * @brief Connect Request - 0x500 bytes (1280 bytes)
@@ -1017,14 +1069,16 @@ static_assert(sizeof(ScanFilterFull) == 0x60, "ScanFilterFull must be 96 bytes (
  * We must add explicit padding to match the C# layout.
  */
 struct __attribute__((packed)) ConnectRequest {
-    SecurityConfig security_config;             // 0x00: 0x44 bytes (68)
-    UserConfig     user_config;                 // 0x44: 0x30 bytes (48)
-    uint32_t       local_communication_version; // 0x74: 4 bytes
-    uint32_t       option_unknown;              // 0x78: 4 bytes
-    uint32_t       _padding;                    // 0x7C: 4 bytes padding for 8-byte alignment
-    NetworkInfo    network_info;                // 0x80: 0x480 bytes (1152)
+    SecurityConfig security_config;        ///< 0x00: 0x44 bytes (68)
+    UserConfig user_config;                ///< 0x44: 0x30 bytes (48)
+    uint32_t local_communication_version;  ///< 0x74: 4 bytes
+    uint32_t option_unknown;               ///< 0x78: 4 bytes
+    uint32_t _padding;         ///< 0x7C: 4 bytes padding for 8-byte alignment
+    NetworkInfo network_info;  ///< 0x80: 0x480 bytes (1152)
 };
-static_assert(sizeof(ConnectRequest) == 0x500, "ConnectRequest must be 0x500 bytes (1280) to match C# alignment");
+static_assert(
+    sizeof(ConnectRequest) == 0x500,
+    "ConnectRequest must be 0x500 bytes (1280) to match C# alignment");
 
 /**
  * @brief Set Accept Policy Request - 1 byte
@@ -1035,7 +1089,9 @@ static_assert(sizeof(ConnectRequest) == 0x500, "ConnectRequest must be 0x500 byt
 struct __attribute__((packed)) SetAcceptPolicyRequest {
     uint8_t accept_policy;  ///< AcceptPolicy enum (0-3)
 };
-static_assert(sizeof(SetAcceptPolicyRequest) == 1, "SetAcceptPolicyRequest must be 1 byte");
+static_assert(
+    sizeof(SetAcceptPolicyRequest) == 1,
+    "SetAcceptPolicyRequest must be 1 byte");
 
 /**
  * @brief Reject Request - 8 bytes
@@ -1050,8 +1106,8 @@ static_assert(sizeof(SetAcceptPolicyRequest) == 1, "SetAcceptPolicyRequest must 
  * ```
  */
 struct __attribute__((packed)) RejectRequest {
-    uint32_t node_id;           ///< Node ID of player to reject
-    uint32_t disconnect_reason; ///< DisconnectReason enum value
+    uint32_t node_id;            ///< Node ID of player to reject
+    uint32_t disconnect_reason;  ///< DisconnectReason enum value
 };
 static_assert(sizeof(RejectRequest) == 8, "RejectRequest must be 8 bytes");
 
@@ -1059,34 +1115,38 @@ static_assert(sizeof(RejectRequest) == 8, "RejectRequest must be 8 bytes");
 // Enums
 // ============================================================================
 
+/// Which stations the host admits (SetAcceptPolicyRequest::accept_policy).
 enum class AcceptPolicy : uint8_t {
-    AcceptAll = 0,
-    RejectAll = 1,
-    BlackList = 2,
-    WhiteList = 3
+    AcceptAll = 0,  ///< Admit every station
+    RejectAll = 1,  ///< Admit nobody
+    BlackList = 2,  ///< Admit everyone except listed stations
+    WhiteList = 3   ///< Admit only listed stations
 };
 
+/// LDN security mode of a network (same values as Nintendo's LDN).
 enum class SecurityMode : uint16_t {
-    Any = 0,
-    Product = 1,
-    Debug = 2
+    Any = 0,      ///< No restriction
+    Product = 1,  ///< Retail security
+    Debug = 2     ///< Debug security
 };
 
+/// LDN network type (same values as Nintendo's LDN).
 enum class NetworkType : uint8_t {
-    None = 0,
-    General = 1,
-    Ldn = 2,
-    All = 3
+    None = 0,     ///< Unspecified
+    General = 1,  ///< General network
+    Ldn = 2,      ///< LDN network
+    All = 3       ///< Any type
 };
 
+/// Why a node left or was removed (RejectRequest::disconnect_reason).
 enum class DisconnectReason : uint32_t {
-    None = 0,
-    User = 1,
-    SystemRequest = 2,
-    DestroyedByHost = 3,
-    DestroyedByAdmin = 4,
-    Rejected = 5,
-    SignalLost = 6
+    None = 0,              ///< No reason
+    User = 1,              ///< Left by user choice
+    SystemRequest = 2,     ///< Requested by the system
+    DestroyedByHost = 3,   ///< Host destroyed the network
+    DestroyedByAdmin = 4,  ///< Destroyed by an administrator
+    Rejected = 5,          ///< Rejected by the host
+    SignalLost = 6         ///< Connection lost
 };
 
 /**
@@ -1106,21 +1166,21 @@ enum class DisconnectReason : uint32_t {
  */
 enum class NetworkErrorCode : uint32_t {
     // Success
-    None = 0,                    ///< No error
+    None = 0,  ///< No error
 
     // Handshake errors (1-99)
-    VersionMismatch = 1,         ///< Protocol version doesn't match server
-    InvalidMagic = 2,            ///< Invalid protocol magic number
-    InvalidSessionId = 3,        ///< Session ID is invalid or expired
-    HandshakeTimeout = 4,        ///< Handshake didn't complete in time
-    AlreadyInitialized = 5,      ///< Client already sent Initialize
+    VersionMismatch = 1,     ///< Protocol version doesn't match server
+    InvalidMagic = 2,        ///< Invalid protocol magic number
+    InvalidSessionId = 3,    ///< Session ID is invalid or expired
+    HandshakeTimeout = 4,    ///< Handshake didn't complete in time
+    AlreadyInitialized = 5,  ///< Client already sent Initialize
 
     // Session errors (100-199)
-    SessionNotFound = 100,       ///< Referenced session doesn't exist
-    SessionFull = 101,           ///< Session has maximum players
-    SessionClosed = 102,         ///< Session was closed by host
-    NotInSession = 103,          ///< Operation requires being in a session
-    AlreadyInSession = 104,      ///< Already in a session
+    SessionNotFound = 100,   ///< Referenced session doesn't exist
+    SessionFull = 101,       ///< Session has maximum players
+    SessionClosed = 102,     ///< Session was closed by host
+    NotInSession = 103,      ///< Operation requires being in a session
+    AlreadyInSession = 104,  ///< Already in a session
 
     // Network errors (200-299)
     NetworkNotFound = 200,       ///< Requested network doesn't exist
@@ -1130,8 +1190,9 @@ enum class NetworkErrorCode : uint32_t {
     InvalidRequest = 204,        ///< Malformed or invalid request
 
     // Internal errors (900-999)
-    InternalError = 900,         ///< Server internal error
-    ServiceUnavailable = 901     ///< Service temporarily unavailable
+    InternalError = 900,      ///< Server internal error
+    ServiceUnavailable = 901  ///< Service temporarily unavailable
 };
 
-} // namespace ryu_ldn::protocol
+}  // namespace ryu_ldn::protocol
+#endif  // SYSMODULE_SOURCE_PROTOCOL_TYPES_HPP_

@@ -14,29 +14,87 @@
 
 #include <stratosphere.hpp>
 #include <cstring>
+#include <memory>
 #include <new>
 
 namespace ryu_ldn::config {
 
 namespace {
 
+/// SD card path of the game whitelist, one title ID per line
 constexpr const char* WHITELIST_PATH = "sdmc:/config/ryu_ldn_nx/gamelist.txt";
 
-// Average bytes per line in gamelist.txt (e.g., "0x0100152000022000\n" = ~19 bytes)
+/// Average bytes per line in gamelist.txt (e.g., "0x0100152000022000\n" =
+/// ~19 bytes); used to size the entry array from the file size
 constexpr size_t BYTES_PER_ENTRY = 18;
 
-// Dynamically allocated whitelist (sized based on file)
-static u64* g_whitelist = nullptr;
-static size_t g_whitelist_capacity = 0;
-static size_t g_whitelist_count = 0;
-static bool g_whitelist_loaded = false;
+// Dynamically allocated whitelist (sized based on file).
+// Owned by a unique_ptr (cppcoreguidelines-owning-memory): the array is
+// allocated once at startup, populated, and released automatically at
+// sysmodule exit — no manual delete, no leak on any exit path.
+/**
+ * @brief Heap-allocated array holding the parsed whitelist of program IDs.
+ *
+ * @role Backing storage for the whitelist consulted by `IsGameWhitelisted` so
+ *       the MITM ShouldMitm path can decide whether to intercept a game
+ *       without touching the SD card on every IPC.
+ * @modified_by `LoadWhitelist` (this file) — allocated via `new (std::nothrow)`
+ *              once at startup, populated from
+ * `sdmc:/config/ryu_ldn_nx/gamelist.txt`, and owned by this unique_ptr for the
+ * sysmodule lifetime.
+ * @thread_safety Not protected by a mutex. `LoadWhitelist` is invoked once
+ * during `InitializeSystemModule` before any MITM session can call
+ *                `IsGameWhitelisted`; the load-then-freeze pattern means later
+ *                read-only access from MITM threads is safe by happens-before.
+ */
+std::unique_ptr<u64[]> g_whitelist = nullptr;
+
+/**
+ * @brief Capacity (in u64 entries) of the g_whitelist array.
+ *
+ * @role Bounding size used by `LoadWhitelist` to stop parsing once the array
+ *       is full and by the loader's loop guards.
+ * @modified_by `LoadWhitelist` only — set during allocation, never mutated
+ *              afterwards.
+ * @thread_safety Same load-then-freeze discipline as g_whitelist; read-only
+ *                after initialization.
+ */
+size_t g_whitelist_capacity = 0;
+
+/**
+ * @brief Number of valid entries currently stored in g_whitelist.
+ *
+ * @role Active length of the whitelist; `IsGameWhitelisted` scans indices
+ *       `[0, g_whitelist_count)` to test membership.
+ * @modified_by `LoadWhitelist` only — incremented as each program ID is
+ *              parsed from the file, then frozen.
+ * @thread_safety Read-only after the one-shot `LoadWhitelist` run; no mutex
+ *                needed by the load-then-freeze contract.
+ */
+size_t g_whitelist_count = 0;
+
+/**
+ * @brief One-shot "initialized" flag preventing double-loads of the whitelist.
+ *
+ * @role Guarded latch so repeated `LoadWhitelist` calls (e.g. via IPC reconnect
+ *       paths) short-circuit after the first successful or failed load.
+ * @modified_by `LoadWhitelist` only — set to true on success and also on the
+ *              empty-file / allocation-failure paths so the sysmodule still
+ *              functions with an empty whitelist.
+ * @thread_safety Read-only after the first `LoadWhitelist`; checked at the top
+ *                of `LoadWhitelist` under the same load-then-freeze discipline.
+ */
+bool g_whitelist_loaded = false;
 
 /**
  * @brief Parse a hex string like "0x0100152000022000" to u64
+ *
+ * @param str Characters to parse (not null-terminated)
+ * @param len Number of characters in str
+ * @return Parsed program ID, or 0 when the text is not valid hex
  */
 u64 ParseHexId(const char* str, size_t len) {
-    if (!str || len == 0) return 0;
-
+    // Only called with line_buf and line_len > 0: no null/empty guard needed.
     size_t i = 0;
 
     // Skip "0x" or "0X" prefix if present
@@ -50,11 +108,11 @@ u64 ParseHexId(const char* str, size_t len) {
         u64 digit;
 
         if (c >= '0' && c <= '9') {
-            digit = c - '0';
+            digit = static_cast<u64>(c - '0');
         } else if (c >= 'a' && c <= 'f') {
-            digit = 10 + (c - 'a');
+            digit = 10 + static_cast<u64>(c - 'a');
         } else if (c >= 'A' && c <= 'F') {
-            digit = 10 + (c - 'A');
+            digit = 10 + static_cast<u64>(c - 'A');
         } else {
             break;  // Invalid character, stop
         }
@@ -69,18 +127,23 @@ u64 ParseHexId(const char* str, size_t len) {
 
 void LoadWhitelist() {
     if (g_whitelist_loaded) {
-        LOG_INFO("GameWhitelist: already loaded (%zu games)", g_whitelist_count);
+        LOG_INFO(
+            "GameWhitelist: already loaded (%zu games)", g_whitelist_count);
         return;
     }
 
     LOG_INFO("GameWhitelist: loading from %s", WHITELIST_PATH);
 
     // Open the file
-    ams::fs::FileHandle file;
-    ams::Result rc = ams::fs::OpenFile(std::addressof(file), WHITELIST_PATH, ams::fs::OpenMode_Read);
+    ams::fs::FileHandle file{};
+    ams::Result rc = ams::fs::OpenFile(
+        std::addressof(file), WHITELIST_PATH, ams::fs::OpenMode_Read);
 
     if (R_FAILED(rc)) {
-        LOG_WARN("GameWhitelist: Cannot open %s (rc=0x%x)", WHITELIST_PATH, rc.GetValue());
+        LOG_WARN(
+            "GameWhitelist: Cannot open %s (rc=0x%x)",
+            WHITELIST_PATH,
+            rc.GetValue());
         g_whitelist_loaded = true;  // Mark as loaded (empty)
         return;
     }
@@ -98,11 +161,15 @@ void LoadWhitelist() {
     LOG_INFO("GameWhitelist: file_size=%lld bytes", file_size);
 
     // Calculate capacity based on file size and allocate
-    g_whitelist_capacity = static_cast<size_t>(file_size / BYTES_PER_ENTRY) + 100;  // +100 margin
-    g_whitelist = new (std::nothrow) u64[g_whitelist_capacity];
-    if (!g_whitelist) {
+    g_whitelist_capacity = (static_cast<size_t>(file_size) / BYTES_PER_ENTRY) +
+                           100;  // +100 margin
+    g_whitelist =
+        std::unique_ptr<u64[]>(new (std::nothrow) u64[g_whitelist_capacity]);
+    if (g_whitelist == nullptr) {
         ams::fs::CloseFile(file);
-        LOG_ERROR("GameWhitelist: failed to allocate %zu entries", g_whitelist_capacity);
+        LOG_ERROR(
+            "GameWhitelist: failed to allocate %zu entries",
+            g_whitelist_capacity);
         g_whitelist_loaded = true;
         return;
     }
@@ -117,21 +184,23 @@ void LoadWhitelist() {
     s64 offset = 0;
 
     while (offset < file_size && g_whitelist_count < g_whitelist_capacity) {
-        size_t to_read = static_cast<size_t>(
+        auto to_read = static_cast<size_t>(
             (file_size - offset) < static_cast<s64>(CHUNK_SIZE)
-            ? (file_size - offset)
-            : static_cast<s64>(CHUNK_SIZE)
-        );
+                ? (file_size - offset)
+                : static_cast<s64>(CHUNK_SIZE));
 
         size_t bytes_read = 0;
-        rc = ams::fs::ReadFile(std::addressof(bytes_read), file, offset, chunk, to_read);
+        rc = ams::fs::ReadFile(
+            std::addressof(bytes_read), file, offset, chunk, to_read);
         if (R_FAILED(rc)) {
             LOG_WARN("GameWhitelist: ReadFile failed rc=0x%x", rc.GetValue());
             break;
         }
 
         // Process chunk byte by byte
-        for (size_t i = 0; i < bytes_read && g_whitelist_count < g_whitelist_capacity; i++) {
+        for (size_t i = 0;
+             i < bytes_read && g_whitelist_count < g_whitelist_capacity;
+             i++) {
             char c = chunk[i];
 
             if (c == '\n' || c == '\r') {
@@ -148,7 +217,7 @@ void LoadWhitelist() {
             }
         }
 
-        offset += bytes_read;
+        offset += static_cast<s64>(bytes_read);
     }
 
     // Check last line if no trailing newline
@@ -165,6 +234,9 @@ void LoadWhitelist() {
     LOG_INFO("GameWhitelist: loaded %zu games", g_whitelist_count);
 }
 
+/**
+ * @brief Check whether a program ID is in the loaded whitelist
+ */
 bool IsGameInWhitelist(u64 program_id) {
     if (!g_whitelist_loaded) {
         LOG_WARN("GameWhitelist: not loaded yet!");

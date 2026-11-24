@@ -1,0 +1,15 @@
+#!/bin/sh
+# Wiki pre-commit: a git wiki is its default branch and nothing else.
+# Refuses a commit made off that branch (a detached HEAD included), which
+# would spawn orphan history the published wiki never sees.
+# Installed by `make hooks` into the wiki clone's own hooks directory.
+branch=$(git symbolic-ref --quiet --short HEAD || [ $? -eq 1 ])
+ref=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD || [ $? -eq 1 ])
+expected=${ref#origin/}
+[ -n "$expected" ] || expected=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin | sed 's|^origin/||' | grep -E '^(main|master)$' | head -n 1)
+
+if [ -z "$branch" ] || [ "$branch" != "$expected" ]; then
+	echo "✗ wiki: refusing a commit off '$expected' (HEAD = '${branch:-detached}')." >&2
+	echo "  git checkout $expected && git merge --ff-only origin/$expected, then redo the edit." >&2
+	exit 1
+fi

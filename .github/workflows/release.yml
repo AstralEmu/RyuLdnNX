@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   packages: read
 
 jobs:
@@ -21,236 +21,107 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Ensure tagged commit is on main
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG_COMMIT: ${{ github.sha }}
+          TAG_NAME: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "Workflow dispatch — skipping branch check"
             exit 0
           fi
           git fetch origin main
-          TAG_COMMIT="${{ github.sha }}"
           MAIN_TIP=$(git rev-parse origin/main)
           if ! git merge-base --is-ancestor "$TAG_COMMIT" "$MAIN_TIP"; then
-            echo "::error::Tag ${{ github.ref_name }} is not on the main branch. Releases can only be created from main."
+            echo "::error::Tag ${TAG_NAME} is not on the main branch. Releases can only be created from main."
             exit 1
           fi
-          echo "Tag ${{ github.ref_name }} is on main ✓"
+          echo "Tag ${TAG_NAME} is on main ✓"
 
-  test:
-    name: Tests & Coverage ≥ 80%
-    runs-on: ubuntu-latest
+  # Shared test + build pipeline extracted into _build-base.yml.
+  # Releases always run the build job (run-build=true) and use the
+  # generic artifact names that the create-release job below expects.
+  base:
+    name: Test & Build (reusable)
     needs: verify-branch
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential g++ netcat-openbsd
-          pip install gcovr
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-
-      - name: Run unit tests with coverage
-        run: cd tests && make clean && make COVERAGE=1 test
-
-      - name: Build integration tests with coverage
-        run: cd tests/integration && make clean && make COV=1 all
-
-      - name: Start LdnServer
-        run: |
-          cd tests/integration
-          bash prepare-compose.sh
-          docker compose -f docker-compose.yml up -d
-          bash wait-for-server.sh localhost 30456 60
-          sleep 2
-
-      - name: Run integration tests with coverage
-        run: |
-          cd tests/integration
-          INTEGRATION_COMPOSE_FILE="$(pwd)/docker-compose.yml" ./run_integration_tests localhost 30456
-
-      - name: Tear down LdnServer
-        if: always()
-        run: cd tests/integration && docker compose -f docker-compose.yml down -v
-
-      - name: Enforce per-file coverage ≥ 80%
-        run: python3 scripts/check-coverage.py --min 80 --root .
-
-      - name: Compute average coverage
-        id: coverage
-        run: |
-          python3 scripts/check-coverage.py --min 0 --root . --json /tmp/cov.json || true
-          python3 <<'PYEOF' > /tmp/avg.txt
-          import json
-          with open('/tmp/cov.json') as f:
-              d = json.load(f)
-          files = [f for f in d.get('files', []) if 'sysmodule/source/' in (f.get('file', f.get('filename', '')))]
-          total_lines = 0
-          total_covered = 0
-          for f in files:
-              lines = f.get('lines', [])
-              if isinstance(lines, list):
-                  total_lines += len(lines)
-                  total_covered += sum(1 for l in lines if l.get('count', 0) > 0)
-          avg = (total_covered / total_lines * 100) if total_lines > 0 else 0
-          print(f'{avg:.1f}')
-          PYEOF
-          echo "percent=$(cat /tmp/avg.txt)" >> $GITHUB_OUTPUT
-
-      - name: Update coverage badge
-        uses: schneegans/dynamic-badges-action@v1.8.0
-        with:
-          auth: ${{ secrets.GIST_BADGE_SECRET }}
-          gistID: REMOVED
-          filename: coverage.json
-          label: coverage
-          message: ${{ steps.coverage.outputs.percent }}%
-          valColorRange: ${{ steps.coverage.outputs.percent }}
-          maxColorRange: 100
-          minColorRange: 0
-
-  build:
-    name: Build & Package
-    runs-on: ubuntu-latest
-    needs: test
-    container: ghcr.io/ethiquema/ryu_ldn_nx:latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Fix git safe directory
-        run: |
-          git config --global --add safe.directory '*'
-          git symbolic-ref HEAD refs/heads/"${GITHUB_REF_NAME:-main}" 2>/dev/null || true
-
-      - name: Link pre-built libraries
-        run: |
-          # Symlink pre-built libstratosphere.a from the container image
-          # so the sysmodule Makefile finds it without rebuilding libs.
-          LIB_DIR="${GITHUB_WORKSPACE}/sysmodule/Atmosphere-libs/libstratosphere/lib/nintendo_nx_arm64_armv8a/release"
-          PREBUILT="/opt/ryu_ldn_nx/libstratosphere/lib/nintendo_nx_arm64_armv8a/release/libstratosphere.a"
-
-          if [ -f "$PREBUILT" ]; then
-            mkdir -p "$LIB_DIR"
-            ln -s "$PREBUILT" "$LIB_DIR/libstratosphere.a"
-            echo "Linked pre-built libstratosphere.a from container image"
-          else
-            echo "::error::Pre-built libstratosphere.a not found at $PREBUILT"
-            exit 1
-          fi
-
-      - name: Detach devkitPro packaging tools from LD_PRELOAD
-        run: |
-          for tool in npdmtool elf2nso build_pfs0 nacptool; do
-            real="/opt/devkitpro/tools/bin/$tool"
-            if [ ! -f "$real.real" ]; then
-              mv "$real" "$real.real"
-            fi
-            cat > "$real" <<'WRAPPER'
-          #!/bin/bash
-          self="${0}.real"
-          name="$(basename "$0")"
-          if [ "$name" = "npdmtool" ] && [ -f "$1" ]; then
-            staged="/tmp/$(basename "$1").$$"
-            cp "$1" "$staged"
-            shift
-            set -- "$staged" "$@"
-          fi
-          exec env -u LD_PRELOAD "$self" "$@"
-          WRAPPER
-            chmod +x "$real"
-          done
-
-      - name: Build sysmodule + overlay + dist ZIP
-        env:
-          DEVKITPRO: /opt/devkitpro
-        run: |
-          export DEVKITPRO=/opt/devkitpro
-          export DEVKITARM=$DEVKITPRO/devkitARM
-          export DEVKITA64=$DEVKITPRO/devkitA64
-          export PATH=$DEVKITPRO/tools/bin:$DEVKITA64/bin:$PATH
-
-          # Copy NPDM descriptor to /tmp to avoid filesystem issues on
-          # the GitHub Actions workspace bind-mount inside the container.
-          # npdmtool cannot parse JSON from the /__w/... bind-mount.
-          cp "${GITHUB_WORKSPACE}/sysmodule/res/app.json" /tmp/app.json
-
-          cd ${GITHUB_WORKSPACE}/sysmodule && make -j4 all APP_JSON=/tmp/app.json
-          cd ${GITHUB_WORKSPACE}/overlay && make -j4 all
-          cd ${GITHUB_WORKSPACE}/sysmodule && make dist APP_JSON=/tmp/app.json
-
-      - name: Upload release ZIP
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-zip
-          path: ryu_ldn_nx-release.zip
-
-      - name: Upload debug symbols
-        uses: actions/upload-artifact@v7
-        with:
-          name: debug-symbols
-          path: |
-            sysmodule/ryu_ldn_nx.elf
-            sysmodule/ryu_ldn_nx.nso
+    uses: ./.github/workflows/_build-base.yml
+    with:
+      run-build: true
+      default-branch: 'main'
+      artifact-name-zip: 'release-zip'
+      artifact-name-debug: 'debug-symbols'
+      # Release workflow always updates the coverage badge.
+      badge-always: true
+    secrets:
+      GIST_BADGE_SECRET: ${{ secrets.GIST_BADGE_SECRET }}
+    permissions:
+      contents: read
+      packages: read
 
   create-release:
     name: Create Release
-    needs: build
+    needs: base
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Download release ZIP
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release-zip
           path: .
 
       - name: Download debug symbols
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: debug-symbols
           path: debug
 
       - name: Get version
         id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Version '$VERSION' does not match semver (e.g. v1.0.0 or v1.0.0-rc.1)"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Rename ZIP with version
-        run: mv ryu_ldn_nx-release.zip ryu_ldn_nx-${{ steps.version.outputs.version }}.zip
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: mv ryu_ldn_nx-release.zip "ryu_ldn_nx-${VERSION}.zip"
 
       - name: Generate changelog
         id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
-          cat > CHANGELOG_RELEASE.md << 'HEADER'
-          ## ryu_ldn_nx ${VERSION}
+          {
+          printf '## ryu_ldn_nx %s\n' "$VERSION"
+          cat << 'HEADER'
 
           Nintendo Switch LDN sysmodule for online local multiplayer with Ryujinx servers.
 
@@ -267,21 +138,23 @@ jobs:
           HEADER
 
           if [ -n "$PREV_TAG" ]; then
-            echo "" >> CHANGELOG_RELEASE.md
-            echo "Changes since \`${PREV_TAG}\`:" >> CHANGELOG_RELEASE.md
-            echo "" >> CHANGELOG_RELEASE.md
-            git log ${PREV_TAG}..HEAD --pretty=format:"- %s" >> CHANGELOG_RELEASE.md
+            echo ""
+            echo "Changes since \`${PREV_TAG}\`:"
+            echo ""
+            git log "${PREV_TAG}..HEAD" --pretty=format:"- %s"
           else
-            echo "- Initial release" >> CHANGELOG_RELEASE.md
+            echo "- Initial release"
           fi
+          } > CHANGELOG_RELEASE.md
 
           echo ""
           echo "=== Generated changelog ==="
           cat CHANGELOG_RELEASE.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
+          tag_name: ${{ steps.version.outputs.version }}
           name: ryu_ldn_nx ${{ steps.version.outputs.version }}
           body_path: CHANGELOG_RELEASE.md
           draft: false

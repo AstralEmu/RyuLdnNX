@@ -29,7 +29,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_CONFIG_CONFIG_MANAGER_HPP_
+#define SYSMODULE_SOURCE_CONFIG_CONFIG_MANAGER_HPP_
 
 #include "config.hpp"
 #include <cstdint>
@@ -76,6 +77,7 @@ class ConfigManager {
 public:
     /**
      * @brief Get the singleton instance
+     * @return The process-wide manager (function-local static).
      */
     /// @gdb{tag="CONFIG:MGR", msg="Getting manager instance"}
     static ConfigManager& Instance();
@@ -94,13 +96,20 @@ public:
 
     /**
      * @brief Check if initialized
+     * @return true once Initialize() has been called.
      */
-    bool IsInitialized() const { return m_initialized; }
+    [[nodiscard]] bool IsInitialized() const {
+        return m_initialized;
+    }
 
     /**
      * @brief Get current configuration (read-only)
+     * @return Reference to the in-memory config, valid for the singleton's
+     *         lifetime.
      */
-    const Config& GetConfig() const { return m_config; }
+    [[nodiscard]] const Config& GetConfig() const {
+        return m_config;
+    }
 
     /**
      * @brief Save current configuration to disk
@@ -126,8 +135,11 @@ public:
 
     /**
      * @brief Get server host
+     * @return NUL-terminated host name, owned by the manager.
      */
-    const char* GetServerHost() const { return m_config.server.host; }
+    [[nodiscard]] const char* GetServerHost() const {
+        return m_config.server.host;
+    }
 
     /**
      * @brief Set server host
@@ -139,73 +151,18 @@ public:
 
     /**
      * @brief Get server port
+     * @return TCP port of the Ryujinx LDN server.
      */
-    uint16_t GetServerPort() const { return m_config.server.port; }
+    [[nodiscard]] uint16_t GetServerPort() const {
+        return m_config.server.port;
+    }
 
     /**
      * @brief Set server port
+     * @param port TCP port; stored as is, marks config dirty.
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting server port"}
     void SetServerPort(uint16_t port);
-
-    /**
-     * @brief Get TLS enabled state
-     */
-    bool GetUseTls() const { return m_config.server.use_tls; }
-
-    /**
-     * @brief Set TLS enabled state
-     */
-    /// @gdb{tag="CONFIG:MGR", msg="Setting TLS enabled state"}
-    void SetUseTls(bool enabled);
-
-    // =========================================================================
-    // Network Settings
-    // =========================================================================
-
-    /**
-     * @brief Get connection timeout (ms)
-     */
-    uint32_t GetConnectTimeout() const { return m_config.network.connect_timeout_ms; }
-
-    /**
-     * @brief Set connection timeout (ms)
-     */
-    /// @gdb{tag="CONFIG:MGR", msg="Setting connect timeout"}
-    void SetConnectTimeout(uint32_t timeout_ms);
-
-    /**
-     * @brief Get ping interval (ms)
-     */
-    uint32_t GetPingInterval() const { return m_config.network.ping_interval_ms; }
-
-    /**
-     * @brief Set ping interval (ms)
-     */
-    /// @gdb{tag="CONFIG:MGR", msg="Setting ping interval"}
-    void SetPingInterval(uint32_t interval_ms);
-
-    /**
-     * @brief Get reconnect delay (ms)
-     */
-    uint32_t GetReconnectDelay() const { return m_config.network.reconnect_delay_ms; }
-
-    /**
-     * @brief Set reconnect delay (ms)
-     */
-    /// @gdb{tag="CONFIG:MGR", msg="Setting reconnect delay"}
-    void SetReconnectDelay(uint32_t delay_ms);
-
-    /**
-     * @brief Get max reconnect attempts
-     */
-    uint32_t GetMaxReconnectAttempts() const { return m_config.network.max_reconnect_attempts; }
-
-    /**
-     * @brief Set max reconnect attempts (0 = infinite)
-     */
-    /// @gdb{tag="CONFIG:MGR", msg="Setting max reconnect attempts"}
-    void SetMaxReconnectAttempts(uint32_t attempts);
 
     // =========================================================================
     // LDN Settings
@@ -213,19 +170,27 @@ public:
 
     /**
      * @brief Get LDN enabled state
+     * @return true when LDN interception is enabled.
      */
-    bool GetLdnEnabled() const { return m_config.ldn.enabled; }
+    [[nodiscard]] bool GetLdnEnabled() const {
+        return m_config.ldn.enabled;
+    }
 
     /**
      * @brief Set LDN enabled state
+     * @param enabled New value; marks config dirty and notifies "ldn".
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting LDN enabled"}
     void SetLdnEnabled(bool enabled);
 
     /**
      * @brief Get passphrase
+     * @return NUL-terminated passphrase, empty when none is set; owned by
+     *         the manager.
      */
-    const char* GetPassphrase() const { return m_config.ldn.passphrase; }
+    [[nodiscard]] const char* GetPassphrase() const {
+        return m_config.ldn.passphrase;
+    }
 
     /**
      * @brief Set passphrase
@@ -240,17 +205,23 @@ public:
     bool SetPassphrase(const char* passphrase);
 
     /**
-     * @brief Get network interface name
+     * @brief Get use_passphrase state
+     * @return true when rooms are filtered by passphrase.
      */
-    const char* GetInterfaceName() const { return m_config.ldn.interface_name; }
+    [[nodiscard]] bool GetUsePassphrase() const {
+        return m_config.ldn.use_passphrase;
+    }
 
     /**
-     * @brief Set network interface name
+     * @brief Set use_passphrase state
      *
-     * @param name Interface name (empty = auto-detect)
+     * When true, LDN rooms are filtered by passphrase. When false,
+     * the sysmodule connects to public rooms regardless of passphrase.
+     *
+     * @param enabled 1 to enable passphrase filtering, 0 for public
      */
-    /// @gdb{tag="CONFIG:MGR", msg="Setting interface name"}
-    void SetInterfaceName(const char* name);
+    /// @gdb{tag="CONFIG:MGR", msg="Setting use_passphrase"}
+    void SetUsePassphrase(bool enabled);
 
     // =========================================================================
     // Debug Settings
@@ -258,36 +229,33 @@ public:
 
     /**
      * @brief Get debug enabled state
+     * @return true when debug logging is enabled.
      */
-    bool GetDebugEnabled() const { return m_config.debug.enabled; }
+    [[nodiscard]] bool GetDebugEnabled() const {
+        return m_config.debug.enabled;
+    }
 
     /**
      * @brief Set debug enabled state
+     * @param enabled New value; marks config dirty and notifies "debug".
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting debug enabled"}
     void SetDebugEnabled(bool enabled);
 
     /**
      * @brief Get debug log level
+     * @return Log level, 0 to 3.
      */
-    uint32_t GetDebugLevel() const { return m_config.debug.level; }
+    [[nodiscard]] uint32_t GetDebugLevel() const {
+        return m_config.debug.level;
+    }
 
     /**
      * @brief Set debug log level (0-3)
+     * @param level Requested level; values above 3 are clamped to 3.
      */
     /// @gdb{tag="CONFIG:MGR", msg="Setting debug level"}
     void SetDebugLevel(uint32_t level);
-
-    /**
-     * @brief Get log to file state
-     */
-    bool GetLogToFile() const { return m_config.debug.log_to_file; }
-
-    /**
-     * @brief Set log to file state
-     */
-    /// @gdb{tag="CONFIG:MGR", msg="Setting log to file"}
-    void SetLogToFile(bool enabled);
 
     // =========================================================================
     // Change Notification
@@ -303,25 +271,38 @@ public:
 
     /**
      * @brief Check if config has unsaved changes
+     * @return true when a setter ran since the last Save() or Reload().
      */
-    bool HasUnsavedChanges() const { return m_dirty; }
-
-private:
-    ConfigManager() = default;
-    ~ConfigManager() = default;
+    [[nodiscard]] bool HasUnsavedChanges() const {
+        return m_dirty;
+    }
 
     // Non-copyable
     ConfigManager(const ConfigManager&) = delete;
     ConfigManager& operator=(const ConfigManager&) = delete;
 
+private:
+    ConfigManager() = default;
+    ~ConfigManager() = default;
+
+    /**
+     * @brief Invoke the change callback if one is registered.
+     * @param section Name of the changed section ("server", "ldn", ...).
+     */
     /// @gdb{tag="CONFIG:MGR", msg="Config change notified"}
     void NotifyChange(const char* section);
 
+    /// Current in-memory configuration.
     Config m_config{};
+    /// NUL-terminated path of the INI file used by load/save.
     char m_config_path[256]{};
+    /// True once the manager has been initialized.
     bool m_initialized = false;
+    /// True when a setter changed the config since the last save.
     bool m_dirty = false;
+    /// Change callback, nullptr when none is registered.
     ConfigChangeCallback m_callback = nullptr;
 };
 
-} // namespace ryu_ldn::config
+}  // namespace ryu_ldn::config
+#endif  // SYSMODULE_SOURCE_CONFIG_CONFIG_MANAGER_HPP_

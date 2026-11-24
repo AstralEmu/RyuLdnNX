@@ -49,8 +49,9 @@
 
 #include "reconnect.hpp"
 
-namespace ryu_ldn {
-namespace network {
+#include <algorithm>
+
+namespace ryu_ldn::network {
 
 /**
  * @brief Constructor with default configuration
@@ -65,11 +66,7 @@ namespace network {
  *
  * The retry count starts at 0 and the initial delay is pre-calculated.
  */
-ReconnectManager::ReconnectManager()
-    : m_config()
-    , m_retry_count(0)
-    , m_current_delay_ms(0)
-{
+ReconnectManager::ReconnectManager() : m_retry_count(0), m_current_delay_ms(0) {
     // Calculate initial delay (will be initial_delay_ms for retry_count=0)
     calculate_delay();
 }
@@ -83,13 +80,9 @@ ReconnectManager::ReconnectManager()
  * - 10s max delay
  * - 1.5x multiplier
  *
- * @param config Custom configuration parameters
  */
 ReconnectManager::ReconnectManager(const ReconnectConfig& config)
-    : m_config(config)
-    , m_retry_count(0)
-    , m_current_delay_ms(0)
-{
+    : m_config(config), m_retry_count(0), m_current_delay_ms(0) {
     calculate_delay();
 }
 
@@ -125,8 +118,11 @@ void ReconnectManager::calculate_delay() {
     for (uint32_t i = 0; i < exponential_count; ++i) {
         // Check for potential overflow before multiplying
         // max_delay / (multiplier/100) gives us the safe threshold
-        uint32_t safe_threshold = (m_config.max_delay_ms * 100) /
-                                   m_config.multiplier_percent;
+        // 64-bit arithmetic: max_delay_ms * 100 overflows uint32_t above ~42 M
+        // ms.
+        const uint64_t safe_threshold =
+            (static_cast<uint64_t>(m_config.max_delay_ms) * 100) /
+            m_config.multiplier_percent;
 
         if (m_current_delay_ms >= safe_threshold) {
             // Would overflow or exceed max, clamp to max
@@ -134,14 +130,13 @@ void ReconnectManager::calculate_delay() {
             return;
         }
 
-        // Apply multiplier: delay = delay * (multiplier_percent / 100)
-        m_current_delay_ms = (m_current_delay_ms * m_config.multiplier_percent) / 100;
-
-        // Clamp to max delay
-        if (m_current_delay_ms > m_config.max_delay_ms) {
-            m_current_delay_ms = m_config.max_delay_ms;
-            return;
-        }
+        // Apply multiplier: delay = delay * (multiplier_percent / 100).
+        // No further clamp is needed: delay < safe_threshold guarantees
+        // delay * multiplier_percent / 100 < max_delay_ms.
+        m_current_delay_ms = static_cast<uint32_t>(
+            (static_cast<uint64_t>(m_current_delay_ms) *
+             m_config.multiplier_percent) /
+            100);
     }
 }
 
@@ -169,7 +164,6 @@ uint32_t ReconnectManager::get_next_delay_ms() const {
  * - Minimum: 900ms (1000 * 0.9)
  * - Maximum: 1100ms (1000 * 1.1)
  *
- * @param seed Random seed (e.g., system tick count, time)
  * @return Delay in milliseconds with jitter applied
  */
 uint32_t ReconnectManager::get_next_delay_ms_with_jitter(uint32_t seed) const {
@@ -188,21 +182,17 @@ uint32_t ReconnectManager::get_next_delay_ms_with_jitter(uint32_t seed) const {
     // Map hash to range [-jitter_percent, +jitter_percent]
     // hash % (2 * jitter + 1) gives [0, 2*jitter]
     // Subtract jitter to get [-jitter, +jitter]
-    uint32_t jitter_range = 2 * m_config.jitter_percent + 1;
+    uint32_t jitter_range = (2U * m_config.jitter_percent) + 1U;
     int32_t jitter_offset = static_cast<int32_t>(hash % jitter_range) -
                             static_cast<int32_t>(m_config.jitter_percent);
 
     // Apply jitter: delay * (100 + jitter_offset) / 100
-    int64_t adjusted = static_cast<int64_t>(m_current_delay_ms) *
-                       (100 + jitter_offset) / 100;
+    int64_t adjusted =
+        static_cast<int64_t>(m_current_delay_ms) * (100 + jitter_offset) / 100;
 
     // Ensure result is positive and within bounds
-    if (adjusted < 1) {
-        adjusted = 1;
-    }
-    if (adjusted > m_config.max_delay_ms) {
-        adjusted = m_config.max_delay_ms;
-    }
+    adjusted = std::max<int64_t>(adjusted, 1);
+    adjusted = std::min<int64_t>(adjusted, m_config.max_delay_ms);
 
     return static_cast<uint32_t>(adjusted);
 }
@@ -211,16 +201,18 @@ uint32_t ReconnectManager::get_next_delay_ms_with_jitter(uint32_t seed) const {
  * @brief Check if retry should be attempted
  *
  * Evaluates whether a retry attempt is permitted based on the
- * maximum retry configuration. If max_retries is 0 (default),
- * infinite retries are allowed.
+ * maximum retry configuration. max_retries = 0 disables auto-reconnect
+ * entirely.
  *
  * @return RetryResult::ShouldRetry if retry is permitted
  * @return RetryResult::MaxRetriesReached if limit exceeded
  */
 RetryResult ReconnectManager::should_retry() const {
-    // If max_retries is 0, infinite retries are allowed
+    // max_retries = 0 disables auto-reconnect entirely
+    // (see AGENTS.md: "max_reconnect_attempts = 0 disables auto-reconnect
+    // entirely — it does not mean infinite retries")
     if (m_config.max_retries == 0) {
-        return RetryResult::ShouldRetry;
+        return RetryResult::MaxRetriesReached;
     }
 
     // Check if we've exceeded the maximum
@@ -270,12 +262,10 @@ void ReconnectManager::reset() {
  * manager instance. The retry count is preserved, but the delay
  * is recalculated with the new parameters.
  *
- * @param config New configuration to use
  */
 void ReconnectManager::set_config(const ReconnectConfig& config) {
     m_config = config;
     calculate_delay();
 }
 
-} // namespace network
-} // namespace ryu_ldn
+}  // namespace ryu_ldn::network

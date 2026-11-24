@@ -2,9 +2,10 @@
  * @file ephemeral_port_pool.hpp
  * @brief Ephemeral Port Pool for BSD Proxy Sockets
  *
- * This file implements a thread-safe ephemeral port allocator for proxy sockets.
- * When games create sockets and bind to port 0 (requesting system-assigned port),
- * we need to assign ports from the ephemeral range (49152-65535).
+ * This file implements a thread-safe ephemeral port allocator for proxy
+ * sockets. When games create sockets and bind to port 0 (requesting
+ * system-assigned port), we need to assign ports from the ephemeral range
+ * (49152-65535).
  *
  * ## Design
  *
@@ -37,7 +38,8 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_EPHEMERAL_PORT_POOL_HPP_
+#define SYSMODULE_SOURCE_BSD_EPHEMERAL_PORT_POOL_HPP_
 
 #include <stratosphere.hpp>
 #include <array>
@@ -66,9 +68,14 @@ constexpr uint16_t EPHEMERAL_PORT_MAX = 65535;
  *
  * 65535 - 49152 + 1 = 16384 ports
  */
-constexpr size_t EPHEMERAL_PORT_COUNT = EPHEMERAL_PORT_MAX - EPHEMERAL_PORT_MIN + 1;
-// uint16_t can never exceed 65535 (EPHEMERAL_PORT_MAX), so no upper-bound check is needed in PortToIndex.
-static_assert(EPHEMERAL_PORT_MAX == 0xFFFF, "EPHEMERAL_PORT_MAX must equal uint16_t max — removes need for upper bound check");
+constexpr size_t EPHEMERAL_PORT_COUNT =
+    EPHEMERAL_PORT_MAX - EPHEMERAL_PORT_MIN + 1;
+// uint16_t can never exceed 65535 (EPHEMERAL_PORT_MAX), so no upper-bound check
+// is needed in PortToIndex.
+static_assert(
+    EPHEMERAL_PORT_MAX == 0xFFFF,
+    "EPHEMERAL_PORT_MAX must equal uint16_t max — removes need for upper bound "
+    "check");
 
 /**
  * @brief Ephemeral Port Pool for Proxy Sockets
@@ -119,7 +126,8 @@ public:
      * which can cause issues with TIME_WAIT states.
      *
      * @param protocol The protocol type (TCP or UDP)
-     * @return The allocated port number in host byte order, or 0 if none available
+     * @return The allocated port number in host byte order, or 0 if none
+     * available
      *
      * @note Thread-safe. Uses internal mutex.
      * @note O(n) worst case where n = EPHEMERAL_PORT_COUNT
@@ -140,8 +148,10 @@ public:
      * @note Thread-safe. Uses internal mutex.
      * @note O(1) operation
      */
-    /// @gdb{tag="BSD:SOCKET", msg="AllocateSpecificPort: port=%u protocol=%d", args="$x1, $x2"}
-    bool AllocateSpecificPort(uint16_t port, ryu_ldn::bsd::ProtocolType protocol);
+    /// @gdb{tag="BSD:SOCKET", msg="AllocateSpecificPort: port=%u protocol=%d",
+    /// args="$x1, $x2"}
+    bool AllocateSpecificPort(
+        uint16_t port, ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Release a previously allocated port
@@ -155,7 +165,8 @@ public:
      * @note Thread-safe. Uses internal mutex.
      * @note O(1) operation
      */
-    /// @gdb{tag="BSD:SOCKET", msg="ReleasePort: port=%u protocol=%d", args="$x1, $x2"}
+    /// @gdb{tag="BSD:SOCKET", msg="ReleasePort: port=%u protocol=%d",
+    /// args="$x1, $x2"}
     void ReleasePort(uint16_t port, ryu_ldn::bsd::ProtocolType protocol);
 
     /**
@@ -168,7 +179,8 @@ public:
      * @note Thread-safe. Uses internal mutex.
      * @note O(1) operation
      */
-    bool IsPortAllocated(uint16_t port, ryu_ldn::bsd::ProtocolType protocol) const;
+    bool IsPortAllocated(
+        uint16_t port, ryu_ldn::bsd::ProtocolType protocol) const;
 
     /**
      * @brief Get the number of available ports for a protocol
@@ -198,7 +210,7 @@ private:
      */
     static constexpr size_t PortToIndex(uint16_t port) {
         if (port < EPHEMERAL_PORT_MIN) {
-            return EPHEMERAL_PORT_COUNT; // Invalid index
+            return EPHEMERAL_PORT_COUNT;  // Invalid index
         }
         return port - EPHEMERAL_PORT_MIN;
     }
@@ -219,7 +231,8 @@ private:
      * @param protocol The protocol type
      * @return Reference to the protocol's bitset
      */
-    std::bitset<EPHEMERAL_PORT_COUNT>& GetBitset(ryu_ldn::bsd::ProtocolType protocol);
+    std::bitset<EPHEMERAL_PORT_COUNT>& GetBitset(
+        ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Get the bitset for the given protocol (const)
@@ -227,7 +240,8 @@ private:
      * @param protocol The protocol type
      * @return Const reference to the protocol's bitset
      */
-    const std::bitset<EPHEMERAL_PORT_COUNT>& GetBitset(ryu_ldn::bsd::ProtocolType protocol) const;
+    const std::bitset<EPHEMERAL_PORT_COUNT>& GetBitset(
+        ryu_ldn::bsd::ProtocolType protocol) const;
 
     /**
      * @brief Mutex for thread safety
@@ -239,14 +253,14 @@ private:
      *
      * Bit is set (1) if port is allocated, clear (0) if available.
      */
-    std::bitset<EPHEMERAL_PORT_COUNT> m_udp_ports{};
+    std::bitset<EPHEMERAL_PORT_COUNT> m_udp_ports;
 
     /**
      * @brief Port allocation bitset for TCP
      *
      * Bit is set (1) if port is allocated, clear (0) if available.
      */
-    std::bitset<EPHEMERAL_PORT_COUNT> m_tcp_ports{};
+    std::bitset<EPHEMERAL_PORT_COUNT> m_tcp_ports;
 
     /**
      * @brief Next allocation hint for UDP (round-robin)
@@ -259,4 +273,5 @@ private:
     size_t m_tcp_hint{0};
 };
 
-} // namespace ams::mitm::bsd
+}  // namespace ams::mitm::bsd
+#endif  // SYSMODULE_SOURCE_BSD_EPHEMERAL_PORT_POOL_HPP_

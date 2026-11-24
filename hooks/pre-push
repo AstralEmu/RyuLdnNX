@@ -1,0 +1,62 @@
+#!/bin/sh
+# Pre-push: judges what is PUSHED, then publishes the wiki so the docs never
+# lag behind the code they describe. No override.
+#
+# git feeds one line per pushed ref on stdin:
+#   <local ref> <local sha> <remote ref> <remote sha>
+set -e
+
+hook_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=hooks/lib.sh
+. "$hook_dir/lib.sh"
+
+zero=0000000000000000000000000000000000000000
+refs_file=$(mktemp)
+trap 'rm -f "$refs_file"' EXIT
+cat > "$refs_file"
+
+git fetch origin --quiet
+
+while read -r _lref lsha rref _rsha; do
+	case "$rref" in
+	refs/heads/*) ;;
+	*) continue ;;
+	esac
+	[ "$lsha" = "$zero" ] && continue
+
+	branch=${rref#refs/heads/}
+
+	# Behind its own remote branch: merge first (history is never rewritten).
+	if git rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null; then
+		behind=$(git rev-list --count "$lsha..origin/$branch")
+		if [ "$behind" -gt 0 ]; then
+			echo "✗ '$branch' is $behind commit(s) behind origin/$branch: git merge origin/$branch" >&2
+			exit 1
+		fi
+	fi
+
+	case "$branch" in
+	develop | main | feature/* | bugfix/* | hotfix/* | chore/* | docs/* | fix/* | refactor/*) ;;
+	*)
+		echo "✗ refusing to push '$branch': use develop, main or feature|bugfix|hotfix|chore|docs|fix|refactor/<slug>." >&2
+		exit 1
+		;;
+	esac
+done < "$refs_file"
+
+wd=$(wiki_dir)
+if [ -z "$wd" ]; then
+	echo "pre-push: no ./docs wiki symlink, wiki publication skipped (this clone has no wiki)" >&2
+	exit 0
+fi
+
+branch=$(wiki_branch)
+git -C "$wd" fetch origin --quiet
+behind=$(git -C "$wd" rev-list --count "HEAD..origin/$branch")
+if [ "$behind" -gt 0 ]; then
+	echo "✗ the wiki is $behind commit(s) behind origin/$branch: git -C docs merge origin/$branch" >&2
+	exit 1
+fi
+
+echo "pre-push: publishing the wiki"
+git -C "$wd" push origin "HEAD:$branch"

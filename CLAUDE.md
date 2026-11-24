@@ -30,7 +30,7 @@ python3 scripts/gdb_codegen.py generate
 python3 scripts/gdb_codegen.py verify
 ```
 
-Unit tests live in [tests/](tests/) and build as native host binaries with `g++ -std=c++17 -DTEST_BUILD`. Each test suite has a per-suite target:
+Unit tests live in [tests/](tests/) and build as native host binaries with `g++ -std=c++20 -DTEST_BUILD`. Each test suite has a per-suite target:
 
 ```bash
 cd tests && make test-ldn-state-machine       # any of: protocol, config, log, socket,
@@ -89,9 +89,9 @@ LDN IPs in `NetworkInfo`, `ProxyConfig`, `m_ipv4_address`, and `GetIpv4Address()
 
 [overlay/](overlay/) is a separate build producing `.ovl`, using `libultrahand`. It talks to `ryu:cfg` via the IPC stubs in [overlay/source/ryu_ldn_ipc.c](overlay/source/ryu_ldn_ipc.c).
 
-### Docs site
+### Docs (GitHub wiki)
 
-[docs/](docs/) is an Astro + Starlight site. `npm run generate-api` runs Doxygen (via [Doxyfile](Doxyfile)) and transforms XML into MDX before `astro build`. The site ships to GitHub Pages.
+The documentation is the GitHub wiki, cloned next to the repo and reachable through the untracked `docs` symlink (`../RyuLdnNX.wiki`). Flat pages with prefixes `Handoff-`, `Technique-`, `User-`, `Design-`, `Roadmap-`, `Reference-`. `make docs` regenerates the `<!-- gen:... -->` regions (C++ reference from Doxygen XML, via `scripts/gen_docs.py`); prose is hand-written. `make hooks` activates `hooks/` (`core.hooksPath`): a commit that changes code must also move `Handoff-Changes`, `Technique-Changelog`, `User-Changelog` and `Handoff-Current-State` in the wiki, committed first. Details: wiki page `Handoff-Dev-Flow`.
 
 ## Conventions specific to this project
 

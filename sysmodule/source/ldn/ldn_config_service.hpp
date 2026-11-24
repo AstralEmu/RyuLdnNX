@@ -23,7 +23,6 @@
  * ### Extended Config Commands (65011-65030)
  * - 65011: GetPassphrase / 65012: SetPassphrase
  * - 65013: GetLdnEnabled / 65014: SetLdnEnabled
- * - 65015: GetUseTls / 65016: SetUseTls
  * - 65017: GetConnectTimeout / 65018: SetConnectTimeout
  * - 65019: GetPingInterval / 65020: SetPingInterval
  * - 65021: GetReconnectDelay / 65022: SetReconnectDelay
@@ -37,25 +36,34 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_CONFIG_SERVICE_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_CONFIG_SERVICE_HPP_
 
 #include <stratosphere.hpp>
 #include "ldn_types.hpp"
+#include "../config/config.hpp"
 
 namespace ams::mitm::ldn {
 
 // Forward declarations
-class LdnICommunication;
+// NOTE: The actual class is defined in ldn_icommunication.hpp as
+// `ICommunicationService`. The previous forward declaration used the
+// non-existent name `LdnICommunication`, which made the constructor
+// parameter and member pointer refer to an unrelated (and never defined)
+// type — a type-system mismatch that would break any translation unit
+// that actually instantiated LdnConfigService with a real
+// ICommunicationService pointer.
+class ICommunicationService;
 
 /**
  * @brief Connection status for overlay
  */
 enum class ConnectionStatus : u32 {
-    Disconnected = 0,   ///< Not connected to server
-    Connecting = 1,     ///< Connection in progress
-    Connected = 2,      ///< Connected, handshake pending
-    Ready = 3,          ///< Fully connected and ready
-    Error = 4,          ///< Connection error
+    Disconnected = 0,  ///< Not connected to server
+    Connecting = 1,    ///< Connection in progress
+    Connected = 2,     ///< Connected, handshake pending
+    Ready = 3,         ///< Fully connected and ready
+    Error = 4,         ///< Connection error
 };
 
 // SessionInfo is defined in ldn_types.hpp
@@ -64,9 +72,9 @@ enum class ConnectionStatus : u32 {
  * @brief Server address structure
  */
 struct ServerAddress {
-    char host[64];
-    u16 port;
-    u16 padding;
+    char host[64];  ///< Null-terminated server host name
+    u16 port;       ///< Server TCP port
+    u16 padding;    ///< Explicit padding so the struct is 68 bytes
 };
 static_assert(sizeof(ServerAddress) == 68);
 
@@ -74,7 +82,7 @@ static_assert(sizeof(ServerAddress) == 68);
  * @brief Passphrase structure for IPC
  */
 struct Passphrase {
-    char passphrase[64];
+    char passphrase[64];  ///< Null-terminated passphrase (max 63 characters)
 };
 static_assert(sizeof(Passphrase) == 64);
 
@@ -82,10 +90,10 @@ static_assert(sizeof(Passphrase) == 64);
  * @brief Network settings structure for batch retrieval
  */
 struct NetworkSettings {
-    u32 connect_timeout_ms;
-    u32 ping_interval_ms;
-    u32 reconnect_delay_ms;
-    u32 max_reconnect_attempts;
+    u32 connect_timeout_ms;      ///< Connection timeout in milliseconds
+    u32 ping_interval_ms;        ///< Ping interval in milliseconds
+    u32 reconnect_delay_ms;      ///< Initial reconnect delay in milliseconds
+    u32 max_reconnect_attempts;  ///< Max reconnect attempts (0 = no retry)
 };
 static_assert(sizeof(NetworkSettings) == 16);
 
@@ -96,7 +104,7 @@ struct DebugSettings {
     u32 enabled;      ///< Bool as u32
     u32 level;        ///< 0-3
     u32 log_to_file;  ///< Bool as u32
-    u32 reserved;
+    u32 reserved;     ///< Reserved for future use
 };
 static_assert(sizeof(DebugSettings) == 16);
 
@@ -122,10 +130,10 @@ public:
     /**
      * @brief Constructor
      *
-     * @param communication Pointer to parent LdnICommunication service
+     * @param communication Pointer to parent ICommunicationService service
      */
     /// @gdb{tag="LDN:LIFECYCLE", msg="ConfigService constructor"}
-    explicit LdnConfigService(LdnICommunication* communication);
+    explicit LdnConfigService(ICommunicationService* communication);
 
     /**
      * @brief Get sysmodule version string
@@ -134,7 +142,7 @@ public:
      * @return Always succeeds
      */
     /// @gdb{tag="LDN:LIFECYCLE", msg="Version queried"}
-    Result GetVersion(sf::Out<std::array<char, 32>> out);
+    static Result GetVersion(sf::Out<std::array<char, 32>> out);
 
     /**
      * @brief Get current connection status
@@ -143,7 +151,7 @@ public:
      * @return Always succeeds
      */
     /// @gdb{tag="LDN:LIFECYCLE", msg="Connection status queried"}
-    Result GetConnectionStatus(sf::Out<ConnectionStatus> out);
+    static Result GetConnectionStatus(sf::Out<ConnectionStatus> out);
 
     /**
      * @brief Get current LDN state
@@ -152,7 +160,7 @@ public:
      * @return Always succeeds
      */
     /// @gdb{tag="LDN:LIFECYCLE", msg="LDN state queried"}
-    Result GetLdnState(sf::Out<u32> out);
+    static Result GetLdnState(sf::Out<u32> out);
 
     /**
      * @brief Get session information
@@ -161,7 +169,7 @@ public:
      * @return Always succeeds
      */
     /// @gdb{tag="LDN:LIFECYCLE", msg="Session info queried"}
-    Result GetSessionInfo(sf::Out<SessionInfo> out);
+    static Result GetSessionInfo(sf::Out<SessionInfo> out);
 
     /**
      * @brief Get server address
@@ -170,7 +178,7 @@ public:
      * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetServerAddress"}
-    Result GetServerAddress(sf::Out<ServerAddress> out);
+    static Result GetServerAddress(sf::Out<ServerAddress> out);
 
     /**
      * @brief Set server address
@@ -179,7 +187,7 @@ public:
      * @return ResultSuccess on success
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetServerAddress"}
-    Result SetServerAddress(const ServerAddress &address);
+    static Result SetServerAddress(const ServerAddress& address);
 
     /**
      * @brief Get debug logging state
@@ -188,7 +196,7 @@ public:
      * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetDebugEnabled"}
-    Result GetDebugEnabled(sf::Out<u32> out);
+    static Result GetDebugEnabled(sf::Out<u32> out);
 
     /**
      * @brief Set debug logging state
@@ -197,7 +205,7 @@ public:
      * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetDebugEnabled"}
-    Result SetDebugEnabled(u32 enabled);
+    static Result SetDebugEnabled(u32 enabled);
 
     /**
      * @brief Force server reconnection
@@ -205,7 +213,7 @@ public:
      * @return ResultSuccess on success
      */
     /// @gdb{tag="LDN:OPS", msg="ForceReconnect"}
-    Result ForceReconnect();
+    static Result ForceReconnect();
 
     /**
      * @brief Get last RTT in milliseconds
@@ -214,7 +222,7 @@ public:
      * @return Always succeeds
      */
     /// @gdb{tag="LDN:OPS", msg="GetLastRtt"}
-    Result GetLastRtt(sf::Out<u32> out);
+    static Result GetLastRtt(sf::Out<u32> out);
 
     // =========================================================================
     // Extended Configuration Commands (65011-65030)
@@ -222,130 +230,212 @@ public:
 
     /**
      * @brief Get passphrase (65011)
+     *
+     * @param[out] out Passphrase, truncated to 63 characters
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetPassphrase"}
-    Result GetPassphrase(sf::Out<Passphrase> out);
+    static Result GetPassphrase(sf::Out<Passphrase> out);
 
     /**
      * @brief Set passphrase (65012)
+     *
+     * @param passphrase New passphrase (null-terminated, 64-byte buffer)
+     * @return Always succeeds (no validation is done here)
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetPassphrase"}
-    Result SetPassphrase(Passphrase passphrase);
+    static Result SetPassphrase(Passphrase passphrase);
 
     /**
      * @brief Get LDN enabled state (65013)
+     *
+     * @param[out] out 1 if LDN emulation is enabled, 0 otherwise
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetLdnEnabled"}
-    Result GetLdnEnabled(sf::Out<u32> out);
+    static Result GetLdnEnabled(sf::Out<u32> out);
 
     /**
      * @brief Set LDN enabled state (65014)
+     *
+     * @param enabled Non-zero to enable LDN emulation, 0 to disable
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetLdnEnabled"}
-    Result SetLdnEnabled(u32 enabled);
-
-    /**
-     * @brief Get TLS enabled state (65015)
-     */
-    /// @gdb{tag="LDN:CONFIG", msg="GetUseTls"}
-    Result GetUseTls(sf::Out<u32> out);
-
-    /**
-     * @brief Set TLS enabled state (65016)
-     */
-    /// @gdb{tag="LDN:CONFIG", msg="SetUseTls"}
-    Result SetUseTls(u32 enabled);
+    static Result SetLdnEnabled(u32 enabled);
 
     /**
      * @brief Get connect timeout in ms (65017)
+     *
+     * @param[out] out Timeout in ms (fixed value, not configurable)
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetConnectTimeout"}
-    Result GetConnectTimeout(sf::Out<u32> out);
+    static Result GetConnectTimeout(sf::Out<u32> out);
 
     /**
      * @brief Set connect timeout in ms (65018)
+     *
+     * No-op kept for IPC protocol compatibility (the timeout is fixed).
+     *
+     * @param timeout_ms Ignored
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetConnectTimeout"}
-    Result SetConnectTimeout(u32 timeout_ms);
+    static Result SetConnectTimeout(u32 timeout_ms);
 
     /**
      * @brief Get ping interval in ms (65019)
+     *
+     * @param[out] out Interval in ms (fixed at 0: the server drives pings)
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetPingInterval"}
-    Result GetPingInterval(sf::Out<u32> out);
+    static Result GetPingInterval(sf::Out<u32> out);
 
     /**
      * @brief Set ping interval in ms (65020)
+     *
+     * No-op kept for IPC protocol compatibility (the interval is fixed).
+     *
+     * @param interval_ms Ignored
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetPingInterval"}
-    Result SetPingInterval(u32 interval_ms);
+    static Result SetPingInterval(u32 interval_ms);
 
     /**
      * @brief Get reconnect delay in ms (65021)
+     *
+     * @param[out] out Initial reconnect delay in ms (fixed value)
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetReconnectDelay"}
-    Result GetReconnectDelay(sf::Out<u32> out);
+    static Result GetReconnectDelay(sf::Out<u32> out);
 
     /**
      * @brief Set reconnect delay in ms (65022)
+     *
+     * No-op kept for IPC protocol compatibility (the delay is fixed).
+     *
+     * @param delay_ms Ignored
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetReconnectDelay"}
-    Result SetReconnectDelay(u32 delay_ms);
+    static Result SetReconnectDelay(u32 delay_ms);
 
     /**
      * @brief Get max reconnect attempts (65023)
+     *
+     * @param[out] out Attempts (fixed at 0, meaning auto-reconnect is off)
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetMaxReconnectAttempts"}
-    Result GetMaxReconnectAttempts(sf::Out<u32> out);
+    static Result GetMaxReconnectAttempts(sf::Out<u32> out);
 
     /**
      * @brief Set max reconnect attempts (65024)
+     *
+     * No-op kept for IPC protocol compatibility (the value is fixed).
+     *
+     * @param attempts Ignored
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetMaxReconnectAttempts"}
-    Result SetMaxReconnectAttempts(u32 attempts);
+    static Result SetMaxReconnectAttempts(u32 attempts);
 
     /**
      * @brief Get debug level 0-3 (65025)
+     *
+     * @param[out] out Current log verbosity
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetDebugLevel"}
-    Result GetDebugLevel(sf::Out<u32> out);
+    static Result GetDebugLevel(sf::Out<u32> out);
 
     /**
      * @brief Set debug level 0-3 (65026)
+     *
+     * @param level New log verbosity, passed to the ConfigManager as is
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetDebugLevel"}
-    Result SetDebugLevel(u32 level);
+    static Result SetDebugLevel(u32 level);
 
     /**
      * @brief Get log to file state (65027)
+     *
+     * Maps to the debug.enabled config key.
+     *
+     * @param[out] out 1 if debug logging is enabled, 0 otherwise
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="GetLogToFile"}
-    Result GetLogToFile(sf::Out<u32> out);
+    static Result GetLogToFile(sf::Out<u32> out);
 
     /**
      * @brief Set log to file state (65028)
+     *
+     * Maps to the debug.enabled config key.
+     *
+     * @param enabled Non-zero to enable debug logging, 0 to disable
+     * @return Always succeeds
      */
     /// @gdb{tag="LDN:CONFIG", msg="SetLogToFile"}
-    Result SetLogToFile(u32 enabled);
+    static Result SetLogToFile(u32 enabled);
 
     /**
      * @brief Save config to file (65029)
      *
-     * @param out Result of save operation
+     * @param[out] out Result of save operation
+     * @return Always succeeds; the operation outcome is in out
      */
     /// @gdb{tag="LDN:CONFIG", msg="SaveConfig"}
-    Result SaveConfig(sf::Out<ConfigResult> out);
+    static Result SaveConfig(sf::Out<ConfigResult> out);
 
     /**
      * @brief Reload config from file (65030)
      *
-     * @param out Result of reload operation
+     * @param[out] out Result of reload operation
+     * @return Always succeeds; the operation outcome is in out
      */
     /// @gdb{tag="LDN:CONFIG", msg="ReloadConfig"}
-    Result ReloadConfig(sf::Out<ConfigResult> out);
+    static Result ReloadConfig(sf::Out<ConfigResult> out);
+
+    /**
+     * @brief Map a config-file result to the IPC ConfigResult
+     *
+     * Shared by SaveConfig and ReloadConfig. Any value that has no IPC
+     * counterpart is reported as IoError.
+     *
+     * @param result Result returned by the ConfigManager
+     * @return The matching IPC ConfigResult
+     */
+    static ConfigResult ToIpcResult(ryu_ldn::config::ConfigResult result);
 
 private:
-    LdnICommunication* m_communication;
+    /**
+     * @brief Pointer to the parent LDN communication service.
+     *
+     * ## Ownership
+     * - **Not owned** by LdnConfigService — the caller (typically the MITM
+     *   service that spawns the `ryu:cfg` session) owns the
+     *   ICommunicationService instance and is responsible for its lifetime.
+     *   LdnConfigService only borrows it to forward status queries.
+     *
+     * ## Lifetime
+     * - Valid for the duration of the config service session. The parent
+     *   service outlives every `ryu:cfg` IPC session it spawns.
+     *
+     * ## Nullability
+     * - **May be nullptr.** A LdnConfigService can be constructed without a
+     *   parent service (see ldn_config_service.cpp ctor comment). Callers
+     *   must null-check before dereferencing. When nullptr, status queries
+     *   fall back to SharedState defaults and never touch the communication
+     *   service.
+     */
+    ICommunicationService* m_communication;
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_CONFIG_SERVICE_HPP_

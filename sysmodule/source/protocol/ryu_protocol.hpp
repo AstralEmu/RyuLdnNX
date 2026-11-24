@@ -12,7 +12,8 @@
  * @license MIT
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_PROTOCOL_RYU_PROTOCOL_HPP_
+#define SYSMODULE_SOURCE_PROTOCOL_RYU_PROTOCOL_HPP_
 
 #include "types.hpp"
 #include <cstring>
@@ -24,12 +25,10 @@ namespace ryu_ldn::protocol {
 // Result Codes
 // ============================================================================
 
-enum class EncodeResult {
-    Success = 0,
-    BufferTooSmall,
-    InvalidPacketId
-};
+/// Outcome of an encode_*() call.
+enum class EncodeResult { Success = 0, BufferTooSmall, InvalidPacketId };
 
+/// Outcome of a decode_*() call.
 enum class DecodeResult {
     Success = 0,
     BufferTooSmall,
@@ -57,7 +56,7 @@ constexpr size_t get_packet_size(size_t payload_size) {
  * @tparam T Payload structure type
  * @return Total packet size (header + sizeof(T))
  */
-template<typename T>
+template <typename T>
 constexpr size_t get_packet_size() {
     return sizeof(LdnHeader) + sizeof(T);
 }
@@ -93,7 +92,8 @@ inline size_t encode_header(uint8_t* buffer, PacketId type, int32_t data_size) {
  * @param[out] out_size Number of bytes written
  * @return EncodeResult::Success or error
  */
-inline EncodeResult encode(uint8_t* buffer, size_t buffer_size, PacketId type, size_t& out_size) {
+inline EncodeResult encode(
+    uint8_t* buffer, size_t buffer_size, PacketId type, size_t& out_size) {
     constexpr size_t required = sizeof(LdnHeader);
     if (buffer_size < required) {
         out_size = 0;
@@ -114,8 +114,13 @@ inline EncodeResult encode(uint8_t* buffer, size_t buffer_size, PacketId type, s
  * @param[out] out_size Number of bytes written
  * @return EncodeResult::Success or error
  */
-template<typename T>
-EncodeResult encode(uint8_t* buffer, size_t buffer_size, PacketId type, const T& payload, size_t& out_size) {
+template <typename T>
+EncodeResult encode(
+    uint8_t* buffer,
+    size_t buffer_size,
+    PacketId type,
+    const T& payload,
+    size_t& out_size) {
     const size_t required = get_packet_size<T>();
     if (buffer_size < required) {
         out_size = 0;
@@ -144,10 +149,15 @@ EncodeResult encode(uint8_t* buffer, size_t buffer_size, PacketId type, const T&
  * @param[out] out_size Number of bytes written
  * @return EncodeResult::Success or error
  */
-template<typename T>
-EncodeResult encode_with_data(uint8_t* buffer, size_t buffer_size, PacketId type,
-                              const T& payload, const uint8_t* extra_data, size_t extra_size,
-                              size_t& out_size) {
+template <typename T>
+EncodeResult encode_with_data(
+    uint8_t* buffer,
+    size_t buffer_size,
+    PacketId type,
+    const T& payload,
+    const uint8_t* extra_data,
+    size_t extra_size,
+    size_t& out_size) {
     const size_t required = sizeof(LdnHeader) + sizeof(T) + extra_size;
     if (buffer_size < required) {
         out_size = 0;
@@ -155,7 +165,8 @@ EncodeResult encode_with_data(uint8_t* buffer, size_t buffer_size, PacketId type
     }
 
     // Write header with combined size
-    size_t offset = encode_header(buffer, type, sizeof(T) + static_cast<int32_t>(extra_size));
+    size_t offset = encode_header(
+        buffer, type, static_cast<int32_t>(sizeof(T) + extra_size));
 
     // Write payload
     std::memcpy(buffer + offset, &payload, sizeof(T));
@@ -180,8 +191,13 @@ EncodeResult encode_with_data(uint8_t* buffer, size_t buffer_size, PacketId type
  * @param[out] out_size Number of bytes written
  * @return EncodeResult::Success or error
  */
-inline EncodeResult encode_raw(uint8_t* buffer, size_t buffer_size, PacketId type,
-                               const uint8_t* data, size_t data_size, size_t& out_size) {
+inline EncodeResult encode_raw(
+    uint8_t* buffer,
+    size_t buffer_size,
+    PacketId type,
+    const uint8_t* data,
+    size_t data_size,
+    size_t& out_size) {
     const size_t required = sizeof(LdnHeader) + data_size;
     if (buffer_size < required) {
         out_size = 0;
@@ -189,10 +205,11 @@ inline EncodeResult encode_raw(uint8_t* buffer, size_t buffer_size, PacketId typ
     }
 
     // Write header
-    size_t offset = encode_header(buffer, type, static_cast<int32_t>(data_size));
+    size_t offset =
+        encode_header(buffer, type, static_cast<int32_t>(data_size));
 
     // Write data
-    if (data && data_size > 0) {
+    if (data != nullptr && data_size > 0) {
         std::memcpy(buffer + offset, data, data_size);
     }
 
@@ -206,10 +223,20 @@ inline EncodeResult encode_raw(uint8_t* buffer, size_t buffer_size, PacketId typ
 
 /**
  * @brief Encode Initialize message
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param id Identifier to encode
+ * @param mac MAC address of the client
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_initialize(uint8_t* buffer, size_t buffer_size,
-                                      const SessionId& id, const MacAddress& mac,
-                                      size_t& out_size) {
+inline EncodeResult encode_initialize(
+    uint8_t* buffer,
+    size_t buffer_size,
+    const SessionId& id,
+    const MacAddress& mac,
+    size_t& out_size) {
     InitializeMessage msg{};
     msg.id = id;
     msg.mac_address = mac;
@@ -218,13 +245,23 @@ inline EncodeResult encode_initialize(uint8_t* buffer, size_t buffer_size,
 
 /**
  * @brief Encode Passphrase message
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param passphrase Passphrase bytes (may be null)
+ * @param passphrase_len Passphrase length in bytes (truncated to 128)
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_passphrase(uint8_t* buffer, size_t buffer_size,
-                                      const uint8_t* passphrase, size_t passphrase_len,
-                                      size_t& out_size) {
+inline EncodeResult encode_passphrase(
+    uint8_t* buffer,
+    size_t buffer_size,
+    const uint8_t* passphrase,
+    size_t passphrase_len,
+    size_t& out_size) {
     PassphraseMessage msg{};
     std::memset(msg.passphrase, 0, sizeof(msg.passphrase));
-    if (passphrase && passphrase_len > 0) {
+    if (passphrase != nullptr && passphrase_len > 0) {
         size_t copy_len = passphrase_len < 128 ? passphrase_len : 128;
         std::memcpy(msg.passphrase, passphrase, copy_len);
     }
@@ -233,9 +270,20 @@ inline EncodeResult encode_passphrase(uint8_t* buffer, size_t buffer_size,
 
 /**
  * @brief Encode Ping message
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param requester Requester identifier
+ * @param id Identifier to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_ping(uint8_t* buffer, size_t buffer_size,
-                                uint8_t requester, uint8_t id, size_t& out_size) {
+inline EncodeResult encode_ping(
+    uint8_t* buffer,
+    size_t buffer_size,
+    uint8_t requester,
+    uint8_t id,
+    size_t& out_size) {
     PingMessage msg{};
     msg.requester = requester;
     msg.id = id;
@@ -245,10 +293,17 @@ inline EncodeResult encode_ping(uint8_t* buffer, size_t buffer_size,
 /**
  * @brief Encode Disconnect message
  *
+ * @param buffer Output buffer receiving the full packet (header + payload)
+ * @param buffer_size Capacity of buffer in bytes
  * @param disconnect_ip IP address of disconnecting client (0 = self)
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or BufferTooSmall if buffer is too small
  */
-inline EncodeResult encode_disconnect(uint8_t* buffer, size_t buffer_size,
-                                      uint32_t disconnect_ip, size_t& out_size) {
+inline EncodeResult encode_disconnect(
+    uint8_t* buffer,
+    size_t buffer_size,
+    uint32_t disconnect_ip,
+    size_t& out_size) {
     DisconnectMessage msg{};
     msg.disconnect_ip = disconnect_ip;
     return encode(buffer, buffer_size, PacketId::Disconnect, msg, out_size);
@@ -256,88 +311,184 @@ inline EncodeResult encode_disconnect(uint8_t* buffer, size_t buffer_size,
 
 /**
  * @brief Encode Scan request
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param filter Scan filter to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_scan(uint8_t* buffer, size_t buffer_size,
-                                const ScanFilterFull& filter, size_t& out_size) {
+inline EncodeResult encode_scan(
+    uint8_t* buffer,
+    size_t buffer_size,
+    const ScanFilterFull& filter,
+    size_t& out_size) {
     return encode(buffer, buffer_size, PacketId::Scan, filter, out_size);
 }
 
 /**
  * @brief Encode Connect request
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param request Request to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_connect(uint8_t* buffer, size_t buffer_size,
-                                   const ConnectRequest& request, size_t& out_size) {
+inline EncodeResult encode_connect(
+    uint8_t* buffer,
+    size_t buffer_size,
+    const ConnectRequest& request,
+    size_t& out_size) {
     return encode(buffer, buffer_size, PacketId::Connect, request, out_size);
 }
 
 /**
  * @brief Encode CreateAccessPoint request with advertise data
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param request Request to encode
+ * @param advertise_data Advertise data appended after the request
+ * @param advertise_size Advertise data size in bytes
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_create_access_point(uint8_t* buffer, size_t buffer_size,
-                                               const CreateAccessPointRequest& request,
-                                               const uint8_t* advertise_data, size_t advertise_size,
-                                               size_t& out_size) {
-    return encode_with_data(buffer, buffer_size, PacketId::CreateAccessPoint,
-                            request, advertise_data, advertise_size, out_size);
+inline EncodeResult encode_create_access_point(
+    uint8_t* buffer,
+    size_t buffer_size,
+    const CreateAccessPointRequest& request,
+    const uint8_t* advertise_data,
+    size_t advertise_size,
+    size_t& out_size) {
+    return encode_with_data(
+        buffer,
+        buffer_size,
+        PacketId::CreateAccessPoint,
+        request,
+        advertise_data,
+        advertise_size,
+        out_size);
 }
 
 /**
  * @brief Encode SetAcceptPolicy request
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param policy Accept policy to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_set_accept_policy(uint8_t* buffer, size_t buffer_size,
-                                             AcceptPolicy policy, size_t& out_size) {
+inline EncodeResult encode_set_accept_policy(
+    uint8_t* buffer,
+    size_t buffer_size,
+    AcceptPolicy policy,
+    size_t& out_size) {
     SetAcceptPolicyRequest msg{};
     msg.accept_policy = static_cast<uint8_t>(policy);
-    return encode(buffer, buffer_size, PacketId::SetAcceptPolicy, msg, out_size);
+    return encode(
+        buffer, buffer_size, PacketId::SetAcceptPolicy, msg, out_size);
 }
 
 /**
  * @brief Encode SetAdvertiseData request
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param data Payload bytes to copy
+ * @param data_size Payload size in bytes
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_set_advertise_data(uint8_t* buffer, size_t buffer_size,
-                                              const uint8_t* data, size_t data_size,
-                                              size_t& out_size) {
-    return encode_raw(buffer, buffer_size, PacketId::SetAdvertiseData, data, data_size, out_size);
+inline EncodeResult encode_set_advertise_data(
+    uint8_t* buffer,
+    size_t buffer_size,
+    const uint8_t* data,
+    size_t data_size,
+    size_t& out_size) {
+    return encode_raw(
+        buffer,
+        buffer_size,
+        PacketId::SetAdvertiseData,
+        data,
+        data_size,
+        out_size);
 }
 
 /**
  * @brief Encode ProxyData packet
  *
+ * @param buffer Output buffer receiving the full packet (header + payload)
+ * @param buffer_size Capacity of buffer in bytes
  * @param info Proxy connection info (source/dest addressing)
  * @param data Payload data to send
  * @param data_size Size of payload
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or BufferTooSmall if buffer is too small
  */
-inline EncodeResult encode_proxy_data(uint8_t* buffer, size_t buffer_size,
-                                      const ProxyInfo& info,
-                                      const uint8_t* data, size_t data_size,
-                                      size_t& out_size) {
+inline EncodeResult encode_proxy_data(
+    uint8_t* buffer,
+    size_t buffer_size,
+    const ProxyInfo& info,
+    const uint8_t* data,
+    size_t data_size,
+    size_t& out_size) {
     ProxyDataHeader header{};
     header.info = info;
     header.data_length = static_cast<uint32_t>(data_size);
-    return encode_with_data(buffer, buffer_size, PacketId::ProxyData,
-                            header, data, data_size, out_size);
+    return encode_with_data(
+        buffer,
+        buffer_size,
+        PacketId::ProxyData,
+        header,
+        data,
+        data_size,
+        out_size);
 }
 
 /**
  * @brief Encode ScanReplyEnd (no payload)
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_scan_reply_end(uint8_t* buffer, size_t buffer_size, size_t& out_size) {
+inline EncodeResult encode_scan_reply_end(
+    uint8_t* buffer, size_t buffer_size, size_t& out_size) {
     return encode(buffer, buffer_size, PacketId::ScanReplyEnd, out_size);
 }
 
 /**
  * @brief Encode RejectReply (no payload)
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_reject_reply(uint8_t* buffer, size_t buffer_size, size_t& out_size) {
+inline EncodeResult encode_reject_reply(
+    uint8_t* buffer, size_t buffer_size, size_t& out_size) {
     return encode(buffer, buffer_size, PacketId::RejectReply, out_size);
 }
 
 /**
  * @brief Encode NetworkInfo (for Connected, SyncNetwork, ScanReply)
+ *
+ * @param buffer Output buffer receiving the full packet
+ * @param buffer_size Capacity of buffer in bytes
+ * @param type Packet type to emit
+ * @param info Network info to encode
+ * @param[out] out_size Bytes written to buffer on success
+ * @return EncodeResult::Success, or the encoding error
  */
-inline EncodeResult encode_network_info(uint8_t* buffer, size_t buffer_size,
-                                        PacketId type, const NetworkInfo& info,
-                                        size_t& out_size) {
+inline EncodeResult encode_network_info(
+    uint8_t* buffer,
+    size_t buffer_size,
+    PacketId type,
+    const NetworkInfo& info,
+    size_t& out_size) {
     return encode(buffer, buffer_size, type, info, out_size);
 }
 
@@ -361,7 +512,8 @@ constexpr bool has_header(size_t buffer_size) {
  * @param[out] header Decoded header
  * @return DecodeResult::Success or error
  */
-inline DecodeResult decode_header(const uint8_t* buffer, size_t buffer_size, LdnHeader& header) {
+inline DecodeResult decode_header(
+    const uint8_t* buffer, size_t buffer_size, LdnHeader& header) {
     if (buffer_size < sizeof(LdnHeader)) {
         return DecodeResult::BufferTooSmall;
     }
@@ -379,7 +531,8 @@ inline DecodeResult decode_header(const uint8_t* buffer, size_t buffer_size, Ldn
     }
 
     // Validate data size (prevent excessive allocation)
-    if (header.data_size < 0 || static_cast<size_t>(header.data_size) > MAX_PACKET_SIZE) {
+    if (header.data_size < 0 ||
+        static_cast<size_t>(header.data_size) > MAX_PACKET_SIZE) {
         return DecodeResult::PacketTooLarge;
     }
 
@@ -393,8 +546,9 @@ inline DecodeResult decode_header(const uint8_t* buffer, size_t buffer_size, Ldn
  * @param[out] packet_size Total size of complete packet (if available)
  * @return DecodeResult::Success if complete packet available
  */
-inline DecodeResult check_complete_packet(const uint8_t* buffer, size_t buffer_size, size_t& packet_size) {
-    LdnHeader header;
+inline DecodeResult check_complete_packet(
+    const uint8_t* buffer, size_t buffer_size, size_t& packet_size) {
+    LdnHeader header{};
     DecodeResult result = decode_header(buffer, buffer_size, header);
     if (result != DecodeResult::Success) {
         packet_size = 0;
@@ -416,7 +570,7 @@ inline DecodeResult check_complete_packet(const uint8_t* buffer, size_t buffer_s
  * @return PacketId from header
  */
 inline PacketId get_packet_type(const uint8_t* buffer) {
-    LdnHeader header;
+    LdnHeader header{};
     std::memcpy(&header, buffer, sizeof(LdnHeader));
     return static_cast<PacketId>(header.type);
 }
@@ -427,7 +581,7 @@ inline PacketId get_packet_type(const uint8_t* buffer) {
  * @return Payload size from header
  */
 inline int32_t get_payload_size(const uint8_t* buffer) {
-    LdnHeader header;
+    LdnHeader header{};
     std::memcpy(&header, buffer, sizeof(LdnHeader));
     return header.data_size;
 }
@@ -450,8 +604,9 @@ inline const uint8_t* get_payload_ptr(const uint8_t* buffer) {
  * @param[out] payload Decoded payload
  * @return DecodeResult::Success or error
  */
-template<typename T>
-DecodeResult decode(const uint8_t* buffer, size_t buffer_size, LdnHeader& header, T& payload) {
+template <typename T>
+DecodeResult decode(
+    const uint8_t* buffer, size_t buffer_size, LdnHeader& header, T& payload) {
     // Decode and validate header
     DecodeResult result = decode_header(buffer, buffer_size, header);
     if (result != DecodeResult::Success) {
@@ -476,18 +631,23 @@ DecodeResult decode(const uint8_t* buffer, size_t buffer_size, LdnHeader& header
  * @param buffer_size Size of input buffer
  * @param[out] header Decoded header
  * @param[out] payload Decoded payload structure
- * @param[out] extra_data Pointer to extra data (points into buffer)
+ * @param[out] extra_offset Offset of the extra data from the start of buffer
+ *             (0 when there is none; the caller adds it to its own buffer)
  * @param[out] extra_size Size of extra data
  * @return DecodeResult::Success or error
  */
-template<typename T>
-DecodeResult decode_with_data(const uint8_t* buffer, size_t buffer_size,
-                               LdnHeader& header, T& payload,
-                               const uint8_t*& extra_data, size_t& extra_size) {
+template <typename T>
+DecodeResult decode_with_data(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    T& payload,
+    size_t& extra_offset,
+    size_t& extra_size) {
     // Decode and validate header
     DecodeResult result = decode_header(buffer, buffer_size, header);
     if (result != DecodeResult::Success) {
-        extra_data = nullptr;
+        extra_offset = 0;
         extra_size = 0;
         return result;
     }
@@ -495,7 +655,7 @@ DecodeResult decode_with_data(const uint8_t* buffer, size_t buffer_size,
     // Check minimum size for structure
     const size_t min_size = sizeof(LdnHeader) + sizeof(T);
     if (buffer_size < min_size) {
-        extra_data = nullptr;
+        extra_offset = 0;
         extra_size = 0;
         return DecodeResult::BufferTooSmall;
     }
@@ -504,23 +664,22 @@ DecodeResult decode_with_data(const uint8_t* buffer, size_t buffer_size,
     std::memcpy(&payload, buffer + sizeof(LdnHeader), sizeof(T));
 
     // Calculate extra data
-    const size_t total_payload = static_cast<size_t>(header.data_size);
+    const auto total_payload = static_cast<size_t>(header.data_size);
     if (total_payload > sizeof(T)) {
         extra_size = total_payload - sizeof(T);
-        // `extra_data` points into the caller-provided `buffer`. This is an
-        // intentional zero-copy design — the caller always provides a
-        // receive buffer on the heap/static BSS, never on the stack.
-        // codeql[cpp/stack-address-escape]
-        extra_data = buffer + sizeof(LdnHeader) + sizeof(T);
+        // The offset is returned rather than a pointer: the caller applies it
+        // to the buffer it owns, so no address escapes through an output
+        // parameter.
+        extra_offset = sizeof(LdnHeader) + sizeof(T);
 
         // Verify buffer has enough data
         if (buffer_size < sizeof(LdnHeader) + total_payload) {
-            extra_data = nullptr;
+            extra_offset = 0;
             extra_size = 0;
             return DecodeResult::IncompletePacket;
         }
     } else {
-        extra_data = nullptr;
+        extra_offset = 0;
         extra_size = 0;
     }
 
@@ -536,9 +695,12 @@ DecodeResult decode_with_data(const uint8_t* buffer, size_t buffer_size,
  * @param[out] data_size Size of raw data
  * @return DecodeResult::Success or error
  */
-inline DecodeResult decode_raw(const uint8_t* buffer, size_t buffer_size,
-                                LdnHeader& header,
-                                const uint8_t*& data, size_t& data_size) {
+inline DecodeResult decode_raw(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    const uint8_t*& data,
+    size_t& data_size) {
     // Decode and validate header
     DecodeResult result = decode_header(buffer, buffer_size, header);
     if (result != DecodeResult::Success) {
@@ -566,124 +728,270 @@ inline DecodeResult decode_raw(const uint8_t* buffer, size_t buffer_size,
 
 /**
  * @brief Decode Initialize message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_initialize(const uint8_t* buffer, size_t buffer_size,
-                                       LdnHeader& header, InitializeMessage& msg) {
+inline DecodeResult decode_initialize(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    InitializeMessage& msg) {
     return decode(buffer, buffer_size, header, msg);
 }
 
 /**
  * @brief Decode Passphrase message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_passphrase(const uint8_t* buffer, size_t buffer_size,
-                                       LdnHeader& header, PassphraseMessage& msg) {
+inline DecodeResult decode_passphrase(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    PassphraseMessage& msg) {
     return decode(buffer, buffer_size, header, msg);
 }
 
 /**
  * @brief Decode Ping message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_ping(const uint8_t* buffer, size_t buffer_size,
-                                 LdnHeader& header, PingMessage& msg) {
+inline DecodeResult decode_ping(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    PingMessage& msg) {
     return decode(buffer, buffer_size, header, msg);
 }
 
 /**
  * @brief Decode Disconnect message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_disconnect(const uint8_t* buffer, size_t buffer_size,
-                                       LdnHeader& header, DisconnectMessage& msg) {
+inline DecodeResult decode_disconnect(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    DisconnectMessage& msg) {
     return decode(buffer, buffer_size, header, msg);
 }
 
 /**
  * @brief Decode NetworkInfo (for Connected, SyncNetwork, ScanReply)
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] info Receives the decoded network info
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_network_info(const uint8_t* buffer, size_t buffer_size,
-                                         LdnHeader& header, NetworkInfo& info) {
+inline DecodeResult decode_network_info(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    NetworkInfo& info) {
     return decode(buffer, buffer_size, header, info);
 }
 
 /**
  * @brief Decode Scan request
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] filter Receives the decoded scan filter
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_scan(const uint8_t* buffer, size_t buffer_size,
-                                 LdnHeader& header, ScanFilterFull& filter) {
+inline DecodeResult decode_scan(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    ScanFilterFull& filter) {
     return decode(buffer, buffer_size, header, filter);
 }
 
 /**
  * @brief Decode Connect request
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] request Receives the decoded request
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_connect(const uint8_t* buffer, size_t buffer_size,
-                                    LdnHeader& header, ConnectRequest& request) {
+inline DecodeResult decode_connect(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    ConnectRequest& request) {
     return decode(buffer, buffer_size, header, request);
 }
 
 /**
  * @brief Decode CreateAccessPoint request with advertise data
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] request Receives the decoded request
+ * @param[out] advertise_offset Receives the offset of the advertise data from
+ * the start of buffer (0 when none)
+ * @param[out] advertise_size Receives the advertise data size in bytes
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_create_access_point(const uint8_t* buffer, size_t buffer_size,
-                                                LdnHeader& header, CreateAccessPointRequest& request,
-                                                const uint8_t*& advertise_data, size_t& advertise_size) {
-    return decode_with_data(buffer, buffer_size, header, request, advertise_data, advertise_size);
+inline DecodeResult decode_create_access_point(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    CreateAccessPointRequest& request,
+    size_t& advertise_offset,
+    size_t& advertise_size) {
+    return decode_with_data(
+        buffer, buffer_size, header, request, advertise_offset, advertise_size);
 }
 
 /**
  * @brief Decode SetAcceptPolicy request
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] request Receives the decoded request
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_set_accept_policy(const uint8_t* buffer, size_t buffer_size,
-                                              LdnHeader& header, SetAcceptPolicyRequest& request) {
+inline DecodeResult decode_set_accept_policy(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    SetAcceptPolicyRequest& request) {
     return decode(buffer, buffer_size, header, request);
 }
 
 /**
  * @brief Decode SetAdvertiseData request
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] data Receives a pointer to the payload inside buffer
+ * @param[out] data_size Receives the payload size in bytes
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_set_advertise_data(const uint8_t* buffer, size_t buffer_size,
-                                               LdnHeader& header,
-                                               const uint8_t*& data, size_t& data_size) {
+inline DecodeResult decode_set_advertise_data(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    const uint8_t*& data,
+    size_t& data_size) {
     return decode_raw(buffer, buffer_size, header, data, data_size);
 }
 
 /**
  * @brief Decode ProxyData packet
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] proxy_header Receives the decoded proxy data header
+ * @param[out] data_offset Receives the offset of the payload from the start of
+ * buffer (0 when none)
+ * @param[out] data_size Receives the payload size in bytes
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_proxy_data(const uint8_t* buffer, size_t buffer_size,
-                                       LdnHeader& header, ProxyDataHeader& proxy_header,
-                                       const uint8_t*& data, size_t& data_size) {
-    return decode_with_data(buffer, buffer_size, header, proxy_header, data, data_size);
+inline DecodeResult decode_proxy_data(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    ProxyDataHeader& proxy_header,
+    size_t& data_offset,
+    size_t& data_size) {
+    return decode_with_data(
+        buffer, buffer_size, header, proxy_header, data_offset, data_size);
 }
 
 /**
  * @brief Decode ProxyConnect message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_proxy_connect(const uint8_t* buffer, size_t buffer_size,
-                                          LdnHeader& header, ProxyConnectRequest& msg) {
+inline DecodeResult decode_proxy_connect(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    ProxyConnectRequest& msg) {
     return decode(buffer, buffer_size, header, msg);
 }
 
 /**
  * @brief Decode ProxyConnectReply message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_proxy_connect_reply(const uint8_t* buffer, size_t buffer_size,
-                                                LdnHeader& header, ProxyConnectResponse& msg) {
+inline DecodeResult decode_proxy_connect_reply(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    ProxyConnectResponse& msg) {
     return decode(buffer, buffer_size, header, msg);
 }
 
 /**
  * @brief Decode ProxyDisconnect message
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] msg Receives the decoded message
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_proxy_disconnect(const uint8_t* buffer, size_t buffer_size,
-                                             LdnHeader& header, ProxyDisconnectMessage& msg) {
+inline DecodeResult decode_proxy_disconnect(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    ProxyDisconnectMessage& msg) {
     return decode(buffer, buffer_size, header, msg);
 }
 
 /**
  * @brief Decode RejectRequest
+ *
+ * @param buffer Packet bytes to decode
+ * @param buffer_size Number of valid bytes in buffer
+ * @param[out] header Receives the decoded LDN header
+ * @param[out] request Receives the decoded request
+ * @return DecodeResult::Success, or the decoding error
  */
-inline DecodeResult decode_reject(const uint8_t* buffer, size_t buffer_size,
-                                   LdnHeader& header, RejectRequest& request) {
+inline DecodeResult decode_reject(
+    const uint8_t* buffer,
+    size_t buffer_size,
+    LdnHeader& header,
+    RejectRequest& request) {
     return decode(buffer, buffer_size, header, request);
 }
 
@@ -693,64 +1001,112 @@ inline DecodeResult decode_reject(const uint8_t* buffer, size_t buffer_size,
 
 /**
  * @brief Convert DecodeResult to string for debugging
+ *
+ * @param result Result code to describe
+ * @return Static string naming the value (never null)
  */
 inline const char* decode_result_to_string(DecodeResult result) {
     switch (result) {
-        case DecodeResult::Success:          return "Success";
-        case DecodeResult::BufferTooSmall:   return "BufferTooSmall";
-        case DecodeResult::InvalidMagic:     return "InvalidMagic";
-        case DecodeResult::InvalidVersion:   return "InvalidVersion";
-        case DecodeResult::PacketTooLarge:   return "PacketTooLarge";
-        case DecodeResult::IncompletePacket: return "IncompletePacket";
-        default:                             return "Unknown";
+        case DecodeResult::Success:
+            return "Success";
+        case DecodeResult::BufferTooSmall:
+            return "BufferTooSmall";
+        case DecodeResult::InvalidMagic:
+            return "InvalidMagic";
+        case DecodeResult::InvalidVersion:
+            return "InvalidVersion";
+        case DecodeResult::PacketTooLarge:
+            return "PacketTooLarge";
+        case DecodeResult::IncompletePacket:
+            return "IncompletePacket";
+        default:
+            return "Unknown";
     }
 }
 
 /**
  * @brief Convert EncodeResult to string for debugging
+ *
+ * @param result Result code to describe
+ * @return Static string naming the value (never null)
  */
 inline const char* encode_result_to_string(EncodeResult result) {
     switch (result) {
-        case EncodeResult::Success:        return "Success";
-        case EncodeResult::BufferTooSmall: return "BufferTooSmall";
-        case EncodeResult::InvalidPacketId: return "InvalidPacketId";
-        default:                           return "Unknown";
+        case EncodeResult::Success:
+            return "Success";
+        case EncodeResult::BufferTooSmall:
+            return "BufferTooSmall";
+        case EncodeResult::InvalidPacketId:
+            return "InvalidPacketId";
+        default:
+            return "Unknown";
     }
 }
 
 /**
  * @brief Convert PacketId to string for debugging
+ *
+ * @param id Packet identifier
+ * @return Static string naming the value (never null)
  */
 inline const char* packet_id_to_string(PacketId id) {
     switch (id) {
-        case PacketId::Initialize:            return "Initialize";
-        case PacketId::Passphrase:            return "Passphrase";
-        case PacketId::CreateAccessPoint:     return "CreateAccessPoint";
-        case PacketId::CreateAccessPointPrivate: return "CreateAccessPointPrivate";
-        case PacketId::ExternalProxy:         return "ExternalProxy";
-        case PacketId::ExternalProxyToken:    return "ExternalProxyToken";
-        case PacketId::ExternalProxyState:    return "ExternalProxyState";
-        case PacketId::SyncNetwork:           return "SyncNetwork";
-        case PacketId::Reject:                return "Reject";
-        case PacketId::RejectReply:           return "RejectReply";
-        case PacketId::Scan:                  return "Scan";
-        case PacketId::ScanReply:             return "ScanReply";
-        case PacketId::ScanReplyEnd:          return "ScanReplyEnd";
-        case PacketId::Connect:               return "Connect";
-        case PacketId::ConnectPrivate:        return "ConnectPrivate";
-        case PacketId::Connected:             return "Connected";
-        case PacketId::Disconnect:            return "Disconnect";
-        case PacketId::ProxyConfig:           return "ProxyConfig";
-        case PacketId::ProxyConnect:          return "ProxyConnect";
-        case PacketId::ProxyConnectReply:     return "ProxyConnectReply";
-        case PacketId::ProxyData:             return "ProxyData";
-        case PacketId::ProxyDisconnect:       return "ProxyDisconnect";
-        case PacketId::SetAcceptPolicy:       return "SetAcceptPolicy";
-        case PacketId::SetAdvertiseData:      return "SetAdvertiseData";
-        case PacketId::Ping:                  return "Ping";
-        case PacketId::NetworkError:          return "NetworkError";
-        default:                              return "Unknown";
+        case PacketId::Initialize:
+            return "Initialize";
+        case PacketId::Passphrase:
+            return "Passphrase";
+        case PacketId::CreateAccessPoint:
+            return "CreateAccessPoint";
+        case PacketId::CreateAccessPointPrivate:
+            return "CreateAccessPointPrivate";
+        case PacketId::ExternalProxy:
+            return "ExternalProxy";
+        case PacketId::ExternalProxyToken:
+            return "ExternalProxyToken";
+        case PacketId::ExternalProxyState:
+            return "ExternalProxyState";
+        case PacketId::SyncNetwork:
+            return "SyncNetwork";
+        case PacketId::Reject:
+            return "Reject";
+        case PacketId::RejectReply:
+            return "RejectReply";
+        case PacketId::Scan:
+            return "Scan";
+        case PacketId::ScanReply:
+            return "ScanReply";
+        case PacketId::ScanReplyEnd:
+            return "ScanReplyEnd";
+        case PacketId::Connect:
+            return "Connect";
+        case PacketId::ConnectPrivate:
+            return "ConnectPrivate";
+        case PacketId::Connected:
+            return "Connected";
+        case PacketId::Disconnect:
+            return "Disconnect";
+        case PacketId::ProxyConfig:
+            return "ProxyConfig";
+        case PacketId::ProxyConnect:
+            return "ProxyConnect";
+        case PacketId::ProxyConnectReply:
+            return "ProxyConnectReply";
+        case PacketId::ProxyData:
+            return "ProxyData";
+        case PacketId::ProxyDisconnect:
+            return "ProxyDisconnect";
+        case PacketId::SetAcceptPolicy:
+            return "SetAcceptPolicy";
+        case PacketId::SetAdvertiseData:
+            return "SetAdvertiseData";
+        case PacketId::Ping:
+            return "Ping";
+        case PacketId::NetworkError:
+            return "NetworkError";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ryu_ldn::protocol
+}  // namespace ryu_ldn::protocol
+#endif  // SYSMODULE_SOURCE_PROTOCOL_RYU_PROTOCOL_HPP_

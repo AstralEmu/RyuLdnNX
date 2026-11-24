@@ -1,0 +1,128 @@
+/**
+ * @file ldn_network_timeout_tests.cpp
+ * @brief Unit tests for the real NetworkTimeout (ldn/ldn_network_timeout.cpp)
+ *
+ * Built against the host Stratosphere stand-in in tests/stubs.
+ */
+
+#include <cstdio>
+#include <cstdint>
+
+#include <cstring>
+
+#include "test_harness.hpp"
+#include "ldn/ldn_network_timeout.hpp"
+
+using ams::mitm::ldn::NetworkTimeout;
+
+/// Test fixture value: fired.
+static int g_fired = 0;
+/// Test helper: on timeout.
+static void on_timeout() {
+    g_fired++;
+}
+
+/**
+ * @brief Test helper: set now.
+ *
+ * @param ms value of the host tick clock in milliseconds
+ */
+static void set_now(int64_t ms) {
+    ams::os::g_host_tick_ms = ms;
+}
+
+/** @brief Test case: a new timeout is inactive and never fires. */
+TEST(a_new_timeout_is_inactive_and_never_fires) {
+    g_fired = 0;
+    NetworkTimeout t(1000, on_timeout);
+    ASSERT_FALSE(t.IsActive());
+    ASSERT_FALSE(t.CheckTimeout(1000000));
+    ASSERT_EQ(g_fired, 0);
+}
+
+/** @brief Test case: refresh activates and always returns true. */
+TEST(refresh_activates_and_always_returns_true) {
+    g_fired = 0;
+    set_now(100);
+    NetworkTimeout t(1000, on_timeout);
+    ASSERT_TRUE(t.RefreshTimeout());
+    ASSERT_TRUE(t.IsActive());
+}
+
+/** @brief Test case: it fires exactly when the idle time has elapsed. */
+TEST(it_fires_exactly_when_the_idle_time_has_elapsed) {
+    g_fired = 0;
+    set_now(100);
+    NetworkTimeout t(1000, on_timeout);
+    t.RefreshTimeout();
+    ASSERT_FALSE(t.CheckTimeout(1099));
+    ASSERT_EQ(g_fired, 0);
+    ASSERT_TRUE(t.IsActive());
+    ASSERT_TRUE(t.CheckTimeout(1100));
+    ASSERT_EQ(g_fired, 1);
+    ASSERT_FALSE(t.IsActive());
+}
+
+/** @brief Test case: it fires only once until refreshed again. */
+TEST(it_fires_only_once_until_refreshed_again) {
+    g_fired = 0;
+    set_now(0);
+    NetworkTimeout t(10, on_timeout);
+    t.RefreshTimeout();
+    ASSERT_TRUE(t.CheckTimeout(50));
+    ASSERT_FALSE(t.CheckTimeout(60));
+    ASSERT_EQ(g_fired, 1);
+    set_now(70);
+    t.RefreshTimeout();
+    ASSERT_FALSE(t.CheckTimeout(75));
+    ASSERT_TRUE(t.CheckTimeout(80));
+    ASSERT_EQ(g_fired, 2);
+}
+
+/** @brief Test case: refreshing restarts the countdown. */
+TEST(refreshing_restarts_the_countdown) {
+    g_fired = 0;
+    set_now(0);
+    NetworkTimeout t(100, on_timeout);
+    t.RefreshTimeout();
+    set_now(90);
+    t.RefreshTimeout();
+    ASSERT_FALSE(t.CheckTimeout(150));
+    ASSERT_TRUE(t.CheckTimeout(190));
+}
+
+/** @brief Test case: disable cancels a pending timeout. */
+TEST(disable_cancels_a_pending_timeout) {
+    g_fired = 0;
+    set_now(0);
+    NetworkTimeout t(10, on_timeout);
+    t.RefreshTimeout();
+    t.DisableTimeout();
+    ASSERT_FALSE(t.IsActive());
+    ASSERT_FALSE(t.CheckTimeout(1000));
+    ASSERT_EQ(g_fired, 0);
+}
+
+/** @brief Test case: a null callback never fires and stays active. */
+TEST(a_null_callback_never_fires_and_stays_active) {
+    set_now(0);
+    NetworkTimeout t(10, nullptr);
+    t.RefreshTimeout();
+    ASSERT_FALSE(t.CheckTimeout(1000));
+    ASSERT_TRUE(t.IsActive());
+}
+
+/** @brief Test case: the default idle timeout matches the reference client. */
+TEST(the_default_idle_timeout_matches_the_reference_client) {
+    ASSERT_EQ(
+        NetworkTimeout::DEFAULT_IDLE_TIMEOUT_MS, static_cast<uint64_t>(6000));
+}
+
+/**
+ * @brief Runs the whole suite; the exit code is non-zero if any test failed.
+ *
+ * @return 0 when every test passed, non-zero otherwise
+ */
+int main() {
+    return test_report("NetworkTimeout Tests");
+}

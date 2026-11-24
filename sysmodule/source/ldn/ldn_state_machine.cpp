@@ -11,16 +11,7 @@
 namespace ams::mitm::ldn {
 
 LdnStateMachine::LdnStateMachine()
-    : m_mutex()
-    , m_state(CommState::None)
-    , m_state_event(os::EventClearMode_AutoClear, true)
-    , m_callback(nullptr)
-    , m_callback_user_data(nullptr)
-{
-}
-
-LdnStateMachine::~LdnStateMachine() {
-}
+    : m_state_event(os::EventClearMode_AutoClear, true) {}
 
 // ============================================================================
 // State Queries
@@ -65,7 +56,7 @@ StateTransitionResult LdnStateMachine::Initialize() {
     m_state = CommState::Initialized;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -83,7 +74,7 @@ StateTransitionResult LdnStateMachine::Finalize() {
     m_state = CommState::None;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -104,7 +95,7 @@ StateTransitionResult LdnStateMachine::OpenAccessPoint() {
     m_state = CommState::AccessPoint;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -117,7 +108,8 @@ StateTransitionResult LdnStateMachine::CloseAccessPoint() {
     if (m_state == CommState::Initialized) {
         return StateTransitionResult::AlreadyInState;
     }
-    if (m_state != CommState::AccessPoint && m_state != CommState::AccessPointCreated) {
+    if (m_state != CommState::AccessPoint &&
+        m_state != CommState::AccessPointCreated) {
         return StateTransitionResult::InvalidTransition;
     }
 
@@ -125,7 +117,7 @@ StateTransitionResult LdnStateMachine::CloseAccessPoint() {
     m_state = CommState::Initialized;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -146,7 +138,7 @@ StateTransitionResult LdnStateMachine::CreateNetwork() {
     m_state = CommState::AccessPointCreated;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -167,7 +159,7 @@ StateTransitionResult LdnStateMachine::DestroyNetwork() {
     m_state = CommState::AccessPoint;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -188,7 +180,7 @@ StateTransitionResult LdnStateMachine::OpenStation() {
     m_state = CommState::Station;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -201,7 +193,8 @@ StateTransitionResult LdnStateMachine::CloseStation() {
     if (m_state == CommState::Initialized) {
         return StateTransitionResult::AlreadyInState;
     }
-    if (m_state != CommState::Station && m_state != CommState::StationConnected) {
+    if (m_state != CommState::Station &&
+        m_state != CommState::StationConnected) {
         return StateTransitionResult::InvalidTransition;
     }
 
@@ -209,7 +202,7 @@ StateTransitionResult LdnStateMachine::CloseStation() {
     m_state = CommState::Initialized;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -230,7 +223,7 @@ StateTransitionResult LdnStateMachine::Connect() {
     m_state = CommState::StationConnected;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -251,7 +244,7 @@ StateTransitionResult LdnStateMachine::Disconnect() {
     m_state = CommState::Station;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -269,7 +262,7 @@ StateTransitionResult LdnStateMachine::SetError() {
     m_state = CommState::Error;
     SignalStateChange();
 
-    if (m_callback) {
+    if (m_callback != nullptr) {
         m_callback(old_state, m_state, m_callback_user_data);
     }
 
@@ -284,7 +277,8 @@ os::NativeHandle LdnStateMachine::GetStateChangeEventHandle() const {
     return m_state_event.GetReadableHandle();
 }
 
-void LdnStateMachine::SetStateCallback(StateCallback callback, void* user_data) {
+void LdnStateMachine::SetStateCallback(
+    StateCallback callback, void* user_data) {
     std::scoped_lock lk(m_mutex);
     m_callback = callback;
     m_callback_user_data = user_data;
@@ -296,81 +290,35 @@ void LdnStateMachine::SetStateCallback(StateCallback callback, void* user_data) 
 
 const char* LdnStateMachine::StateToString(CommState state) {
     switch (state) {
-        case CommState::None:               return "None";
-        case CommState::Initialized:        return "Initialized";
-        case CommState::AccessPoint:        return "AccessPoint";
-        case CommState::AccessPointCreated: return "AccessPointCreated";
-        case CommState::Station:            return "Station";
-        case CommState::StationConnected:   return "StationConnected";
-        case CommState::Error:              return "Error";
-        default:                            return "Unknown";
+        case CommState::None:
+            return "None";
+        case CommState::Initialized:
+            return "Initialized";
+        case CommState::AccessPoint:
+            return "AccessPoint";
+        case CommState::AccessPointCreated:
+            return "AccessPointCreated";
+        case CommState::Station:
+            return "Station";
+        case CommState::StationConnected:
+            return "StationConnected";
+        case CommState::Error:
+            return "Error";
+        default:
+            return "Unknown";
     }
 }
 
 const char* LdnStateMachine::ResultToString(StateTransitionResult result) {
     switch (result) {
-        case StateTransitionResult::Success:           return "Success";
-        case StateTransitionResult::InvalidTransition: return "InvalidTransition";
-        case StateTransitionResult::AlreadyInState:    return "AlreadyInState";
-        default:                                       return "Unknown";
-    }
-}
-
-// ============================================================================
-// Private Methods
-// ============================================================================
-
-StateTransitionResult LdnStateMachine::TransitionTo(CommState new_state) {
-    if (m_state == new_state) {
-        return StateTransitionResult::AlreadyInState;
-    }
-
-    if (!IsValidTransition(m_state, new_state)) {
-        return StateTransitionResult::InvalidTransition;
-    }
-
-    CommState old_state = m_state;
-    m_state = new_state;
-    SignalStateChange();
-
-    if (m_callback) {
-        m_callback(old_state, m_state, m_callback_user_data);
-    }
-
-    return StateTransitionResult::Success;
-}
-
-bool LdnStateMachine::IsValidTransition(CommState from, CommState to) {
-    // Special cases: can always go to Error or None (via Finalize)
-    if (to == CommState::Error || to == CommState::None) {
-        return true;
-    }
-
-    switch (from) {
-        case CommState::None:
-            return to == CommState::Initialized;
-
-        case CommState::Initialized:
-            return to == CommState::AccessPoint || to == CommState::Station;
-
-        case CommState::AccessPoint:
-            return to == CommState::AccessPointCreated || to == CommState::Initialized;
-
-        case CommState::AccessPointCreated:
-            return to == CommState::AccessPoint || to == CommState::Initialized;
-
-        case CommState::Station:
-            return to == CommState::StationConnected || to == CommState::Initialized;
-
-        case CommState::StationConnected:
-            return to == CommState::Station || to == CommState::Initialized;
-
-        case CommState::Error:
-            // Can recover to Initialized via re-initialization
-            return to == CommState::Initialized;
-
+        case StateTransitionResult::Success:
+            return "Success";
+        case StateTransitionResult::InvalidTransition:
+            return "InvalidTransition";
+        case StateTransitionResult::AlreadyInState:
+            return "AlreadyInState";
         default:
-            return false;
+            return "Unknown";
     }
 }
 
@@ -378,4 +326,4 @@ void LdnStateMachine::SignalStateChange() {
     m_state_event.Signal();
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

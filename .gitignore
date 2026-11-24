@@ -83,17 +83,9 @@ $RECYCLE.BIN/
 # Documentation
 # =============================================================================
 
-# Doxygen output (regenerated from source)
-docs/doxygen-xml/
-
-# Starlight/Astro build
-docs/dist/
-docs/.astro/
-docs/node_modules/
-
-# Generated API docs (regenerated from Doxygen XML)
-docs/src/content/docs/api/*.mdx
-!docs/src/content/docs/api/index.mdx
+# Wiki clone symlink (the wiki is its own git repo) and generator scratch
+docs
+.cache/
 
 # =============================================================================
 # Tests
@@ -225,3 +217,15 @@ output/
 
 # Lock Files (For build priorities)
 .lock-*
+
+# =============================================================================
+# Build wrapper logs
+# =============================================================================
+
+# build-wrapper.sh coordination logs (scripts/builder/)
+build-logs/
+
+# Local Claude Code permissions (per-developer)
+.claude/settings.local.json
+
+__pycache__/

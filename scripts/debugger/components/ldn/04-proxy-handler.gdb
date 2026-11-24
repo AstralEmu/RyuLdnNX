@@ -17,4 +17,4 @@ dprintf ryu_ldn::ldn::LdnProxyHandler::handle_proxy_data, "[LDN:PROXY_HANDLER] H
 dprintf ryu_ldn::ldn::LdnProxyHandler::handle_proxy_disconnect, "[LDN:PROXY_HANDLER] Handling proxy disconnect\n"
 dprintf ryu_ldn::ldn::LdnProxyHandler::reset, "[LDN:PROXY_HANDLER] Reset handler\n"
 
-echo [LDN] proxy_handler: 12 dprintf points\n
+echo [LDN] proxy-handler: 12 dprintf points\n

@@ -73,8 +73,9 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <errno.h>
+#include <cerrno>
 #include <cstring>
+#include <utility>
 
 namespace ams::mitm::p2p {
 
@@ -109,8 +110,10 @@ void ClientRecvThreadEntry(void* arg) {
 //
 // One stack is enough — the sysmodule only ever holds a single P2pProxyClient
 // (via ICommunicationService::m_p2p_client) at a time.
+/// Size in bytes of the receive thread stack (16 KB).
 constexpr size_t P2P_CLIENT_STACK_SIZE = 0x4000;
-alignas(os::ThreadStackAlignment) constinit u8
+/// Statically allocated receive thread stack (page aligned, see above).
+alignas(os::ThreadStackAlignment) static constinit u8
     g_p2p_client_recv_thread_stack[P2P_CLIENT_STACK_SIZE];
 
 // =============================================================================
@@ -121,19 +124,16 @@ alignas(os::ThreadStackAlignment) constinit u8
  * @brief Constructor
  *
  * Initializes client state but does not establish a connection.
- * Call Connect() to connect to a host.
- *
- * @param packet_callback Callback for forwarding received proxy packets
+ * Call Connect() to connect to a host. The callback parameter is
+ * documented with the declaration.
  */
 P2pProxyClient::P2pProxyClient(ProxyPacketCallback packet_callback)
-    : m_socket_fd(-1)
-    , m_connected(false)
-    , m_disposed(false)
-    , m_ready(false)
-    , m_proxy_config{}
-    , m_recv_thread_running(false)
-    , m_packet_callback(packet_callback) {
+    : m_connected(false),
+      m_disposed(false),
 
+      m_proxy_config{},
+      m_recv_thread_running(false),
+      m_packet_callback(packet_callback) {
     LOG_VERBOSE("P2pProxyClient created");
 }
 
@@ -155,9 +155,8 @@ P2pProxyClient::~P2pProxyClient() {
 /**
  * @brief Connect to a P2P host using string address
  *
- * @param address Host IP address as dotted decimal string (e.g., "192.168.1.100")
- * @param port Host port number
- * @return true if connection established successfully
+ * The address is a dotted decimal string (e.g. "192.168.1.100"). Parameters
+ * and return value are documented with the declaration.
  *
  * ## Implementation Notes
  *
@@ -174,7 +173,7 @@ bool P2pProxyClient::Connect(const char* address, uint16_t port) {
     }
 
     // Parse IP address
-    struct in_addr addr;
+    struct in_addr addr{};
     if (inet_pton(AF_INET, address, &addr) != 1) {
         LOG_ERROR("P2P client: invalid address '%s'", address);
         return false;
@@ -187,14 +186,10 @@ bool P2pProxyClient::Connect(const char* address, uint16_t port) {
 /**
  * @brief Connect to a P2P host using IP bytes
  *
- * @param ip_bytes IP address as byte array (network order)
- * @param ip_len Length of IP address (4 for IPv4)
- * @param port Host port number
- * @return true if connection established successfully
- *
  * This overload is used when we have the IP address from ExternalProxyConfig.
  */
-bool P2pProxyClient::Connect(const uint8_t* ip_bytes, size_t ip_len, uint16_t port) {
+bool P2pProxyClient::Connect(
+    const uint8_t* ip_bytes, size_t ip_len, uint16_t port) {
     std::scoped_lock lock(m_mutex);
 
     if (m_connected) {
@@ -223,7 +218,9 @@ bool P2pProxyClient::Connect(const uint8_t* ip_bytes, size_t ip_len, uint16_t po
 
     // TCP_NODELAY - disable Nagle's algorithm for low latency
     int nodelay = 1;
-    if (setsockopt(m_socket_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) < 0) {
+    if (setsockopt(
+            m_socket_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) <
+        0) {
         LOG_WARN("P2P client: failed to set TCP_NODELAY (errno=%d)", errno);
     }
 
@@ -251,8 +248,10 @@ bool P2pProxyClient::Connect(const uint8_t* ip_bytes, size_t ip_len, uint16_t po
     // Step 4: Connect with Timeout
     // =========================================================================
 
-    int result = ::connect(m_socket_fd, reinterpret_cast<struct sockaddr*>(&server_addr),
-                           sizeof(server_addr));
+    int result = ::connect(
+        m_socket_fd,
+        reinterpret_cast<struct sockaddr*>(&server_addr),
+        sizeof(server_addr));
 
     if (result < 0 && errno != EINPROGRESS) {
         LOG_ERROR("P2P client: connect failed (errno=%d)", errno);
@@ -271,15 +270,18 @@ bool P2pProxyClient::Connect(const uint8_t* ip_bytes, size_t ip_len, uint16_t po
         FD_ZERO(&write_fds);
         FD_SET(m_socket_fd, &write_fds);
 
-        struct timeval timeout;
+        struct timeval timeout{};
         timeout.tv_sec = CONNECT_TIMEOUT_MS / 1000;
         timeout.tv_usec = (CONNECT_TIMEOUT_MS % 1000) * 1000;
 
-        result = select(m_socket_fd + 1, nullptr, &write_fds, nullptr, &timeout);
+        result =
+            select(m_socket_fd + 1, nullptr, &write_fds, nullptr, &timeout);
 
         if (result <= 0) {
-            LOG_ERROR("P2P client: connect timeout or error (result=%d, errno=%d)",
-                      result, errno);
+            LOG_ERROR(
+                "P2P client: connect timeout or error (result=%d, errno=%d)",
+                result,
+                errno);
             close(m_socket_fd);
             m_socket_fd = -1;
             return false;
@@ -288,7 +290,9 @@ bool P2pProxyClient::Connect(const uint8_t* ip_bytes, size_t ip_len, uint16_t po
         // Check if connection succeeded
         int so_error = 0;
         socklen_t len = sizeof(so_error);
-        if (getsockopt(m_socket_fd, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0 || so_error != 0) {
+        if (getsockopt(m_socket_fd, SOL_SOCKET, SO_ERROR, &so_error, &len) <
+                0 ||
+            so_error != 0) {
             LOG_ERROR("P2P client: connect failed (so_error=%d)", so_error);
             close(m_socket_fd);
             m_socket_fd = -1;
@@ -317,13 +321,18 @@ bool P2pProxyClient::Connect(const uint8_t* ip_bytes, size_t ip_len, uint16_t po
     // the moment we actually managed to get past `connect()` (before the
     // private_ip htonl fix the connect always timed out, so this code
     // path was never reached).
-    Result rc = os::CreateThread(&m_recv_thread, ClientRecvThreadEntry, this,
-                                  g_p2p_client_recv_thread_stack,
-                                  P2P_CLIENT_STACK_SIZE,
-                                  /* priority */ 7);
+    Result rc = os::CreateThread(
+        &m_recv_thread,
+        ClientRecvThreadEntry,
+        this,
+        g_p2p_client_recv_thread_stack,
+        P2P_CLIENT_STACK_SIZE,
+        /* priority */ 7);
 
     if (R_FAILED(rc)) {
-        LOG_ERROR("P2P client: failed to create recv thread (rc=0x%X)", rc.GetValue());
+        LOG_ERROR(
+            "P2P client: failed to create recv thread (rc=0x%X)",
+            rc.GetValue());
         close(m_socket_fd);
         m_socket_fd = -1;
         m_connected = false;
@@ -355,11 +364,11 @@ void P2pProxyClient::Disconnect() {
     // Stop receive thread
     m_recv_thread_running = false;
 
-    // Close socket to unblock recv()
+    // Unblock recv() without releasing the descriptor: the receive thread
+    // still reads it, so close() waits until that thread has been joined
+    // (closing first races with recv() and risks descriptor reuse).
     if (m_socket_fd >= 0) {
         shutdown(m_socket_fd, SHUT_RDWR);
-        close(m_socket_fd);
-        m_socket_fd = -1;
     }
 
     // Wait for receive thread to finish
@@ -370,6 +379,11 @@ void P2pProxyClient::Disconnect() {
         os::WaitThread(&m_recv_thread);
         os::DestroyThread(&m_recv_thread);
         m_mutex.Lock();
+    }
+
+    if (m_socket_fd >= 0) {
+        close(m_socket_fd);
+        m_socket_fd = -1;
     }
 
     m_connected = false;
@@ -397,8 +411,8 @@ bool P2pProxyClient::IsConnected() const {
  * Sends the ExternalProxyConfig packet to the host. The host validates the
  * authentication token and responds with ProxyConfig on success.
  *
- * @param config ExternalProxyConfig received from master server
- * @return true if authentication packet was sent successfully
+ * The config comes from the master server (see the declaration for the
+ * parameter and return value).
  *
  * ## Ryujinx Reference
  *
@@ -410,7 +424,8 @@ bool P2pProxyClient::IsConnected() const {
  * }
  * ```
  */
-bool P2pProxyClient::PerformAuth(const ryu_ldn::protocol::ExternalProxyConfig& config) {
+bool P2pProxyClient::PerformAuth(
+    const ryu_ldn::protocol::ExternalProxyConfig& config) {
     std::scoped_lock lock(m_mutex);
 
     if (!m_connected) {
@@ -423,15 +438,20 @@ bool P2pProxyClient::PerformAuth(const ryu_ldn::protocol::ExternalProxyConfig& c
     // Encode ExternalProxyConfig packet
     uint8_t packet[256];
     size_t len = 0;
-    ryu_ldn::protocol::encode(packet, sizeof(packet),
-                              ryu_ldn::protocol::PacketId::ExternalProxy,
-                              config, len);
+    ryu_ldn::protocol::encode(
+        packet,
+        sizeof(packet),
+        ryu_ldn::protocol::PacketId::ExternalProxy,
+        config,
+        len);
 
     // Send to host
     ssize_t sent = send(m_socket_fd, packet, len, 0);
     if (sent < 0 || static_cast<size_t>(sent) != len) {
-        LOG_ERROR("P2P client: failed to send auth packet (sent=%zd, errno=%d)",
-                  sent, errno);
+        LOG_ERROR(
+            "P2P client: failed to send auth packet (sent=%zd, errno=%d)",
+            sent,
+            errno);
         return false;
     }
 
@@ -442,11 +462,10 @@ bool P2pProxyClient::PerformAuth(const ryu_ldn::protocol::ExternalProxyConfig& c
 /**
  * @brief Wait for proxy to be ready
  *
- * Blocks until the host sends ProxyConfig (indicating successful authentication)
- * or timeout expires.
+ * Blocks until the host sends ProxyConfig (indicating successful
+ * authentication) or timeout expires.
  *
- * @param timeout_ms Timeout in milliseconds
- * @return true if ProxyConfig received within timeout
+ * See the declaration for the timeout and return value.
  *
  * ## Ryujinx Reference
  *
@@ -471,12 +490,14 @@ bool P2pProxyClient::EnsureProxyReady(int timeout_ms) {
     LOG_INFO("P2P client: waiting for proxy ready (timeout=%dms)", timeout_ms);
 
     // Wait on condition variable with timeout
-    const auto wait_time = TimeSpan::FromMilliSeconds(timeout_ms);
+    const auto wait_time =
+        TimeSpan::FromMilliSeconds(static_cast<s64>(timeout_ms));
     m_ready_cv.TimedWait(m_mutex, wait_time);
 
     if (m_ready) {
-        LOG_INFO("P2P client: proxy is ready (virtual IP: 0x%08X)",
-                 m_proxy_config.proxy_ip);
+        LOG_INFO(
+            "P2P client: proxy is ready (virtual IP: 0x%08X)",
+            m_proxy_config.proxy_ip);
         return true;
     }
 
@@ -486,6 +507,8 @@ bool P2pProxyClient::EnsureProxyReady(int timeout_ms) {
 
 /**
  * @brief Check if proxy is ready
+ * @return true once ProxyConfig was received from the host (cleared when the
+ *         receive thread exits with an error).
  */
 bool P2pProxyClient::IsReady() const {
     std::scoped_lock lock(m_mutex);
@@ -513,49 +536,68 @@ bool P2pProxyClient::Send(const void* data, size_t size) {
 /**
  * @brief Send ProxyData to host
  */
-bool P2pProxyClient::SendProxyData(const ryu_ldn::protocol::ProxyDataHeader& header,
-                                    const uint8_t* data, size_t data_len) {
+bool P2pProxyClient::SendProxyData(
+    const ryu_ldn::protocol::ProxyDataHeader& header,
+    const uint8_t* data,
+    size_t data_len) {
     uint8_t packet[0x10000];  // 64KB max
     size_t len = 0;
-    ryu_ldn::protocol::encode_with_data(packet, sizeof(packet),
-                                        ryu_ldn::protocol::PacketId::ProxyData,
-                                        header, data, data_len, len);
+    ryu_ldn::protocol::encode_with_data(
+        packet,
+        sizeof(packet),
+        ryu_ldn::protocol::PacketId::ProxyData,
+        header,
+        data,
+        data_len,
+        len);
     return Send(packet, len);
 }
 
 /**
  * @brief Send ProxyConnect request to host
  */
-bool P2pProxyClient::SendProxyConnect(const ryu_ldn::protocol::ProxyConnectRequest& request) {
+bool P2pProxyClient::SendProxyConnect(
+    const ryu_ldn::protocol::ProxyConnectRequest& request) {
     uint8_t packet[256];
     size_t len = 0;
-    ryu_ldn::protocol::encode(packet, sizeof(packet),
-                              ryu_ldn::protocol::PacketId::ProxyConnect,
-                              request, len);
+    ryu_ldn::protocol::encode(
+        packet,
+        sizeof(packet),
+        ryu_ldn::protocol::PacketId::ProxyConnect,
+        request,
+        len);
     return Send(packet, len);
 }
 
 /**
  * @brief Send ProxyConnectReply to host
  */
-bool P2pProxyClient::SendProxyConnectReply(const ryu_ldn::protocol::ProxyConnectResponse& response) {
+bool P2pProxyClient::SendProxyConnectReply(
+    const ryu_ldn::protocol::ProxyConnectResponse& response) {
     uint8_t packet[256];
     size_t len = 0;
-    ryu_ldn::protocol::encode(packet, sizeof(packet),
-                              ryu_ldn::protocol::PacketId::ProxyConnectReply,
-                              response, len);
+    ryu_ldn::protocol::encode(
+        packet,
+        sizeof(packet),
+        ryu_ldn::protocol::PacketId::ProxyConnectReply,
+        response,
+        len);
     return Send(packet, len);
 }
 
 /**
  * @brief Send ProxyDisconnect to host
  */
-bool P2pProxyClient::SendProxyDisconnect(const ryu_ldn::protocol::ProxyDisconnectMessage& message) {
+bool P2pProxyClient::SendProxyDisconnect(
+    const ryu_ldn::protocol::ProxyDisconnectMessage& message) {
     uint8_t packet[256];
     size_t len = 0;
-    ryu_ldn::protocol::encode(packet, sizeof(packet),
-                              ryu_ldn::protocol::PacketId::ProxyDisconnect,
-                              message, len);
+    ryu_ldn::protocol::encode(
+        packet,
+        sizeof(packet),
+        ryu_ldn::protocol::PacketId::ProxyDisconnect,
+        message,
+        len);
     return Send(packet, len);
 }
 
@@ -574,7 +616,8 @@ void P2pProxyClient::ReceiveLoop() {
 
     while (m_recv_thread_running && !m_disposed) {
         // Receive data (blocking)
-        ssize_t received = recv(m_socket_fd, m_recv_buffer, RECV_BUFFER_SIZE, 0);
+        ssize_t received =
+            recv(m_socket_fd, m_recv_buffer, RECV_BUFFER_SIZE, 0);
 
         if (received <= 0) {
             if (received == 0) {
@@ -606,10 +649,9 @@ void P2pProxyClient::ReceiveLoop() {
  * @brief Process received data
  *
  * Parses the received buffer and dispatches each complete packet to
- * the appropriate handler.
- *
- * @param data Buffer containing received data
- * @param size Number of bytes in buffer
+ * the appropriate handler. A partial trailing packet or a bad magic stops
+ * the loop with a warning (the rest of the buffer is dropped). Parameters are
+ * documented with the declaration.
  */
 void P2pProxyClient::ProcessData(const uint8_t* data, size_t size) {
     size_t offset = 0;
@@ -621,7 +663,9 @@ void P2pProxyClient::ProcessData(const uint8_t* data, size_t size) {
             break;
         }
 
-        const auto* header = reinterpret_cast<const ryu_ldn::protocol::LdnHeader*>(data + offset);
+        const auto* header =
+            reinterpret_cast<const ryu_ldn::protocol::LdnHeader*>(
+                data + offset);
 
         // Validate magic
         if (header->magic != ryu_ldn::protocol::PROTOCOL_MAGIC) {
@@ -635,54 +679,74 @@ void P2pProxyClient::ProcessData(const uint8_t* data, size_t size) {
 
         // Need complete packet
         if (offset + packet_size > size) {
-            LOG_WARN("P2P client: incomplete packet (need %zu, have %zu)",
-                     packet_size, size - offset);
+            LOG_WARN(
+                "P2P client: incomplete packet (need %zu, have %zu)",
+                packet_size,
+                size - offset);
             break;
         }
 
         // Get packet payload
-        const uint8_t* packet_data = data + offset + sizeof(ryu_ldn::protocol::LdnHeader);
+        const uint8_t* packet_data =
+            data + offset + sizeof(ryu_ldn::protocol::LdnHeader);
 
         // Dispatch by packet type
         switch (static_cast<ryu_ldn::protocol::PacketId>(header->type)) {
             case ryu_ldn::protocol::PacketId::ProxyConfig: {
-                if (static_cast<size_t>(header->data_size) >= sizeof(ryu_ldn::protocol::ProxyConfig)) {
-                    const auto* config = reinterpret_cast<const ryu_ldn::protocol::ProxyConfig*>(packet_data);
+                if (static_cast<size_t>(header->data_size) >=
+                    sizeof(ryu_ldn::protocol::ProxyConfig)) {
+                    const auto* config =
+                        reinterpret_cast<const ryu_ldn::protocol::ProxyConfig*>(
+                            packet_data);
                     HandleProxyConfig(*config);
                 }
                 break;
             }
 
             case ryu_ldn::protocol::PacketId::ProxyData: {
-                if (static_cast<size_t>(header->data_size) >= sizeof(ryu_ldn::protocol::ProxyDataHeader)) {
-                    const auto* pheader = reinterpret_cast<const ryu_ldn::protocol::ProxyDataHeader*>(packet_data);
-                    const uint8_t* payload = packet_data + sizeof(ryu_ldn::protocol::ProxyDataHeader);
-                    size_t payload_len = static_cast<size_t>(header->data_size) -
-                                         sizeof(ryu_ldn::protocol::ProxyDataHeader);
+                if (static_cast<size_t>(header->data_size) >=
+                    sizeof(ryu_ldn::protocol::ProxyDataHeader)) {
+                    const auto* pheader = reinterpret_cast<
+                        const ryu_ldn::protocol::ProxyDataHeader*>(packet_data);
+                    const uint8_t* payload =
+                        packet_data +
+                        sizeof(ryu_ldn::protocol::ProxyDataHeader);
+                    size_t payload_len =
+                        static_cast<size_t>(header->data_size) -
+                        sizeof(ryu_ldn::protocol::ProxyDataHeader);
                     HandleProxyData(*pheader, payload, payload_len);
                 }
                 break;
             }
 
             case ryu_ldn::protocol::PacketId::ProxyConnect: {
-                if (static_cast<size_t>(header->data_size) >= sizeof(ryu_ldn::protocol::ProxyConnectRequest)) {
-                    const auto* request = reinterpret_cast<const ryu_ldn::protocol::ProxyConnectRequest*>(packet_data);
+                if (static_cast<size_t>(header->data_size) >=
+                    sizeof(ryu_ldn::protocol::ProxyConnectRequest)) {
+                    const auto* request = reinterpret_cast<
+                        const ryu_ldn::protocol::ProxyConnectRequest*>(
+                        packet_data);
                     HandleProxyConnect(*request);
                 }
                 break;
             }
 
             case ryu_ldn::protocol::PacketId::ProxyConnectReply: {
-                if (static_cast<size_t>(header->data_size) >= sizeof(ryu_ldn::protocol::ProxyConnectResponse)) {
-                    const auto* response = reinterpret_cast<const ryu_ldn::protocol::ProxyConnectResponse*>(packet_data);
+                if (static_cast<size_t>(header->data_size) >=
+                    sizeof(ryu_ldn::protocol::ProxyConnectResponse)) {
+                    const auto* response = reinterpret_cast<
+                        const ryu_ldn::protocol::ProxyConnectResponse*>(
+                        packet_data);
                     HandleProxyConnectReply(*response);
                 }
                 break;
             }
 
             case ryu_ldn::protocol::PacketId::ProxyDisconnect: {
-                if (static_cast<size_t>(header->data_size) >= sizeof(ryu_ldn::protocol::ProxyDisconnectMessage)) {
-                    const auto* message = reinterpret_cast<const ryu_ldn::protocol::ProxyDisconnectMessage*>(packet_data);
+                if (static_cast<size_t>(header->data_size) >=
+                    sizeof(ryu_ldn::protocol::ProxyDisconnectMessage)) {
+                    const auto* message = reinterpret_cast<
+                        const ryu_ldn::protocol::ProxyDisconnectMessage*>(
+                        packet_data);
                     HandleProxyDisconnect(*message);
                 }
                 break;
@@ -707,6 +771,9 @@ void P2pProxyClient::ProcessData(const uint8_t* data, size_t size) {
  * This packet indicates successful authentication. The ProxyConfig contains
  * our assigned virtual IP and subnet mask.
  *
+ * @param config ProxyConfig received from the host; copied into
+ *               m_proxy_config under m_mutex.
+ *
  * ## Ryujinx Reference
  *
  * ```csharp
@@ -717,11 +784,14 @@ void P2pProxyClient::ProcessData(const uint8_t* data, size_t size) {
  * }
  * ```
  */
-void P2pProxyClient::HandleProxyConfig(const ryu_ldn::protocol::ProxyConfig& config) {
+void P2pProxyClient::HandleProxyConfig(
+    const ryu_ldn::protocol::ProxyConfig& config) {
     std::scoped_lock lock(m_mutex);
 
-    LOG_INFO("P2P client: received ProxyConfig (IP: 0x%08X, mask: 0x%08X)",
-             config.proxy_ip, config.proxy_subnet_mask);
+    LOG_INFO(
+        "P2P client: received ProxyConfig (IP: 0x%08X, mask: 0x%08X)",
+        config.proxy_ip,
+        config.proxy_subnet_mask);
 
     // Store config
     m_proxy_config = config;
@@ -734,20 +804,29 @@ void P2pProxyClient::HandleProxyConfig(const ryu_ldn::protocol::ProxyConfig& con
 /**
  * @brief Handle ProxyData from host
  *
- * Forward to the BSD MITM layer via callback.
+ * Forward to the BSD MITM layer via callback. Header and payload are packed
+ * into one 64 KB stack buffer; a packet that does not fit is dropped
+ * silently.
+ *
+ * @param header ProxyData header with the routing information.
+ * @param data Payload bytes following the header.
+ * @param data_len Payload size in bytes.
  */
-void P2pProxyClient::HandleProxyData(const ryu_ldn::protocol::ProxyDataHeader& header,
-                                      const uint8_t* data, size_t data_len) {
+void P2pProxyClient::HandleProxyData(
+    const ryu_ldn::protocol::ProxyDataHeader& header,
+    const uint8_t* data,
+    size_t data_len) {
     LOG_VERBOSE("P2P client: received ProxyData (%zu bytes)", data_len);
 
-    if (m_packet_callback) {
+    if (m_packet_callback != nullptr) {
         // Create combined buffer for callback
         size_t total_size = sizeof(header) + data_len;
         uint8_t buffer[0x10000];
         if (total_size <= sizeof(buffer)) {
             std::memcpy(buffer, &header, sizeof(header));
             std::memcpy(buffer + sizeof(header), data, data_len);
-            m_packet_callback(ryu_ldn::protocol::PacketId::ProxyData, buffer, total_size);
+            m_packet_callback(
+                ryu_ldn::protocol::PacketId::ProxyData, buffer, total_size);
         }
     }
 }
@@ -756,13 +835,18 @@ void P2pProxyClient::HandleProxyData(const ryu_ldn::protocol::ProxyDataHeader& h
  * @brief Handle ProxyConnect from host
  *
  * Forward to the BSD MITM layer via callback.
+ *
+ * @param request Connect request describing the peer socket to open.
  */
-void P2pProxyClient::HandleProxyConnect(const ryu_ldn::protocol::ProxyConnectRequest& request) {
+void P2pProxyClient::HandleProxyConnect(
+    const ryu_ldn::protocol::ProxyConnectRequest& request) {
     LOG_VERBOSE("P2P client: received ProxyConnect");
 
-    if (m_packet_callback) {
-        m_packet_callback(ryu_ldn::protocol::PacketId::ProxyConnect,
-                          &request, sizeof(request));
+    if (m_packet_callback != nullptr) {
+        m_packet_callback(
+            ryu_ldn::protocol::PacketId::ProxyConnect,
+            &request,
+            sizeof(request));
     }
 }
 
@@ -770,13 +854,18 @@ void P2pProxyClient::HandleProxyConnect(const ryu_ldn::protocol::ProxyConnectReq
  * @brief Handle ProxyConnectReply from host
  *
  * Forward to the BSD MITM layer via callback.
+ *
+ * @param response Host answer to an earlier ProxyConnect request.
  */
-void P2pProxyClient::HandleProxyConnectReply(const ryu_ldn::protocol::ProxyConnectResponse& response) {
+void P2pProxyClient::HandleProxyConnectReply(
+    const ryu_ldn::protocol::ProxyConnectResponse& response) {
     LOG_VERBOSE("P2P client: received ProxyConnectReply");
 
-    if (m_packet_callback) {
-        m_packet_callback(ryu_ldn::protocol::PacketId::ProxyConnectReply,
-                          &response, sizeof(response));
+    if (m_packet_callback != nullptr) {
+        m_packet_callback(
+            ryu_ldn::protocol::PacketId::ProxyConnectReply,
+            &response,
+            sizeof(response));
     }
 }
 
@@ -784,14 +873,19 @@ void P2pProxyClient::HandleProxyConnectReply(const ryu_ldn::protocol::ProxyConne
  * @brief Handle ProxyDisconnect from host
  *
  * Forward to the BSD MITM layer via callback.
+ *
+ * @param message Disconnect notice for a proxied connection.
  */
-void P2pProxyClient::HandleProxyDisconnect(const ryu_ldn::protocol::ProxyDisconnectMessage& message) {
+void P2pProxyClient::HandleProxyDisconnect(
+    const ryu_ldn::protocol::ProxyDisconnectMessage& message) {
     LOG_VERBOSE("P2P client: received ProxyDisconnect");
 
-    if (m_packet_callback) {
-        m_packet_callback(ryu_ldn::protocol::PacketId::ProxyDisconnect,
-                          &message, sizeof(message));
+    if (m_packet_callback != nullptr) {
+        m_packet_callback(
+            ryu_ldn::protocol::PacketId::ProxyDisconnect,
+            &message,
+            sizeof(message));
     }
 }
 
-} // namespace ams::mitm::p2p
+}  // namespace ams::mitm::p2p

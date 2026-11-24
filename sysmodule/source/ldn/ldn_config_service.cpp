@@ -11,27 +11,29 @@
 #include "../config/config.hpp"
 #include "../config/config_manager.hpp"
 
+/// Version string reported over IPC; the build system overrides it with -D.
 #ifndef RYU_LDN_VERSION
 #define RYU_LDN_VERSION "0.1.0-dev"
 #endif
 
 namespace ams::mitm::ldn {
 
-LdnConfigService::LdnConfigService(LdnICommunication* communication)
-    : m_communication(communication)
-{
+LdnConfigService::LdnConfigService(ICommunicationService* communication)
+    : m_communication(communication) {
     // m_communication can be null if created without a parent service
 }
 
 Result LdnConfigService::GetVersion(sf::Out<std::array<char, 32>> out) {
     std::array<char, 32> version{};
     std::strncpy(version.data(), RYU_LDN_VERSION, 31);
+    version[31] =
+        '\0';  // Guarantee null-termination even if RYU_LDN_VERSION >= 31 chars
     *out = version;
     R_SUCCEED();
 }
 
 Result LdnConfigService::GetConnectionStatus(sf::Out<ConnectionStatus> out) {
-    auto& shared_state = SharedState::GetInstance();
+    const auto& shared_state = SharedState::GetInstance();
     CommState ldn_state = shared_state.GetLdnState();
 
     // Map LDN state to connection status
@@ -61,13 +63,13 @@ Result LdnConfigService::GetLdnState(sf::Out<u32> out) {
 }
 
 Result LdnConfigService::GetSessionInfo(sf::Out<SessionInfo> out) {
-    auto& shared_state = SharedState::GetInstance();
+    const auto& shared_state = SharedState::GetInstance();
     *out = shared_state.GetSessionInfoStruct();
     R_SUCCEED();
 }
 
 Result LdnConfigService::GetServerAddress(sf::Out<ServerAddress> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     ServerAddress addr{};
     std::strncpy(addr.host, cfg.GetServerHost(), 63);
     addr.host[63] = '\0';
@@ -76,7 +78,7 @@ Result LdnConfigService::GetServerAddress(sf::Out<ServerAddress> out) {
     R_SUCCEED();
 }
 
-Result LdnConfigService::SetServerAddress(const ServerAddress &address) {
+Result LdnConfigService::SetServerAddress(const ServerAddress& address) {
     auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     cfg.SetServerHost(address.host);
     cfg.SetServerPort(address.port);
@@ -91,7 +93,7 @@ Result LdnConfigService::SetServerAddress(const ServerAddress &address) {
 }
 
 Result LdnConfigService::GetDebugEnabled(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     *out = cfg.GetDebugEnabled() ? 1 : 0;
     R_SUCCEED();
 }
@@ -110,7 +112,7 @@ Result LdnConfigService::ForceReconnect() {
 }
 
 Result LdnConfigService::GetLastRtt(sf::Out<u32> out) {
-    auto& shared_state = SharedState::GetInstance();
+    const auto& shared_state = SharedState::GetInstance();
     *out = shared_state.GetLastRtt();
     R_SUCCEED();
 }
@@ -120,7 +122,7 @@ Result LdnConfigService::GetLastRtt(sf::Out<u32> out) {
 // =============================================================================
 
 Result LdnConfigService::GetPassphrase(sf::Out<Passphrase> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     Passphrase p{};
     std::strncpy(p.passphrase, cfg.GetPassphrase(), 63);
     p.passphrase[63] = '\0';
@@ -135,7 +137,7 @@ Result LdnConfigService::SetPassphrase(Passphrase passphrase) {
 }
 
 Result LdnConfigService::GetLdnEnabled(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     *out = cfg.GetLdnEnabled() ? 1 : 0;
     R_SUCCEED();
 }
@@ -146,68 +148,62 @@ Result LdnConfigService::SetLdnEnabled(u32 enabled) {
     R_SUCCEED();
 }
 
-Result LdnConfigService::GetUseTls(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    *out = cfg.GetUseTls() ? 1 : 0;
-    R_SUCCEED();
-}
+// ============================================================================
 
-Result LdnConfigService::SetUseTls(u32 enabled) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    cfg.SetUseTls(enabled != 0);
-    R_SUCCEED();
-}
+// Network Timeout Stubs (hardcoded values)
+// ============================================================================
 
 Result LdnConfigService::GetConnectTimeout(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    *out = cfg.GetConnectTimeout();
+    *out = 5000;  // Hardcoded: 5s connection timeout
     R_SUCCEED();
 }
 
 Result LdnConfigService::SetConnectTimeout(u32 timeout_ms) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    cfg.SetConnectTimeout(timeout_ms);
+    // Network timeouts are now hardcoded. Kept for IPC protocol compatibility.
+    (void)timeout_ms;  // Suppress unused warning
     R_SUCCEED();
 }
 
 Result LdnConfigService::GetPingInterval(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    *out = cfg.GetPingInterval();
+    *out = 0;  // Hardcoded: server drives pings
     R_SUCCEED();
 }
 
 Result LdnConfigService::SetPingInterval(u32 interval_ms) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    cfg.SetPingInterval(interval_ms);
+    // Ping interval is now hardcoded at 0. Kept for IPC protocol compatibility.
+    (void)interval_ms;  // Suppress unused warning
     R_SUCCEED();
 }
 
 Result LdnConfigService::GetReconnectDelay(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    *out = cfg.GetReconnectDelay();
+    *out = 1000;  // Hardcoded: 1s initial reconnect delay
     R_SUCCEED();
 }
 
 Result LdnConfigService::SetReconnectDelay(u32 delay_ms) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    cfg.SetReconnectDelay(delay_ms);
+    // Reconnect delay is now hardcoded. Kept for IPC protocol compatibility.
+    (void)delay_ms;  // Suppress unused warning
     R_SUCCEED();
 }
 
 Result LdnConfigService::GetMaxReconnectAttempts(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    *out = cfg.GetMaxReconnectAttempts();
+    *out = 0;  // Hardcoded: auto-reconnect disabled
     R_SUCCEED();
 }
 
 Result LdnConfigService::SetMaxReconnectAttempts(u32 attempts) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    cfg.SetMaxReconnectAttempts(attempts);
+    // Max reconnect attempts is now hardcoded. Kept for IPC protocol
+    // compatibility.
+    (void)attempts;  // Suppress unused warning
     R_SUCCEED();
 }
 
+// ============================================================================
+// Debug Settings
+// ============================================================================
+
 Result LdnConfigService::GetDebugLevel(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
     *out = cfg.GetDebugLevel();
     R_SUCCEED();
 }
@@ -219,61 +215,40 @@ Result LdnConfigService::SetDebugLevel(u32 level) {
 }
 
 Result LdnConfigService::GetLogToFile(sf::Out<u32> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    *out = cfg.GetLogToFile() ? 1 : 0;
+    const auto& cfg = ryu_ldn::config::ConfigManager::Instance();
+    *out = cfg.GetDebugEnabled() ? 1 : 0;  // Maps to debug.enabled
     R_SUCCEED();
 }
 
 Result LdnConfigService::SetLogToFile(u32 enabled) {
     auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    cfg.SetLogToFile(enabled != 0);
+    cfg.SetDebugEnabled(enabled != 0);  // Maps to debug.enabled
     R_SUCCEED();
 }
 
-Result LdnConfigService::SaveConfig(sf::Out<ConfigResult> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    auto result = cfg.Save();
-
-    // Convert ryu_ldn::config::ConfigResult to IPC ConfigResult
+ConfigResult LdnConfigService::ToIpcResult(
+    ryu_ldn::config::ConfigResult result) {
     switch (result) {
         case ryu_ldn::config::ConfigResult::Success:
-            *out = ConfigResult::Success;
-            break;
+            return ConfigResult::Success;
         case ryu_ldn::config::ConfigResult::FileNotFound:
-            *out = ConfigResult::FileNotFound;
-            break;
+            return ConfigResult::FileNotFound;
         case ryu_ldn::config::ConfigResult::ParseError:
-            *out = ConfigResult::ParseError;
-            break;
+            return ConfigResult::ParseError;
         case ryu_ldn::config::ConfigResult::IoError:
         default:
-            *out = ConfigResult::IoError;
-            break;
+            return ConfigResult::IoError;
     }
+}
+
+Result LdnConfigService::SaveConfig(sf::Out<ConfigResult> out) {
+    *out = ToIpcResult(ryu_ldn::config::ConfigManager::Instance().Save());
     R_SUCCEED();
 }
 
 Result LdnConfigService::ReloadConfig(sf::Out<ConfigResult> out) {
-    auto& cfg = ryu_ldn::config::ConfigManager::Instance();
-    auto result = cfg.Reload();
-
-    // Convert ryu_ldn::config::ConfigResult to IPC ConfigResult
-    switch (result) {
-        case ryu_ldn::config::ConfigResult::Success:
-            *out = ConfigResult::Success;
-            break;
-        case ryu_ldn::config::ConfigResult::FileNotFound:
-            *out = ConfigResult::FileNotFound;
-            break;
-        case ryu_ldn::config::ConfigResult::ParseError:
-            *out = ConfigResult::ParseError;
-            break;
-        case ryu_ldn::config::ConfigResult::IoError:
-        default:
-            *out = ConfigResult::IoError;
-            break;
-    }
+    *out = ToIpcResult(ryu_ldn::config::ConfigManager::Instance().Reload());
     R_SUCCEED();
 }
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn

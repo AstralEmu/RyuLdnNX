@@ -70,8 +70,8 @@ void GenerateRandomPassphrase(char* out, size_t out_size) {
 
     const char* hex_chars = "0123456789abcdef";
 
-    // Copy prefix
-    std::strcpy(out, "Ryujinx-");
+    // Copy prefix (out_size >= 17 is guaranteed by the guard above)
+    std::memcpy(out, "Ryujinx-", 8);
 
     // Generate 8 random hex chars
     for (int i = 0; i < 8; i++) {
@@ -110,8 +110,9 @@ bool ConfigManager::Initialize(const char* config_path) {
     ConfigResult result = load_config(m_config_path, m_config);
 
     // Success or FileNotFound are both acceptable
-    m_initialized = (result == ConfigResult::Success ||
-                     result == ConfigResult::FileNotFound);
+    m_initialized =
+        (result == ConfigResult::Success ||
+         result == ConfigResult::FileNotFound);
     m_dirty = false;
 
     return m_initialized;
@@ -145,7 +146,8 @@ ConfigResult ConfigManager::Reload() {
     ConfigResult result = load_config(m_config_path, m_config);
 
     // Clear dirty flag on successful reload
-    if (result == ConfigResult::Success || result == ConfigResult::FileNotFound) {
+    if (result == ConfigResult::Success ||
+        result == ConfigResult::FileNotFound) {
         m_dirty = false;
     }
 
@@ -157,7 +159,9 @@ ConfigResult ConfigManager::Reload() {
 // =============================================================================
 
 void ConfigManager::SetServerHost(const char* host) {
-    if (host == nullptr) return;
+    if (host == nullptr) {
+        return;
+    }
 
     std::strncpy(m_config.server.host, host, MAX_HOST_LENGTH);
     m_config.server.host[MAX_HOST_LENGTH] = '\0';
@@ -169,40 +173,6 @@ void ConfigManager::SetServerPort(uint16_t port) {
     m_config.server.port = port;
     m_dirty = true;
     NotifyChange("server");
-}
-
-void ConfigManager::SetUseTls(bool enabled) {
-    m_config.server.use_tls = enabled;
-    m_dirty = true;
-    NotifyChange("server");
-}
-
-// =============================================================================
-// Network Settings
-// =============================================================================
-
-void ConfigManager::SetConnectTimeout(uint32_t timeout_ms) {
-    m_config.network.connect_timeout_ms = timeout_ms;
-    m_dirty = true;
-    NotifyChange("network");
-}
-
-void ConfigManager::SetPingInterval(uint32_t interval_ms) {
-    m_config.network.ping_interval_ms = interval_ms;
-    m_dirty = true;
-    NotifyChange("network");
-}
-
-void ConfigManager::SetReconnectDelay(uint32_t delay_ms) {
-    m_config.network.reconnect_delay_ms = delay_ms;
-    m_dirty = true;
-    NotifyChange("network");
-}
-
-void ConfigManager::SetMaxReconnectAttempts(uint32_t attempts) {
-    m_config.network.max_reconnect_attempts = attempts;
-    m_dirty = true;
-    NotifyChange("network");
 }
 
 // =============================================================================
@@ -224,7 +194,8 @@ bool ConfigManager::SetPassphrase(const char* passphrase) {
     if (passphrase == nullptr || passphrase[0] == '\0') {
         m_config.ldn.passphrase[0] = '\0';
     } else {
-        std::strncpy(m_config.ldn.passphrase, passphrase, MAX_PASSPHRASE_LENGTH);
+        std::strncpy(
+            m_config.ldn.passphrase, passphrase, MAX_PASSPHRASE_LENGTH);
         m_config.ldn.passphrase[MAX_PASSPHRASE_LENGTH] = '\0';
     }
     m_dirty = true;
@@ -232,13 +203,12 @@ bool ConfigManager::SetPassphrase(const char* passphrase) {
     return true;
 }
 
-void ConfigManager::SetInterfaceName(const char* name) {
-    if (name == nullptr) {
-        m_config.ldn.interface_name[0] = '\0';
-    } else {
-        std::strncpy(m_config.ldn.interface_name, name, MAX_INTERFACE_LENGTH);
-        m_config.ldn.interface_name[MAX_INTERFACE_LENGTH] = '\0';
-    }
+// =============================================================================
+// Use Passphrase
+// ============================================================================
+
+void ConfigManager::SetUsePassphrase(bool enabled) {
+    m_config.ldn.use_passphrase = enabled;
     m_dirty = true;
     NotifyChange("ldn");
 }
@@ -260,12 +230,6 @@ void ConfigManager::SetDebugLevel(uint32_t level) {
     NotifyChange("debug");
 }
 
-void ConfigManager::SetLogToFile(bool enabled) {
-    m_config.debug.log_to_file = enabled;
-    m_dirty = true;
-    NotifyChange("debug");
-}
-
 // =============================================================================
 // Change Notification
 // =============================================================================
@@ -280,4 +244,4 @@ void ConfigManager::NotifyChange(const char* section) {
     }
 }
 
-} // namespace ryu_ldn::config
+}  // namespace ryu_ldn::config

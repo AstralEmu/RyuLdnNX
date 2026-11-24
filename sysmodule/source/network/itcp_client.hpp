@@ -9,7 +9,8 @@
  * between ITcpClient and TcpClient.
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_ITCP_CLIENT_HPP_
+#define SYSMODULE_SOURCE_NETWORK_ITCP_CLIENT_HPP_
 
 #include <cstdint>
 #include <cstddef>
@@ -29,24 +30,24 @@ namespace ryu_ldn::network {
  * transport-level and protocol-level error conditions.
  */
 enum class ClientResult {
-    Success = 0,           ///< Operation completed successfully
+    Success = 0,  ///< Operation completed successfully
 
     // Connection errors
-    NotConnected,          ///< Client is not connected to server
-    AlreadyConnected,      ///< Client is already connected
-    ConnectionFailed,      ///< Failed to establish connection
-    ConnectionLost,        ///< Connection was lost during operation
-    Timeout,               ///< Operation timed out
+    NotConnected,      ///< Client is not connected to server
+    AlreadyConnected,  ///< Client is already connected
+    ConnectionFailed,  ///< Failed to establish connection
+    ConnectionLost,    ///< Connection was lost during operation
+    Timeout,           ///< Operation timed out
 
     // Protocol errors
-    InvalidPacket,         ///< Received packet failed validation
-    ProtocolError,         ///< Protocol-level error (version mismatch, etc.)
-    BufferTooSmall,        ///< Provided buffer too small for data
-    EncodingError,         ///< Failed to encode outgoing packet
+    InvalidPacket,   ///< Received packet failed validation
+    ProtocolError,   ///< Protocol-level error (version mismatch, etc.)
+    BufferTooSmall,  ///< Provided buffer too small for data
+    EncodingError,   ///< Failed to encode outgoing packet
 
     // Resource errors
-    NotInitialized,        ///< Socket subsystem not initialized
-    InternalError          ///< Unexpected internal error
+    NotInitialized,  ///< Socket subsystem not initialized
+    InternalError    ///< Unexpected internal error
 };
 
 /**
@@ -57,19 +58,32 @@ enum class ClientResult {
  */
 inline const char* client_result_to_string(ClientResult result) {
     switch (result) {
-        case ClientResult::Success:          return "Success";
-        case ClientResult::NotConnected:     return "NotConnected";
-        case ClientResult::AlreadyConnected: return "AlreadyConnected";
-        case ClientResult::ConnectionFailed: return "ConnectionFailed";
-        case ClientResult::ConnectionLost:   return "ConnectionLost";
-        case ClientResult::Timeout:          return "Timeout";
-        case ClientResult::InvalidPacket:    return "InvalidPacket";
-        case ClientResult::ProtocolError:    return "ProtocolError";
-        case ClientResult::BufferTooSmall:   return "BufferTooSmall";
-        case ClientResult::EncodingError:    return "EncodingError";
-        case ClientResult::NotInitialized:   return "NotInitialized";
-        case ClientResult::InternalError:    return "InternalError";
-        default:                             return "Unknown";
+        case ClientResult::Success:
+            return "Success";
+        case ClientResult::NotConnected:
+            return "NotConnected";
+        case ClientResult::AlreadyConnected:
+            return "AlreadyConnected";
+        case ClientResult::ConnectionFailed:
+            return "ConnectionFailed";
+        case ClientResult::ConnectionLost:
+            return "ConnectionLost";
+        case ClientResult::Timeout:
+            return "Timeout";
+        case ClientResult::InvalidPacket:
+            return "InvalidPacket";
+        case ClientResult::ProtocolError:
+            return "ProtocolError";
+        case ClientResult::BufferTooSmall:
+            return "BufferTooSmall";
+        case ClientResult::EncodingError:
+            return "EncodingError";
+        case ClientResult::NotInitialized:
+            return "NotInitialized";
+        case ClientResult::InternalError:
+            return "InternalError";
+        default:
+            return "Unknown";
     }
 }
 
@@ -96,6 +110,9 @@ inline const char* client_result_to_string(ClientResult result) {
  */
 class ITcpClient {
 public:
+    /// Default connection timeout (ms) used by the short connect() overload.
+    static constexpr uint32_t kDefaultConnectTimeoutMs = 5000;
+
     /**
      * @brief Virtual destructor
      */
@@ -121,7 +138,21 @@ public:
      * @param timeout_ms Connection timeout in milliseconds
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult connect(const char* host, uint16_t port, uint32_t timeout_ms = 5000) = 0;
+    virtual ClientResult connect(
+        const char* host, uint16_t port, uint32_t timeout_ms) = 0;
+
+    /**
+     * @brief Connect to a remote server with the default 5000 ms timeout
+     *
+     * Non-virtual convenience overload; forwards to the full-arity connect().
+     *
+     * @param host Server hostname or IP address
+     * @param port Server port number
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult connect(const char* host, uint16_t port) {
+        return connect(host, port, kDefaultConnectTimeoutMs);
+    }
 
     /**
      * @brief Disconnect from the server
@@ -135,7 +166,7 @@ public:
      *
      * @return true if connected
      */
-    virtual bool is_connected() const = 0;
+    [[nodiscard]] virtual bool is_connected() const = 0;
 
     /**
      * @brief Send a raw protocol packet with header encoding
@@ -145,7 +176,8 @@ public:
      * @param payload_size Size of payload in bytes
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_packet(protocol::PacketId type, const void* payload, size_t payload_size) = 0;
+    virtual ClientResult send_packet(
+        protocol::PacketId type, const void* payload, size_t payload_size) = 0;
 
     /**
      * @brief Send pre-encoded data (used by P2P components)
@@ -162,7 +194,8 @@ public:
      * @param msg Initialize message with session ID and MAC
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_initialize(const protocol::InitializeMessage& msg) = 0;
+    virtual ClientResult send_initialize(
+        const protocol::InitializeMessage& msg) = 0;
 
     /**
      * @brief Send Passphrase message (struct overload)
@@ -170,7 +203,8 @@ public:
      * @param msg Passphrase message with room password
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_passphrase(const protocol::PassphraseMessage& msg) = 0;
+    virtual ClientResult send_passphrase(
+        const protocol::PassphraseMessage& msg) = 0;
 
     /**
      * @brief Send Passphrase message (string overload)
@@ -194,7 +228,8 @@ public:
      * @param msg Disconnect message with reason code
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_disconnect(const protocol::DisconnectMessage& msg) = 0;
+    virtual ClientResult send_disconnect(
+        const protocol::DisconnectMessage& msg) = 0;
 
     /**
      * @brief Send CreateAccessPoint request (host mode)
@@ -204,9 +239,24 @@ public:
      * @param advertise_size Size of advertise data
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_create_access_point(const protocol::CreateAccessPointRequest& request,
-                                                    const uint8_t* advertise_data = nullptr,
-                                                    size_t advertise_size = 0) = 0;
+    virtual ClientResult send_create_access_point(
+        const protocol::CreateAccessPointRequest& request,
+        const uint8_t* advertise_data,
+        size_t advertise_size) = 0;
+
+    /**
+     * @brief Convenience overload without advertise data
+     *
+     * Non-virtual; forwards to the full-arity send_create_access_point()
+     * with a null advertise buffer of size 0.
+     *
+     * @param request Request configuration
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult send_create_access_point(
+        const protocol::CreateAccessPointRequest& request) {
+        return send_create_access_point(request, nullptr, 0);
+    }
 
     /**
      * @brief Send CreateAccessPointPrivate request (private host mode)
@@ -216,9 +266,25 @@ public:
      * @param advertise_size Size of advertise data
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_create_access_point_private(const protocol::CreateAccessPointPrivateRequest& request,
-                                                            const uint8_t* advertise_data = nullptr,
-                                                            size_t advertise_size = 0) = 0;
+    virtual ClientResult send_create_access_point_private(
+        const protocol::CreateAccessPointPrivateRequest& request,
+        const uint8_t* advertise_data,
+        size_t advertise_size) = 0;
+
+    /**
+     * @brief Convenience overload without advertise data
+     *
+     * Non-virtual; forwards to the full-arity
+     * send_create_access_point_private() with a null advertise buffer of size
+     * 0.
+     *
+     * @param request Request configuration
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult send_create_access_point_private(
+        const protocol::CreateAccessPointPrivateRequest& request) {
+        return send_create_access_point_private(request, nullptr, 0);
+    }
 
     /**
      * @brief Send Connect request (join a network)
@@ -226,7 +292,8 @@ public:
      * @param request Connection request with target network info
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_connect(const protocol::ConnectRequest& request) = 0;
+    virtual ClientResult send_connect(
+        const protocol::ConnectRequest& request) = 0;
 
     /**
      * @brief Send ConnectPrivate request (join a private network)
@@ -234,7 +301,8 @@ public:
      * @param request Private connection request
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_connect_private(const protocol::ConnectPrivateRequest& request) = 0;
+    virtual ClientResult send_connect_private(
+        const protocol::ConnectPrivateRequest& request) = 0;
 
     /**
      * @brief Send Scan request (find available networks)
@@ -252,8 +320,10 @@ public:
      * @param data_size Size of game data
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_proxy_data(const protocol::ProxyDataHeader& header,
-                                          const uint8_t* data, size_t data_size) = 0;
+    virtual ClientResult send_proxy_data(
+        const protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_size) = 0;
 
     /**
      * @brief Send SetAcceptPolicy request (host-only)
@@ -261,7 +331,8 @@ public:
      * @param request Accept policy request
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_set_accept_policy(const protocol::SetAcceptPolicyRequest& request) = 0;
+    virtual ClientResult send_set_accept_policy(
+        const protocol::SetAcceptPolicyRequest& request) = 0;
 
     /**
      * @brief Send SetAdvertiseData request (host-only)
@@ -270,7 +341,8 @@ public:
      * @param size Size of advertise data
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_set_advertise_data(const uint8_t* data, size_t size) = 0;
+    virtual ClientResult send_set_advertise_data(
+        const uint8_t* data, size_t size) = 0;
 
     /**
      * @brief Send Reject request (host-only, kick a player)
@@ -278,7 +350,8 @@ public:
      * @param request Reject request with node ID and reason
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult send_reject(const protocol::RejectRequest& request) = 0;
+    virtual ClientResult send_reject(
+        const protocol::RejectRequest& request) = 0;
 
     /**
      * @brief Receive the next complete protocol packet
@@ -292,17 +365,40 @@ public:
      * @param timeout_ms Receive timeout in milliseconds (-1 = blocking)
      * @return ClientResult indicating success or failure
      */
-    virtual ClientResult receive_packet(protocol::PacketId& type,
-                                         void* payload, size_t payload_buffer_size,
-                                         size_t& payload_size,
-                                         int32_t timeout_ms = -1) = 0;
+    virtual ClientResult receive_packet(
+        protocol::PacketId& type,
+        void* payload,
+        size_t payload_buffer_size,
+        size_t& payload_size,
+        int32_t timeout_ms) = 0;
+
+    /**
+     * @brief Receive a packet, blocking until one arrives
+     *
+     * Non-virtual convenience overload; forwards to the full-arity
+     * receive_packet() with timeout_ms = -1.
+     *
+     * @param[out] type Packet type of received packet
+     * @param[out] payload Buffer to receive payload data
+     * @param payload_buffer_size Size of payload buffer
+     * @param[out] payload_size Actual size of received payload
+     * @return ClientResult indicating success or failure
+     */
+    ClientResult receive_packet(
+        protocol::PacketId& type,
+        void* payload,
+        size_t payload_buffer_size,
+        size_t& payload_size) {
+        return receive_packet(
+            type, payload, payload_buffer_size, payload_size, -1);
+    }
 
     /**
      * @brief Check if a complete packet is buffered and available
      *
      * @return true if at least one complete packet is available
      */
-    virtual bool has_packet_available() const = 0;
+    [[nodiscard]] virtual bool has_packet_available() const = 0;
 
     /**
      * @brief Enable or disable TCP_NODELAY
@@ -313,4 +409,5 @@ public:
     virtual ClientResult set_nodelay(bool enable) = 0;
 };
 
-} // namespace ryu_ldn::network
+}  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_ITCP_CLIENT_HPP_

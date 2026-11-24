@@ -20,12 +20,14 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_LDN_LDN_SHARED_STATE_HPP_
+#define SYSMODULE_SOURCE_LDN_LDN_SHARED_STATE_HPP_
 
 #include <stratosphere.hpp>
 #include <unordered_set>
 #include <vector>
 #include "ldn_types.hpp"
+#include <atomic>
 
 namespace ams::mitm::ldn {
 
@@ -40,7 +42,7 @@ namespace ams::mitm::ldn {
  *
  * All methods are thread-safe and use a mutex for synchronization.
  *
- * @example
+ * Example:
  * @code
  * // In MITM service (ICommunicationService)
  * auto& state = SharedState::GetInstance();
@@ -86,7 +88,8 @@ public:
      * @param active True if a game is using LDN
      * @param process_id Process ID of the game (0 when inactive)
      */
-    /// @gdb{tag="LDN:STATE", msg="SetGameActive: active=%d pid=%lu", args="$x1, $x2"}
+    /// @gdb{tag="LDN:STATE", msg="SetGameActive: active=%d pid=%lu", args="$x1,
+    /// $x2"}
     void SetGameActive(bool active, u64 process_id);
 
     /**
@@ -204,8 +207,10 @@ public:
      * @param local_node_id This node's ID
      * @param is_host True if this node is the host
      */
-    /// @gdb{tag="LDN:STATE", msg="SetSessionInfo: node_count=%d max=%d local=%d is_host=%d", args="$x1, $x2, $x3, $x4"}
-    void SetSessionInfo(u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host);
+    /// @gdb{tag="LDN:STATE", msg="SetSessionInfo: node_count=%d max=%d local=%d
+    /// is_host=%d", args="$x1, $x2, $x3, $x4"}
+    void SetSessionInfo(
+        u8 node_count, u8 max_nodes, u8 local_node_id, bool is_host);
 
     /**
      * @brief Get session information
@@ -216,7 +221,8 @@ public:
      * @param[out] is_host True if this node is the host
      */
     /// @gdb{tag="LDN:STATE", msg="GetSessionInfo"}
-    void GetSessionInfo(u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const;
+    void GetSessionInfo(
+        u8& node_count, u8& max_nodes, u8& local_node_id, bool& is_host) const;
 
     /**
      * @brief Get session information as struct
@@ -271,24 +277,73 @@ public:
     /// @gdb{tag="LDN:STATE", msg="ConsumeReconnectRequest"}
     bool ConsumeReconnectRequest();
 
-private:
-    /// @gdb{tag="LDN:STATE", msg="SharedState: constructor"}
-    SharedState() = default;
+    // =========================================================================
+    // Active Session Counting (IPC session exit detection)
+    // =========================================================================
+
+    /**
+     * @brief Increment the active IPC session count
+     *
+     * Called in the constructor of each MITM session (ldn:u and bsd:u).
+     * When the game dies, Atmosphere closes all sessions and the destructor
+     * decrements the counter for each one.
+     */
+    /// @gdb{tag="LDN:STATE", msg="IncrementSessionCount"}
+    void IncrementSessionCount();
+
+    /**
+     * @brief Decrement the active IPC session count
+     *
+     * Called in the destructor of each MITM session.
+     * When it reaches 0, no more sessions exist — the game has exited.
+     *
+     * @return The new count after the decrement
+     */
+    /// @gdb{tag="LDN:STATE", msg="DecrementSessionCount"}
+    u32 DecrementSessionCount();
+
+    /**
+     * @brief Get the current active session count
+     *
+     * @return Number of active IPC sessions (ldn:u + bsd:u)
+     */
+    /// @gdb{tag="LDN:STATE", msg="GetActiveSessionCount"}
+    u32 GetActiveSessionCount() const;
+
+    // Non-copyable
     SharedState(const SharedState&) = delete;
     SharedState& operator=(const SharedState&) = delete;
 
-    mutable ams::os::SdkMutex m_mutex{};
+private:
+    /// @gdb{tag="LDN:STATE", msg="SharedState: constructor"}
+    SharedState() = default;
+
+    /// Guards every non-atomic field below
+    mutable ams::os::SdkMutex m_mutex;
+    /// True while a game is using LDN
     bool m_game_active = false;
+    /// Process ID of the active game (0 if none)
     u64 m_process_id = 0;
     u64 m_ldn_pid = 0;  ///< PID that opened ldn:u (set before Initialize)
-    CommState m_ldn_state = static_cast<CommState>(0); // CommState::None
+    /// Current LDN state (CommState::None initially)
+    CommState m_ldn_state = static_cast<CommState>(0);
+    /// Current number of nodes in the session
     u8 m_node_count = 0;
+    /// Maximum number of nodes in the session
     u8 m_max_nodes = 0;
+    /// Local node ID in the session
     u8 m_local_node_id = 0;
+    /// True if this console hosts the session
     bool m_is_host = false;
+    /// Last measured round-trip time in milliseconds
     u32 m_last_rtt_ms = 0;
+    /// Set by the overlay, consumed by the MITM service to force a reconnect
     bool m_reconnect_requested = false;
-    std::unordered_set<u64> m_ldn_games;  ///< Set of program_ids with LDN support
+    std::atomic<u32> m_active_sessions{
+        0};  ///< Active IPC session count (ldn:u + bsd:u)
+    std::unordered_set<u64>
+        m_ldn_games;  ///< Set of program_ids with LDN support
 };
 
-} // namespace ams::mitm::ldn
+}  // namespace ams::mitm::ldn
+#endif  // SYSMODULE_SOURCE_LDN_LDN_SHARED_STATE_HPP_

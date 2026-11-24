@@ -20,7 +20,8 @@
  *
  * ## IPC Protocol
  *
- * Commands are defined in config_ipc_service.hpp with the following conventions:
+ * Commands are defined in config_ipc_service.hpp with the following
+ * conventions:
  * - Get* commands: Read configuration values (no side effects)
  * - Set* commands: Write configuration values (in-memory only until SaveConfig)
  * - SaveConfig: Persist current configuration to SD card
@@ -103,7 +104,62 @@ void safe_strcpy(char* dest, const char* src, size_t max_len) {
     dest[i] = '\0';
 }
 
-} // anonymous namespace
+/**
+ * @brief Validate a passphrase string for IPC SetPassphrase
+ *
+ * Rules:
+ *   - Length (excluding null terminator) must be <= max_len
+ *   - Every character must be printable ASCII (0x20 .. 0x7E)
+ *
+ * @param str Passphrase buffer, never null (the only caller passes an array)
+ * @param max_len Maximum allowed length excluding the null terminator
+ * @return true if valid, false otherwise
+ */
+bool ValidatePassphrase(const char* str, size_t max_len) {
+    size_t i = 0;
+    while (str[i] != '\0') {
+        if (i >= max_len) {
+            return false;  // Too long
+        }
+        const auto c = static_cast<unsigned char>(str[i]);
+        if (c < 0x20 || c > 0x7E) {
+            return false;  // Non-printable
+        }
+        i++;
+    }
+    return true;
+}
+
+/**
+ * @brief Validate a server host string for IPC SetServerAddress
+ *
+ * Rules:
+ *   - Length (excluding null terminator) must be <= max_len
+ *   - Must not contain shell-injection metacharacters: ; | & ` and the
+ *     backtick character. These would be dangerous if the host string
+ *     were ever passed to a shell (e.g., for DNS lookup helpers).
+ *
+ * @param str Host buffer, never null (the only caller passes an array)
+ * @param max_len Maximum allowed length excluding the null terminator
+ * @return true if valid, false otherwise
+ */
+bool ValidateHost(const char* str, size_t max_len) {
+    size_t i = 0;
+    while (str[i] != '\0') {
+        if (i >= max_len) {
+            return false;  // Too long
+        }
+        const char c = str[i];
+        // Reject shell-injection metacharacters
+        if (c == ';' || c == '|' || c == '&' || c == '`') {
+            return false;
+        }
+        i++;
+    }
+    return true;
+}
+
+}  // anonymous namespace
 
 // =============================================================================
 // ConfigService Implementation - Version & Status
@@ -118,12 +174,12 @@ void safe_strcpy(char* dest, const char* src, size_t max_len) {
  * @param out Output buffer for version string (32 bytes, null-terminated)
  * @return Always succeeds
  */
-ams::Result ConfigService::GetVersion(ams::sf::Out<std::array<char, 32>> out) {
+ams::Result ConfigService::GetVersion(RyuCfgOutVersionString out) {
     static constexpr const char* VERSION = "1.0.0";
 
     // Clear output buffer
-    std::memset(out->data(), 0, out->size());
-    safe_strcpy(out->data(), VERSION, out->size() - 1);
+    std::memset(out->buf.data(), 0, RyuCfgVersionString::size());
+    safe_strcpy(out->buf.data(), VERSION, RyuCfgVersionString::size() - 1);
 
     LOG_VERBOSE("Config IPC: GetVersion called -> %s", VERSION);
     R_SUCCEED();
@@ -182,11 +238,14 @@ ams::Result ConfigService::IsServiceActive(ams::sf::Out<u32> out) {
  * @param out Output buffer for passphrase (64 bytes, null-terminated)
  * @return Always succeeds
  */
-ams::Result ConfigService::GetPassphrase(ams::sf::Out<std::array<char, 64>> out) {
+ams::Result ConfigService::GetPassphrase(RyuCfgOutPassphraseString out) {
     std::scoped_lock lk(g_config_mutex);
 
-    std::memset(out->data(), 0, out->size());
-    safe_strcpy(out->data(), g_config.ldn.passphrase, out->size() - 1);
+    std::memset(out->buf.data(), 0, RyuCfgPassphraseString::size());
+    safe_strcpy(
+        out->buf.data(),
+        g_config.ldn.passphrase,
+        RyuCfgPassphraseString::size() - 1);
 
     LOG_VERBOSE("Config IPC: GetPassphrase called");
     R_SUCCEED();
@@ -197,13 +256,28 @@ ams::Result ConfigService::GetPassphrase(ams::sf::Out<std::array<char, 64>> out)
  *
  * Changes the passphrase in memory. Call SaveConfig to persist.
  *
- * @param passphrase New passphrase (64 bytes, null-terminated)
- * @return Always succeeds
+ * Validates that the passphrase is at most MAX_PASSPHRASE_LENGTH characters
+ * long and contains only printable ASCII (0x20 .. 0x7E). Returns
+ * `result::ResultInvalidIpcInput` if the input is rejected; in that case the
+ * in-memory passphrase is left untouched.
  */
-ams::Result ConfigService::SetPassphrase(std::array<char, 64> passphrase) {
+ams::Result ConfigService::SetPassphrase(RyuCfgPassphraseString passphrase) {
+    // Bound the scan by the 64-byte IPC buffer (63 characters + terminator),
+    // not by the larger config limit: an unterminated buffer must be rejected,
+    // never read past its end.
+    if (!ValidatePassphrase(passphrase.buf.data(), passphrase.buf.size() - 1)) {
+        LOG_WARN(
+            "Config IPC: SetPassphrase rejected (invalid length or "
+            "non-printable chars)");
+        R_THROW(result::ResultInvalidIpcInput());
+    }
+
     std::scoped_lock lk(g_config_mutex);
 
-    safe_strcpy(g_config.ldn.passphrase, passphrase.data(), config::MAX_PASSPHRASE_LENGTH);
+    safe_strcpy(
+        g_config.ldn.passphrase,
+        passphrase.buf.data(),
+        config::MAX_PASSPHRASE_LENGTH);
 
     LOG_INFO("Config IPC: SetPassphrase -> '%s'", g_config.ldn.passphrase);
     R_SUCCEED();
@@ -230,16 +304,15 @@ ams::Result ConfigService::GetLdnEnabled(ams::sf::Out<u32> out) {
  * @brief Enable or disable LDN emulation
  *
  * Changes the setting in memory. Call SaveConfig to persist.
- *
- * @param enabled 1 = enable, 0 = disable
- * @return Always succeeds
  */
 ams::Result ConfigService::SetLdnEnabled(u32 enabled) {
     std::scoped_lock lk(g_config_mutex);
 
     g_config.ldn.enabled = (enabled != 0);
 
-    LOG_INFO("Config IPC: SetLdnEnabled -> %s", g_config.ldn.enabled ? "true" : "false");
+    LOG_INFO(
+        "Config IPC: SetLdnEnabled -> %s",
+        g_config.ldn.enabled ? "true" : "false");
     R_SUCCEED();
 }
 
@@ -255,7 +328,7 @@ ams::Result ConfigService::SetLdnEnabled(u32 enabled) {
  * @param out Output structure with host (64 bytes) and port (u16)
  * @return Always succeeds
  */
-ams::Result ConfigService::GetServerAddress(ams::sf::Out<ServerAddressIpc> out) {
+ams::Result ConfigService::GetServerAddress(RyuCfgOutServerAddress out) {
     std::scoped_lock lk(g_config_mutex);
 
     std::memset(&(*out), 0, sizeof(ServerAddressIpc));
@@ -272,49 +345,31 @@ ams::Result ConfigService::GetServerAddress(ams::sf::Out<ServerAddressIpc> out) 
  * Changes the server address in memory. Call SaveConfig to persist.
  * Requires restart/reconnect to take effect.
  *
- * @param address New server address structure
- * @return Always succeeds
+ * Validates that the host string is at most MAX_HOST_LENGTH characters long
+ * and does not contain shell-injection metacharacters (`;`, `|`, `&`,
+ * backtick). Returns `result::ResultInvalidIpcInput` if the input is rejected;
+ * in that case the in-memory host is left untouched.
  */
-ams::Result ConfigService::SetServerAddress(const ServerAddressIpc &address) {
+ams::Result ConfigService::SetServerAddress(RyuCfgInServerAddress address) {
+    // The IPC field is 64 bytes: bound the scan by the field, not by the larger
+    // config limit, so an unterminated field is rejected instead of being read
+    // past its end into the port and padding bytes.
+    if (!ValidateHost(address.host, sizeof(address.host) - 1)) {
+        LOG_WARN(
+            "Config IPC: SetServerAddress rejected (invalid host length or "
+            "shell metacharacters)");
+        R_THROW(result::ResultInvalidIpcInput());
+    }
+
     std::scoped_lock lk(g_config_mutex);
 
     safe_strcpy(g_config.server.host, address.host, config::MAX_HOST_LENGTH);
     g_config.server.port = address.port;
 
-    LOG_INFO("Config IPC: SetServerAddress -> %s:%u", g_config.server.host, g_config.server.port);
-    R_SUCCEED();
-}
-
-/**
- * @brief Check if TLS is enabled for server connection
- *
- * @param out Output: 1 = TLS enabled, 0 = plaintext
- * @return Always succeeds
- */
-ams::Result ConfigService::GetUseTls(ams::sf::Out<u32> out) {
-    std::scoped_lock lk(g_config_mutex);
-
-    *out = g_config.server.use_tls ? 1 : 0;
-
-    LOG_VERBOSE("Config IPC: GetUseTls -> %u", *out);
-    R_SUCCEED();
-}
-
-/**
- * @brief Enable or disable TLS for server connection
- *
- * Changes the setting in memory. Call SaveConfig to persist.
- * Requires restart/reconnect to take effect.
- *
- * @param enabled 1 = enable TLS, 0 = disable
- * @return Always succeeds
- */
-ams::Result ConfigService::SetUseTls(u32 enabled) {
-    std::scoped_lock lk(g_config_mutex);
-
-    g_config.server.use_tls = (enabled != 0);
-
-    LOG_INFO("Config IPC: SetUseTls -> %s", g_config.server.use_tls ? "true" : "false");
+    LOG_INFO(
+        "Config IPC: SetServerAddress -> %s:%u",
+        g_config.server.host,
+        g_config.server.port);
     R_SUCCEED();
 }
 
@@ -322,225 +377,99 @@ ams::Result ConfigService::SetUseTls(u32 enabled) {
 // ConfigService Implementation - Debug Settings
 // =============================================================================
 
-/**
- * @brief Check if debug logging is enabled
- *
- * @param out Output: 1 = enabled, 0 = disabled
- * @return Always succeeds
- */
 ams::Result ConfigService::GetDebugEnabled(ams::sf::Out<u32> out) {
     std::scoped_lock lk(g_config_mutex);
-
     *out = g_config.debug.enabled ? 1 : 0;
-
     LOG_VERBOSE("Config IPC: GetDebugEnabled -> %u", *out);
     R_SUCCEED();
 }
 
-/**
- * @brief Enable or disable debug logging
- *
- * @param enabled 1 = enable, 0 = disable
- * @return Always succeeds
- */
 ams::Result ConfigService::SetDebugEnabled(u32 enabled) {
     std::scoped_lock lk(g_config_mutex);
-
     g_config.debug.enabled = (enabled != 0);
-
-    LOG_INFO("Config IPC: SetDebugEnabled -> %s", g_config.debug.enabled ? "true" : "false");
+    LOG_INFO(
+        "Config IPC: SetDebugEnabled -> %s",
+        g_config.debug.enabled ? "true" : "false");
     R_SUCCEED();
 }
 
-/**
- * @brief Get the current debug log level
- *
- * Log levels:
- * - 0: Error only
- * - 1: Warning and above
- * - 2: Info and above
- * - 3: Verbose (all messages)
- *
- * @param out Output log level (0-3)
- * @return Always succeeds
- */
 ams::Result ConfigService::GetDebugLevel(ams::sf::Out<u32> out) {
     std::scoped_lock lk(g_config_mutex);
-
     *out = g_config.debug.level;
-
     LOG_VERBOSE("Config IPC: GetDebugLevel -> %u", *out);
     R_SUCCEED();
 }
 
-/**
- * @brief Set the debug log level
- *
- * @param level New log level (0-3)
- * @return Always succeeds
- */
 ams::Result ConfigService::SetDebugLevel(u32 level) {
-    std::scoped_lock lk(g_config_mutex);
+    // Validate debug level range. The logger supports levels 0..4 inclusive
+    // (0 = Error, 1 = Warn, 2 = Info, 3 = Verbose, 4 = Trace-equivalent).
+    // Out-of-range values would corrupt the in-memory config and could lead
+    // to undefined behavior in the logger's level comparisons.
+    if (level > 4) {
+        LOG_WARN(
+            "Config IPC: SetDebugLevel rejected (level=%u out of range 0..4)",
+            level);
+        R_THROW(result::ResultInvalidIpcInput());
+    }
 
+    std::scoped_lock lk(g_config_mutex);
     g_config.debug.level = level;
-
-    LOG_INFO("Config IPC: SetDebugLevel -> %u", level);
-    R_SUCCEED();
-}
-
-/**
- * @brief Check if file logging is enabled
- *
- * When enabled, logs are written to SD card at /config/ryu_ldn_nx/ryu_ldn_nx.log
- *
- * @param out Output: 1 = enabled, 0 = disabled
- * @return Always succeeds
- */
-ams::Result ConfigService::GetLogToFile(ams::sf::Out<u32> out) {
-    std::scoped_lock lk(g_config_mutex);
-
-    *out = g_config.debug.log_to_file ? 1 : 0;
-
-    LOG_VERBOSE("Config IPC: GetLogToFile -> %u", *out);
-    R_SUCCEED();
-}
-
-/**
- * @brief Enable or disable file logging
- *
- * @param enabled 1 = enable, 0 = disable
- * @return Always succeeds
- */
-ams::Result ConfigService::SetLogToFile(u32 enabled) {
-    std::scoped_lock lk(g_config_mutex);
-
-    g_config.debug.log_to_file = (enabled != 0);
-
-    LOG_INFO("Config IPC: SetLogToFile -> %s", g_config.debug.log_to_file ? "true" : "false");
+    LOG_INFO("Config IPC: SetDebugLevel -> %u", g_config.debug.level);
     R_SUCCEED();
 }
 
 // =============================================================================
-// ConfigService Implementation - Network Timeouts
+// ConfigService Implementation - Configuration Persistence
 // =============================================================================
 
-/**
- * @brief Get the connection timeout in milliseconds
- *
- * Maximum time to wait when establishing connection to server.
- *
- * @param out Output timeout in milliseconds
- * @return Always succeeds
- */
-ams::Result ConfigService::GetConnectTimeout(ams::sf::Out<u32> out) {
+ams::Result ConfigService::SaveConfig(RyuCfgOutConfigResult out) {
     std::scoped_lock lk(g_config_mutex);
-
-    *out = g_config.network.connect_timeout_ms;
-
-    LOG_VERBOSE("Config IPC: GetConnectTimeout -> %u ms", *out);
+    config::ConfigResult result =
+        config::save_config(config::CONFIG_PATH, g_config);
+    *out = static_cast<ConfigResult>(result);
+    if (result == config::ConfigResult::Success) {
+        LOG_INFO("Config IPC: SaveConfig -> Success");
+    } else {
+        LOG_WARN(
+            "Config IPC: SaveConfig -> %s",
+            config::config_result_to_string(result));
+    }
     R_SUCCEED();
 }
 
-/**
- * @brief Set the connection timeout in milliseconds
- *
- * @param timeout_ms New timeout value
- * @return Always succeeds
- */
-ams::Result ConfigService::SetConnectTimeout(u32 timeout_ms) {
-    std::scoped_lock lk(g_config_mutex);
-
-    g_config.network.connect_timeout_ms = timeout_ms;
-
-    LOG_INFO("Config IPC: SetConnectTimeout -> %u ms", timeout_ms);
-    R_SUCCEED();
-}
-
-/**
- * @brief Get the ping interval in milliseconds
- *
- * How often to send keepalive pings to the server.
- *
- * @param out Output interval in milliseconds
- * @return Always succeeds
- */
-ams::Result ConfigService::GetPingInterval(ams::sf::Out<u32> out) {
-    std::scoped_lock lk(g_config_mutex);
-
-    *out = g_config.network.ping_interval_ms;
-
-    LOG_VERBOSE("Config IPC: GetPingInterval -> %u ms", *out);
-    R_SUCCEED();
-}
-
-/**
- * @brief Set the ping interval in milliseconds
- *
- * @param interval_ms New interval value
- * @return Always succeeds
- */
-ams::Result ConfigService::SetPingInterval(u32 interval_ms) {
-    std::scoped_lock lk(g_config_mutex);
-
-    g_config.network.ping_interval_ms = interval_ms;
-
-    LOG_INFO("Config IPC: SetPingInterval -> %u ms", interval_ms);
-    R_SUCCEED();
-}
-
-// =============================================================================
-// ConfigService Implementation - File Operations
-// =============================================================================
-
-/**
- * @brief Save current configuration to SD card
- *
- * Writes the current in-memory configuration to /config/ryu_ldn_nx/config.ini.
- * This persists any changes made via Set* commands.
- *
- * @param out Output result code:
- *            - Success (0): Config saved successfully
- *            - FileNotFound (1): Unexpected (directory creation failed)
- *            - ParseError (2): Not applicable for save
- *            - IoError (3): Write failed
- *            - InvalidValue (4): Not applicable for save
- * @return Always succeeds (check out for actual result)
- */
-ams::Result ConfigService::SaveConfig(ams::sf::Out<ConfigResult> out) {
-    std::scoped_lock lk(g_config_mutex);
-
-    config::ConfigResult result = config::save_config(config::CONFIG_PATH, g_config);
-    *out = static_cast<ConfigResult>(static_cast<u32>(result));
-
-    LOG_INFO("Config IPC: SaveConfig -> result=%u", static_cast<u32>(*out));
-    R_SUCCEED();
-}
-
-/**
- * @brief Reload configuration from SD card
- *
- * Discards any unsaved in-memory changes and reloads from config.ini.
- * Useful to revert changes or pick up external modifications.
- *
- * @param out Output result code:
- *            - Success (0): Config reloaded successfully
- *            - FileNotFound (1): Config file doesn't exist
- *            - ParseError (2): Config file has syntax errors
- *            - IoError (3): Read failed
- *            - InvalidValue (4): Invalid config value
- * @return Always succeeds (check out for actual result)
- */
 ams::Result ConfigService::ReloadConfig(ams::sf::Out<ConfigResult> out) {
     std::scoped_lock lk(g_config_mutex);
-
-    // Reset to defaults first (ensures clean state)
     g_config = config::get_default_config();
+    config::ConfigResult result =
+        config::load_config(config::CONFIG_PATH, g_config);
+    *out = static_cast<ConfigResult>(result);
+    if (result == config::ConfigResult::Success) {
+        LOG_INFO("Config IPC: ReloadConfig -> Success");
+    } else {
+        LOG_WARN(
+            "Config IPC: ReloadConfig -> %s (using defaults)",
+            config::config_result_to_string(result));
+    }
+    R_SUCCEED();
+}
 
-    // Load from file (overwrites defaults)
-    config::ConfigResult result = config::load_config(config::CONFIG_PATH, g_config);
-    *out = static_cast<ConfigResult>(static_cast<u32>(result));
+// =============================================================================
+// ConfigService Implementation - Passphrase Filtering
+// =============================================================================
 
-    LOG_INFO("Config IPC: ReloadConfig -> result=%u", static_cast<u32>(*out));
+ams::Result ConfigService::GetUsePassphrase(ams::sf::Out<u32> out) {
+    std::scoped_lock lk(g_config_mutex);
+    *out = g_config.ldn.use_passphrase ? 1 : 0;
+    LOG_VERBOSE("Config IPC: GetUsePassphrase -> %u", *out);
+    R_SUCCEED();
+}
+
+ams::Result ConfigService::SetUsePassphrase(u32 enabled) {
+    std::scoped_lock lk(g_config_mutex);
+    g_config.ldn.use_passphrase = (enabled != 0);
+    LOG_INFO(
+        "Config IPC: SetUsePassphrase -> %s",
+        g_config.ldn.use_passphrase ? "true" : "false");
     R_SUCCEED();
 }
 
@@ -548,159 +477,82 @@ ams::Result ConfigService::ReloadConfig(ams::sf::Out<ConfigResult> out) {
 // ConfigService Implementation - Runtime LDN State
 // =============================================================================
 
-/**
- * @brief Check if a game is actively using LDN
- *
- * Returns 1 if a game has initialized the LDN service (ldn:u),
- * 0 otherwise. Used by overlay to determine what UI to show.
- *
- * @param out Output: 1 = game active, 0 = no game
- * @return Always succeeds
- */
 ams::Result ConfigService::IsGameActive(ams::sf::Out<u32> out) {
-    auto& shared_state = ams::mitm::ldn::SharedState::GetInstance();
-    *out = shared_state.IsGameActive() ? 1 : 0;
-
+    const auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    *out = state.IsGameActive() ? 1 : 0;
     LOG_VERBOSE("Config IPC: IsGameActive -> %u", *out);
     R_SUCCEED();
 }
 
-/**
- * @brief Get the current LDN communication state
- *
- * Returns the CommState enum value representing current LDN state:
- * - 0: None (not initialized)
- * - 1: Initialized
- * - 2: AccessPoint
- * - 3: AccessPointCreated
- * - 4: Station
- * - 5: StationConnected
- * - 6: Error
- *
- * @param out Output state value (0-6)
- * @return Always succeeds
- */
 ams::Result ConfigService::GetLdnState(ams::sf::Out<u32> out) {
-    auto& shared_state = ams::mitm::ldn::SharedState::GetInstance();
-    *out = static_cast<u32>(shared_state.GetLdnState());
-
+    auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    *out = static_cast<u32>(state.GetLdnState());
     LOG_VERBOSE("Config IPC: GetLdnState -> %u", *out);
     R_SUCCEED();
 }
 
-/**
- * @brief Get session information
- *
- * Returns current session info: node count, max nodes, local node ID,
- * and whether this node is the host.
- *
- * @param out Output SessionInfoIpc structure
- * @return Always succeeds
- */
-ams::Result ConfigService::GetSessionInfo(ams::sf::Out<SessionInfoIpc> out) {
-    auto& shared_state = ams::mitm::ldn::SharedState::GetInstance();
+ams::Result ConfigService::GetSessionInfo(RyuCfgOutSessionInfo out) {
+    const auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    u8 node_count;
+    u8 max_nodes;
+    u8 local_node_id;
+    bool is_host;
+    state.GetSessionInfo(node_count, max_nodes, local_node_id, is_host);
 
-    // Get session info from SharedState
-    ams::mitm::ldn::SessionInfo info = shared_state.GetSessionInfoStruct();
+    std::memset(&(*out), 0, sizeof(SessionInfoIpc));
+    out->node_count = node_count;
+    out->max_nodes = max_nodes;
+    out->local_node_id = local_node_id;
+    out->is_host = is_host ? 1 : 0;
 
-    // Copy to IPC structure
-    out->node_count = info.node_count;
-    out->max_nodes = info.node_count_max;
-    out->local_node_id = info.local_node_id;
-    out->is_host = info.is_host;
-    std::memset(out->reserved, 0, sizeof(out->reserved));
-
-    LOG_VERBOSE("Config IPC: GetSessionInfo -> nodes=%u/%u, local=%u, host=%u",
-                out->node_count, out->max_nodes, out->local_node_id, out->is_host);
+    LOG_VERBOSE(
+        "Config IPC: GetSessionInfo -> nodes=%u/%u local=%u host=%u",
+        out->node_count,
+        out->max_nodes,
+        out->local_node_id,
+        out->is_host);
     R_SUCCEED();
 }
 
-/**
- * @brief Get last measured RTT
- *
- * Returns the last round-trip time measurement in milliseconds.
- * 0 means no RTT has been measured yet.
- *
- * @param out Output RTT in milliseconds
- * @return Always succeeds
- */
 ams::Result ConfigService::GetLastRtt(ams::sf::Out<u32> out) {
-    auto& shared_state = ams::mitm::ldn::SharedState::GetInstance();
-    *out = shared_state.GetLastRtt();
-
+    const auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    *out = state.GetLastRtt();
     LOG_VERBOSE("Config IPC: GetLastRtt -> %u ms", *out);
     R_SUCCEED();
 }
 
-/**
- * @brief Request reconnection
- *
- * Sets a flag that the MITM service will check to trigger a reconnect.
- * Useful when network conditions change or connection is lost.
- *
- * @return Always succeeds
- */
 ams::Result ConfigService::ForceReconnect() {
-    auto& shared_state = ams::mitm::ldn::SharedState::GetInstance();
-    shared_state.RequestReconnect();
-
+    auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    state.RequestReconnect();
     LOG_INFO("Config IPC: ForceReconnect requested");
     R_SUCCEED();
 }
 
-/**
- * @brief Get the process ID of the active game
- *
- * Returns the process ID of the game currently using LDN.
- * Useful for debugging and logging.
- *
- * @param out Output process ID (0 if no game active)
- * @return Always succeeds
- */
 ams::Result ConfigService::GetActiveProcessId(ams::sf::Out<u64> out) {
-    auto& shared_state = ams::mitm::ldn::SharedState::GetInstance();
-    *out = shared_state.GetActiveProcessId();
-
-    LOG_VERBOSE("Config IPC: GetActiveProcessId -> 0x%lX", *out);
+    const auto& state = ams::mitm::ldn::SharedState::GetInstance();
+    *out = state.GetActiveProcessId();
+    LOG_VERBOSE("Config IPC: GetActiveProcessId -> 0x%lx", *out);
     R_SUCCEED();
 }
 
-// ============================================================================
-// P2P Proxy Control
-// ============================================================================
+// =============================================================================
+// ConfigService Implementation - P2P Proxy Control
+// =============================================================================
 
-/**
- * @brief Get P2P proxy disabled state
- *
- * Returns whether P2P proxy is disabled (like Ryujinx MultiplayerDisableP2p).
- *
- * @param out Output: 1 if disabled, 0 if enabled
- * @return Always succeeds
- */
 ams::Result ConfigService::GetDisableP2p(ams::sf::Out<u32> out) {
-    std::scoped_lock lock(g_config_mutex);
+    std::scoped_lock lk(g_config_mutex);
     *out = g_config.ldn.disable_p2p ? 1 : 0;
-
     LOG_VERBOSE("Config IPC: GetDisableP2p -> %u", *out);
     R_SUCCEED();
 }
 
-/**
- * @brief Set P2P proxy disabled state
- *
- * Sets whether P2P proxy should be disabled (like Ryujinx MultiplayerDisableP2p).
- * When disabled, the server will not attempt P2P connections.
- *
- * @param disabled 1 to disable P2P, 0 to enable
- * @return Always succeeds
- */
 ams::Result ConfigService::SetDisableP2p(u32 disabled) {
-    LOG_INFO("Config IPC: SetDisableP2p(%u)", disabled);
-
-    std::scoped_lock lock(g_config_mutex);
+    std::scoped_lock lk(g_config_mutex);
     g_config.ldn.disable_p2p = (disabled != 0);
-
+    LOG_INFO(
+        "Config IPC: SetDisableP2p -> %s",
+        g_config.ldn.disable_p2p ? "true" : "false");
     R_SUCCEED();
 }
 
-} // namespace ryu_ldn::ipc
+}  // namespace ryu_ldn::ipc

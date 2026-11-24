@@ -40,8 +40,10 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_P2P_P2P_PROXY_CLIENT_HPP_
+#define SYSMODULE_SOURCE_P2P_P2P_PROXY_CLIENT_HPP_
 
+#include <atomic>
 #include <stratosphere.hpp>
 #include "../protocol/types.hpp"
 #include "../protocol/ryu_protocol.hpp"
@@ -54,8 +56,8 @@ namespace ams::mitm::p2p {
  * When the P2P client receives ProxyData, ProxyConnect, etc. from the host,
  * it forwards them to the BSD MITM layer via this callback.
  */
-using ProxyPacketCallback = void(*)(ryu_ldn::protocol::PacketId type,
-                                     const void* data, size_t size);
+using ProxyPacketCallback =
+    void (*)(ryu_ldn::protocol::PacketId type, const void* data, size_t size);
 
 /**
  * @brief P2P Proxy Client
@@ -63,6 +65,30 @@ using ProxyPacketCallback = void(*)(ryu_ldn::protocol::PacketId type,
  * TCP client that connects to a P2P host for direct LDN multiplayer.
  * When a Switch joins a network with P2P enabled, this client establishes
  * a direct connection to the host instead of going through the relay server.
+ *
+ * ## Security / Encryption
+ *
+ * P2P traffic is carried **in cleartext** over the direct TCP connection.
+ * There is no TLS, no DTLS, and no application-layer encryption of proxy
+ * packets. This is a deliberate architectural choice:
+ *
+ *   - It is consistent with the rest of the sysmodule: the relay-server
+ *     path (RyuLdnClient → Ryujinx LDN server) is plain raw TCP (the LDN
+ *     protocol carries no confidentiality guarantees — it transports PIA
+ *     mesh frames that the game layer is responsible for protecting if
+ *     needed).
+ *   - Adding TLS to the P2P leg would require a shared trust anchor
+ *     between peers that the current server-mediated auth
+ *     (ExternalProxyConfig token) does not provide; it would also push
+ *     the sysmodule past its memory budget (mbedTLS context + buffers).
+ *   - The threat model is "LDN multiplayer traffic between consenting
+ *     peers on a trusted network", not "confidential payload over an
+ *     untrusted link". Peers who need confidentiality should use a VPN
+ *     at the OS level.
+ *
+ * Anyone reusing this code in a context where the P2P link crosses an
+ * untrusted network MUST add transport encryption — do not assume the
+ * cleartext default is safe for arbitrary deployments.
  *
  * ## Thread Safety
  *
@@ -142,6 +168,8 @@ public:
 
     /**
      * @brief Check if connected to host
+     * @return true while the TCP connection to the host is established
+     * (read under the client mutex).
      */
     /// @gdb{tag="P2P:CLIENT", msg="Connection state queried"}
     bool IsConnected() const;
@@ -196,7 +224,9 @@ public:
      * @brief Get our virtual IP address
      * @return Virtual IP assigned by host (valid after ready)
      */
-    uint32_t GetVirtualIp() const { return m_proxy_config.proxy_ip; }
+    uint32_t GetVirtualIp() const {
+        return m_proxy_config.proxy_ip;
+    }
 
     // =========================================================================
     // Sending Proxy Messages
@@ -210,8 +240,10 @@ public:
      * @return true if sent successfully
      */
     /// @gdb{tag="P2P:MSG", msg="Client sending proxy data"}
-    bool SendProxyData(const ryu_ldn::protocol::ProxyDataHeader& header,
-                       const uint8_t* data, size_t data_len);
+    bool SendProxyData(
+        const ryu_ldn::protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_len);
 
     /**
      * @brief Send ProxyConnect request to the host
@@ -219,7 +251,8 @@ public:
      * @return true if sent successfully
      */
     /// @gdb{tag="P2P:MSG", msg="Client sending proxy connect"}
-    bool SendProxyConnect(const ryu_ldn::protocol::ProxyConnectRequest& request);
+    bool SendProxyConnect(
+        const ryu_ldn::protocol::ProxyConnectRequest& request);
 
     /**
      * @brief Send ProxyConnectReply to the host
@@ -227,7 +260,8 @@ public:
      * @return true if sent successfully
      */
     /// @gdb{tag="P2P:MSG", msg="Client sending connect reply"}
-    bool SendProxyConnectReply(const ryu_ldn::protocol::ProxyConnectResponse& response);
+    bool SendProxyConnectReply(
+        const ryu_ldn::protocol::ProxyConnectResponse& response);
 
     /**
      * @brief Send ProxyDisconnect to the host
@@ -235,7 +269,8 @@ public:
      * @return true if sent successfully
      */
     /// @gdb{tag="P2P:MSG", msg="Client sending disconnect"}
-    bool SendProxyDisconnect(const ryu_ldn::protocol::ProxyDisconnectMessage& message);
+    bool SendProxyDisconnect(
+        const ryu_ldn::protocol::ProxyDisconnectMessage& message);
 
     /**
      * @brief Send raw packet data
@@ -275,31 +310,47 @@ private:
     /// @gdb{tag="P2P:MSG", msg="Client handling proxy config"}
     void HandleProxyConfig(const ryu_ldn::protocol::ProxyConfig& config);
     /// @gdb{tag="P2P:MSG", msg="Client handling proxy data"}
-    void HandleProxyData(const ryu_ldn::protocol::ProxyDataHeader& header,
-                         const uint8_t* data, size_t data_len);
+    void HandleProxyData(
+        const ryu_ldn::protocol::ProxyDataHeader& header,
+        const uint8_t* data,
+        size_t data_len);
     /// @gdb{tag="P2P:MSG", msg="Client handling proxy connect"}
-    void HandleProxyConnect(const ryu_ldn::protocol::ProxyConnectRequest& request);
+    void HandleProxyConnect(
+        const ryu_ldn::protocol::ProxyConnectRequest& request);
     /// @gdb{tag="P2P:MSG", msg="Client handling connect reply"}
-    void HandleProxyConnectReply(const ryu_ldn::protocol::ProxyConnectResponse& response);
+    void HandleProxyConnectReply(
+        const ryu_ldn::protocol::ProxyConnectResponse& response);
     /// @gdb{tag="P2P:MSG", msg="Client handling disconnect"}
-    void HandleProxyDisconnect(const ryu_ldn::protocol::ProxyDisconnectMessage& message);
+    void HandleProxyDisconnect(
+        const ryu_ldn::protocol::ProxyDisconnectMessage& message);
 
     // =========================================================================
     // Member Variables
     // =========================================================================
 
+    /// Guards the connection, readiness and proxy-config state below; used with
+    /// m_ready_cv.
     mutable os::Mutex m_mutex{false};
 
     // Socket
-    int m_socket_fd;
-    bool m_connected;
-    bool m_disposed;
+    /// TCP socket to the host, or -1 when not connected.
+    int m_socket_fd{-1};
+    /// True once the TCP connect succeeded; cleared by Disconnect() and when
+    /// the receive loop ends.
+    std::atomic<bool> m_connected;
+    /// Set by the destructor so the receive loop stops touching the object.
+    std::atomic<bool> m_disposed;
 
     // Authentication state
-    bool m_ready;
+    /// True once the host's ProxyConfig has been received (authentication
+    /// done).
+    bool m_ready{false};
+    /// Broadcast when m_ready changes or the connection drops; waited on by
+    /// EnsureProxyReady().
     os::ConditionVariable m_ready_cv;
 
     // Proxy config from host
+    /// ProxyConfig received from the host; valid once m_ready is true.
     ryu_ldn::protocol::ProxyConfig m_proxy_config;
 
     // Receive thread (stack lives in BSS — see g_p2p_client_recv_thread_stack
@@ -309,15 +360,23 @@ private:
     // to the unimplemented aligned operator new and std::abort'd 0xFFE the
     // moment the server told us about the external proxy. Same root cause
     // as the P2pProxyServer/P2pProxySession fix.
-    os::ThreadType m_recv_thread;
-    bool m_recv_thread_running;
+    /// Receive thread handle; its stack lives in BSS (see note above).
+    os::ThreadType m_recv_thread{};
+    /// True while the receive thread should keep looping; cleared to ask it to
+    /// stop.
+    std::atomic<bool> m_recv_thread_running;
 
     // Receive buffer
+    /// Size in bytes of m_recv_buffer (64 KB).
     static constexpr size_t RECV_BUFFER_SIZE = 0x10000;
-    uint8_t m_recv_buffer[RECV_BUFFER_SIZE];
+    /// Accumulation buffer for incoming bytes before packet parsing.
+    uint8_t m_recv_buffer[RECV_BUFFER_SIZE]{};
 
     // Packet callback
+    /// Callback notified of proxy packets received from the host; may be
+    /// nullptr.
     ProxyPacketCallback m_packet_callback;
 };
 
-} // namespace ams::mitm::p2p
+}  // namespace ams::mitm::p2p
+#endif  // SYSMODULE_SOURCE_P2P_P2P_PROXY_CLIENT_HPP_

@@ -5,12 +5,13 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_CONNECTION_STATE_HPP_
+#define SYSMODULE_SOURCE_NETWORK_CONNECTION_STATE_HPP_
 
+#include <atomic>
 #include <cstdint>
 
-namespace ryu_ldn {
-namespace network {
+namespace ryu_ldn::network {
 
 /**
  * @brief Connection states for the state machine
@@ -31,17 +32,17 @@ enum class ConnectionState : uint8_t {
  * @brief Events that can trigger state transitions
  */
 enum class ConnectionEvent : uint8_t {
-    Connect,            ///< Request to connect
-    ConnectSuccess,     ///< TCP connection established
-    ConnectFailed,      ///< TCP connection failed
-    HandshakeStarted,   ///< Protocol handshake initiated (sent Initialize)
-    HandshakeSuccess,   ///< Protocol handshake completed
-    HandshakeFailed,    ///< Protocol handshake failed
-    Disconnect,         ///< Request to disconnect
-    ConnectionLost,     ///< Connection unexpectedly lost
-    BackoffExpired,     ///< Backoff timer expired, ready to retry
-    RetryRequested,     ///< Manual retry requested
-    FatalError          ///< Unrecoverable error occurred
+    Connect,           ///< Request to connect
+    ConnectSuccess,    ///< TCP connection established
+    ConnectFailed,     ///< TCP connection failed
+    HandshakeStarted,  ///< Protocol handshake initiated (sent Initialize)
+    HandshakeSuccess,  ///< Protocol handshake completed
+    HandshakeFailed,   ///< Protocol handshake failed
+    Disconnect,        ///< Request to disconnect
+    ConnectionLost,    ///< Connection unexpectedly lost
+    BackoffExpired,    ///< Backoff timer expired, ready to retry
+    RetryRequested,    ///< Manual retry requested
+    FatalError         ///< Unrecoverable error occurred
 };
 
 /**
@@ -59,9 +60,10 @@ enum class TransitionResult : uint8_t {
  * @param new_state New state
  * @param event Event that triggered the transition
  */
-using StateChangeCallback = void (*)(ConnectionState old_state,
-                                      ConnectionState new_state,
-                                      ConnectionEvent event);
+using StateChangeCallback = void (*)(
+    ConnectionState old_state,
+    ConnectionState new_state,
+    ConnectionEvent event);
 
 /**
  * @brief Connection state machine
@@ -103,27 +105,31 @@ public:
      * @brief Get current connection state
      * @return Current state
      */
-    ConnectionState get_state() const { return m_state; }
+    [[nodiscard]] ConnectionState get_state() const {
+        return m_state;
+    }
 
     /**
      * @brief Check if currently connected (Connected, Handshaking, or Ready)
      * @return true if in a connected state
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="is_connected"}
-    bool is_connected() const;
+    [[nodiscard]] bool is_connected() const;
 
     /**
      * @brief Check if fully ready (handshake complete)
      * @return true if in Ready state
      */
-    bool is_ready() const { return m_state == ConnectionState::Ready; }
+    [[nodiscard]] bool is_ready() const {
+        return m_state == ConnectionState::Ready;
+    }
 
     /**
      * @brief Check if in a transitional state (Connecting, Handshaking, etc.)
      * @return true if transitioning
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="is_transitioning"}
-    bool is_transitioning() const;
+    [[nodiscard]] bool is_transitioning() const;
 
     /**
      * @brief Process an event and perform state transition
@@ -137,19 +143,24 @@ public:
      * @brief Set callback for state changes
      * @param callback Function to call on state change (nullptr to disable)
      */
-    /// @gdb{tag="NETWORK:STATE_MACHINE", msg="set_state_change_callback: cb=%p", args="$x0"}
+    /// @gdb{tag="NETWORK:STATE_MACHINE", msg="set_state_change_callback:
+    /// cb=%p", args="$x0"}
     void set_state_change_callback(StateChangeCallback callback);
 
     /**
      * @brief Get retry count since last successful connection
      * @return Number of retry attempts
      */
-    uint32_t get_retry_count() const { return m_retry_count; }
+    [[nodiscard]] uint32_t get_retry_count() const {
+        return m_retry_count;
+    }
 
     /**
      * @brief Reset retry count (call on successful connection)
      */
-    void reset_retry_count() { m_retry_count = 0; }
+    void reset_retry_count() {
+        m_retry_count = 0;
+    }
 
     /**
      * @brief Force state (use with caution, bypasses transition validation)
@@ -173,9 +184,13 @@ public:
     static const char* event_to_string(ConnectionEvent event);
 
 private:
-    ConnectionState m_state;
-    StateChangeCallback m_callback;
-    uint32_t m_retry_count;
+    /// Current connection state (read by the receive thread, written by the
+    /// thread driving the machine)
+    std::atomic<ConnectionState> m_state;
+    /// Optional callback invoked on every state change
+    StateChangeCallback m_callback{nullptr};
+    /// Retry attempts made since the last successful connection
+    uint32_t m_retry_count{0};
 
     /**
      * @brief Check if transition is valid
@@ -185,15 +200,16 @@ private:
      * @return true if transition is valid
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="is_valid_transition"}
-    bool is_valid_transition(ConnectionState from, ConnectionEvent event,
-                             ConnectionState& to) const;
+    static bool is_valid_transition(
+        ConnectionState from, ConnectionEvent event, ConnectionState& to);
 
     /**
      * @brief Perform the state transition
      * @param new_state Target state
      * @param event Event that caused transition
      */
-    /// @gdb{tag="NETWORK:STATE_MACHINE", msg="transition_to: old=%d new=%d event=%d", args="$x1, $x2, $x3"}
+    /// @gdb{tag="NETWORK:STATE_MACHINE", msg="transition_to: old=%d new=%d
+    /// event=%d", args="$x1, $x2, $x3"}
     void transition_to(ConnectionState new_state, ConnectionEvent event);
 };
 
@@ -204,12 +220,16 @@ private:
  */
 inline const char* transition_result_to_string(TransitionResult result) {
     switch (result) {
-        case TransitionResult::Success:           return "Success";
-        case TransitionResult::InvalidTransition: return "InvalidTransition";
-        case TransitionResult::AlreadyInState:    return "AlreadyInState";
-        default:                                  return "Unknown";
+        case TransitionResult::Success:
+            return "Success";
+        case TransitionResult::InvalidTransition:
+            return "InvalidTransition";
+        case TransitionResult::AlreadyInState:
+            return "AlreadyInState";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace network
-} // namespace ryu_ldn
+}  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_CONNECTION_STATE_HPP_

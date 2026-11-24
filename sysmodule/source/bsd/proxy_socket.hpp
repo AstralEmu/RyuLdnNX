@@ -16,7 +16,8 @@
  * ## Data Flow
  *
  * ```
- * Game calls Send() ─────► ProxySocket.Send() ─────► ProxyData packet ─────► Server
+ * Game calls Send() ─────► ProxySocket.Send() ─────► ProxyData packet ─────►
+ * Server
  *
  * Server ─────► ProxyData packet ─────► ProxySocket.IncomingData() ─────► Queue
  *                                                                           │
@@ -40,11 +41,14 @@
  * @license GPL-2.0-or-later
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_BSD_PROXY_SOCKET_HPP_
+#define SYSMODULE_SOURCE_BSD_PROXY_SOCKET_HPP_
 
+#include <algorithm>
+#include <atomic>
 #include <stratosphere.hpp>
-#include <deque>
-#include <vector>
+#include <array>
+#include <memory>
 #include "bsd_types.hpp"
 #include "../protocol/types.hpp"
 
@@ -62,6 +66,23 @@ class ProxySocketManager;
 constexpr size_t PROXY_SOCKET_MAX_QUEUE_SIZE = 32;
 
 /**
+ * @brief Maximum number of pending TCP accept connections per listening socket
+ *
+ * Static cap so the accept queue lives inline in ProxySocket with zero
+ * heap allocation. When full, incoming connections are dropped (logged).
+ */
+constexpr size_t MAX_ACCEPT_QUEUE = 16;
+
+/**
+ * @brief Maximum number of socket option entries stored per ProxySocket
+ *
+ * Static cap so socket options live inline in ProxySocket with zero
+ * heap allocation. When full, a new option that doesn't match an
+ * existing key is rejected (returns false from SetSocketOption).
+ */
+constexpr size_t MAX_SOCKET_OPTIONS = 32;
+
+/**
  * @brief Maximum payload size for a single ProxyData packet
  *
  * MK8DX and other LDN games routinely send packets up to ~1460 bytes
@@ -75,12 +96,12 @@ constexpr size_t PROXY_SOCKET_MAX_PAYLOAD = 2000;
  * @brief State of a proxy socket
  */
 enum class ProxySocketState {
-    Created,        ///< Socket created but not bound
-    Bound,          ///< Socket bound to local address
-    Connecting,     ///< TCP: Connect in progress, waiting for reply
-    Connected,      ///< Socket connected to remote (TCP) or has default dest (UDP)
-    Listening,      ///< Socket listening for connections (TCP only)
-    Closed,         ///< Socket closed, awaiting cleanup
+    Created,     ///< Socket created but not bound
+    Bound,       ///< Socket bound to local address
+    Connecting,  ///< TCP: Connect in progress, waiting for reply
+    Connected,   ///< Socket connected to remote (TCP) or has default dest (UDP)
+    Listening,   ///< Socket listening for connections (TCP only)
+    Closed,      ///< Socket closed, awaiting cleanup
 };
 
 /**
@@ -93,10 +114,10 @@ enum class ProxySocketState {
  * cycle per datagram (100+ pkts/s) on top of the internet round-trip.
  */
 struct ReceivedPacket {
-    ryu_ldn::bsd::SockAddrIn from;                   ///< Source address
-    uint16_t len;                                    ///< Payload length (<= PROXY_SOCKET_MAX_PAYLOAD)
-    uint16_t _pad;                                   ///< Alignment
-    uint8_t data[PROXY_SOCKET_MAX_PAYLOAD];          ///< Payload buffer
+    ryu_ldn::bsd::SockAddrIn from;  ///< Source address
+    uint16_t len;   ///< Payload length (<= PROXY_SOCKET_MAX_PAYLOAD)
+    uint16_t _pad;  ///< Alignment
+    uint8_t data[PROXY_SOCKET_MAX_PAYLOAD];  ///< Payload buffer
 };
 
 /**
@@ -118,8 +139,8 @@ struct ReceivedPacket {
  *
  * ```cpp
  * // Create and bind a UDP proxy socket
- * auto socket = std::make_unique<ProxySocket>(SocketType::Dgram, ProtocolType::Udp);
- * socket->Bind(local_addr);
+ * auto socket = std::make_unique<ProxySocket>(SocketType::Dgram,
+ * ProtocolType::Udp); socket->Bind(local_addr);
  *
  * // Send data to a peer
  * socket->SendTo(data, data_len, remote_addr);
@@ -138,8 +159,10 @@ public:
      * @param type Socket type (Stream for TCP, Dgram for UDP)
      * @param protocol Protocol type (Tcp or Udp)
      */
-    /// @gdb{tag="BSD:ALIGN", msg="ProxySocket constructed: type=%d protocol=%d", args="$x0, $x1"}
-    ProxySocket(ryu_ldn::bsd::SocketType type, ryu_ldn::bsd::ProtocolType protocol);
+    /// @gdb{tag="BSD:ALIGN", msg="ProxySocket constructed: type=%d
+    /// protocol=%d", args="$x0, $x1"}
+    ProxySocket(
+        ryu_ldn::bsd::SocketType type, ryu_ldn::bsd::ProtocolType protocol);
 
     /**
      * @brief Destructor
@@ -156,10 +179,15 @@ public:
     ProxySocket& operator=(const ProxySocket&) = delete;
 
     /**
-     * @brief Move constructor
+     * @brief Non-movable: the socket owns an atomic, a mutex and events.
+     *
+     * Moving was already implicitly deleted because those members are
+     * non-movable. Sockets are owned through std::unique_ptr and never moved.
      */
-    ProxySocket(ProxySocket&&) = default;
-    ProxySocket& operator=(ProxySocket&&) = default;
+    ProxySocket(ProxySocket&&) = delete;
+    /// Move assignment is deleted for the same reason as the constructor.
+    /// @return This socket.
+    ProxySocket& operator=(ProxySocket&&) = delete;
 
     // =========================================================================
     // Socket State
@@ -169,31 +197,41 @@ public:
      * @brief Get the current socket state
      * @return Current state (Created, Bound, Connected, etc.)
      */
-    ProxySocketState GetState() const { return m_state; }
+    ProxySocketState GetState() const {
+        return m_state;
+    }
 
     /**
      * @brief Get the socket type
      * @return Socket type (Stream or Dgram)
      */
-    ryu_ldn::bsd::SocketType GetType() const { return m_type; }
+    ryu_ldn::bsd::SocketType GetType() const {
+        return m_type;
+    }
 
     /**
      * @brief Get the protocol type
      * @return Protocol type (Tcp or Udp)
      */
-    ryu_ldn::bsd::ProtocolType GetProtocol() const { return m_protocol; }
+    ryu_ldn::bsd::ProtocolType GetProtocol() const {
+        return m_protocol;
+    }
 
     /**
      * @brief Check if socket is non-blocking
      * @return true if non-blocking mode is enabled
      */
-    bool IsNonBlocking() const { return m_non_blocking; }
+    bool IsNonBlocking() const {
+        return m_non_blocking;
+    }
 
     /**
      * @brief Set non-blocking mode
      * @param non_blocking true to enable non-blocking mode
      */
-    void SetNonBlocking(bool non_blocking) { m_non_blocking = non_blocking; }
+    void SetNonBlocking(bool non_blocking) {
+        m_non_blocking = non_blocking;
+    }
 
     // =========================================================================
     // Address Management
@@ -208,7 +246,8 @@ public:
      * @param addr Local address to bind to (must be in LDN network 10.114.x.x)
      * @return Success or error (e.g., already bound, invalid address)
      *
-     * @note Does not validate that the address is actually ours - caller must check
+     * @note Does not validate that the address is actually ours - caller must
+     * check
      */
     /// @gdb{tag="BSD:ALIGN", msg="ProxySocket::Bind"}
     Result Bind(const ryu_ldn::bsd::SockAddrIn& addr);
@@ -247,13 +286,17 @@ public:
      * @brief Get the local address reference
      * @return Reference to local address structure
      */
-    const ryu_ldn::bsd::SockAddrIn& GetLocalAddr() const { return m_local_addr; }
+    const ryu_ldn::bsd::SockAddrIn& GetLocalAddr() const {
+        return m_local_addr;
+    }
 
     /**
      * @brief Get the remote address reference
      * @return Reference to remote address structure
      */
-    const ryu_ldn::bsd::SockAddrIn& GetRemoteAddr() const { return m_remote_addr; }
+    const ryu_ldn::bsd::SockAddrIn& GetRemoteAddr() const {
+        return m_remote_addr;
+    }
 
     // =========================================================================
     // Data Transfer
@@ -284,7 +327,11 @@ public:
      * @return Bytes sent or negative errno on error
      */
     /// @gdb{tag="BSD:ALIGN", msg="ProxySocket::SendTo"}
-    s32 SendTo(const void* data, size_t len, s32 flags, const ryu_ldn::bsd::SockAddrIn& dest);
+    s32 SendTo(
+        const void* data,
+        size_t len,
+        s32 flags,
+        const ryu_ldn::bsd::SockAddrIn& dest);
 
     /**
      * @brief Receive data (connected sockets only)
@@ -294,7 +341,8 @@ public:
      * @param buffer Buffer to receive into
      * @param len Buffer size
      * @param flags Receive flags (currently supports MSG_PEEK, MSG_DONTWAIT)
-     * @return Bytes received, 0 if connection closed, or negative errno on error
+     * @return Bytes received, 0 if connection closed, or negative errno on
+     * error
      */
     /// @gdb{tag="BSD:DATA", msg="ProxySocket::Recv"}
     s32 Recv(void* buffer, size_t len, s32 flags);
@@ -308,10 +356,12 @@ public:
      * @param len Buffer size
      * @param flags Receive flags
      * @param from Output: source address (can be nullptr)
-     * @return Bytes received, 0 if connection closed, or negative errno on error
+     * @return Bytes received, 0 if connection closed, or negative errno on
+     * error
      */
     /// @gdb{tag="BSD:DATA", msg="ProxySocket::RecvFrom"}
-    s32 RecvFrom(void* buffer, size_t len, s32 flags, ryu_ldn::bsd::SockAddrIn* from);
+    s32 RecvFrom(
+        void* buffer, size_t len, s32 flags, ryu_ldn::bsd::SockAddrIn* from);
 
     /**
      * @brief Queue incoming data from a ProxyData packet
@@ -326,7 +376,8 @@ public:
      * @note Thread-safe. Signals the receive event.
      */
     /// @gdb{tag="BSD:DATA", msg="ProxySocket::IncomingData"}
-    void IncomingData(const void* data, size_t len, const ryu_ldn::bsd::SockAddrIn& from);
+    void IncomingData(
+        const void* data, size_t len, const ryu_ldn::bsd::SockAddrIn& from);
 
     // =========================================================================
     // Socket Options
@@ -345,7 +396,8 @@ public:
      * @return Success or error
      */
     /// @gdb{tag="BSD:CONFIG", msg="ProxySocket::SetSockOpt"}
-    Result SetSockOpt(s32 level, s32 optname, const void* optval, size_t optlen);
+    Result SetSockOpt(
+        s32 level, s32 optname, const void* optval, size_t optlen);
 
     /**
      * @brief Get a socket option
@@ -357,7 +409,8 @@ public:
      * @return Success or error
      */
     /// @gdb{tag="BSD:CONFIG", msg="ProxySocket::GetSockOpt"}
-    Result GetSockOpt(s32 level, s32 optname, void* optval, size_t* optlen) const;
+    Result GetSockOpt(
+        s32 level, s32 optname, void* optval, size_t* optlen) const;
 
     // =========================================================================
     // TCP-specific Operations
@@ -394,7 +447,8 @@ public:
      * @param request The connection request info
      */
     /// @gdb{tag="BSD:DATA", msg="ProxySocket::IncomingConnection"}
-    void IncomingConnection(const ryu_ldn::protocol::ProxyConnectRequest& request);
+    void IncomingConnection(
+        const ryu_ldn::protocol::ProxyConnectRequest& request);
 
     /**
      * @brief Handle connect response (for TCP connect handshake)
@@ -404,7 +458,8 @@ public:
      * @param response The connect response
      */
     /// @gdb{tag="BSD:DATA", msg="ProxySocket::HandleConnectResponse"}
-    void HandleConnectResponse(const ryu_ldn::protocol::ProxyConnectResponse& response);
+    void HandleConnectResponse(
+        const ryu_ldn::protocol::ProxyConnectResponse& response);
 
     /**
      * @brief Check if accept queue has pending connections
@@ -416,19 +471,25 @@ public:
      * @brief Get broadcast flag
      * @return true if SO_BROADCAST is enabled
      */
-    bool IsBroadcastEnabled() const { return m_broadcast; }
+    bool IsBroadcastEnabled() const {
+        return m_broadcast;
+    }
 
     /**
      * @brief Set broadcast flag (SO_BROADCAST)
      * @param enabled true to enable broadcast reception
      */
-    void SetBroadcastEnabled(bool enabled) { m_broadcast = enabled; }
+    void SetBroadcastEnabled(bool enabled) {
+        m_broadcast = enabled;
+    }
 
     /**
      * @brief Set broadcast address for filtering
      * @param addr Broadcast address (e.g., 10.114.255.255)
      */
-    void SetBroadcastAddress(uint32_t addr) { m_broadcast_address = addr; }
+    void SetBroadcastAddress(uint32_t addr) {
+        m_broadcast_address = addr;
+    }
 
     // =========================================================================
     // Shutdown and Close
@@ -487,18 +548,98 @@ public:
      *
      * @return Reference to the receive event
      */
-    os::Event& GetReceiveEvent() { return m_receive_event; }
+    os::Event& GetReceiveEvent() {
+        return m_receive_event;
+    }
 
 private:
-    /**
-     * @brief Pop the front packet from the receive queue
-     *
-     * @param peek If true, don't remove from queue (MSG_PEEK)
-     * @return The front packet, or empty if queue is empty
-     *
-     * @note Caller must hold m_queue_mutex
-     */
-    ReceivedPacket PopFrontPacket(bool peek);
+    // =========================================================================
+    // Accept queue ring buffer helpers (caller must hold m_queue_mutex)
+    // =========================================================================
+
+    /// @return True when no accepted socket is queued.
+    bool IsAcceptQueueEmpty() const {
+        return m_accept_queue_count == 0;
+    }
+
+    /// @return True when the accept ring holds MAX_ACCEPT_QUEUE sockets.
+    bool IsAcceptQueueFull() const {
+        return m_accept_queue_count >= MAX_ACCEPT_QUEUE;
+    }
+
+    /// Push a new accepted socket at the tail. Caller must hold m_queue_mutex
+    /// and must have checked !IsAcceptQueueFull() first (the only caller does).
+    /// @param socket Accepted socket; ownership moves into the ring.
+    void AcceptQueuePushBack(std::unique_ptr<ProxySocket> socket) {
+        m_accept_queue[m_accept_queue_tail] = std::move(socket);
+        m_accept_queue_tail = (m_accept_queue_tail + 1) % MAX_ACCEPT_QUEUE;
+        m_accept_queue_count++;
+    }
+
+    /// Pop the front accepted socket. Caller must hold m_queue_mutex and
+    /// must have checked !IsAcceptQueueEmpty() first (both callers do).
+    /// @return The oldest queued socket (ownership transferred to caller).
+    std::unique_ptr<ProxySocket> AcceptQueuePopFront() {
+        std::unique_ptr<ProxySocket> result =
+            std::move(m_accept_queue[m_accept_queue_head]);
+        m_accept_queue[m_accept_queue_head].reset();
+        m_accept_queue_head = (m_accept_queue_head + 1) % MAX_ACCEPT_QUEUE;
+        m_accept_queue_count--;
+        return result;
+    }
+
+    // =========================================================================
+    // Socket option helpers (caller must hold m_queue_mutex)
+    // =========================================================================
+
+    /// Find a socket option by key. Returns pointer to the value or nullptr.
+    /// Linear scan is fine: ≤ MAX_SOCKET_OPTIONS entries.
+    /// @param key Option key, see MakeOptionKey().
+    /// @return Pointer to the stored value, or nullptr if the key is absent.
+    s32* FindSocketOption(uint32_t key) {
+        auto* const it = std::ranges::find_if(
+            m_socket_options,
+
+            [key](const auto& entry) {
+                return entry.valid && entry.key == key;
+            });
+        return it != m_socket_options.end() ? &it->value : nullptr;
+    }
+
+    /// Const overload.
+    /// @param key Option key, see MakeOptionKey().
+    /// @return Pointer to the stored value, or nullptr if the key is absent.
+    const s32* FindSocketOption(uint32_t key) const {
+        const auto* const it = std::ranges::find_if(
+            m_socket_options,
+
+            [key](const auto& entry) {
+                return entry.valid && entry.key == key;
+            });
+        return it != m_socket_options.end() ? &it->value : nullptr;
+    }
+
+    /// Set a socket option: update existing key, or insert in first free slot.
+    /// @param key Option key, see MakeOptionKey().
+    /// @param value Integer value to store.
+    /// @return True if stored, false if no free slot.
+    bool SetSocketOption(uint32_t key, s32 value) {
+        if (s32* existing = FindSocketOption(key)) {
+            *existing = value;
+            return true;
+        }
+        auto* const free_slot = std::ranges::find_if(
+            m_socket_options,
+
+            [](const auto& entry) { return !entry.valid; });
+        if (free_slot == m_socket_options.end()) {
+            return false;
+        }
+        free_slot->key = key;
+        free_slot->value = value;
+        free_slot->valid = true;
+        return true;
+    }
 
     /**
      * @brief Socket type (Stream or Dgram)
@@ -522,9 +663,13 @@ private:
 
     /**
      * @brief Shutdown flags
+     *
+     * Atomic: Shutdown() runs on the IPC thread while a blocked reader polls
+     * the flag from another thread (proven by ThreadSanitizer).
      */
-    bool m_shutdown_read{false};
-    bool m_shutdown_write{false};
+    std::atomic<bool> m_shutdown_read{false};
+    /// Write side shut down (see m_shutdown_read).
+    std::atomic<bool> m_shutdown_write{false};
 
     /**
      * @brief Local address (set by Bind)
@@ -546,10 +691,10 @@ private:
      * Producer: network thread via IncomingData. Consumer: game thread via
      * RecvFrom. Full = drop oldest (UDP behavior). Protected by m_queue_mutex.
      */
-    ReceivedPacket m_rx_ring[PROXY_SOCKET_MAX_QUEUE_SIZE];
-    size_t m_rx_head = 0;                            ///< Read index
-    size_t m_rx_tail = 0;                            ///< Write index
-    size_t m_rx_count = 0;                           ///< Elements in ring
+    ReceivedPacket m_rx_ring[PROXY_SOCKET_MAX_QUEUE_SIZE]{};
+    size_t m_rx_head = 0;   ///< Read index
+    size_t m_rx_tail = 0;   ///< Write index
+    size_t m_rx_count = 0;  ///< Elements in ring
 
     /**
      * @brief Event signaled when data is available
@@ -557,9 +702,16 @@ private:
     os::Event m_receive_event{os::EventClearMode_ManualClear};
 
     /**
-     * @brief TCP accept queue (pending connections)
+     * @brief TCP accept queue (pending connections) — fixed-size ring buffer.
+     *
+     * Producer: network thread via IncomingConnection. Consumer: game thread
+     * via Accept. Full = drop incoming connection (logged). Protected by
+     * m_queue_mutex. The slots are owned (destroyed when overwritten / popped).
      */
-    std::deque<std::unique_ptr<ProxySocket>> m_accept_queue;
+    std::array<std::unique_ptr<ProxySocket>, MAX_ACCEPT_QUEUE> m_accept_queue{};
+    size_t m_accept_queue_head = 0;   ///< Read index (next to pop)
+    size_t m_accept_queue_tail = 0;   ///< Write index (next push)
+    size_t m_accept_queue_count = 0;  ///< Elements currently in the ring
 
     /**
      * @brief Event signaled when accept queue has connections
@@ -572,7 +724,8 @@ private:
     bool m_connect_response_received{false};
 
     /**
-     * @brief TCP connect response data (valid when m_connect_response_received is true)
+     * @brief TCP connect response data (valid when m_connect_response_received
+     * is true)
      */
     ryu_ldn::protocol::ProxyConnectResponse m_connect_response{};
 
@@ -597,20 +750,34 @@ private:
     uint32_t m_broadcast_address{0};
 
     /**
-     * @brief Socket options storage
+     * @brief Socket options storage — fixed-size array (no heap allocation).
      *
      * Most options are stored locally since we're proxying.
-     * Format: map of (level << 16 | optname) -> value
-     * Currently stores integer options only (most common case).
+     * Format: (level << 16 | optname) -> value. Only integer options
+     * are stored (most common case). Linear search is fine: ≤32 entries.
      */
-    std::unordered_map<uint32_t, s32> m_socket_options;
+    struct SocketOptionEntry {
+        /// (level << 16 | optname), see MakeOptionKey().
+        uint32_t key;
+        /// Stored integer option value.
+        s32 value;
+        /// True when the slot is in use.
+        bool valid;
+    };
+    /// Fixed table of stored socket options (no heap).
+    std::array<SocketOptionEntry, MAX_SOCKET_OPTIONS> m_socket_options{};
 
     /**
      * @brief Helper to get option key from level and optname
+     * @param level Option level (e.g. SOL_SOCKET), stored in the high 16 bits.
+     * @param optname Option name; only its low 16 bits are kept.
+     * @return Combined 32-bit key `(level << 16) | (optname & 0xFFFF)`.
      */
     static constexpr uint32_t MakeOptionKey(s32 level, s32 optname) {
-        return (static_cast<uint32_t>(level) << 16) | static_cast<uint32_t>(optname & 0xFFFF);
+        return (static_cast<uint32_t>(level) << 16) |
+               static_cast<uint32_t>(optname & 0xFFFF);
     }
 };
 
-} // namespace ams::mitm::bsd
+}  // namespace ams::mitm::bsd
+#endif  // SYSMODULE_SOURCE_BSD_PROXY_SOCKET_HPP_

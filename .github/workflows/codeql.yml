@@ -32,8 +32,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          persist-credentials: false
           submodules: recursive
           fetch-depth: 0
 
@@ -42,7 +43,8 @@ jobs:
           git config --global --add safe.directory '*'
           # Detached HEAD in containers causes 'fatal: ref HEAD is not a symbolic ref'
           # for tools like git-describe. Create a symbolic ref to suppress the warning.
-          git symbolic-ref HEAD refs/heads/"${GITHUB_REF_NAME:-develop}" 2>/dev/null || true
+          git symbolic-ref HEAD refs/heads/"${GITHUB_REF_NAME:-develop}" \
+            || echo "::warning::could not point HEAD at a symbolic ref; git describe may warn"
 
       # Pre-generate the .npdm BEFORE Initialize CodeQL injects LD_PRELOAD.
       # npdmtool uses strtoull() without resetting errno first. CodeQL's
@@ -57,7 +59,7 @@ jobs:
           npdmtool /tmp/app.json "${GITHUB_WORKSPACE}/sysmodule/ryu_ldn_nx.npdm"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4
         with:
           languages: ${{ matrix.language }}
           config-file: .github/codeql-config.yml
@@ -113,6 +115,6 @@ jobs:
           cd "${GITHUB_WORKSPACE}/sysmodule" && make -j4 all APP_JSON=/tmp/app.json
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4
         with:
           category: "/language:${{ matrix.language }}"

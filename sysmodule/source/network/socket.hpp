@@ -9,8 +9,10 @@
  * Reference: Epic 2, Story 2.2
  */
 
-#pragma once
+#ifndef SYSMODULE_SOURCE_NETWORK_SOCKET_HPP_
+#define SYSMODULE_SOURCE_NETWORK_SOCKET_HPP_
 
+#include <atomic>
 #include <cstdint>
 #include <cstddef>
 
@@ -20,20 +22,21 @@ namespace ryu_ldn::network {
 // Result Codes
 // ============================================================================
 
+/** @brief Outcome of a socket operation (errno mapped to portable codes). */
 enum class SocketResult {
-    Success = 0,
-    WouldBlock,        // Non-blocking operation would block
-    Timeout,           // Operation timed out
-    ConnectionRefused, // Server refused connection
-    ConnectionReset,   // Connection reset by peer
-    HostUnreachable,   // Cannot reach host
-    NetworkDown,       // Network is down
-    NotConnected,      // Socket not connected
-    AlreadyConnected,  // Socket already connected
-    InvalidAddress,    // Invalid address format
-    SocketError,       // Generic socket error
-    NotInitialized,    // Socket subsystem not initialized
-    Closed             // Socket was closed
+    Success = 0,        ///< Operation completed
+    WouldBlock,         ///< Non-blocking operation would block
+    Timeout,            ///< Operation timed out
+    ConnectionRefused,  ///< Server refused connection
+    ConnectionReset,    ///< Connection reset by peer
+    HostUnreachable,    ///< Cannot reach host
+    NetworkDown,        ///< Network is down
+    NotConnected,       ///< Socket not connected
+    AlreadyConnected,   ///< Socket already connected
+    InvalidAddress,     ///< Invalid address format
+    SocketError,        ///< Generic socket error
+    NotInitialized,     ///< Socket subsystem not initialized
+    Closed              ///< Socket was closed
 };
 
 // ============================================================================
@@ -92,7 +95,8 @@ public:
      * @return SocketResult::Success or error
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="Socket connect"}
-    SocketResult connect(const char* host, uint16_t port, uint32_t timeout_ms = 0);
+    SocketResult connect(
+        const char* host, uint16_t port, uint32_t timeout_ms = 0);
 
     /**
      * @brief Send data (blocking)
@@ -119,7 +123,11 @@ public:
      * @param timeout_ms Receive timeout (0 = non-blocking, -1 = blocking)
      * @return SocketResult::Success, WouldBlock, or error
      */
-    SocketResult recv(uint8_t* buffer, size_t buffer_size, size_t& received, int32_t timeout_ms = 0);
+    SocketResult recv(
+        uint8_t* buffer,
+        size_t buffer_size,
+        size_t& received,
+        int32_t timeout_ms = 0);
 
     /**
      * @brief Close the socket
@@ -132,51 +140,56 @@ public:
      * @return true if connected
      */
     /// @gdb{tag="NETWORK:STATE_MACHINE", msg="Socket is_connected"}
-    bool is_connected() const;
+    [[nodiscard]] bool is_connected() const;
 
     /**
      * @brief Check if socket is valid (has file descriptor)
      * @return true if valid
      */
-    bool is_valid() const;
+    [[nodiscard]] bool is_valid() const;
 
     /**
      * @brief Get the native socket file descriptor
      * @return File descriptor or -1 if invalid
      */
-    int get_fd() const { return m_fd; }
+    [[nodiscard]] int get_fd() const {
+        return m_fd;
+    }
 
     /**
      * @brief Set socket to non-blocking mode
      * @param non_blocking true for non-blocking, false for blocking
      * @return SocketResult::Success or error
      */
-    SocketResult set_non_blocking(bool non_blocking);
+    [[nodiscard]] SocketResult set_non_blocking(bool non_blocking) const;
 
     /**
      * @brief Set TCP_NODELAY option (disable Nagle's algorithm)
      * @param nodelay true to disable Nagle
      * @return SocketResult::Success or error
      */
-    SocketResult set_nodelay(bool nodelay);
+    [[nodiscard]] SocketResult set_nodelay(bool nodelay) const;
 
     /**
      * @brief Set socket receive buffer size
      * @param size Buffer size in bytes
      * @return SocketResult::Success or error
      */
-    SocketResult set_recv_buffer_size(int size);
+    [[nodiscard]] SocketResult set_recv_buffer_size(int size) const;
 
     /**
      * @brief Set socket send buffer size
      * @param size Buffer size in bytes
      * @return SocketResult::Success or error
      */
-    SocketResult set_send_buffer_size(int size);
+    [[nodiscard]] SocketResult set_send_buffer_size(int size) const;
 
 private:
-    int m_fd;
-    bool m_connected;
+    /// Native socket descriptor, -1 when the socket is invalid. Atomic: the
+    /// receive thread reads it while another thread may close the socket.
+    std::atomic<int> m_fd;
+    /// true once connect() has completed successfully (atomic, see m_fd).
+    std::atomic<bool> m_connected;
 
     /**
      * @brief Create TCP socket
@@ -227,6 +240,7 @@ bool socket_is_initialized();
 // Utility Functions
 // ============================================================================
 
+#ifdef TEST_BUILD
 /**
  * @brief Convert errno to SocketResult (for testing)
  *
@@ -234,7 +248,6 @@ bool socket_is_initialized();
  * @param err errno value
  * @return Corresponding SocketResult
  */
-#ifdef TEST_BUILD
 SocketResult errno_to_result(int err);
 #endif
 
@@ -246,21 +259,36 @@ SocketResult errno_to_result(int err);
  */
 inline const char* socket_result_to_string(SocketResult result) {
     switch (result) {
-        case SocketResult::Success:           return "Success";
-        case SocketResult::WouldBlock:        return "WouldBlock";
-        case SocketResult::Timeout:           return "Timeout";
-        case SocketResult::ConnectionRefused: return "ConnectionRefused";
-        case SocketResult::ConnectionReset:   return "ConnectionReset";
-        case SocketResult::HostUnreachable:   return "HostUnreachable";
-        case SocketResult::NetworkDown:       return "NetworkDown";
-        case SocketResult::NotConnected:      return "NotConnected";
-        case SocketResult::AlreadyConnected:  return "AlreadyConnected";
-        case SocketResult::InvalidAddress:    return "InvalidAddress";
-        case SocketResult::SocketError:       return "SocketError";
-        case SocketResult::NotInitialized:    return "NotInitialized";
-        case SocketResult::Closed:            return "Closed";
-        default:                              return "Unknown";
+        case SocketResult::Success:
+            return "Success";
+        case SocketResult::WouldBlock:
+            return "WouldBlock";
+        case SocketResult::Timeout:
+            return "Timeout";
+        case SocketResult::ConnectionRefused:
+            return "ConnectionRefused";
+        case SocketResult::ConnectionReset:
+            return "ConnectionReset";
+        case SocketResult::HostUnreachable:
+            return "HostUnreachable";
+        case SocketResult::NetworkDown:
+            return "NetworkDown";
+        case SocketResult::NotConnected:
+            return "NotConnected";
+        case SocketResult::AlreadyConnected:
+            return "AlreadyConnected";
+        case SocketResult::InvalidAddress:
+            return "InvalidAddress";
+        case SocketResult::SocketError:
+            return "SocketError";
+        case SocketResult::NotInitialized:
+            return "NotInitialized";
+        case SocketResult::Closed:
+            return "Closed";
+        default:
+            return "Unknown";
     }
 }
 
-} // namespace ryu_ldn::network
+}  // namespace ryu_ldn::network
+#endif  // SYSMODULE_SOURCE_NETWORK_SOCKET_HPP_
