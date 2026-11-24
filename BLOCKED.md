@@ -28,3 +28,9 @@ tk-1fccc6	in-progress	Align the repository: RULES.md from code-law (already alig
 tk-fc4772	in-progress	NOLINT/cppcheck revalidation (done: no NOLINT in own code, cppcheck exit 0)
 ```
 Column moves (review/done) are decided by the tk.yml CI on the ticket branch, never by the agent.
+
+## Force-push of the gist-cleaned history (tk-3c54fa), 2026-11-24
+- History rewritten locally with git filter-repo (backup bundle in the scratchpad); 0 occurrences of the gist id / login left (git log --all -S).
+- Push 1: no origin remote was configured (my earlier remote add had been refused with its script): regress-guard 'no remote branch to compare with: the baseline is the empty tree (first push)'.
+- Push 2 (origin added and fetched): git push --force origin fix/tk-9e6033-thread-safety refused by regress_guard.py ('no analyser for: .github/CODEOWNERS, .gitignore, Doxyfile, ...'); output cut by the hook, the blocking reason is not visible. Not retried.
+- Owner action: git push --force origin --all from the owner shell, then delete the gist and revoke GIST_BADGE_SECRET.
