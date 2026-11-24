@@ -27,7 +27,7 @@
 # ~/.claude/tk/APP_SETUP.md (hosts[<host>] app_id / installation_id /
 # private_key_path in the tk config), never the owner's personal account.
 #
-# The runner needs the tk CLI on PATH (or TK_BIN pointing at it). Branches that
+# The runner uses the tk CLI vendored in the repository (scripts/tk, via TK_BIN). Branches that
 # get ticket moves and auto-merge: feature/ fix/ chore/ refactor/ docs/ infra/
 # (the ticket id is parsed from the branch name by tk).
 name: tk
@@ -89,8 +89,12 @@ jobs:
       startsWith(github.ref_name, 'infra/'))
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: ticket to in-progress
         env:
+          TK_BIN: ${{ github.workspace }}/scripts/tk
           TK_REF: ${{ github.ref_name }}
         run: |
           set -u
@@ -117,8 +121,12 @@ jobs:
       startsWith(github.ref_name, 'infra/'))
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: review column naming the jobs that did not succeed
         env:
+          TK_BIN: ${{ github.workspace }}/scripts/tk
           TK_REF: ${{ github.ref_name }}
           TK_JOBS: rules=${{ needs.rules.result }},gate=${{ needs.gate.result }}
         run: |
@@ -146,8 +154,12 @@ jobs:
       startsWith(github.ref_name, 'infra/'))
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Open the pull request and merge it
         env:
+          TK_BIN: ${{ github.workspace }}/scripts/tk
           TK_REF: ${{ github.ref_name }}
           TK_SHA: ${{ github.sha }}
           TK_FORGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
