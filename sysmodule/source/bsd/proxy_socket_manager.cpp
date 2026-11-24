@@ -32,7 +32,7 @@ ProxySocket* ProxySocketManager::CreateProxySocket(
     s32 fd,
     ryu_ldn::bsd::SocketType type,
     ryu_ldn::bsd::ProtocolType protocol) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     // Check if fd already has a proxy socket
     if (ProxySocketEntry* existing = FindSocketEntry(fd)) {
@@ -64,7 +64,7 @@ ProxySocket* ProxySocketManager::CreateProxySocket(
 }
 
 ProxySocket* ProxySocketManager::GetProxySocket(s32 fd) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     if (ProxySocketEntry* entry = FindSocketEntry(fd)) {
         return entry->socket.get();
     }
@@ -91,12 +91,12 @@ const ProxySocketManager::ProxySocketEntry* ProxySocketManager::FindSocketEntry(
 }
 
 bool ProxySocketManager::IsProxySocket(s32 fd) const {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     return FindSocketEntry(fd) != nullptr;
 }
 
 bool ProxySocketManager::CloseProxySocket(s32 fd) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     ProxySocketEntry* entry = FindSocketEntry(fd);
     if (entry == nullptr) {
@@ -129,7 +129,7 @@ bool ProxySocketManager::CloseProxySocket(s32 fd) {
 }
 
 void ProxySocketManager::CloseAllProxySockets() {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     // Close all sockets
     for (auto& entry : m_sockets) {
@@ -147,7 +147,7 @@ void ProxySocketManager::CloseAllProxySockets() {
 }
 
 void ProxySocketManager::Reset() {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     // Close all proxy sockets
     for (auto& entry : m_sockets) {
@@ -201,7 +201,7 @@ void ProxySocketManager::ReleasePort(
 // =============================================================================
 
 void ProxySocketManager::SetSendCallback(SendProxyDataCallback callback) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     m_send_callback = callback;
 }
 
@@ -215,7 +215,7 @@ bool ProxySocketManager::SendProxyData(
     size_t data_len) const {
     SendProxyDataCallback callback;
     {
-        std::scoped_lock lock(m_mutex);
+        ryu::ScopedLock lock(m_mutex);
         callback = m_send_callback;
     }
 
@@ -247,7 +247,7 @@ bool ProxySocketManager::SendProxyData(
 
 void ProxySocketManager::SetProxyConnectCallback(
     SendProxyConnectCallback callback) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     m_proxy_connect_callback = callback;
 }
 
@@ -259,7 +259,7 @@ bool ProxySocketManager::SendProxyConnect(
     ryu_ldn::bsd::ProtocolType protocol) const {
     SendProxyConnectCallback callback;
     {
-        std::scoped_lock lock(m_mutex);
+        ryu::ScopedLock lock(m_mutex);
         callback = m_proxy_connect_callback;
     }
 
@@ -272,7 +272,7 @@ bool ProxySocketManager::SendProxyConnect(
 
 void ProxySocketManager::SetProxyConnectReplyCallback(
     SendProxyConnectReplyCallback callback) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     m_proxy_connect_reply_callback = callback;
 }
 
@@ -284,7 +284,7 @@ bool ProxySocketManager::SendProxyConnectReply(
     ryu_ldn::bsd::ProtocolType protocol) const {
     SendProxyConnectReplyCallback callback;
     {
-        std::scoped_lock lock(m_mutex);
+        ryu::ScopedLock lock(m_mutex);
         callback = m_proxy_connect_reply_callback;
     }
 
@@ -297,7 +297,7 @@ bool ProxySocketManager::SendProxyConnectReply(
 
 void ProxySocketManager::SetProxyDisconnectCallback(
     SendProxyDisconnectCallback callback) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     m_proxy_disconnect_callback = callback;
 }
 
@@ -309,7 +309,7 @@ bool ProxySocketManager::SendProxyDisconnect(
     ryu_ldn::bsd::ProtocolType protocol) const {
     SendProxyDisconnectCallback callback;
     {
-        std::scoped_lock lock(m_mutex);
+        ryu::ScopedLock lock(m_mutex);
         callback = m_proxy_disconnect_callback;
     }
 
@@ -322,7 +322,7 @@ bool ProxySocketManager::SendProxyDisconnect(
 
 bool ProxySocketManager::RouteConnectResponse(
     const ryu_ldn::protocol::ProxyConnectResponse& response) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     // Find socket in Connecting state that matches the destination
     uint32_t dest_ip =
@@ -357,7 +357,7 @@ bool ProxySocketManager::RouteConnectResponse(
 
 bool ProxySocketManager::RouteConnectRequest(
     const ryu_ldn::protocol::ProxyConnectRequest& request) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     // Find listening socket that matches the destination
     uint32_t dest_ip = request.info.dest_ipv4;
@@ -411,7 +411,7 @@ bool ProxySocketManager::RouteIncomingData(
     ryu_ldn::bsd::ProtocolType protocol,
     const void* data,
     size_t data_len) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     // For broadcast/multicast packets, deliver to ALL matching sockets.
     // PIA mesh discovery relies on broadcast UDP reaching every listener
@@ -533,12 +533,12 @@ size_t ProxySocketManager::FindAllSocketsByDestination(
 // =============================================================================
 
 void ProxySocketManager::SetLocalIp(uint32_t ip) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     m_local_ip = ip;
 }
 
 uint32_t ProxySocketManager::GetLocalIp() const {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     return m_local_ip;
 }
 
@@ -547,7 +547,7 @@ uint32_t ProxySocketManager::GetLocalIp() const {
 // =============================================================================
 
 size_t ProxySocketManager::GetActiveSocketCount() const {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     return m_socket_count;
 }
 
@@ -564,7 +564,7 @@ void ProxySocketManager::DeliverPendingPackets(
     ProxySocket* socket, uint16_t port, ryu_ldn::bsd::ProtocolType protocol) {
     // Called after bind - deliver any buffered packets matching this socket
     // Caller must NOT hold m_mutex (we take it here)
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     if (socket == nullptr || m_pending_count == 0) {
         return;

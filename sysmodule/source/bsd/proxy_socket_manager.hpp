@@ -615,7 +615,7 @@ private:
         uint16_t dest_port,
         ryu_ldn::bsd::ProtocolType protocol,
         ProxySocket* out_sockets[],
-        size_t max_sockets);
+        size_t max_sockets) RYU_REQUIRES(m_mutex);
 
     /**
      * @brief Map of file descriptor to ProxySocket — fixed-size flat array.
@@ -630,9 +630,9 @@ private:
         std::unique_ptr<ProxySocket> socket;
     };
     /// Socket table, guarded by m_mutex
-    std::array<ProxySocketEntry, MAX_PROXY_SOCKETS> m_sockets{};
+    std::array<ProxySocketEntry, MAX_PROXY_SOCKETS> m_sockets RYU_GUARDED_BY(m_mutex){};
     /// Number of used slots in m_sockets
-    size_t m_socket_count = 0;
+    size_t m_socket_count RYU_GUARDED_BY(m_mutex) = 0;
 
     /**
      * @brief Find the socket entry for a given fd
@@ -642,14 +642,14 @@ private:
      * @param fd File descriptor to look up
      * @return Pointer to the entry, or nullptr if not found
      */
-    ProxySocketEntry* FindSocketEntry(s32 fd);
+    ProxySocketEntry* FindSocketEntry(s32 fd) RYU_REQUIRES(m_mutex);
 
     /**
      * @brief Const overload of FindSocketEntry
      * @param fd File descriptor to look up
      * @return Pointer to the entry, or nullptr if not found
      */
-    const ProxySocketEntry* FindSocketEntry(s32 fd) const;
+    const ProxySocketEntry* FindSocketEntry(s32 fd) const RYU_REQUIRES(m_mutex);
 
     /**
      * @brief Mutex for thread safety
@@ -722,13 +722,13 @@ private:
     /// Ring storage, guarded by m_mutex. A slot is filled before
     /// m_pending_count counts it, so only the zero state itself needs no
     /// reader care; the singleton gets it from .bss at no cost.
-    PendingPacket m_pending_ring[MaxPendingPackets] = {};
+    PendingPacket m_pending_ring[MaxPendingPackets] RYU_GUARDED_BY(m_mutex) = {};
     /// Index of the oldest pending packet
-    size_t m_pending_head = 0;
+    size_t m_pending_head RYU_GUARDED_BY(m_mutex) = 0;
     /// Index where the next packet is written
-    size_t m_pending_tail = 0;
+    size_t m_pending_tail RYU_GUARDED_BY(m_mutex) = 0;
     /// Number of packets currently stored
-    size_t m_pending_count = 0;
+    size_t m_pending_count RYU_GUARDED_BY(m_mutex) = 0;
 };
 
 }  // namespace ams::mitm::bsd
