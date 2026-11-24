@@ -10,6 +10,7 @@
  */
 
 #include "ephemeral_port_pool.hpp"
+#include "../util/thread_safety.hpp"
 
 namespace ams::mitm::bsd {
 
@@ -47,7 +48,7 @@ const std::bitset<EPHEMERAL_PORT_COUNT>& EphemeralPortPool::GetBitset(
 // =============================================================================
 
 uint16_t EphemeralPortPool::AllocatePort(ryu_ldn::bsd::ProtocolType protocol) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     auto& bitset = GetBitset(protocol);
     size_t& hint =
@@ -83,7 +84,7 @@ bool EphemeralPortPool::AllocateSpecificPort(
         return true;
     }
 
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     auto& bitset = GetBitset(protocol);
 
@@ -108,7 +109,7 @@ void EphemeralPortPool::ReleasePort(
         return;  // Port not in ephemeral range, nothing to release
     }
 
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     auto& bitset = GetBitset(protocol);
 
@@ -127,7 +128,7 @@ bool EphemeralPortPool::IsPortAllocated(
         return false;  // Port not in ephemeral range
     }
 
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     const auto& bitset = GetBitset(protocol);
     return bitset.test(index);
@@ -135,7 +136,7 @@ bool EphemeralPortPool::IsPortAllocated(
 
 size_t EphemeralPortPool::GetAvailableCount(
     ryu_ldn::bsd::ProtocolType protocol) const {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     const auto& bitset = GetBitset(protocol);
 
@@ -144,7 +145,7 @@ size_t EphemeralPortPool::GetAvailableCount(
 }
 
 void EphemeralPortPool::ReleaseAll() {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     m_udp_ports.reset();
     m_tcp_ports.reset();

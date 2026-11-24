@@ -45,6 +45,7 @@
 #include <array>
 #include <bitset>
 #include "bsd_types.hpp"
+#include "../util/thread_safety.hpp"
 
 namespace ams::mitm::bsd {
 
@@ -232,7 +233,7 @@ private:
      * @return Reference to the protocol's bitset
      */
     std::bitset<EPHEMERAL_PORT_COUNT>& GetBitset(
-        ryu_ldn::bsd::ProtocolType protocol);
+        ryu_ldn::bsd::ProtocolType protocol) RYU_REQUIRES(m_mutex);
 
     /**
      * @brief Get the bitset for the given protocol (const)
@@ -241,7 +242,7 @@ private:
      * @return Const reference to the protocol's bitset
      */
     const std::bitset<EPHEMERAL_PORT_COUNT>& GetBitset(
-        ryu_ldn::bsd::ProtocolType protocol) const;
+        ryu_ldn::bsd::ProtocolType protocol) const RYU_REQUIRES(m_mutex);
 
     /**
      * @brief Mutex for thread safety
@@ -253,24 +254,24 @@ private:
      *
      * Bit is set (1) if port is allocated, clear (0) if available.
      */
-    std::bitset<EPHEMERAL_PORT_COUNT> m_udp_ports;
+    std::bitset<EPHEMERAL_PORT_COUNT> m_udp_ports RYU_GUARDED_BY(m_mutex);
 
     /**
      * @brief Port allocation bitset for TCP
      *
      * Bit is set (1) if port is allocated, clear (0) if available.
      */
-    std::bitset<EPHEMERAL_PORT_COUNT> m_tcp_ports;
+    std::bitset<EPHEMERAL_PORT_COUNT> m_tcp_ports RYU_GUARDED_BY(m_mutex);
 
     /**
      * @brief Next allocation hint for UDP (round-robin)
      */
-    size_t m_udp_hint{0};
+    size_t m_udp_hint RYU_GUARDED_BY(m_mutex){0};
 
     /**
      * @brief Next allocation hint for TCP (round-robin)
      */
-    size_t m_tcp_hint{0};
+    size_t m_tcp_hint RYU_GUARDED_BY(m_mutex){0};
 };
 
 }  // namespace ams::mitm::bsd

@@ -27,7 +27,7 @@ NetworkTimeout::~NetworkTimeout() {
 }
 
 bool NetworkTimeout::RefreshTimeout() {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     // Get current time
     m_timeout_start_ms = static_cast<uint64_t>(
@@ -41,7 +41,7 @@ bool NetworkTimeout::RefreshTimeout() {
 }
 
 void NetworkTimeout::DisableTimeout() {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     m_active = false;
     m_timeout_start_ms = 0;
@@ -50,7 +50,7 @@ void NetworkTimeout::DisableTimeout() {
 }
 
 bool NetworkTimeout::CheckTimeout(uint64_t current_time_ms) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     if (!m_active || m_callback == nullptr) {
         return false;
@@ -76,7 +76,7 @@ bool NetworkTimeout::CheckTimeout(uint64_t current_time_ms) {
 }
 
 bool NetworkTimeout::IsActive() const {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     return m_active;
 }
 

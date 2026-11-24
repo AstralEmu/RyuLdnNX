@@ -24,6 +24,7 @@
 #define SYSMODULE_SOURCE_LDN_LDN_NETWORK_TIMEOUT_HPP_
 
 #include <stratosphere.hpp>
+#include "../util/thread_safety.hpp"
 
 namespace ams::mitm::ldn {
 
@@ -103,9 +104,9 @@ public:
 private:
     uint64_t m_idle_timeout_ms;      ///< Timeout duration
     TimeoutCallback m_callback;      ///< Callback to invoke on timeout
-    uint64_t m_timeout_start_ms{0};  ///< When timeout was started
-    bool m_active{false};            ///< True if timeout is active
     mutable os::Mutex m_mutex;       ///< Thread safety
+    uint64_t m_timeout_start_ms RYU_GUARDED_BY(m_mutex){0};  ///< When timeout started
+    bool m_active RYU_GUARDED_BY(m_mutex){false};  ///< True if timeout is active
 };
 
 }  // namespace ams::mitm::ldn
