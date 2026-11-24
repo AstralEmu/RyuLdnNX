@@ -47,6 +47,7 @@
 #include <stratosphere.hpp>
 #include "../protocol/types.hpp"
 #include "../protocol/ryu_protocol.hpp"
+#include "../util/thread_safety.hpp"
 
 namespace ams::mitm::p2p {
 
@@ -216,7 +217,8 @@ public:
      * @brief Get the received ProxyConfig
      * @return ProxyConfig from host (valid after EnsureProxyReady returns true)
      */
-    const ryu_ldn::protocol::ProxyConfig& GetProxyConfig() const {
+    ryu_ldn::protocol::ProxyConfig GetProxyConfig() const {
+        ryu::ScopedLock lock(m_mutex);
         return m_proxy_config;
     }
 
@@ -225,6 +227,7 @@ public:
      * @return Virtual IP assigned by host (valid after ready)
      */
     uint32_t GetVirtualIp() const {
+        ryu::ScopedLock lock(m_mutex);
         return m_proxy_config.proxy_ip;
     }
 
@@ -334,7 +337,7 @@ private:
 
     // Socket
     /// TCP socket to the host, or -1 when not connected.
-    int m_socket_fd{-1};
+    int m_socket_fd RYU_GUARDED_BY(m_mutex){-1};
     /// True once the TCP connect succeeded; cleared by Disconnect() and when
     /// the receive loop ends.
     std::atomic<bool> m_connected;
@@ -344,14 +347,14 @@ private:
     // Authentication state
     /// True once the host's ProxyConfig has been received (authentication
     /// done).
-    bool m_ready{false};
+    bool m_ready RYU_GUARDED_BY(m_mutex){false};
     /// Broadcast when m_ready changes or the connection drops; waited on by
     /// EnsureProxyReady().
     os::ConditionVariable m_ready_cv;
 
     // Proxy config from host
     /// ProxyConfig received from the host; valid once m_ready is true.
-    ryu_ldn::protocol::ProxyConfig m_proxy_config;
+    ryu_ldn::protocol::ProxyConfig m_proxy_config RYU_GUARDED_BY(m_mutex);
 
     // Receive thread (stack lives in BSS — see g_p2p_client_recv_thread_stack
     // in p2p_proxy_client.cpp). Inlining `alignas(0x1000) uint8_t stack[N]`

@@ -190,7 +190,7 @@ bool P2pProxyClient::Connect(const char* address, uint16_t port) {
  */
 bool P2pProxyClient::Connect(
     const uint8_t* ip_bytes, size_t ip_len, uint16_t port) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     if (m_connected) {
         LOG_WARN("P2P client: already connected");
@@ -353,33 +353,36 @@ bool P2pProxyClient::Connect(
  * Safe to call multiple times.
  */
 void P2pProxyClient::Disconnect() {
-    std::scoped_lock lock(m_mutex);
+    bool join_recv_thread = false;
+    {
+        ryu::ScopedLock lock(m_mutex);
 
-    if (!m_connected && m_socket_fd < 0) {
-        return;
+        if (!m_connected && m_socket_fd < 0) {
+            return;
+        }
+
+        LOG_INFO("P2P client: disconnecting");
+
+        // Stop receive thread
+        m_recv_thread_running = false;
+
+        // Unblock recv() without releasing the descriptor: the receive thread
+        // still reads it, so close() waits until that thread has been joined
+        // (closing first races with recv() and risks descriptor reuse).
+        if (m_socket_fd >= 0) {
+            shutdown(m_socket_fd, SHUT_RDWR);
+        }
+
+        join_recv_thread = m_connected;
     }
 
-    LOG_INFO("P2P client: disconnecting");
-
-    // Stop receive thread
-    m_recv_thread_running = false;
-
-    // Unblock recv() without releasing the descriptor: the receive thread
-    // still reads it, so close() waits until that thread has been joined
-    // (closing first races with recv() and risks descriptor reuse).
-    if (m_socket_fd >= 0) {
-        shutdown(m_socket_fd, SHUT_RDWR);
-    }
-
-    // Wait for receive thread to finish
-    if (m_connected) {
-        // We need to release the lock temporarily to avoid deadlock
-        // since the recv thread might try to acquire it
-        m_mutex.Unlock();
+    // Join outside the lock: the receive thread may need m_mutex to finish.
+    if (join_recv_thread) {
         os::WaitThread(&m_recv_thread);
         os::DestroyThread(&m_recv_thread);
-        m_mutex.Lock();
     }
+
+    ryu::ScopedLock lock(m_mutex);
 
     if (m_socket_fd >= 0) {
         close(m_socket_fd);
@@ -397,7 +400,7 @@ void P2pProxyClient::Disconnect() {
  * @brief Check if connected to host
  */
 bool P2pProxyClient::IsConnected() const {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     return m_connected;
 }
 
@@ -426,7 +429,7 @@ bool P2pProxyClient::IsConnected() const {
  */
 bool P2pProxyClient::PerformAuth(
     const ryu_ldn::protocol::ExternalProxyConfig& config) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     if (!m_connected) {
         LOG_ERROR("P2P client: cannot auth - not connected");
@@ -476,7 +479,7 @@ bool P2pProxyClient::PerformAuth(
  * ```
  */
 bool P2pProxyClient::EnsureProxyReady(int timeout_ms) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     if (m_ready) {
         return true;
@@ -511,7 +514,7 @@ bool P2pProxyClient::EnsureProxyReady(int timeout_ms) {
  *         receive thread exits with an error).
  */
 bool P2pProxyClient::IsReady() const {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
     return m_ready;
 }
 
@@ -523,7 +526,7 @@ bool P2pProxyClient::IsReady() const {
  * @brief Send raw packet data to host
  */
 bool P2pProxyClient::Send(const void* data, size_t size) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     if (!m_connected || m_socket_fd < 0) {
         return false;
@@ -614,10 +617,18 @@ bool P2pProxyClient::SendProxyDisconnect(
 void P2pProxyClient::ReceiveLoop() {
     LOG_VERBOSE("P2P client: recv thread started");
 
+    // The descriptor is only closed by Disconnect() after this thread is
+    // joined, so one read under the lock stays valid for the whole loop.
+    int socket_fd;
+    {
+        ryu::ScopedLock lock(m_mutex);
+        socket_fd = m_socket_fd;
+    }
+
     while (m_recv_thread_running && !m_disposed) {
         // Receive data (blocking)
         ssize_t received =
-            recv(m_socket_fd, m_recv_buffer, RECV_BUFFER_SIZE, 0);
+            recv(socket_fd, m_recv_buffer, RECV_BUFFER_SIZE, 0);
 
         if (received <= 0) {
             if (received == 0) {
@@ -636,7 +647,7 @@ void P2pProxyClient::ReceiveLoop() {
 
     // Mark as disconnected if we exited due to error
     {
-        std::scoped_lock lock(m_mutex);
+        ryu::ScopedLock lock(m_mutex);
         if (m_connected && !m_disposed) {
             m_connected = false;
             m_ready = false;
@@ -786,7 +797,7 @@ void P2pProxyClient::ProcessData(const uint8_t* data, size_t size) {
  */
 void P2pProxyClient::HandleProxyConfig(
     const ryu_ldn::protocol::ProxyConfig& config) {
-    std::scoped_lock lock(m_mutex);
+    ryu::ScopedLock lock(m_mutex);
 
     LOG_INFO(
         "P2P client: received ProxyConfig (IP: 0x%08X, mask: 0x%08X)",
