@@ -3,8 +3,11 @@
 #---------------------------------------------------------------------------------
 
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -g -O0
+CXXFLAGS := -std=c++20 -Wall -Wextra -g -O0
 CXXFLAGS += -I../../sysmodule/source
+# Host stand-ins for Stratosphere/libnx, shared with the unit tests.
+CXXFLAGS += -I../stubs
+CXXFLAGS += -isystem ../stubs/system
 CXXFLAGS += -DTEST_BUILD
 
 # Coverage support
