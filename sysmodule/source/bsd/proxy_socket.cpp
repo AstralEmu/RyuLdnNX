@@ -273,7 +273,7 @@ s32 ProxySocket::RecvFrom(
 
     // Helper: copy front-of-ring into caller's buffer, pop unless peeking.
     // Caller must hold m_queue_mutex.
-    auto consume_front = [&](void* out_buf, size_t out_len) -> s32 {
+    auto consume_front = [&](void* out_buf, size_t out_len) RYU_REQUIRES(m_queue_mutex) -> s32 {
         const ReceivedPacket& slot = m_rx_ring[m_rx_head];
         size_t copy_len = std::min(out_len, static_cast<size_t>(slot.len));
         if (copy_len > 0) {
@@ -294,7 +294,7 @@ s32 ProxySocket::RecvFrom(
 
     // Try to get data from queue
     {
-        std::scoped_lock lock(m_queue_mutex);
+        ryu::ScopedLock lock(m_queue_mutex);
 
         if (m_rx_count == 0) {
             if (dontwait) {
@@ -309,7 +309,7 @@ s32 ProxySocket::RecvFrom(
     if (!dontwait) {
         m_receive_event.Wait();
 
-        std::scoped_lock lock(m_queue_mutex);
+        ryu::ScopedLock lock(m_queue_mutex);
 
         if (m_rx_count > 0) {
             return consume_front(buffer, len);
@@ -357,7 +357,7 @@ void ProxySocket::IncomingData(
     size_t copy_len =
         std::min(len, static_cast<size_t>(PROXY_SOCKET_MAX_PAYLOAD));
 
-    std::scoped_lock lock(m_queue_mutex);
+    ryu::ScopedLock lock(m_queue_mutex);
 
     // Drop oldest if ring is full (UDP behavior)
     if (m_rx_count >= PROXY_SOCKET_MAX_QUEUE_SIZE) {
@@ -497,7 +497,7 @@ std::unique_ptr<ProxySocket> ProxySocket::Accept(
 
     // Check if non-blocking and no connections available
     {
-        std::scoped_lock lock(m_queue_mutex);
+        ryu::ScopedLock lock(m_queue_mutex);
         if (IsAcceptQueueEmpty()) {
             if (m_non_blocking) {
                 // EWOULDBLOCK
@@ -524,7 +524,7 @@ std::unique_ptr<ProxySocket> ProxySocket::Accept(
 
     // Try again after waking up
     {
-        std::scoped_lock lock(m_queue_mutex);
+        ryu::ScopedLock lock(m_queue_mutex);
         if (!IsAcceptQueueEmpty()) {
             auto accepted = AcceptQueuePopFront();
 
@@ -551,7 +551,7 @@ void ProxySocket::IncomingConnection(
         return;
     }
 
-    std::scoped_lock lock(m_queue_mutex);
+    ryu::ScopedLock lock(m_queue_mutex);
 
     // Create a new socket for the accepted connection
     auto accepted = std::make_unique<ProxySocket>(m_type, m_protocol);
@@ -616,7 +616,7 @@ void ProxySocket::HandleConnectResponse(
 }
 
 bool ProxySocket::HasPendingConnections() const {
-    std::scoped_lock lock(m_queue_mutex);
+    ryu::ScopedLock lock(m_queue_mutex);
     return !IsAcceptQueueEmpty();
 }
 
@@ -656,7 +656,7 @@ Result ProxySocket::Close() {
 
     // Clear ring queue (no deallocation — just reset indices)
     {
-        std::scoped_lock lock(m_queue_mutex);
+        ryu::ScopedLock lock(m_queue_mutex);
         m_rx_head = 0;
         m_rx_tail = 0;
         m_rx_count = 0;
@@ -687,12 +687,12 @@ Result ProxySocket::Close() {
 // =============================================================================
 
 bool ProxySocket::HasPendingData() const {
-    std::scoped_lock lock(m_queue_mutex);
+    ryu::ScopedLock lock(m_queue_mutex);
     return m_rx_count > 0;
 }
 
 size_t ProxySocket::GetPendingDataSize() const {
-    std::scoped_lock lock(m_queue_mutex);
+    ryu::ScopedLock lock(m_queue_mutex);
     size_t total = 0;
     for (size_t i = 0, idx = m_rx_head; i < m_rx_count; i++) {
         total += m_rx_ring[idx].len;

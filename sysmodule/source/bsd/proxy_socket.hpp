@@ -50,6 +50,7 @@
 #include <array>
 #include <memory>
 #include "bsd_types.hpp"
+#include "../util/thread_safety.hpp"
 #include "../protocol/types.hpp"
 
 namespace ams::mitm::bsd {
@@ -558,19 +559,19 @@ private:
     // =========================================================================
 
     /// @return True when no accepted socket is queued.
-    bool IsAcceptQueueEmpty() const {
+    bool IsAcceptQueueEmpty() const RYU_REQUIRES(m_queue_mutex) {
         return m_accept_queue_count == 0;
     }
 
     /// @return True when the accept ring holds MAX_ACCEPT_QUEUE sockets.
-    bool IsAcceptQueueFull() const {
+    bool IsAcceptQueueFull() const RYU_REQUIRES(m_queue_mutex) {
         return m_accept_queue_count >= MAX_ACCEPT_QUEUE;
     }
 
     /// Push a new accepted socket at the tail. Caller must hold m_queue_mutex
     /// and must have checked !IsAcceptQueueFull() first (the only caller does).
     /// @param socket Accepted socket; ownership moves into the ring.
-    void AcceptQueuePushBack(std::unique_ptr<ProxySocket> socket) {
+    void AcceptQueuePushBack(std::unique_ptr<ProxySocket> socket) RYU_REQUIRES(m_queue_mutex) {
         m_accept_queue[m_accept_queue_tail] = std::move(socket);
         m_accept_queue_tail = (m_accept_queue_tail + 1) % MAX_ACCEPT_QUEUE;
         m_accept_queue_count++;
@@ -579,7 +580,7 @@ private:
     /// Pop the front accepted socket. Caller must hold m_queue_mutex and
     /// must have checked !IsAcceptQueueEmpty() first (both callers do).
     /// @return The oldest queued socket (ownership transferred to caller).
-    std::unique_ptr<ProxySocket> AcceptQueuePopFront() {
+    std::unique_ptr<ProxySocket> AcceptQueuePopFront() RYU_REQUIRES(m_queue_mutex) {
         std::unique_ptr<ProxySocket> result =
             std::move(m_accept_queue[m_accept_queue_head]);
         m_accept_queue[m_accept_queue_head].reset();
@@ -596,7 +597,7 @@ private:
     /// Linear scan is fine: ≤ MAX_SOCKET_OPTIONS entries.
     /// @param key Option key, see MakeOptionKey().
     /// @return Pointer to the stored value, or nullptr if the key is absent.
-    s32* FindSocketOption(uint32_t key) {
+    s32* FindSocketOption(uint32_t key) RYU_REQUIRES(m_queue_mutex) {
         auto* const it = std::ranges::find_if(
             m_socket_options,
 
@@ -609,7 +610,7 @@ private:
     /// Const overload.
     /// @param key Option key, see MakeOptionKey().
     /// @return Pointer to the stored value, or nullptr if the key is absent.
-    const s32* FindSocketOption(uint32_t key) const {
+    const s32* FindSocketOption(uint32_t key) const RYU_REQUIRES(m_queue_mutex) {
         const auto* const it = std::ranges::find_if(
             m_socket_options,
 
@@ -623,7 +624,7 @@ private:
     /// @param key Option key, see MakeOptionKey().
     /// @param value Integer value to store.
     /// @return True if stored, false if no free slot.
-    bool SetSocketOption(uint32_t key, s32 value) {
+    bool SetSocketOption(uint32_t key, s32 value) RYU_REQUIRES(m_queue_mutex) {
         if (s32* existing = FindSocketOption(key)) {
             *existing = value;
             return true;
@@ -691,10 +692,10 @@ private:
      * Producer: network thread via IncomingData. Consumer: game thread via
      * RecvFrom. Full = drop oldest (UDP behavior). Protected by m_queue_mutex.
      */
-    ReceivedPacket m_rx_ring[PROXY_SOCKET_MAX_QUEUE_SIZE]{};
-    size_t m_rx_head = 0;   ///< Read index
-    size_t m_rx_tail = 0;   ///< Write index
-    size_t m_rx_count = 0;  ///< Elements in ring
+    ReceivedPacket m_rx_ring[PROXY_SOCKET_MAX_QUEUE_SIZE] RYU_GUARDED_BY(m_queue_mutex){};
+    size_t m_rx_head RYU_GUARDED_BY(m_queue_mutex) = 0;   ///< Read index
+    size_t m_rx_tail RYU_GUARDED_BY(m_queue_mutex) = 0;   ///< Write index
+    size_t m_rx_count RYU_GUARDED_BY(m_queue_mutex) = 0;  ///< Elements in ring
 
     /**
      * @brief Event signaled when data is available
@@ -708,10 +709,10 @@ private:
      * via Accept. Full = drop incoming connection (logged). Protected by
      * m_queue_mutex. The slots are owned (destroyed when overwritten / popped).
      */
-    std::array<std::unique_ptr<ProxySocket>, MAX_ACCEPT_QUEUE> m_accept_queue{};
-    size_t m_accept_queue_head = 0;   ///< Read index (next to pop)
-    size_t m_accept_queue_tail = 0;   ///< Write index (next push)
-    size_t m_accept_queue_count = 0;  ///< Elements currently in the ring
+    std::array<std::unique_ptr<ProxySocket>, MAX_ACCEPT_QUEUE> m_accept_queue RYU_GUARDED_BY(m_queue_mutex){};
+    size_t m_accept_queue_head RYU_GUARDED_BY(m_queue_mutex) = 0;   ///< Read index (next to pop)
+    size_t m_accept_queue_tail RYU_GUARDED_BY(m_queue_mutex) = 0;   ///< Write index (next push)
+    size_t m_accept_queue_count RYU_GUARDED_BY(m_queue_mutex) = 0;  ///< Elements currently in the ring
 
     /**
      * @brief Event signaled when accept queue has connections
@@ -765,7 +766,7 @@ private:
         bool valid;
     };
     /// Fixed table of stored socket options (no heap).
-    std::array<SocketOptionEntry, MAX_SOCKET_OPTIONS> m_socket_options{};
+    std::array<SocketOptionEntry, MAX_SOCKET_OPTIONS> m_socket_options RYU_GUARDED_BY(m_queue_mutex){};
 
     /**
      * @brief Helper to get option key from level and optname
