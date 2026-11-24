@@ -7,20 +7,15 @@ State at 2026-11-24, PR #104 (head 3154c2a): all checks pass (lint, actionlint/s
 
 ## Open, awaiting the owner
 - tk CI (run 45391644115, branch fix/tk-9e6033-thread-safety): rules, start, gate green (gate 2m24s); board and auto-merge fail with "tk not on PATH (set TK_BIN)": the runner has no tk CLI (it lives in ~/.claude/bin) and no GitHub App credentials (APP_SETUP.md). Proposals: (a) self-hosted runner with TK_BIN, (b) vendor tk into the repo plus the App key as a secret. Also: auto-merge targets the default branch (main) while this repo's flow merges into develop. Needs the owner's choice (secrets, merge target).
-- Tickets L1-L12 of the old local store are not on the github board; only tk-9e6033 (-Wthread-safety, stub Mutex annotated, branch pushed) exists there.
+- Tickets L1-L12 of the old local store are not on the github board.
 
 ## Ticket table (tk list, 2026-11-24)
 ```
-L1	review	ÉTAPE 2 — Transposer chaque check en C++, un par un, jusqu'à zéro alerte. Pour chaque catégorie, mesure d'abord le nombre d'alertes, corrige la cause dans le code, branche ensuite la gate.
-L3	review	Autonomie: étape 0 (gates + commits), étapes 1-3 (checks Python -> C++), CodeQL 4 alertes
-L4	review	Autonomie: mesures tidy complet + clang analyzer, suite étape 2
-L5	review	Autonomie: google-* tidy, relecture agents, gates, commits
-L6	review	Corriger régression assert_ll int64_t, gates, commits
-L7	review	Aligner le dépôt: RULES.md depuis code-law (ordre tk-align)
-L8	review	Autonomie: revalider tests+build après dernier commit, puis suite étape 2 (13 NOLINT, -Wthread-safety, cppcheck)
-L9	review	Décisions owner: en-tête test-seam (unity), stub CopyHandle non copiable, fix 3 alertes CodeQL sans casser ryuldn, push puis suivre gates GH
-L10	review	Corriger les erreurs avalées des hooks (regress-guard) puis pousser la PR #104
-L11	review	Fix -Wthread-safety findings (stub Mutex annotations), see BLOCKED.md
-L12	review	Resolve PR #104 conflicts with develop via CLI merge (owner request)
+tk-9e6033	in-progress	Fix -Wthread-safety findings: annotate the host stub Mutex (stub done; GUARDED_BY needs an annotated RAII guard first)
+tk-7113bf	todo	Step 2: port each remaining Python check to C++, down to zero alerts
+tk-49853d	todo	Measure full clang-tidy and clang analyzer findings
+tk-351f0e	todo	Review google-* tidy, agents' review, gates
+tk-1fccc6	in-progress	Align the repository: RULES.md from code-law (already aligned, rules job green)
+tk-fc4772	in-progress	NOLINT/cppcheck revalidation (done: no NOLINT in own code, cppcheck exit 0)
 ```
-Every ticket is in column `review`; moving it to review/done is the owner's slot (and CI's), not the agent's. No ticket is in todo/doing, so no work is left to take.
+Column moves (review/done) are decided by the tk.yml CI on the ticket branch, never by the agent.
