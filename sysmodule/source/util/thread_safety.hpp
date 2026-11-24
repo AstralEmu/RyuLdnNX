@@ -18,11 +18,12 @@
 #ifdef __clang__
 #define RYU_CLASS_TSA(x) [[clang::x]]
 #define RYU_GUARDED_BY(m) __attribute__((guarded_by(m)))
+#define RYU_REQUIRES(m) __attribute__((requires_capability(m)))
 #else
 #define RYU_CLASS_TSA(x)
 #define RYU_GUARDED_BY(m)
+#define RYU_REQUIRES(m)
 #endif
-#define RYU_REQUIRES(m) RYU_TSA(requires_capability(m))
 
 namespace ryu {
 
