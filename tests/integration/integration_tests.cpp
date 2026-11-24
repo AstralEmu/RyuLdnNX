@@ -1531,20 +1531,29 @@ static int run_shell(const char* cmd) {
     return -1;
 }
 
-// Check if a TCP port is reachable (python3)
+// Check if a TCP port is served (python3)
 /**
- * @brief Check with python3 whether a TCP port accepts connections.
+ * @brief Check with python3 whether a TCP port is served by the application.
+ *
+ * A restarting container accepts the connection through the Docker port
+ * proxy and closes it again until the application listens (observed for
+ * about 0.5 s after `docker compose start`). A connect alone therefore
+ * proves nothing: the connection must also stay open for one second without
+ * the peer sending or closing anything (the server never speaks first).
+ *
  * @param host Host to connect to.
  * @param port Port to connect to.
  * @param timeout_s Connection timeout in seconds.
- * @return true when the connection succeeded.
+ * @return true when the connection succeeded and was not closed by the peer.
  */
 static bool tcp_check(const char* host, uint16_t port, int timeout_s = 5) {
     std::string cmd =
-        "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(" +
+        "python3 -c \"import select,socket,sys; s=socket.socket(); "
+        "s.settimeout(" +
         std::to_string(timeout_s) + "); r=s.connect_ex(('" + host + "'," +
         std::to_string(port) +
-        ")); s.close(); sys.exit(0 if r==0 else 1)\" 2>/dev/null";
+        ")); ok=r==0 and not select.select([s],[],[],1)[0]; s.close(); "
+        "sys.exit(0 if ok else 1)\" 2>/dev/null";
     return run_shell(cmd.c_str()) == 0;
 }
 
