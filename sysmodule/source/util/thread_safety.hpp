@@ -9,13 +9,13 @@
 #ifndef SYSMODULE_SOURCE_UTIL_THREAD_SAFETY_HPP_
 #define SYSMODULE_SOURCE_UTIL_THREAD_SAFETY_HPP_
 
-#if defined(__clang__)
+#ifdef __clang__
 #define RYU_TSA(x) __attribute__((x))
 #else
 #define RYU_TSA(x)
 #endif
 
-#if defined(__clang__)
+#ifdef __clang__
 #define RYU_CLASS_TSA(x) [[clang::x]]
 #define RYU_GUARDED_BY(m) __attribute__((guarded_by(m)))
 #else

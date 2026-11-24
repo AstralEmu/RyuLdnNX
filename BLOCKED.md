@@ -8,6 +8,15 @@ State at 2026-11-24, PR #104 (head 3154c2a): all checks pass (lint, actionlint/s
 ## Open, awaiting the owner
 - tk CI (run 45391644115, branch fix/tk-9e6033-thread-safety): rules, start, gate green (gate 2m24s); board and auto-merge fail with "tk not on PATH (set TK_BIN)": the runner has no tk CLI (it lives in ~/.claude/bin) and no GitHub App credentials (APP_SETUP.md). Proposals: (a) self-hosted runner with TK_BIN, (b) vendor tk into the repo plus the App key as a secret. Also: auto-merge targets the default branch (main) while this repo's flow merges into develop. Needs the owner's choice (secrets, merge target).
 - Tickets L1-L12 of the old local store are not on the github board.
+- tk CI auto-merge target: main or develop (owner choice).
+- tk-49853d (tidy-host measurement, 2026-11-24, 178 findings): three owner choices.
+  - google-runtime-int: the language requires unsigned long long for operator"".
+  - redundant-member-init on ThreadType: the host stub differs from the device C struct; dropping {} would leave the field uninitialised on device.
+  - stub-only findings (owning-memory, template-virtual-member-function): exclude for tests/stubs/ or not.
+- Real defects to fix without waiting: recv under a lock at p2p_proxy_client.cpp:620 and p2p_proxy_server.cpp:2239 (clang-analyzer-unix.BlockInCriticalSection).
+
+## Resolved this session
+- regress-guard refused the thread-safety pilot because tree-sitter does not expand attribute macros; ~/.claude/hooks/regress_guard.py now blanks repo-defined attribute macros before parsing old and new alike (guard not weakened).
 
 ## Ticket table (tk list, 2026-11-24)
 ```
