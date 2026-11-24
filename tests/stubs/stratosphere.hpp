@@ -29,6 +29,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -119,7 +120,7 @@ inline void (*g_host_before_plain_lock)(const void* mutex) = nullptr;
 /// Satisfies Lockable, so std::scoped_lock / std::unique_lock work on it.
 /// Clang thread-safety capability attributes (no-ops elsewhere), so
 /// -Wthread-safety can check code that locks the stub Mutex.
-#if defined(__clang__)
+#ifdef __clang__
 #define RYU_TSA(x) __attribute__((x))
 #else
 #define RYU_TSA(x)
@@ -143,12 +144,16 @@ public:
             if (g_host_before_recursive_lock != nullptr) {
                 g_host_before_recursive_lock();
             }
-            m_recursive_mutex.lock();
-        } else {
-            if (g_host_before_plain_lock != nullptr) {
-                g_host_before_plain_lock(this);
+        } else if (g_host_before_plain_lock != nullptr) {
+            g_host_before_plain_lock(this);
+        }
+        m_mutex.lock();
+        if (!m_recursive) {
+            // A plain SDK mutex deadlocks on a relock; fail loudly instead.
+            ++m_plain_depth;
+            if (m_plain_depth > 1) {
+                std::abort();
             }
-            m_mutex.lock();
         }
     }
 
@@ -158,7 +163,16 @@ public:
      * @return true if the lock was taken
      */
     bool try_lock() RYU_TSA(try_acquire_capability(true)) {
-        return m_recursive ? m_recursive_mutex.try_lock() : m_mutex.try_lock();
+        const bool taken = m_mutex.try_lock();
+        if (taken && !m_recursive) {
+            if (m_plain_depth > 0) {
+                // Already held by this thread: a plain mutex refuses.
+                m_mutex.unlock();
+                return false;
+            }
+            ++m_plain_depth;
+        }
+        return taken;
     }
 
     /// Stratosphere spelling of lock()/unlock()
@@ -172,20 +186,21 @@ public:
 
     /// Unlocks the mutex of the flavor chosen at construction
     void unlock() RYU_TSA(release_capability()) {
-        if (m_recursive) {
-            m_recursive_mutex.unlock();
-        } else {
-            m_mutex.unlock();
+        if (!m_recursive) {
+            --m_plain_depth;
         }
+        m_mutex.unlock();
     }
 
 private:
     /// Selects which of the two backing mutexes is used
     bool m_recursive;
-    /// Backing mutex when not recursive
-    std::mutex m_mutex;
-    /// Backing mutex when recursive
-    std::recursive_mutex m_recursive_mutex;
+    /// Backing mutex; one recursive mutex serves both flavors so the lock and
+    /// unlock calls do not depend on a branch (the clang analyzer loses the
+    /// lock state across such a branch)
+    std::recursive_mutex m_mutex;
+    /// Lock depth of a non-recursive Mutex, guarded by m_mutex itself
+    int m_plain_depth = 0;
 };
 
 /// Non-recursive mutex of the SDK (Lockable)
@@ -682,15 +697,42 @@ constexpr std::size_t ThreadStackAlignment = 0x1000;
 
 /// Thread object: the entry point and its argument are kept by CreateThread
 /// and the host thread is started by StartThread, like the kernel does.
+struct ThreadType;
+
+/// Host threads of the ThreadType objects, kept aside so ThreadType stays
+/// trivially default constructible like the kernel's C struct.
+inline std::mutex g_host_threads_mutex;
+/// Running host thread of each started ThreadType
+inline std::unordered_map<const void*, std::thread>& HostThreads() {
+    static std::unordered_map<const void*, std::thread> threads;
+    return threads;
+}
+/// Joins and forgets the host thread started for owner, if any
+inline void ReclaimHostThread(const void* owner) {
+    std::thread host;
+    {
+        const std::scoped_lock lock(g_host_threads_mutex);
+        const auto it = HostThreads().find(owner);
+        if (it == HostThreads().end()) {
+            return;
+        }
+        host = std::move(it->second);
+        HostThreads().erase(it);
+    }
+    if (host.joinable()) {
+        host.join();
+    }
+}
+
 struct ThreadType {
+    // No default member initializers: like the kernel's C struct this type is
+    // trivially default constructible and callers zero it with `{}`.
     /// Entry point set by CreateThread
-    void (*entry)(void*) = nullptr;
+    void (*entry)(void*);
     /// Argument passed to the entry point
-    void* arg = nullptr;
+    void* arg;
     /// Name set by SetThreadNamePointer (not copied, may be null)
-    const char* name = nullptr;
-    /// Host thread, running between StartThread and the join
-    std::thread thread;
+    const char* name;
 
     ThreadType() = default;
     ThreadType(const ThreadType&) = delete;
@@ -698,9 +740,7 @@ struct ThreadType {
     /// A kernel thread that already exited needs no join; the host must
     /// reclaim it. Only reached for an exited thread, otherwise it waits.
     ~ThreadType() {
-        if (thread.joinable()) {
-            thread.join();
-        }
+        ReclaimHostThread(this);
     }
 };
 
@@ -726,9 +766,7 @@ inline Result CreateThread(
     if (g_host_create_thread_result != 0) {
         return Result(g_host_create_thread_result);
     }
-    if (out->thread.joinable()) {
-        out->thread.join();
-    }
+    ReclaimHostThread(out);
     out->entry = entry;
     out->arg = arg;
     return ResultSuccess();
@@ -749,7 +787,8 @@ inline void StartThread(ThreadType* thread) {
     if (g_host_before_start_thread != nullptr) {
         g_host_before_start_thread(thread->name != nullptr ? thread->name : "");
     }
-    thread->thread = std::thread([entry = thread->entry, arg = thread->arg] {
+    ReclaimHostThread(thread);
+    std::thread host([entry = thread->entry, arg = thread->arg] {
         try {
             entry(arg);
         } catch (const HostThreadExit&) {
@@ -758,6 +797,8 @@ inline void StartThread(ThreadType* thread) {
             return;
         }
     });
+    const std::scoped_lock lock(g_host_threads_mutex);
+    HostThreads().emplace(thread, std::move(host));
 }
 /**
  * @brief Joins the host thread if it is running
@@ -765,9 +806,7 @@ inline void StartThread(ThreadType* thread) {
  * @param thread thread to wait for
  */
 inline void WaitThread(ThreadType* thread) {
-    if (thread->thread.joinable()) {
-        thread->thread.join();
-    }
+    ReclaimHostThread(thread);
 }
 /// Does nothing: the destructor of ThreadType joins
 inline void DestroyThread(ThreadType* /*unused*/) {}
@@ -1517,7 +1556,7 @@ namespace ams {
  * @param v value in KB
  * @return v * 1024
  */
-constexpr unsigned long long operator""_KB(unsigned long long v) {
+constexpr decltype(0ULL) operator""_KB(decltype(0ULL) v) {
     return v * 1024ULL;
 }
 /**
@@ -1526,7 +1565,7 @@ constexpr unsigned long long operator""_KB(unsigned long long v) {
  * @param v value in MB
  * @return v * 1024 * 1024
  */
-constexpr unsigned long long operator""_MB(unsigned long long v) {
+constexpr decltype(0ULL) operator""_MB(decltype(0ULL) v) {
     return v * 1024ULL * 1024ULL;
 }
 
@@ -1783,13 +1822,39 @@ public:
     }
 };
 
-/// Server manager: records what is registered and what is accepted; a
-/// session loop returns at once (or runs the test's hook) instead of serving.
-template <std::size_t Ports, class Options, std::size_t MaxSessions>
-class ServerManager {
+/// Non-template root of the server managers: holds the virtual accept hook,
+/// which a template class must not declare (one vtable per instantiation).
+class ServerManagerBase {
 public:
     /// The server type this manager serves
     using Server = ::ams::sf::hipc::Server;
+
+    ServerManagerBase() = default;
+    ServerManagerBase(const ServerManagerBase&) = delete;
+    ServerManagerBase& operator=(const ServerManagerBase&) = delete;
+    ServerManagerBase(ServerManagerBase&&) = delete;
+    ServerManagerBase& operator=(ServerManagerBase&&) = delete;
+    virtual ~ServerManagerBase() = default;
+
+protected:
+    /**
+     * @brief Default accept handler, overridable by a test
+     *
+     * @param port_index index of the port with a pending session
+     * @param server server the session belongs to
+     * @return success
+     */
+    virtual Result OnNeedsToAccept(
+        [[maybe_unused]] int port_index, [[maybe_unused]] Server* server) {
+        return ResultSuccess();
+    }
+};
+
+/// Server manager: records what is registered and what is accepted; a
+/// session loop returns at once (or runs the test's hook) instead of serving.
+template <std::size_t Ports, class Options, std::size_t MaxSessions>
+class ServerManager : public ServerManagerBase {
+public:
 
     /// One registration made on the manager
     struct Registration {
@@ -1817,7 +1882,7 @@ public:
     /// Result the Register* methods return
     Result register_result;
 
-    virtual ~ServerManager() = default;
+    ~ServerManager() override = default;
 
     /**
      * @brief Counts one loop and runs loop_hook, then returns at once instead
@@ -1888,19 +1953,6 @@ public:
      */
     Result HostAccept(int port_index, Server* server) {
         return OnNeedsToAccept(port_index, server);
-    }
-
-protected:
-    /**
-     * @brief Default accept handler, overridable by a test
-     *
-     * @param port_index index of the port with a pending session
-     * @param server server the session belongs to
-     * @return success
-     */
-    virtual Result OnNeedsToAccept(
-        [[maybe_unused]] int port_index, [[maybe_unused]] Server* server) {
-        return ResultSuccess();
     }
 };
 

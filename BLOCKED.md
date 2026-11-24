@@ -5,8 +5,9 @@ State at 2026-11-24, PR #104 (head 3154c2a): all checks pass (lint, actionlint/s
 ## Resolved
 - DCO gate removed; PR conflicts merged; clang-tidy via `.clang-tidy` AllowedTypes; CI pulls only `test`/`build`; integration Makefile gets the host stubs; integration readiness check requires a connection held open 1 s (Docker proxy accepts before the server listens).
 
-## Open, awaiting the owner
-- tk CI (run 45391644115, branch fix/tk-9e6033-thread-safety): rules, start, gate green (gate 2m24s); board and auto-merge fail with "tk not on PATH (set TK_BIN)": the runner has no tk CLI (it lives in ~/.claude/bin) and no GitHub App credentials (APP_SETUP.md). Proposals: (a) self-hosted runner with TK_BIN, (b) vendor tk into the repo plus the App key as a secret. Also: auto-merge targets the default branch (main) while this repo's flow merges into develop. Needs the owner's choice (secrets, merge target).
+## Open
+- tk CI (run 45391644115): board and auto-merge fail with "tk not on PATH (set TK_BIN)". Owner decisions: auto-merge always targets `develop`; the runner authenticates with a token on GitHub. Real blockers on my side: creating the repository secret returns 403 for the Ethiquema account (`gh secret list`), and `.github/workflows/tk.yml` is a gate file I may not edit (guard-protected-files). Needed from the owner: the secret `TK_FORGE_TOKEN` and the `tk.yml` change (TK_BIN pointing at a vendored tk, merge target develop).
+- Hook against bypasses: ordered by the owner; hooks are edited only on the owner's order, and guard-protected-files decides whether I may write it.
 - Tickets L1-L12 of the old local store are not on the github board.
 
 ## Ticket table (tk list, 2026-11-24)

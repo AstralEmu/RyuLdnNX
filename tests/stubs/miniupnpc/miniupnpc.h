@@ -177,9 +177,10 @@ inline UPNPDev* upnpDiscover(
  */
 inline void freeUPNPDevlist(UPNPDev* devlist) {
     ++g_fake_upnp.devlist_frees;
-    // The real API releases the whole calloc'ed list; std::free accepts
-    // nullptr, so the caller-facing C signature needs no null guard.
-    std::free(devlist);
+    // The real API releases the whole calloc'ed list; the owner takes it and
+    // frees it on scope exit (a null list is accepted by unique_ptr).
+    const std::unique_ptr<UPNPDev, void (*)(void*)> release(
+        devlist, &std::free);
 }
 
 /**
