@@ -80,6 +80,7 @@
 #include "socket.hpp"
 #include "protocol/ryu_protocol.hpp"
 #include "protocol/packet_buffer.hpp"
+#include "util/thread_safety.hpp"
 
 namespace ryu_ldn::network {
 
@@ -545,9 +546,9 @@ public:
 private:
     Socket m_socket;  ///< Underlying TCP socket
     protocol::PacketBuffer<0x2000>
-        m_recv_buffer;  ///< Buffer for TCP stream reassembly (8KB - saves
+        m_recv_buffer RYU_GUARDED_BY(m_locks.recv);  ///< Buffer for TCP stream reassembly (8KB - saves
                         ///< 56KB!)
-    uint8_t m_send_buffer[2048]{};  ///< Buffer for encoding outgoing packets
+    uint8_t m_send_buffer[2048] RYU_GUARDED_BY(m_locks.send){};  ///< Buffer for encoding outgoing packets
                                     ///< (zero-initialized, LINT-22)
 
     /**
@@ -586,7 +587,8 @@ private:
      * @return Number of bytes written (header + payload)
      */
     template <typename T>
-    size_t encode_fixed(protocol::PacketId type, const T& payload);
+    size_t encode_fixed(protocol::PacketId type, const T& payload)
+        RYU_REQUIRES(m_locks.send);
 
     /**
      * @brief Try to receive more data into packet buffer
@@ -597,7 +599,8 @@ private:
      * @return ClientResult::Success if data received or would block
      * @return Error result on connection failure
      */
-    ClientResult receive_into_buffer(int32_t timeout_ms);
+    ClientResult receive_into_buffer(int32_t timeout_ms)
+        RYU_REQUIRES(m_locks.recv);
 };
 
 }  // namespace ryu_ldn::network
