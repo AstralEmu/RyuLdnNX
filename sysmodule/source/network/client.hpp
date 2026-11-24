@@ -91,6 +91,7 @@
 #include "reconnect.hpp"
 #include "../config/config.hpp"
 #include "../protocol/types.hpp"
+#include "../util/thread_safety.hpp"
 
 namespace ryu_ldn::network {
 
@@ -589,17 +590,17 @@ private:
      * Lock order: g_active_service_mutex > m_op_mutex > m_shared_mutex > leaf.
      * Not touched by move construction/assignment.
      */
-    class OpMutex {
+    class RYU_CLASS_TSA(capability("mutex")) OpMutex {
     public:
         OpMutex() = default;
         OpMutex(OpMutex&&) = delete;
         OpMutex& operator=(OpMutex&&) = delete;
         /// Acquire the lock.
-        void lock() {
+        void lock() RYU_TSA(acquire_capability()) {
             m_mutex.lock();
         }
         /// Release the lock.
-        void unlock() {
+        void unlock() RYU_TSA(release_capability()) {
             m_mutex.unlock();
         }
 
