@@ -6,8 +6,8 @@ State at 2026-11-24, PR #104 (head 3154c2a): all checks pass (lint, actionlint/s
 - DCO gate removed; PR conflicts merged; clang-tidy via `.clang-tidy` AllowedTypes; CI pulls only `test`/`build`; integration Makefile gets the host stubs; integration readiness check requires a connection held open 1 s (Docker proxy accepts before the server listens).
 
 ## Open, awaiting the owner
-- tk ticket flow: `tk detect` returns local (remote host is the SSH alias github-ethiquema); owner AstralEmu absent from ~/.claude/tk/config.json; no .github/workflows/tk.yml; branch name carries no ticket id. Fix not applied without the owner's go.
-- L11 (-Wthread-safety): owner decision pending.
+- tk CI (run 45391644115, branch fix/tk-9e6033-thread-safety): rules, start, gate green (gate 2m24s); board and auto-merge fail with "tk not on PATH (set TK_BIN)": the runner has no tk CLI (it lives in ~/.claude/bin) and no GitHub App credentials (APP_SETUP.md). Proposals: (a) self-hosted runner with TK_BIN, (b) vendor tk into the repo plus the App key as a secret. Also: auto-merge targets the default branch (main) while this repo's flow merges into develop. Needs the owner's choice (secrets, merge target).
+- Tickets L1-L12 of the old local store are not on the github board; only tk-9e6033 (-Wthread-safety, stub Mutex annotated, branch pushed) exists there.
 
 ## Ticket table (tk list, 2026-11-24)
 ```
