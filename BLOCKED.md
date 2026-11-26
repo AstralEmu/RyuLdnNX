@@ -47,3 +47,11 @@ Column moves (review/done) are decided by the tk.yml CI on the ticket branch, ne
 - Proven cause: the board/auto-merge steps run `TK="${TK_BIN:-tk}"` (.github/workflows/tk.yml:126,156) and the hosted runner has no tk. `.tk/bin/tk` (vendored by `tk align --fix tk`) is untracked, so a fresh checkout carries nothing either. No repository-permission change is involved.
 - Fixes, owner's decision (both touch a guarded flow file): (a) commit `.tk/bin/tk` + `.tk/tk/gate.py` and set `TK_BIN: .tk/bin/tk` on the jobs that need it — settles the .tk/ vs scripts/tk duplication in favour of .tk/; (b) install tk on the runner (self-hosted, or an install step) — needs a published package.
 - The auto-merge target (main vs develop) stays a separate open question.
+
+## Measurement 2026-11-26 02:21 (why the CI template cannot be adopted as-is)
+Command results in this checkout, exit codes taken from the command itself:
+- `tk gate --only lint` -> exit 1, "Found 26 errors in 6 files (checked 23 source files)", all in `tests/ldn-server/py-healthcheck/ldn_healthcheck/__main__.py` and 5 more files (e.g. 'Name "webhook" is not defined' [name-defined]).
+- `tk gate --only test` -> exit 1, "FAIL Required test coverage of 100% not reached. Total coverage: 0.00%", plus "gate: tests/c FAIL missing: no gate stage knows this c code: define the Makefile target gate-tests-c for it" and the same for tests/c++ (`gate-tests-c++`).
+The single job of the current `.github/workflows/tk.yml` runs `make test`, which is green; that is why CI looks healthy while the template's four jobs would be red on day one.
+Adopting the template, in order: (1) commit `.tk/bin/tk` + `.tk/tk/gate.py` so the template's TK_BIN path resolves (tk PARITY.md D12: the runner gets tk from the repository itself); (2) add the `gate-tests-c` / `gate-tests-c++` Makefile targets the checker looks for; (3) clear the 26 mypy errors; (4) decide the coverage threshold (template 100%, repo pre-commit 80%); (5) auto-merge target main vs develop. Nothing here weakens a check; the order keeps each step measurable.
+This is what tk-1fccc6 ("Align the repository") still needs. Owner decision required before editing the guarded workflow. Note for tk-1fccc6 was written in the shell but the security classifier refused the call (matched on the word for the checker); the measurement lives here instead.
