@@ -1,6 +1,6 @@
 # BLOCKED
 
-State at 2026-11-24, PR #104 (head 3154c2a): all checks pass (lint, actionlint/shellcheck, CodeQL x2, Tests & Coverage >= 80%). Build & Package and Create Pre-Release are skipped on PRs by design.
+State at 2026-11-26: branch `fix/tk-9e6033-thread-safety` = `ae0fa96` (same on origin); PR #104 is `chore/post-audit-fixes` @ `068c48f` into `develop`. Last checks seen on #104 (runs 45447739625 / 45447739839 / 45447741406): lint, CodeQL cpp, actionlint, rules, gate, start, Tests & Coverage all green; Build & Package skipped on PRs by design.
 
 ## Resolved
 - DCO gate removed; PR conflicts merged; clang-tidy via `.clang-tidy` AllowedTypes; CI pulls only `test`/`build`; integration Makefile gets the host stubs; integration readiness check requires a connection held open 1 s (Docker proxy accepts before the server listens).
@@ -30,7 +30,11 @@ tk-fc4772	in-progress	NOLINT/cppcheck revalidation (done: no NOLINT in own code,
 Column moves (review/done) are decided by the tk.yml CI on the ticket branch, never by the agent.
 
 ## Force-push of the gist-cleaned history (tk-3c54fa), 2026-11-24
-- History rewritten locally with git filter-repo (backup bundle in the scratchpad); 0 occurrences of the gist id / login left (git log --all -S).
-- Push 1: no origin remote was configured (my earlier remote add had been refused with its script): regress-guard 'no remote branch to compare with: the baseline is the empty tree (first push)'.
-- Push 2 (origin added and fetched): git push --force origin fix/tk-9e6033-thread-safety refused by regress_guard.py ('no analyser for: .github/CODEOWNERS, .gitignore, Doxyfile, ...'); output cut by the hook, the blocking reason is not visible. Not retried.
-- Owner action: git push --force origin --all from the owner shell, then delete the gist and revoke GIST_BADGE_SECRET.
+- Done by the owner (`git push --force origin --all` from the owner shell). Still open: delete the gist, revoke `GIT_BADGE_SECRET`/`GIST_BADGE_SECRET`, check the old commits are unreachable by hash. Badge still in the tree: `README.md:4`, `.github/workflows/_build-base.yml:41-42,132-137`, `build.yml:57`, `release.yml:62`.
+
+## Update 2026-11-26 01:21 (blockage lifted, work resumed)
+- The tk backend answers again: `tk show tk-9e6033` -> `{"status": "in-progress"}`. The 50 open violations were closed with that proof (50/50 `violations.py ack` succeeded). Cause not proven: `~/.claude/bin/tk` was modified on 2026-11-25 16:56 and the session restarted; `~/.claude/tk/config.json` has held a single `github.com` entry since 2026-11-24 19:32.
+- `tkbin` alignment done: `tk align --fix tk` wrote `.tk/bin/tk` and `.tk/tk/gate.py` (no host path or login inside; grep clean). `.tk/` is untracked.
+- `ci` alignment still open: `tk align --fix ci` refuses, "`.github/workflows/tk.yml` exists and differs from the template: merge the tk jobs by hand". Diff against `~/.claude/tk/templates/github-ci.yml`: the repo has one `gate` job (make gate/check/test) while the template has `lint`, `test`, `audit`, `e2e` running `tk gate --only <cat>` off `.tk/bin/tk`, plus `actions/checkout` in `start`, `board`, `auto-merge`. The template announces 100% coverage (the repo pre-commit asks 80%) and its `auto-merge` targets the repository default branch (main) while the owner's rule is develop. Nothing measured yet with `tk gate`; the merge needs its own ticket and the owner's go.
+- Duplication to settle, owner's call: `chore/vendor-tk` vendors tk as `scripts/tk` (+ `tk.yml`), while `tk align` now vendors it as `.tk/`. One of the two layouts must win.
+- Still open from the previous list: auto-merge 403 ("GitHub Actions is not permitted to create or approve pull requests"), `chore/vendor-tk` merge-vs-own-PR, tk-49853d tidy choices, `recv` under a lock reported at `p2p_proxy_server.cpp:2239` (the client side is fixed in `ae0fa96`; the server side was not re-measured).
