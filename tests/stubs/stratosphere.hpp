@@ -27,6 +27,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <pthread.h>
 #include <string>
 #include <thread>
 #include <utility>
@@ -132,7 +133,24 @@ public:
      *
      * @param recursive true lets the owning thread lock it again
      */
-    explicit Mutex(bool recursive) : m_recursive(recursive) {}
+    explicit Mutex(bool recursive) : m_recursive(recursive) {
+        // One backing mutex, like the device: the recursive flag is an
+        // attribute of the single os::Mutex, not a different primitive. With
+        // two std::mutex objects behind a runtime branch, clang's analyzer
+        // lost the lock/unlock pairing and flagged a recv() far outside the
+        // lock's scope (unix.BlockInCriticalSection).
+        pthread_mutexattr_t attr;
+        pthread_mutexattr_init(&attr);
+        pthread_mutexattr_settype(
+            &attr, recursive ? PTHREAD_MUTEX_RECURSIVE : PTHREAD_MUTEX_DEFAULT);
+        pthread_mutex_init(&m_mutex, &attr);
+        pthread_mutexattr_destroy(&attr);
+    }
+
+    /// Destroys the backing mutex
+    ~Mutex() {
+        pthread_mutex_destroy(&m_mutex);
+    }
 
     Mutex(const Mutex&) = delete;
     Mutex& operator=(const Mutex&) = delete;
@@ -143,13 +161,10 @@ public:
             if (g_host_before_recursive_lock != nullptr) {
                 g_host_before_recursive_lock();
             }
-            m_recursive_mutex.lock();
-        } else {
-            if (g_host_before_plain_lock != nullptr) {
-                g_host_before_plain_lock(this);
-            }
-            m_mutex.lock();
+        } else if (g_host_before_plain_lock != nullptr) {
+            g_host_before_plain_lock(this);
         }
+        pthread_mutex_lock(&m_mutex);
     }
 
     /**
@@ -158,7 +173,7 @@ public:
      * @return true if the lock was taken
      */
     bool try_lock() RYU_TSA(try_acquire_capability(true)) {
-        return m_recursive ? m_recursive_mutex.try_lock() : m_mutex.try_lock();
+        return pthread_mutex_trylock(&m_mutex) == 0;
     }
 
     /// Stratosphere spelling of lock()/unlock()
@@ -170,22 +185,16 @@ public:
         unlock();
     }
 
-    /// Unlocks the mutex of the flavor chosen at construction
+    /// Unlocks the backing mutex
     void unlock() RYU_TSA(release_capability()) {
-        if (m_recursive) {
-            m_recursive_mutex.unlock();
-        } else {
-            m_mutex.unlock();
-        }
+        pthread_mutex_unlock(&m_mutex);
     }
 
 private:
-    /// Selects which of the two backing mutexes is used
-    bool m_recursive;
-    /// Backing mutex when not recursive
-    std::mutex m_mutex;
-    /// Backing mutex when recursive
-    std::recursive_mutex m_recursive_mutex;
+    /// Selects the recursion attribute of the one backing mutex
+    const bool m_recursive;
+    /// The single backing mutex (recursive or not, per the constructor)
+    pthread_mutex_t m_mutex;
 };
 
 /// Non-recursive mutex of the SDK (Lockable)
