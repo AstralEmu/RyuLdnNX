@@ -21,6 +21,7 @@
 #include "ldn_proxy_buffer.hpp"
 #include "ldn_network_timeout.hpp"
 #include "interfaces/icommunication.hpp"
+#include "../util/thread_safety.hpp"
 #include "../network/client.hpp"
 
 // Forward declarations — P2P types are only held as raw pointers in this
@@ -413,7 +414,8 @@ private:
      * @param data Packet payload
      * @param size Payload size
      */
-    void HandleConnectedPacket(const uint8_t* data, size_t size);
+    void HandleConnectedPacket(const uint8_t* data, size_t size)
+        RYU_REQUIRES(m_shared_mutex);
 
     /**
      * @brief Handle SyncNetwork packet from server
@@ -424,7 +426,8 @@ private:
      * @param data Packet payload
      * @param size Payload size
      */
-    void HandleSyncNetworkPacket(const uint8_t* data, size_t size);
+    void HandleSyncNetworkPacket(const uint8_t* data, size_t size)
+        RYU_REQUIRES(m_shared_mutex);
 
     /**
      * @brief Handle ProxyConfig packet from server
@@ -435,7 +438,8 @@ private:
      * @param data Packet payload
      * @param size Payload size
      */
-    void HandleProxyConfigPacket(const uint8_t* data, size_t size);
+    void HandleProxyConfigPacket(const uint8_t* data, size_t size)
+        RYU_REQUIRES(m_shared_mutex);
 
     /**
      * @brief Handle ExternalProxy packet from server
@@ -446,7 +450,8 @@ private:
      * @param data Packet payload
      * @param size Payload size
      */
-    void HandleExternalProxyPacket(const uint8_t* data, size_t size);
+    void HandleExternalProxyPacket(const uint8_t* data, size_t size)
+        RYU_REQUIRES(m_shared_mutex);
 
     /**
      * @brief Handle ProxyData packet from server
@@ -457,7 +462,8 @@ private:
      * @param data Packet payload
      * @param size Payload size
      */
-    void HandleProxyDataPacket(const uint8_t* data, size_t size);
+    void HandleProxyDataPacket(const uint8_t* data, size_t size)
+        RYU_REQUIRES(m_shared_mutex);
 
     /**
      * @brief Handle NetworkError packet from server
@@ -468,7 +474,8 @@ private:
      * @param data Packet payload
      * @param size Payload size
      */
-    void HandleNetworkErrorPacket(const uint8_t* data, size_t size);
+    void HandleNetworkErrorPacket(const uint8_t* data, size_t size)
+        RYU_REQUIRES(m_shared_mutex);
 
     /**
      * @brief Handle ScanReply packet from server
@@ -480,7 +487,8 @@ private:
      * @param data Packet payload
      * @param size Payload size
      */
-    void HandleScanReplyPacket(const uint8_t* data, size_t size);
+    void HandleScanReplyPacket(const uint8_t* data, size_t size)
+        RYU_REQUIRES(m_shared_mutex);
 
     /**
      * @brief Wait for a specific packet response from server
@@ -502,10 +510,10 @@ private:
     u64 m_error_state{0};             ///< Error state flag
     u64 m_client_process_id{0};       ///< Client game process ID
     u64 m_local_communication_id{0};  ///< LocalCommunicationId from NACP
-    size_t m_scan_result_count{0};    ///< Number of scan results
+    size_t m_scan_result_count RYU_GUARDED_BY(m_shared_mutex){0};    ///< Number of scan results
     size_t m_advertise_data_size{0};  ///< Size of advertise data
-    u32 m_ipv4_address{0};            ///< Assigned IPv4 address
-    u32 m_subnet_mask{0};             ///< Subnet mask
+    u32 m_ipv4_address RYU_GUARDED_BY(m_shared_mutex){0};            ///< Assigned IPv4 address
+    u32 m_subnet_mask RYU_GUARDED_BY(m_shared_mutex){0};             ///< Subnet mask
     DisconnectReason m_disconnect_reason{
         DisconnectReason::None};  ///< Last disconnect reason
     ryu_ldn::protocol::PacketId m_last_response_id{
@@ -513,11 +521,11 @@ private:
     ryu_ldn::protocol::NetworkErrorCode m_last_network_error{
         ryu_ldn::protocol::NetworkErrorCode::None};  ///< Last error from server
     u16 m_expected_scene_id{0};       ///< Expected sceneId from Scan filter
-    bool m_network_connected{false};  ///< True when in active network session
+    bool m_network_connected RYU_GUARDED_BY(m_shared_mutex){false};  ///< True when in active network session
     bool m_p2p_connect_thread_initialized{false};  ///< P2P thread created
     bool m_recv_thread_stopped{false};  ///< True if Finalize() stopped recv
 
-    NetworkInfo m_network_info;  ///< Current network info
+    NetworkInfo m_network_info RYU_GUARDED_BY(m_shared_mutex);  ///< Current network info
 
     ryu_ldn::network::RyuLdnClient
         m_server_client;                   ///< Server communication client
@@ -567,7 +575,7 @@ private:
     // Scan results buffer (reduced to save ~18KB of memory)
     static constexpr size_t MAX_SCAN_RESULTS =
         8;  ///< Max networks from scan (reduced from 24)
-    NetworkInfo m_scan_results[MAX_SCAN_RESULTS]{};  ///< Scan results buffer
+    NetworkInfo m_scan_results[MAX_SCAN_RESULTS] RYU_GUARDED_BY(m_shared_mutex){};  ///< Scan results buffer
 
     // Advertise data buffer
     uint8_t m_advertise_data[384]{};  ///< Stored advertise data
@@ -579,7 +587,7 @@ private:
     // Network connected flag (like Ryujinx _networkConnected)
 
     // Node state tracking for GetNetworkInfoLatestUpdate
-    bool m_prev_node_connected[NodeCountMax]{};  ///< Previous connected state
+    bool m_prev_node_connected[NodeCountMax] RYU_GUARDED_BY(m_shared_mutex){};  ///< Previous connected state
                                                  ///< of each node
 
     // Last network error (like Ryujinx _lastError)
@@ -588,7 +596,7 @@ private:
     // _hostedProxy, Config)
     bool m_use_p2p_proxy;  ///< True if P2P proxy enabled
     ryu_ldn::protocol::ProxyConfig
-        m_proxy_config;  ///< Current proxy configuration
+        m_proxy_config RYU_GUARDED_BY(m_shared_mutex);  ///< Current proxy configuration
     ryu_ldn::protocol::ExternalProxyConfig
         m_external_proxy_config;  ///< External proxy config
     // Owning pointers (cppcoreguidelines-owning-memory): released
@@ -708,7 +716,7 @@ private:
      *
      * @return Node ID (0-7) or 0xFF if not found
      */
-    u8 FindLocalNodeId() const;
+    u8 FindLocalNodeId() const RYU_REQUIRES(m_shared_mutex);
 
     /**
      * @brief Consume last network error (like Ryujinx ConsumeNetworkError)

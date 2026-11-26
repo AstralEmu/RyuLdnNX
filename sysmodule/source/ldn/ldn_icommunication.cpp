@@ -110,7 +110,15 @@ void ICommunicationService::OnInactivityTimeout() {
     std::scoped_lock lock(g_active_service_mutex);
 
     ICommunicationService* svc = g_active_ldn_service.load();
-    if (svc != nullptr && !svc->m_network_connected) {
+    if (svc == nullptr) {
+        return;
+    }
+    bool connected;
+    {
+        ryu::ScopedLock shared_lock(svc->m_shared_mutex);
+        connected = svc->m_network_connected;
+    }
+    if (!connected) {
         LOG_INFO("Inactivity timeout - disconnecting from server");
         svc->DisconnectFromServer();
     }
@@ -457,7 +465,7 @@ ICommunicationService::~ICommunicationService() {
     m_error_state = 0;
     std::memset(&m_network_info, 0, sizeof(m_network_info));
     {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         m_ipv4_address = 0;
         m_subnet_mask = 0;
         m_network_connected = false;
@@ -662,7 +670,7 @@ Result ICommunicationService::Initialize(
 
     // Reset disconnect reason on fresh initialization
     {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         m_disconnect_reason = DisconnectReason::None;
     }
 
@@ -735,7 +743,7 @@ Result ICommunicationService::Finalize() {
     // Clear network state
     std::memset(&m_network_info, 0, sizeof(m_network_info));
     {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         m_ipv4_address = 0;
         m_subnet_mask = 0;
     }
@@ -762,7 +770,7 @@ Result ICommunicationService::GetState(ams::sf::Out<u32> state) const {
     // If error_state is set and we have a disconnect reason, return error
     DisconnectReason reason;
     {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         reason = m_disconnect_reason;
     }
     if (m_error_state != 0) {
@@ -781,7 +789,7 @@ Result ICommunicationService::GetNetworkInfo(ams::sf::Out<NetworkInfo> buffer) {
     // Take a snapshot under the shared mutex — the receive thread may
     // be writing m_network_info right now from a SyncNetwork packet.
     {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         buffer.SetValue(m_network_info);
     }
     R_SUCCEED();
@@ -795,7 +803,7 @@ Result ICommunicationService::GetIpv4Address(
     u32 proxy_ip;
     u32 proxy_mask;
     {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         proxy_ip = m_proxy_config.proxy_ip;
         proxy_mask = m_proxy_config.proxy_subnet_mask;
     }
@@ -833,7 +841,7 @@ Result ICommunicationService::GetIpv4Address(
 
 Result ICommunicationService::GetDisconnectReason(
     ams::sf::Out<u32> reason) const {
-    std::scoped_lock lock(m_shared_mutex);
+    ryu::ScopedLock lock(m_shared_mutex);
     reason.SetValue(static_cast<u32>(m_disconnect_reason));
     R_SUCCEED();
 }
@@ -841,7 +849,7 @@ Result ICommunicationService::GetDisconnectReason(
 Result ICommunicationService::GetSecurityParameter(
     ams::sf::Out<SecurityParameter> out) {
     SecurityParameter param{};
-    std::scoped_lock lock(m_shared_mutex);
+    ryu::ScopedLock lock(m_shared_mutex);
     NetworkInfo2SecurityParameter(&m_network_info, &param);
     out.SetValue(param);
     R_SUCCEED();
@@ -850,7 +858,7 @@ Result ICommunicationService::GetSecurityParameter(
 Result ICommunicationService::GetNetworkConfig(
     ams::sf::Out<NetworkConfig> out) {
     NetworkConfig config{};
-    std::scoped_lock lock(m_shared_mutex);
+    ryu::ScopedLock lock(m_shared_mutex);
     NetworkInfo2NetworkConfig(&m_network_info, &config);
     out.SetValue(config);
     R_SUCCEED();
@@ -868,7 +876,7 @@ Result ICommunicationService::GetNetworkInfoLatestUpdate(
     // Hold the shared mutex for the whole call: the node snapshot, the
     // log and m_prev_node_connected must see one consistent state. This
     // function never calls into the client, so the lock order holds.
-    std::scoped_lock lock(m_shared_mutex);
+    ryu::ScopedLock lock(m_shared_mutex);
     LOG_INFO(
         "GetNetworkInfoLatestUpdate() called, node_count=%u, "
         "update_buf_size=%zu",
@@ -978,8 +986,11 @@ Result ICommunicationService::Scan(
 
     // Reset scan results buffer and events (like Ryujinx
     // _availableGames.Clear() and _scan.Reset())
-    m_scan_result_count = 0;
-    std::memset(m_scan_results, 0, sizeof(m_scan_results));
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        m_scan_result_count = 0;
+        std::memset(m_scan_results, 0, sizeof(m_scan_results));
+    }
     m_scan_event.Clear();
     m_error_event.Clear();
 
@@ -1089,6 +1100,7 @@ Result ICommunicationService::Scan(
     }
 
     // Copy results to output buffer
+    ryu::ScopedLock shared_lock(m_shared_mutex);
     size_t result_count = m_scan_result_count;
     size_t max_results = buffer.GetSize();
     result_count = std::min(result_count, max_results);
@@ -1152,9 +1164,12 @@ Result ICommunicationService::CloseAccessPoint() {
     R_UNLESS(result == StateTransitionResult::Success, MAKERESULT(0x10, 1));
 
     // Clear network info
-    std::memset(&m_network_info, 0, sizeof(m_network_info));
-    m_network_connected = false;
-    m_expected_scene_id = 0;
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        std::memset(&m_network_info, 0, sizeof(m_network_info));
+        m_network_connected = false;
+        m_expected_scene_id = 0;
+    }
 
     // Update shared state
     SharedState::GetInstance().SetLdnState(CommState::Initialized);
@@ -1403,7 +1418,7 @@ Result ICommunicationService::CreateNetwork(const CreateNetworkConfig& data) {
     constexpr uint32_t kPredictedSubnetMask = 0xFFFF0000;  // /16
     bool preset_ip = false;
     if (m_use_p2p_proxy) {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         if (m_ipv4_address == 0) {
             m_ipv4_address = kPredictedHostIp;
             m_subnet_mask = kPredictedSubnetMask;
@@ -1424,7 +1439,10 @@ Result ICommunicationService::CreateNetwork(const CreateNetworkConfig& data) {
 
     // Mark as connected to network and disable inactivity timeout (like
     // Ryujinx)
-    m_network_connected = true;
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        m_network_connected = true;
+    }
     m_inactivity_timeout.DisableTimeout();
 
     // Update shared state
@@ -1447,9 +1465,12 @@ Result ICommunicationService::DestroyNetwork() {
 
     // Server will be notified via disconnect or explicit message
     // Clear network info
-    std::memset(&m_network_info, 0, sizeof(m_network_info));
-    m_network_connected = false;
-    m_expected_scene_id = 0;
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        std::memset(&m_network_info, 0, sizeof(m_network_info));
+        m_network_connected = false;
+        m_expected_scene_id = 0;
+    }
 
     // Refresh inactivity timeout after leaving network (like Ryujinx)
     m_inactivity_timeout.RefreshTimeout();
@@ -1472,7 +1493,12 @@ Result ICommunicationService::SetAdvertiseData(
 
     // Like Ryujinx: only send if _networkConnected
     // if (_networkConnected) { SendAsync(...); }
-    if (m_network_connected) {
+    bool connected;
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        connected = m_network_connected;
+    }
+    if (connected) {
         auto send_result = m_server_client.send_set_advertise_data(
             m_advertise_data, m_advertise_data_size);
         if (send_result != ryu_ldn::network::ClientOpResult::Success) {
@@ -1492,7 +1518,12 @@ Result ICommunicationService::SetStationAcceptPolicy(u8 policy) {
 
     // Like Ryujinx: only send if _networkConnected
     // if (_networkConnected) { SendAsync(...); }
-    if (m_network_connected) {
+    bool connected;
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        connected = m_network_connected;
+    }
+    if (connected) {
         auto accept_policy =
             static_cast<ryu_ldn::protocol::AcceptPolicy>(policy);
         auto send_result =
@@ -1661,7 +1692,10 @@ Result ICommunicationService::Connect(
 
     // Mark as connected to network and disable inactivity timeout (like
     // Ryujinx)
-    m_network_connected = true;
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        m_network_connected = true;
+    }
     m_inactivity_timeout.DisableTimeout();
 
     // Note: m_network_info is already set by the Connected packet handler
@@ -1684,7 +1718,12 @@ Result ICommunicationService::Disconnect() {
     R_UNLESS(result == StateTransitionResult::Success, MAKERESULT(0x10, 1));
 
     // Send disconnect notification to server (like Ryujinx DisconnectNetwork)
-    if (IsServerConnected() && m_network_connected) {
+    bool connected;
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        connected = m_network_connected;
+    }
+    if (IsServerConnected() && connected) {
         auto send_result = m_server_client.send_disconnect_network();
         if (send_result != ryu_ldn::network::ClientOpResult::Success) {
             LOG_WARN(
@@ -1697,7 +1736,7 @@ Result ICommunicationService::Disconnect() {
     }
 
     {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         m_network_connected = false;
         m_disconnect_reason = DisconnectReason::User;
     }
@@ -1944,7 +1983,12 @@ Result ICommunicationService::Reject(u32 nodeId) {
 
     // Like Ryujinx: check _networkConnected instead of just IsServerConnected
     // if (_networkConnected) { ... } else { return ResultCode.InvalidState; }
-    if (!m_network_connected) {
+    bool connected;
+    {
+        ryu::ScopedLock shared_lock(m_shared_mutex);
+        connected = m_network_connected;
+    }
+    if (!connected) {
         LOG_WARN("Reject: not in network session");
         R_RETURN(MAKERESULT(0x10, 2));  // InvalidState - not in network
     }
@@ -2086,7 +2130,7 @@ void ICommunicationService::HandleServerPacket(
     // Event Signal() calls are safe outside this lock (kernel handles
     // synchronization internally). We hold the lock briefly to avoid
     // contention with IPC readers like GetNetworkInfo.
-    std::scoped_lock lock(m_shared_mutex);
+    ryu::ScopedLock lock(m_shared_mutex);
 
     switch (id) {
         case ryu_ldn::protocol::PacketId::Connected: {
@@ -2777,7 +2821,7 @@ bool ICommunicationService::WaitForResponse(
     // true, the Connected packet was processed by the receive thread before
     // this call
     {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         if (expected_id == ryu_ldn::protocol::PacketId::Connected &&
             m_network_connected) {
             LOG_VERBOSE(
@@ -2839,7 +2883,7 @@ bool ICommunicationService::WaitForResponse(
             // thread, protected by m_shared_mutex.
             ryu_ldn::protocol::PacketId last_id;
             {
-                std::scoped_lock lock(m_shared_mutex);
+                ryu::ScopedLock lock(m_shared_mutex);
                 last_id = m_last_response_id;
             }
 
@@ -2885,7 +2929,7 @@ bool ICommunicationService::WaitForResponse(
     // sets m_network_connected=true and then signals m_response_event
     // separately — check one last time under the mutex).
     if (!result && expected_id == ryu_ldn::protocol::PacketId::Connected) {
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         if (m_network_connected) {
             LOG_VERBOSE("Connected was processed during wait");
             result = true;
@@ -3124,7 +3168,7 @@ void ICommunicationService::HandleExternalProxyConnect(
     {
         // One critical section so GetIpv4Address never sees a torn
         // (ip, mask) pair. No client call is made while it is held.
-        std::scoped_lock lock(m_shared_mutex);
+        ryu::ScopedLock lock(m_shared_mutex);
         m_proxy_config = cfg;
         m_ipv4_address = cfg.proxy_ip;
         m_subnet_mask = cfg.proxy_subnet_mask;
@@ -3323,6 +3367,7 @@ void ICommunicationService::ReceiveThreadFunc() {
 }
 
 u8 ICommunicationService::FindLocalNodeId() const {
+    // Callers must hold m_shared_mutex (enforced by RYU_REQUIRES).
     // m_network_info is written by the receive thread in HandleServerPacket;
     // callers (HandleConnectedPacket / HandleSyncNetworkPacket) run inside
     // HandleServerPacket which already holds m_shared_mutex. os::SdkMutex is
