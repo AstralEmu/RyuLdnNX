@@ -89,12 +89,13 @@ jobs:
       startsWith(github.ref_name, 'infra/'))
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: ticket to in-progress
         env:
           TK_REF: ${{ github.ref_name }}
         run: |
           set -u
-          TK="${TK_BIN:-tk}"
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
           if ! command -v "$TK" >/dev/null 2>&1; then
             echo "::warning::tk not on PATH (set TK_BIN): ticket not updated"
             exit 0
@@ -117,13 +118,14 @@ jobs:
       startsWith(github.ref_name, 'infra/'))
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: review column naming the jobs that did not succeed
         env:
           TK_REF: ${{ github.ref_name }}
           TK_JOBS: rules=${{ needs.rules.result }},gate=${{ needs.gate.result }}
         run: |
           set -u
-          TK="${TK_BIN:-tk}"
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
           if ! command -v "$TK" >/dev/null 2>&1; then
             echo "::warning::tk not on PATH (set TK_BIN): ticket not updated"
             exit 0
@@ -146,6 +148,7 @@ jobs:
       startsWith(github.ref_name, 'infra/'))
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Open the pull request and merge it
         env:
           TK_REF: ${{ github.ref_name }}
@@ -153,7 +156,7 @@ jobs:
           TK_FORGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          TK="${TK_BIN:-tk}"
+          TK="${TK_BIN:-${GITHUB_WORKSPACE:-.}/.tk/bin/tk}"
           if ! command -v "$TK" >/dev/null 2>&1; then
             echo "::error::tk not on PATH (set TK_BIN): cannot open and merge the pull request"
             exit 1
